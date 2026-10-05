@@ -49,6 +49,9 @@ object SmsParser {
     }
 }
 
+private fun fingerprint(text: String): String =
+    java.security.MessageDigest.getInstance("SHA-256").digest(text.toByteArray()).joinToString("") { "%02x".format(it) }
+
 class SmsReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action != Telephony.Sms.Intents.SMS_RECEIVED_ACTION) return
@@ -67,7 +70,9 @@ class SmsReceiver : BroadcastReceiver() {
                             merchant = parsed.merchant,
                             sender = sender,
                             epochDay = LocalDate.now().toEpochDay(),
-                            body = body,
+                            // Keep only a fingerprint for de-duplication, never the message itself
+                            // (bank SMS carry account digits and balances).
+                            body = fingerprint(body),
                         ),
                     )
                 }

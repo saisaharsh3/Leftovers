@@ -184,6 +184,10 @@ interface SmsDao {
 
     @Query("SELECT COUNT(*) FROM sms_suggestions WHERE body = :body")
     suspend fun countWithBody(body: String): Int
+
+    /** Older versions stored whole messages; anything that isn't a 64-char hash gets cleared. */
+    @Query("UPDATE sms_suggestions SET body = '' WHERE length(body) != 64")
+    suspend fun scrubRawBodies()
 }
 /** Raw table access for backup and restore. */
 @Dao

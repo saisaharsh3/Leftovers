@@ -32,4 +32,6 @@ class SmsRepository(private val dao: SmsDao) {
     }
 
     suspend fun dismiss(id: Long) = dao.delete(id)
+
+    suspend fun scrubRawBodies() = dao.scrubRawBodies()
 }

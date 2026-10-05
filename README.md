@@ -52,7 +52,9 @@ today, and plan for the things you want.
 ## Privacy
 
 Everything stays on your device. There are no accounts, ads, analytics or network calls.
-Backups go only where you choose to save them. SMS detection is off by default; when it is on,
+The app is excluded from Android's automatic cloud backup, so backups go only where you choose to
+save them. With app lock on, screenshots are blocked and the app is hidden in the recent-apps
+preview. SMS detection is off by default; when it is on,
 messages are read on the device and nothing is added without your tap.
 
 ## Install

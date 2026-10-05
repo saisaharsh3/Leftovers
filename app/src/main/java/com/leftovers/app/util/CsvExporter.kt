@@ -42,6 +42,16 @@ object CsvExporter {
         return Intent.createChooser(send, "Export transactions")
     }
 
-    private fun escape(value: String): String =
-        if (value.any { it == ',' || it == '"' || it == '\n' }) "\"" + value.replace("\"", "\"\"") + "\"" else value
+    private fun escape(raw: String): String {
+        // Spreadsheets run cells starting with these as formulas; notes can come from bank SMS,
+        // so neutralise them (CSV/formula injection).
+        val value = if (raw.firstOrNull() in formulaStarts) "'$raw" else raw
+        return if (value.any { it == ',' || it == '"' || it == '\n' || it == '\r' }) {
+            "\"" + value.replace("\"", "\"\"") + "\""
+        } else {
+            value
+        }
+    }
+
+    private val formulaStarts = setOf('=', '+', '-', '@', '\t', '\r')
 }

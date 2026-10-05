@@ -111,6 +111,15 @@ class BudgetAlertManager(
             .setStyle(NotificationCompat.BigTextStyle().bigText(text))
             .setContentIntent(openApp)
             .setAutoCancel(true)
+            // Amounts stay hidden on the lock screen; only this neutral version shows there.
+            .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+            .setPublicVersion(
+                NotificationCompat.Builder(context, CHANNEL_ID)
+                    .setSmallIcon(R.drawable.ic_stat_wallet)
+                    .setContentTitle("Budget update")
+                    .setContentText("Unlock to see details")
+                    .build(),
+            )
             .build()
         NotificationManagerCompat.from(context).notify(id, notification)
     }

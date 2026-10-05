@@ -53,6 +53,7 @@ class AppContainer(private val context: Context) {
     val budgetAlerts = BudgetAlertManager(context, repository, settings)
 
     fun start() {
+        scope.launch { sms.scrubRawBodies() }
         // Keep the home-screen widget in step with the data.
         scope.launch {
             combine(repository.allTransactions, settings.settings, planning.recurring) { _, _, _ -> Unit }
