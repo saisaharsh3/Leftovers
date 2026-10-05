@@ -1,0 +1,161 @@
+package com.leftovers.app.util
+
+import android.content.Context
+import android.net.Uri
+import androidx.room.withTransaction
+import com.leftovers.app.data.Account
+import com.leftovers.app.data.AppDatabase
+import com.leftovers.app.data.BackupDao
+import com.leftovers.app.data.BudgetPlan
+import com.leftovers.app.data.Category
+import com.leftovers.app.data.Goal
+import com.leftovers.app.data.GoalDeposit
+import com.leftovers.app.data.Recurring
+import com.leftovers.app.data.SettingsRepository
+import com.leftovers.app.data.Transaction
+import com.leftovers.app.data.Transfer
+import com.leftovers.app.data.TxType
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withContext
+import org.json.JSONArray
+import org.json.JSONObject
+
+/**
+ * Saves everything to a single JSON file the user picks (local storage, Google Drive, …)
+ * and restores from it. Receipt photos are not included.
+ */
+class BackupManager(
+    private val context: Context,
+    private val database: AppDatabase,
+    private val settings: SettingsRepository,
+) {
+    private val dao: BackupDao = database.backupDao()
+
+    suspend fun export(target: Uri): Result<Int> = withContext(Dispatchers.IO) {
+        runCatching {
+            val transactions = dao.transactions()
+            val s = settings.settings.first()
+            val json = JSONObject().apply {
+                put("app", "leftovers")
+                put("version", 1)
+                put("exportedAt", System.currentTimeMillis())
+                put("settings", JSONObject().apply {
+                    put("currency", s.currencyCode)
+                    put("budgetMode", s.plan.mode.name)
+                    put("monthly", s.plan.monthlyMinor)
+                    put("yearly", s.plan.yearlyMinor)
+                    put("split", s.plan.split.name)
+                    put("custom", BudgetPlan.encodeCustom(s.plan.custom))
+                })
+                put("categories", JSONArray(dao.categories().map { c ->
+                    JSONObject().put("id", c.id).put("name", c.name).put("icon", c.emoji).put("color", c.color)
+                        .put("type", c.type.name).put("budget", c.budgetMinor ?: JSONObject.NULL)
+                }))
+                put("accounts", JSONArray(dao.accounts().map { a ->
+                    JSONObject().put("id", a.id).put("name", a.name).put("icon", a.icon).put("color", a.color)
+                        .put("opening", a.openingMinor).put("createdAt", a.createdAt)
+                }))
+                put("transactions", JSONArray(transactions.map { t ->
+                    JSONObject().put("id", t.id).put("amount", t.amountMinor).put("type", t.type.name)
+                        .put("categoryId", t.categoryId).put("day", t.epochDay).put("note", t.note)
+                        .put("createdAt", t.createdAt).put("accountId", t.accountId ?: JSONObject.NULL)
+                }))
+                put("transfers", JSONArray(dao.transfers().map { t ->
+                    JSONObject().put("id", t.id).put("from", t.fromAccountId).put("to", t.toAccountId).put("amount", t.amountMinor)
+                        .put("day", t.epochDay).put("note", t.note).put("createdAt", t.createdAt)
+                }))
+                put("recurring", JSONArray(dao.recurring().map { r ->
+                    JSONObject().put("id", r.id).put("name", r.name).put("amount", r.amountMinor).put("type", r.type.name)
+                        .put("categoryId", r.categoryId).put("day", r.dayOfMonth).put("start", r.startMonth)
+                        .put("lastPosted", r.lastPostedMonth ?: JSONObject.NULL).put("active", r.active)
+                }))
+                put("goals", JSONArray(dao.goals().map { g ->
+                    JSONObject().put("id", g.id).put("name", g.name).put("icon", g.emoji).put("color", g.color)
+                        .put("target", g.targetMinor).put("targetMonth", g.targetMonth).put("createdAt", g.createdAt)
+                }))
+                put("deposits", JSONArray(dao.deposits().map { d ->
+                    JSONObject().put("id", d.id).put("goalId", d.goalId).put("amount", d.amountMinor)
+                        .put("day", d.epochDay).put("createdAt", d.createdAt)
+                }))
+            }
+            context.contentResolver.openOutputStream(target, "wt")?.use { it.write(json.toString(2).toByteArray()) }
+                ?: error("Couldn't open the file")
+            transactions.size
+        }
+    }
+
+    /** Replaces all data with the backup's contents. */
+    suspend fun import(source: Uri): Result<Int> = withContext(Dispatchers.IO) {
+        runCatching {
+            val text = context.contentResolver.openInputStream(source)?.use { it.readBytes().decodeToString() }
+                ?: error("Couldn't open the file")
+            val json = JSONObject(text)
+            // "cash-tracker" is the app's previous name; keep accepting those backups.
+            require(json.optString("app") in setOf("leftovers", "cash-tracker")) { "This isn't a Leftovers backup" }
+
+            fun JSONObject.longOrNull(key: String) = if (isNull(key)) null else getLong(key)
+            fun JSONObject.stringOrNull(key: String) = if (isNull(key)) null else getString(key)
+            fun JSONArray.objects() = (0 until length()).map { getJSONObject(it) }
+
+            val categories = json.getJSONArray("categories").objects().map {
+                Category(it.getLong("id"), it.getString("name"), it.getString("icon"), it.getLong("color"), TxType.valueOf(it.getString("type")), it.longOrNull("budget"))
+            }
+            val accounts = json.optJSONArray("accounts")?.objects().orEmpty().map {
+                Account(it.getLong("id"), it.getString("name"), it.getString("icon"), it.getLong("color"), it.getLong("opening"), it.getLong("createdAt"))
+            }
+            val transactions = json.getJSONArray("transactions").objects().map {
+                Transaction(
+                    it.getLong("id"), it.getLong("amount"), TxType.valueOf(it.getString("type")), it.getLong("categoryId"),
+                    it.getLong("day"), it.getString("note"), it.getLong("createdAt"), it.longOrNull("accountId"), null,
+                )
+            }
+            val transfers = json.optJSONArray("transfers")?.objects().orEmpty().map {
+                Transfer(it.getLong("id"), it.getLong("from"), it.getLong("to"), it.getLong("amount"), it.getLong("day"), it.getString("note"), it.getLong("createdAt"))
+            }
+            val recurring = json.optJSONArray("recurring")?.objects().orEmpty().map {
+                Recurring(
+                    it.getLong("id"), it.getString("name"), it.getLong("amount"), TxType.valueOf(it.getString("type")),
+                    it.getLong("categoryId"), it.getInt("day"), it.getString("start"), it.stringOrNull("lastPosted"), it.getBoolean("active"),
+                )
+            }
+            val goals = json.optJSONArray("goals")?.objects().orEmpty().map {
+                Goal(it.getLong("id"), it.getString("name"), it.getString("icon"), it.getLong("color"), it.getLong("target"), it.getString("targetMonth"), it.getLong("createdAt"))
+            }
+            val deposits = json.optJSONArray("deposits")?.objects().orEmpty().map {
+                GoalDeposit(it.getLong("id"), it.getLong("goalId"), it.getLong("amount"), it.getLong("day"), it.getLong("createdAt"))
+            }
+
+            database.withTransaction {
+                dao.clearDeposits()
+                dao.clearGoals()
+                dao.clearTransfers()
+                dao.clearTransactions()
+                dao.clearRecurring()
+                dao.clearAccounts()
+                dao.clearCategories()
+                dao.insertCategories(categories)
+                dao.insertAccounts(accounts)
+                dao.insertTransactions(transactions)
+                dao.insertTransfers(transfers)
+                dao.insertRecurring(recurring)
+                dao.insertGoals(goals)
+                dao.insertDeposits(deposits)
+            }
+
+            json.optJSONObject("settings")?.let { s ->
+                settings.setCurrency(s.getString("currency"))
+                settings.savePlan(
+                    BudgetPlan(
+                        mode = com.leftovers.app.data.BudgetMode.valueOf(s.getString("budgetMode")),
+                        monthlyMinor = s.getLong("monthly"),
+                        yearlyMinor = s.getLong("yearly"),
+                        split = com.leftovers.app.data.YearSplit.valueOf(s.getString("split")),
+                        custom = BudgetPlan.decodeCustom(s.optString("custom")),
+                    ),
+                )
+            }
+            transactions.size
+        }
+    }
+}
