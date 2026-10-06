@@ -92,13 +92,13 @@ class TagsAndDebtsTest {
 
     @Test fun balancesGroupByPersonIgnoringSettled() {
         val debts = listOf(
-            Debt(1, "Rahul", 50_000, createdAt = 1),
-            Debt(2, "rahul ", -20_000, createdAt = 2),
+            Debt(1, "Nick", 50_000, createdAt = 1),
+            Debt(2, "nick ", -20_000, createdAt = 2),
             Debt(3, "Priya", -10_000, createdAt = 3),
             Debt(4, "Priya", -90_000, settled = true, createdAt = 4),
         )
         val balances = debts.openBalances()
-        assertEquals(listOf("rahul", "Priya"), balances.map { it.person })
+        assertEquals(listOf("nick", "Priya"), balances.map { it.person })
         assertEquals(30_000L, balances[0].netMinor)
         assertEquals(-10_000L, balances[1].netMinor)
     }

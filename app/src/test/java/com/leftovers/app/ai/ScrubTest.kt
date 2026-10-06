@@ -14,7 +14,7 @@ class ScrubTest {
 
     @Test fun hidesPhoneNumbersUpiAndEmail() {
         assertEquals("Call [hidden]", scrub("Call 9876543210"))
-        assertEquals("Sent to [hidden]", scrub("Sent to rahul.k@okhdfcbank"))
+        assertEquals("Sent to [hidden]", scrub("Sent to nick.k@okhdfcbank"))
         assertEquals("Mail [hidden] today", scrub("Mail me@example.com today"))
     }
 
