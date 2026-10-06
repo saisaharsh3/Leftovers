@@ -12,6 +12,7 @@ import com.leftovers.app.data.TransactionRepository
 import com.leftovers.app.data.TxType
 import com.leftovers.app.util.BackupManager
 import com.leftovers.app.util.BudgetAlertManager
+import com.leftovers.app.ai.AssistantSettings
 import com.leftovers.app.util.AutoBackup
 import com.leftovers.app.util.BillReminders
 import com.leftovers.app.util.Reminders
@@ -55,6 +56,7 @@ class AppContainer(private val context: Context) {
     val sms = SmsRepository(database.smsDao())
     val backup = BackupManager(context, database, settings)
     val budgetAlerts = BudgetAlertManager(context, repository, settings)
+    val assistant = AssistantSettings(context)
 
     fun start() {
         scope.launch { sms.scrubRawBodies() }

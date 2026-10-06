@@ -65,9 +65,9 @@ import com.leftovers.app.ui.components.LocalSharedTransitionScope
 import com.leftovers.app.ui.components.frosted
 import com.leftovers.app.ui.components.glassBorder
 import com.leftovers.app.ui.components.pressable
-import com.leftovers.app.ui.components.sharedContainer
 import com.leftovers.app.ui.icons.Lucide
 import com.leftovers.app.ui.screens.AccountsScreen
+import com.leftovers.app.ui.screens.AssistantScreen
 import com.leftovers.app.ui.screens.BudgetPlanScreen
 import com.leftovers.app.ui.screens.BudgetsScreen
 import com.leftovers.app.ui.screens.CategoriesScreen
@@ -100,6 +100,7 @@ private object Routes {
     const val RECAP = "recap/{month}"
     const val SETTINGS = "settings"
     const val CATEGORIES = "categories"
+    const val ASSISTANT = "assistant"
 
     fun add(day: Long = -1L, amount: Long = -1L, note: String = "", sms: Long = -1L) =
         "add?day=$day&amount=$amount&note=${Uri.encode(note)}&sms=$sms"
@@ -121,8 +122,8 @@ private val tabs = listOf(
 
 private fun NavBackStackEntry.route() = destination.route.orEmpty()
 private fun NavBackStackEntry.isTab() = route() in Routes.tabs
-private fun NavBackStackEntry.isAdd() = route().startsWith("add")
-private fun NavBackStackEntry.isSheet() = route().startsWith("edit") || route().startsWith("recap")
+private fun NavBackStackEntry.isAdd() = route().startsWith("add") || route().startsWith("edit")
+private fun NavBackStackEntry.isSheet() = route().startsWith("recap")
 
 /** Registers a screen and hands its animation scope to shared-element modifiers. */
 private fun NavGraphBuilder.screen(
@@ -165,7 +166,8 @@ fun LeftoversNavHost(openAdd: Boolean = false, onOpenAddHandled: () -> Unit = {}
                     modifier = Modifier.fillMaxSize(),
                     enterTransition = {
                         when {
-                            targetState.isAdd() -> fadeIn(tween(250))
+                            // Add and edit slide up like a sheet: moving a finished layout is cheap and never stretches text.
+                            targetState.isAdd() -> slideInVertically(tween(320, easing = FastOutSlowInEasing)) { it / 5 } + fadeIn(tween(220))
                             targetState.isSheet() -> slideInVertically(tween(420, easing = FastOutSlowInEasing)) { it } + fadeIn(tween(200))
                             targetState.isTab() && initialState.isTab() -> fadeIn(tween(260)) + scaleIn(tween(260), initialScale = 0.985f)
                             else -> slideIntoContainer(SlideDirection.Start, spring(dampingRatio = 1f, stiffness = Spring.StiffnessMediumLow)) + fadeIn(tween(220))
@@ -189,7 +191,7 @@ fun LeftoversNavHost(openAdd: Boolean = false, onOpenAddHandled: () -> Unit = {}
                     },
                     popExitTransition = {
                         when {
-                            initialState.isAdd() -> fadeOut(tween(250))
+                            initialState.isAdd() -> slideOutVertically(tween(260, easing = FastOutSlowInEasing)) { it / 5 } + fadeOut(tween(200))
                             initialState.isSheet() -> slideOutVertically(tween(360, easing = FastOutSlowInEasing)) { it } + fadeOut(tween(260))
                             else -> slideOutOfContainer(SlideDirection.End, spring(dampingRatio = 1f, stiffness = Spring.StiffnessMediumLow)) + fadeOut(tween(220))
                         }
@@ -207,8 +209,10 @@ fun LeftoversNavHost(openAdd: Boolean = false, onOpenAddHandled: () -> Unit = {}
                             onReviewSms = { s -> nav.navigate(Routes.add(s.epochDay, s.amountMinor, s.merchant, s.id)) },
                             onOpenRecap = { nav.navigate(Routes.recap(it.toString())) },
                             onOpenAccounts = { nav.navigate(Routes.ACCOUNTS) },
+                            onOpenAssistant = { nav.navigate(Routes.ASSISTANT) },
                         )
                     }
+                    screen(Routes.ASSISTANT) { AssistantScreen(onBack = back) }
                     screen(Routes.ACTIVITY) {
                         HistoryScreen(
                             onOpenTransaction = { nav.navigate(Routes.edit(it)) },
@@ -248,7 +252,6 @@ fun LeftoversNavHost(openAdd: Boolean = false, onOpenAddHandled: () -> Unit = {}
                                 back()
                             },
                             onManageCategories = { nav.navigate(Routes.CATEGORIES) },
-                            modifier = Modifier.sharedContainer("add"),
                         )
                     }
                     screen(Routes.EDIT, idArg) {
@@ -343,7 +346,6 @@ private fun FloatingDock(current: String?, onTab: (String) -> Unit, onAdd: () ->
         Box(
             Modifier
                 .padding(horizontal = 6.dp)
-                .sharedContainer("add")
                 .size(54.dp)
                 .pressable(onAdd, pressedScale = 0.88f)
                 .clip(CircleShape)
@@ -387,7 +389,8 @@ private fun DockItem(tab: Tab, selected: Boolean, onClick: () -> Unit) {
 @Composable
 private fun Toast(text: String) {
     val c = LocalAppColors.current
-    Glass(shape = CircleShape, strong = true, modifier = Modifier.frosted()) {
+    // Clip before blurring so the frost follows the pill shape instead of filling a rectangle.
+    Glass(shape = CircleShape, strong = true, modifier = Modifier.clip(CircleShape).frosted()) {
         Row(Modifier.padding(horizontal = 18.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
             Icon(Lucide.CircleCheck, contentDescription = null, tint = c.positive, modifier = Modifier.size(18.dp))
             Spacer(Modifier.width(10.dp))

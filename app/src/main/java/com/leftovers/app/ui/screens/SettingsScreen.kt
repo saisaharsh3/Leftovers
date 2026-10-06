@@ -80,6 +80,7 @@ class SettingsViewModel(
     private val repository: TransactionRepository,
     private val settingsRepository: SettingsRepository,
     private val backup: BackupManager,
+    val assistant: com.leftovers.app.ai.AssistantSettings,
 ) : ViewModel() {
     val settings: StateFlow<AppSettings?> =
         settingsRepository.settings.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
@@ -192,6 +193,7 @@ fun SettingsScreen(
     var showCurrency by rememberSaveable { mutableStateOf(false) }
     var confirmWipe by rememberSaveable { mutableStateOf(false) }
     var showTime by rememberSaveable { mutableStateOf(false) }
+    var showAssistant by rememberSaveable { mutableStateOf(false) }
     var pendingRestore by remember { mutableStateOf<Uri?>(null) }
     fun toast(text: String) = scope.launch { snackbar.showSnackbar(text) }
 
@@ -276,6 +278,16 @@ fun SettingsScreen(
                 }
             }
 
+            item { SectionHeader("AI assistant") }
+            item {
+                val assistant by viewModel.assistant.config.collectAsStateWithLifecycle()
+                Glass(Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(vertical = 6.dp)) {
+                        NavRow(Lucide.Sparkles, "AI assistant", assistant?.let { "${it.provider.label} · connected" } ?: "Not connected") { showAssistant = true }
+                    }
+                }
+            }
+
             item { SectionHeader("General") }
             item {
                 Glass(Modifier.fillMaxWidth()) {
@@ -337,7 +349,7 @@ fun SettingsScreen(
                 ) {
                     Icon(Lucide.Lock, contentDescription = null, tint = c.textTertiary, modifier = Modifier.size(14.dp))
                     Spacer(Modifier.width(6.dp))
-                    Text("Stored only on this device · Leftovers 1.0.3", style = MaterialTheme.typography.bodySmall, color = c.textTertiary, textAlign = TextAlign.Center)
+                    Text("Stored only on this device · Leftovers 1.0.4", style = MaterialTheme.typography.bodySmall, color = c.textTertiary, textAlign = TextAlign.Center)
                 }
             }
             item {
@@ -355,6 +367,8 @@ fun SettingsScreen(
                 )
             }
         }
+
+        if (showAssistant) AssistantSetupSheet(onDismiss = { showAssistant = false })
 
         if (showCurrency) {
             CurrencyPickerSheet(

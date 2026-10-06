@@ -170,6 +170,7 @@ fun HomeScreen(
     onReviewSms: (SmsSuggestion) -> Unit,
     onOpenRecap: (YearMonth) -> Unit,
     onOpenAccounts: () -> Unit,
+    onOpenAssistant: () -> Unit,
     viewModel: HomeViewModel = viewModel(factory = AppViewModelProvider.Factory),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -196,6 +197,8 @@ fun HomeScreen(
                         Text(greeting(), style = MaterialTheme.typography.bodyMedium, color = c.textSecondary)
                         Text(state.month.label(), style = MaterialTheme.typography.headlineLarge, color = c.textPrimary)
                     }
+                    RoundButton(Lucide.Sparkles, "AI assistant", onOpenAssistant)
+                    Spacer(Modifier.width(8.dp))
                     RoundButton(Lucide.Settings, "Settings", onOpenSettings)
                 }
             }

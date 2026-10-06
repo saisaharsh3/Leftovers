@@ -7,6 +7,8 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.leftovers.app.LeftoversApp
 import com.leftovers.app.ui.screens.AccountsViewModel
+import com.leftovers.app.ui.screens.AssistantSetupViewModel
+import com.leftovers.app.ui.screens.AssistantViewModel
 import com.leftovers.app.ui.screens.BudgetPlanViewModel
 import com.leftovers.app.ui.screens.BudgetsViewModel
 import com.leftovers.app.ui.screens.CategoriesViewModel
@@ -28,7 +30,7 @@ object AppViewModelProvider {
             val c = container()
             EditorViewModel(createSavedStateHandle(), app(), c.repository, c.accounts, c.settings, c.sms, c.planning, c.budgetAlerts)
         }
-        initializer { AccountsViewModel(container().accounts, container().settings) }
+        initializer { AccountsViewModel(container().accounts, container().settings, container().repository) }
         initializer { RecapViewModel(createSavedStateHandle(), container().repository, container().planning, container().settings) }
         initializer { HistoryViewModel(container().repository) }
         initializer { StatsViewModel(container().repository, container().settings) }
@@ -42,7 +44,9 @@ object AppViewModelProvider {
         initializer { GoalsViewModel(container().planning) }
         initializer { GoalDetailViewModel(createSavedStateHandle(), container().planning) }
         initializer { CategoriesViewModel(container().repository) }
-        initializer { SettingsViewModel(container().repository, container().settings, container().backup) }
+        initializer { SettingsViewModel(container().repository, container().settings, container().backup, container().assistant) }
+        initializer { AssistantViewModel(container(), container().assistant) }
+        initializer { AssistantSetupViewModel(container().assistant) }
     }
 }
 

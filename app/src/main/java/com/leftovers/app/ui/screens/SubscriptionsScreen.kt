@@ -187,12 +187,19 @@ fun SubscriptionsScreen(
             item {
                 Glass(Modifier.fillMaxWidth().appear(0), strong = true, shape = RoundedCornerShape(32.dp)) {
                     Column(Modifier.padding(22.dp)) {
-                        Text("Going out every month", style = MaterialTheme.typography.labelLarge, color = c.textSecondary)
+                        // Lead with whichever side the user is looking at; mention the other below.
+                        val income = filter == TxType.INCOME
+                        Text(if (income) "Coming in every month" else "Going out every month", style = MaterialTheme.typography.labelLarge, color = c.textSecondary)
                         Spacer(Modifier.height(4.dp))
-                        RollingText(money.format(monthlyOut), MaterialTheme.typography.displaySmall, c.textPrimary)
-                        if (monthlyIn > 0) {
+                        RollingText(money.format(if (income) monthlyIn else monthlyOut), MaterialTheme.typography.displaySmall, if (income) c.positive else c.textPrimary)
+                        val other = if (income) monthlyOut else monthlyIn
+                        if (other > 0) {
                             Spacer(Modifier.height(6.dp))
-                            Text("+${money.format(monthlyIn)} coming in", style = MaterialTheme.typography.bodySmall, color = c.positive)
+                            Text(
+                                if (income) "−${money.format(other)} going out" else "+${money.format(other)} coming in",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = if (income) c.textSecondary else c.positive,
+                            )
                         }
                     }
                 }
@@ -461,7 +468,7 @@ private fun RecurringEditor(
                 },
                 Modifier.fillMaxWidth(),
             )
-            GlassTextField(name, { name = it.take(30) }, placeholder = "e.g. Netflix", label = "Name")
+            GlassTextField(name, { name = it.take(30) }, placeholder = if (type == TxType.INCOME) "e.g. Salary" else "e.g. Netflix", label = "Name")
             MoneyField(amountText, { amountText = it }, label = "Amount every month")
 
             Text("Category", style = MaterialTheme.typography.labelMedium, color = c.textSecondary, modifier = Modifier.padding(start = 6.dp))
@@ -472,7 +479,7 @@ private fun RecurringEditor(
             }
 
             Text(
-                "Deducted on the ${if (day == 31) "last day" else ordinal(day)} of every month",
+                "${if (type == TxType.INCOME) "Received" else "Deducted"} on the ${if (day == 31) "last day" else ordinal(day)} of every month",
                 style = MaterialTheme.typography.labelMedium,
                 color = c.textSecondary,
                 modifier = Modifier.padding(start = 6.dp),

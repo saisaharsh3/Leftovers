@@ -150,7 +150,7 @@ fun PlanScreen(
                     Column(Modifier.padding(vertical = 6.dp)) {
                         ListRow(
                             title = if (active.isEmpty()) "No subscriptions yet" else "${money.format(active.sumOf { it.amountMinor })} every month",
-                            subtitle = if (active.isEmpty()) "Rent, phone, streaming — logged automatically" else "${active.size} active · deducted on their billing day",
+                            subtitle = if (active.isEmpty()) "Rent, phone, streaming — logged automatically" else "${active.size} active · logged automatically each month",
                             leading = { IconTile(Lucide.Repeat, c.textPrimary, size = 42.dp) },
                             trailing = { Icon(Lucide.ChevronRight, contentDescription = null, tint = c.textTertiary, modifier = Modifier.size(18.dp)) },
                         )

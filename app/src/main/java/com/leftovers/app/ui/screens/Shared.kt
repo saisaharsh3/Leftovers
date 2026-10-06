@@ -84,6 +84,9 @@ fun GlassTextField(
     keyboardType: KeyboardType = KeyboardType.Text,
     textStyle: TextStyle = MaterialTheme.typography.bodyLarge,
     focusRequester: FocusRequester? = null,
+    /** Masks the text and keeps it out of keyboard suggestions, for secrets like API keys. */
+    password: Boolean = false,
+    singleLine: Boolean = true,
 ) {
     val c = LocalAppColors.current
     Column(modifier) {
@@ -101,12 +104,15 @@ fun GlassTextField(
                     BasicTextField(
                         value = value,
                         onValueChange = onValueChange,
-                        singleLine = true,
+                        singleLine = singleLine,
+                        maxLines = if (singleLine) 1 else 5,
                         textStyle = textStyle.copy(color = c.textPrimary),
+                        visualTransformation = if (password) androidx.compose.ui.text.input.PasswordVisualTransformation() else androidx.compose.ui.text.input.VisualTransformation.None,
                         cursorBrush = SolidColor(c.accent),
                         keyboardOptions = KeyboardOptions(
-                            keyboardType = keyboardType,
-                            capitalization = if (keyboardType == KeyboardType.Text) KeyboardCapitalization.Sentences else KeyboardCapitalization.None,
+                            keyboardType = if (password) KeyboardType.Password else keyboardType,
+                            capitalization = if (keyboardType == KeyboardType.Text && !password) KeyboardCapitalization.Sentences else KeyboardCapitalization.None,
+                            autoCorrectEnabled = !password,
                         ),
                         modifier = Modifier
                             .fillMaxWidth()

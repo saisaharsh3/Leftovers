@@ -51,6 +51,7 @@ today, and plan for the things you want.
 - A story-style monthly recap
 
 **Extras**
+- Optional AI assistant (Claude, ChatGPT or Gemini, your own key): ask about your spending or tell it what to log; every change waits for your Apply
 - Home-screen widgets: safe to spend today (with a one-tap add button) and what's left this month
 - Evening reminder, app lock (fingerprint, face or PIN), backup and restore to a file or Google Drive, weekly automatic backups to a folder you choose, CSV export
 - Optional bank-SMS detection that suggests entries for you to confirm
@@ -58,11 +59,23 @@ today, and plan for the things you want.
 
 ## Privacy
 
-Everything stays on your device. There are no accounts, ads, analytics or network calls.
+Everything stays on your device. There are no accounts, ads or analytics, and the app makes no network calls unless you connect the optional AI assistant.
 The app is excluded from Android's automatic cloud backup, so backups go only where you choose to
 save them. With app lock on, screenshots are blocked and the app is hidden in the recent-apps
 preview. SMS detection is off by default; when it is on,
 messages are read on the device and nothing is added without your tap.
+
+**AI assistant (optional, off until you connect it).** You can connect Claude, ChatGPT or Gemini with your
+own API key to ask questions or have it log and edit entries. When connected:
+
+- Your key is encrypted with an Android Keystore key, never included in backups, and deleted when you disconnect.
+- The AI sees only what a question needs, through specific commands: totals first, at most 50 entries at a time.
+  Each reply shows what was shared.
+- Notes stay on the phone unless you turn on *Share entry notes*. Card and account numbers, UPI IDs, phone numbers
+  and emails are blanked out before anything is sent. Receipt photos and SMS are never sent.
+- Every change it proposes (add, edit, delete, budgets, subscriptions, transfers, goals) waits for you to tap
+  **Apply**, and *Let it propose changes* can be turned off for read-only use.
+- Chats aren't saved, and connections are HTTPS-only to the provider you chose, handled under its privacy policy.
 
 ## Install
 

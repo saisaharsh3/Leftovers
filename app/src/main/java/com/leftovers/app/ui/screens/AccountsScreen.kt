@@ -1,5 +1,8 @@
 package com.leftovers.app.ui.screens
 
+import com.leftovers.app.data.TxType
+import com.leftovers.app.data.TransactionItem
+import com.leftovers.app.data.TransactionRepository
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -78,7 +81,45 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 
-class AccountsViewModel(private val repository: AccountRepository, private val settings: SettingsRepository) : ViewModel() {
+/** Where an account's balance comes from, so a surprising number can be traced. */
+data class BalanceBreakdown(
+    val opening: Long,
+    val income: Long,
+    val spent: Long,
+    val transfersIn: Long,
+    val transfersOut: Long,
+    val entries: Int,
+    /** Entries dated before the account was added, whose effect the opening balance may already include. */
+    val olderCount: Int,
+    val olderNet: Long,
+) {
+    val balance: Long get() = opening + income - spent + transfersIn - transfersOut
+}
+
+class AccountsViewModel(
+    private val repository: AccountRepository,
+    private val settings: SettingsRepository,
+    transactions: TransactionRepository,
+) : ViewModel() {
+    val allTransactions: StateFlow<List<TransactionItem>> =
+        transactions.allTransactions.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    fun breakdown(account: Account, items: List<TransactionItem>, transferList: List<Transfer>): BalanceBreakdown {
+        val mine = items.filter { it.accountId == account.id }
+        val addedOn = java.time.Instant.ofEpochMilli(account.createdAt).atZone(java.time.ZoneId.systemDefault()).toLocalDate().toEpochDay()
+        val older = mine.filter { it.epochDay < addedOn }
+        return BalanceBreakdown(
+            opening = account.openingMinor,
+            income = mine.filter { it.type == TxType.INCOME }.sumOf { it.amountMinor },
+            spent = mine.filter { it.type == TxType.EXPENSE }.sumOf { it.amountMinor },
+            transfersIn = transferList.filter { it.toAccountId == account.id }.sumOf { it.amountMinor },
+            transfersOut = transferList.filter { it.fromAccountId == account.id }.sumOf { it.amountMinor },
+            entries = mine.size,
+            olderCount = older.size,
+            olderNet = older.sumOf { if (it.type == TxType.INCOME) it.amountMinor else -it.amountMinor },
+        )
+    }
+
     val accounts: StateFlow<List<AccountWithBalance>> =
         repository.accounts.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
     val transfers: StateFlow<List<Transfer>> =
@@ -226,8 +267,10 @@ fun AccountsScreen(
     }
 
     editing?.let { account ->
+        val all by viewModel.allTransactions.collectAsStateWithLifecycle()
         AccountEditor(
             initial = account,
+            breakdown = if (account.id != 0L) viewModel.breakdown(account, all, transfers) else null,
             isDefault = account.id == defaultId,
             onDismiss = { editing = null },
             onSave = { a, makeDefault ->
@@ -297,6 +340,7 @@ fun AccountsScreen(
 @Composable
 private fun AccountEditor(
     initial: Account,
+    breakdown: BalanceBreakdown?,
     isDefault: Boolean,
     onDismiss: () -> Unit,
     onSave: (Account, Boolean) -> Unit,
@@ -353,6 +397,7 @@ private fun AccountEditor(
                 Modifier.fillMaxWidth(),
                 enabled = name.isNotBlank(),
             )
+            if (breakdown != null) BalanceBreakdownCard(breakdown, initial.createdAt)
             if (onMoveEntries != null) {
                 SecondaryButton("Move its entries to another account", onMoveEntries, Modifier.fillMaxWidth(), icon = Lucide.Repeat)
             }
@@ -426,6 +471,44 @@ private fun MoveEntriesSheet(
                 targets.forEach { a -> Chip(a.name, onClick = { to = a.id }, icon = CategoryIcons[a.icon], iconTint = Color(a.color), selected = to == a.id) }
             }
             PrimaryButton("Move entries", { targets.find { it.id == to }?.let(onMove) }, Modifier.fillMaxWidth())
+        }
+    }
+}
+
+@Composable
+private fun BalanceBreakdownCard(b: BalanceBreakdown, createdAt: Long) {
+    val c = LocalAppColors.current
+    val money = LocalMoney.current
+    @Composable
+    fun line(label: String, amount: Long, sign: String, color: Color = c.textPrimary) {
+        Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(label, style = MaterialTheme.typography.bodyMedium, color = c.textSecondary, modifier = Modifier.weight(1f))
+            Text("$sign${money.format(amount)}", style = MaterialTheme.typography.bodyMedium, color = color)
+        }
+    }
+    Glass(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp)) {
+            Text("How this balance adds up", style = MaterialTheme.typography.titleSmall, color = c.textPrimary)
+            Spacer(Modifier.height(8.dp))
+            line("Opening balance", b.opening, "")
+            line("Income (${b.entries} entries in total)", b.income, "+ ", c.positive)
+            line("Spending", b.spent, "− ", c.negative)
+            if (b.transfersIn > 0) line("Transfers in", b.transfersIn, "+ ")
+            if (b.transfersOut > 0) line("Transfers out", b.transfersOut, "− ")
+            RowDivider(inset = 0.dp)
+            Spacer(Modifier.height(4.dp))
+            line("Balance", b.balance, "")
+            if (b.olderCount > 0) {
+                val added = java.time.Instant.ofEpochMilli(createdAt).atZone(java.time.ZoneId.systemDefault()).toLocalDate().friendlyLabel()
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    "${b.olderCount} ${if (b.olderCount == 1) "entry is" else "entries are"} dated before you added this account ($added), " +
+                        "changing it by ${money.format(b.olderNet)}. If the opening balance you typed already included ${if (b.olderCount == 1) "it" else "them"}, " +
+                        "${if (b.olderCount == 1) "it is" else "they are"} counted twice: set the opening balance to what the account held before ${if (b.olderCount == 1) "it" else "them"}.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = c.warning,
+                )
+            }
         }
     }
 }
