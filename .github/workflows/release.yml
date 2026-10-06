@@ -21,6 +21,9 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v6
 
+      - name: Run unit tests
+        run: ./gradlew testDebugUnitTest --stacktrace
+
       - name: Restore signing key
         env:
           SIGNING_KEYSTORE_BASE64: ${{ secrets.SIGNING_KEYSTORE_BASE64 }}
