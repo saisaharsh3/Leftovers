@@ -31,6 +31,7 @@ import com.leftovers.app.data.BudgetMode
 import com.leftovers.app.data.BudgetPlan
 import com.leftovers.app.data.GoalWithSaved
 import com.leftovers.app.data.PlanningRepository
+import com.leftovers.app.data.openBalances
 import com.leftovers.app.data.RecurringItem
 import com.leftovers.app.data.SettingsRepository
 import com.leftovers.app.data.TransactionRepository
@@ -72,6 +73,8 @@ data class PlanUiState(
     val dailyLimit: Long = 0,
     val recurring: List<RecurringItem> = emptyList(),
     val goals: List<GoalWithSaved> = emptyList(),
+    val owedToYou: Long = 0,
+    val youOwe: Long = 0,
 )
 
 class PlanViewModel(
@@ -84,7 +87,9 @@ class PlanViewModel(
         settings.settings,
         planning.recurring,
         planning.goals,
-    ) { all, s, recurring, goals ->
+        planning.debts,
+    ) { all, s, recurring, goals, debts ->
+        val open = debts.openBalances()
         val month = YearMonth.now()
         val items = all.filter { YearMonth.from(it.date) == month }
         val budget = s.plan.budgetFor(month, all)
@@ -96,6 +101,8 @@ class PlanViewModel(
             dailyLimit = dailyBudget(budget, items, recurring.pendingExpenses(month))?.dailyLimit ?: 0,
             recurring = recurring,
             goals = goals,
+            owedToYou = open.filter { it.netMinor > 0 }.sumOf { it.netMinor },
+            youOwe = open.filter { it.netMinor < 0 }.sumOf { -it.netMinor },
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), PlanUiState())
 }
@@ -109,6 +116,7 @@ fun PlanScreen(
     onOpenGoal: (Long) -> Unit,
     onOpenCategories: () -> Unit,
     onOpenAccounts: () -> Unit,
+    onOpenDebts: () -> Unit,
     viewModel: PlanViewModel = viewModel(factory = AppViewModelProvider.Factory),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -211,6 +219,19 @@ fun PlanScreen(
                             leading = { IconTile(Lucide.Wallet, c.textPrimary, size = 42.dp) },
                             trailing = { Icon(Lucide.ChevronRight, contentDescription = null, tint = c.textTertiary, modifier = Modifier.size(18.dp)) },
                             onClick = onOpenAccounts,
+                        )
+                        RowDivider()
+                        ListRow(
+                            "Money owed",
+                            subtitle = when {
+                                state.owedToYou > 0 && state.youOwe > 0 -> "You're owed ${money.format(state.owedToYou)} · you owe ${money.format(state.youOwe)}"
+                                state.owedToYou > 0 -> "You're owed ${money.format(state.owedToYou)}"
+                                state.youOwe > 0 -> "You owe ${money.format(state.youOwe)}"
+                                else -> "Lent and borrowed with friends"
+                            },
+                            leading = { IconTile(Lucide.HandCoins, c.textPrimary, size = 42.dp) },
+                            trailing = { Icon(Lucide.ChevronRight, contentDescription = null, tint = c.textTertiary, modifier = Modifier.size(18.dp)) },
+                            onClick = onOpenDebts,
                         )
                         RowDivider()
                         ListRow(

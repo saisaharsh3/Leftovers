@@ -74,6 +74,7 @@ import com.leftovers.app.ui.screens.AssistantScreen
 import com.leftovers.app.ui.screens.BudgetPlanScreen
 import com.leftovers.app.ui.screens.BudgetsScreen
 import com.leftovers.app.ui.screens.CategoriesScreen
+import com.leftovers.app.ui.screens.DebtsScreen
 import com.leftovers.app.ui.screens.EditorScreen
 import com.leftovers.app.ui.screens.GoalDetailScreen
 import com.leftovers.app.ui.screens.GoalsScreen
@@ -92,6 +93,7 @@ private object Routes {
     const val ACTIVITY = "activity"
     const val INSIGHTS = "insights"
     const val PLAN = "plan"
+    const val DEBTS = "debts"
     const val ADD = "add?day={day}&amount={amount}&note={note}&sms={sms}"
     const val EDIT = "edit/{id}"
     const val BUDGET = "budget"
@@ -272,8 +274,10 @@ fun LeftoversNavHost(openAdd: Boolean = false, onOpenAddHandled: () -> Unit = {}
                             onOpenGoal = { nav.navigate(Routes.goal(it)) },
                             onOpenCategories = { nav.navigate(Routes.CATEGORIES) },
                             onOpenAccounts = { nav.navigate(Routes.ACCOUNTS) },
+                            onOpenDebts = { nav.navigate(Routes.DEBTS) },
                         )
                     }
+                    screen(Routes.DEBTS) { DebtsScreen(onBack = back) }
                     screen(
                         Routes.ADD,
                         listOf(

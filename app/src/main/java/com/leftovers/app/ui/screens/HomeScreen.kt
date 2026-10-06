@@ -40,6 +40,7 @@ import com.leftovers.app.data.AccountRepository
 import com.leftovers.app.data.DailyBudget
 import com.leftovers.app.data.GoalWithSaved
 import com.leftovers.app.data.PlanningRepository
+import com.leftovers.app.data.forecastMonthEnd
 import com.leftovers.app.data.RecurringItem
 import com.leftovers.app.data.SettingsRepository
 import com.leftovers.app.data.SmsRepository
@@ -104,6 +105,8 @@ data class HomeUiState(
     /** Sum of every account's balance; null until accounts load. */
     val balance: Long? = null,
     val accountCount: Int = 0,
+    /** Where [balance] is heading by the end of the month; null early in the month. */
+    val forecast: Long? = null,
 )
 
 class HomeViewModel(
@@ -146,6 +149,7 @@ class HomeViewModel(
             carryPrompt = s.plan.pendingCarry(month, all),
             balance = accountList.sumOf { it.balanceMinor },
             accountCount = accountList.size,
+            forecast = forecastMonthEnd(accountList.sumOf { it.balanceMinor }, all, recurring, todayDate),
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), HomeUiState())
 
@@ -254,6 +258,14 @@ fun HomeScreen(
                             Column(Modifier.weight(1f)) {
                                 Text("Total balance", style = MaterialTheme.typography.labelLarge, color = c.textSecondary)
                                 RollingText(money.formatWhole(balance), MaterialTheme.typography.headlineSmall, if (balance < 0) c.negative else c.textPrimary)
+                                state.forecast?.let { f ->
+                                    val end = state.month.atEndOfMonth().format(java.time.format.DateTimeFormatter.ofPattern("d MMM"))
+                                    Text(
+                                        "About ${money.formatWhole(f)} by $end",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = if (f < 0) c.negative else c.textSecondary,
+                                    )
+                                }
                             }
                             Text(
                                 if (state.accountCount == 1) "1 account" else "${state.accountCount} accounts",

@@ -1,5 +1,21 @@
 package com.leftovers.app.ui.screens
 
+import android.content.Context
+import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.Canvas as AndroidCanvas
+import android.graphics.Paint
+import androidx.compose.foundation.layout.width
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.graphics.layer.drawLayer
+import androidx.compose.ui.graphics.rememberGraphicsLayer
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.FileProvider
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import java.io.File
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
@@ -141,6 +157,11 @@ fun RecapScreen(onClose: () -> Unit, viewModel: RecapViewModel = viewModel(facto
     val pager = rememberPagerState { pages.size }
     val scope = rememberCoroutineScope()
     val progress = remember { Animatable(0f) }
+    val context = LocalContext.current
+    // The current page is recorded as it draws, so it can be shared as an image.
+    val shot = rememberGraphicsLayer()
+    val background = c.background.toArgb()
+    val footer = c.textTertiary.toArgb()
 
     // Keyed on the settled page: currentPage flips halfway through a scroll, which would restart
     // this effect and cancel the scroll, leaving the pager stuck between two pages.
@@ -156,6 +177,10 @@ fun RecapScreen(onClose: () -> Unit, viewModel: RecapViewModel = viewModel(facto
             state = pager,
             modifier = Modifier
                 .fillMaxSize()
+                .drawWithContent {
+                    shot.record { this@drawWithContent.drawContent() }
+                    drawLayer(shot)
+                }
                 .pointerInput(Unit) {
                     detectTapGestures { offset ->
                         scope.launch {
@@ -189,6 +214,10 @@ fun RecapScreen(onClose: () -> Unit, viewModel: RecapViewModel = viewModel(facto
                     color = c.textSecondary,
                     modifier = Modifier.weight(1f),
                 )
+                RoundButton(Lucide.Share2, "Share", {
+                    scope.launch { shareRecap(context, shot.toImageBitmap().asAndroidBitmap(), background, footer) }
+                }, size = 40.dp)
+                Spacer(Modifier.width(8.dp))
                 RoundButton(Lucide.X, "Close", onClose, size = 40.dp)
             }
         }
@@ -205,6 +234,33 @@ fun RecapScreen(onClose: () -> Unit, viewModel: RecapViewModel = viewModel(facto
             )
         }
     }
+}
+
+/** Shares the page on a solid background with a small "Leftovers" mark, through the share sheet. */
+private suspend fun shareRecap(context: Context, page: Bitmap, background: Int, footer: Int) {
+    val uri = withContext(Dispatchers.IO) {
+        val src = page.copy(Bitmap.Config.ARGB_8888, false)
+        val out = Bitmap.createBitmap(src.width, src.height, Bitmap.Config.ARGB_8888)
+        AndroidCanvas(out).apply {
+            drawColor(background)
+            drawBitmap(src, 0f, 0f, null)
+            val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = footer
+                textSize = src.width / 28f
+                textAlign = Paint.Align.CENTER
+            }
+            drawText("Leftovers", src.width / 2f, src.height - src.width / 12f, paint)
+        }
+        val dir = File(context.cacheDir, "exports").apply { mkdirs() }
+        val file = File(dir, "recap.png")
+        file.outputStream().use { out.compress(Bitmap.CompressFormat.PNG, 100, it) }
+        FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+    }
+    val send = Intent(Intent.ACTION_SEND)
+        .setType("image/png")
+        .putExtra(Intent.EXTRA_STREAM, uri)
+        .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    context.startActivity(Intent.createChooser(send, "Share recap"))
 }
 
 private val dayFormat = DateTimeFormatter.ofPattern("EEEE, d MMMM")

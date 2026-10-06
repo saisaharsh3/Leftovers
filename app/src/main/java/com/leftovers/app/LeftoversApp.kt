@@ -54,7 +54,7 @@ class AppContainer(private val context: Context) {
     val planning = PlanningRepository(database)
     val accounts = AccountRepository(database.accountDao(), database.transferDao(), database.transactionDao())
     val sms = SmsRepository(database.smsDao())
-    val backup = BackupManager(context, database, settings)
+    val backup = BackupManager(context, database, settings, com.leftovers.app.util.BackupPassword(context))
     val budgetAlerts = BudgetAlertManager(context, repository, settings)
     val assistant = AssistantSettings(context)
 

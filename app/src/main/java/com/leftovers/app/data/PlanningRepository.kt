@@ -9,9 +9,12 @@ class PlanningRepository(private val database: AppDatabase) {
     private val recurringDao = database.recurringDao()
     private val goalDao = database.goalDao()
     private val transactionDao = database.transactionDao()
+    private val debtDao = database.debtDao()
 
     val recurring: Flow<List<RecurringItem>> = recurringDao.observeAll()
     val goals: Flow<List<GoalWithSaved>> = goalDao.observeAll()
+
+    val debts: Flow<List<Debt>> = debtDao.observeAll()
 
     fun deposits(goalId: Long): Flow<List<GoalDeposit>> = goalDao.observeDeposits(goalId)
 
@@ -22,6 +25,10 @@ class PlanningRepository(private val database: AppDatabase) {
     suspend fun deleteGoal(goal: Goal) = goalDao.delete(goal)
     suspend fun saveDeposit(deposit: GoalDeposit) = goalDao.upsertDeposit(deposit)
     suspend fun deleteDeposit(deposit: GoalDeposit) = goalDao.deleteDeposit(deposit)
+
+    suspend fun saveDebt(debt: Debt) = debtDao.upsert(debt)
+    suspend fun deleteDebt(debt: Debt) = debtDao.delete(debt)
+    suspend fun settle(person: String) = debtDao.settle(person)
 
     /**
      * Logs every recurring charge whose date has arrived but hasn't been recorded yet,

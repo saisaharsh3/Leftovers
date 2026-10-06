@@ -10,9 +10,9 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 @Database(
     entities = [
         Category::class, Transaction::class, Recurring::class, Goal::class, GoalDeposit::class,
-        Account::class, Transfer::class, SmsSuggestion::class,
+        Account::class, Transfer::class, SmsSuggestion::class, Debt::class,
     ],
-    version = 6,
+    version = 7,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -24,13 +24,25 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun transferDao(): TransferDao
     abstract fun smsDao(): SmsDao
     abstract fun backupDao(): BackupDao
+    abstract fun debtDao(): DebtDao
 
     companion object {
         fun build(context: Context): AppDatabase =
             Room.databaseBuilder(context, AppDatabase::class.java, "leftovers.db")
                 .addCallback(SeedCategories)
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
+                .addMigrations(*ALL_MIGRATIONS)
                 .build()
+    }
+}
+
+/** v7 adds money lent and borrowed. */
+private val MIGRATION_6_7 = object : Migration(6, 7) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `debts` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `person` TEXT NOT NULL, " +
+                "`amountMinor` INTEGER NOT NULL, `note` TEXT NOT NULL, `epochDay` INTEGER NOT NULL, `settled` INTEGER NOT NULL, " +
+                "`createdAt` INTEGER NOT NULL)",
+        )
     }
 }
 
@@ -201,3 +213,7 @@ val DefaultCategories = listOf(
     Category(name = "Gifts", emoji = "party", color = Palette.AMBER, type = TxType.INCOME, addsToBudget = true),
     Category(name = "Other", emoji = "coins", color = Palette.LILAC, type = TxType.INCOME, addsToBudget = true),
 )
+
+/** Every upgrade step, oldest first; also used by the migration tests. */
+internal val ALL_MIGRATIONS: Array<Migration>
+    get() = arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)

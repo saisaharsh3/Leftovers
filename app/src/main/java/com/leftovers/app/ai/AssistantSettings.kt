@@ -138,8 +138,8 @@ class AssistantSettings(context: Context) {
     }
 }
 
-/** AES-GCM with a non-exportable Keystore key. */
-private object KeyVault {
+/** AES-GCM with a non-exportable Keystore key. Also protects the backup password. */
+internal object KeyVault {
     private const val ALIAS = "leftovers_assistant_key"
     private const val TRANSFORMATION = "AES/GCM/NoPadding"
 

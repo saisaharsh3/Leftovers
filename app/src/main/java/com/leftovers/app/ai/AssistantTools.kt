@@ -141,8 +141,8 @@ class AssistantTools(private val container: AppContainer, private val privacy: A
                     Param("category", "string", "Category name", required = true),
                     Param("day_of_month", "integer", "Billing day, 1-31", required = true),
                     Param("type", "string", "expense (default) or income", enum = listOf("expense", "income")),
-                    Param("every", "string", "monthly (default) or yearly", enum = listOf("monthly", "yearly")),
-                    Param("month", "integer", "For yearly: the month it's charged, 1-12"),
+                    Param("every", "string", "monthly (default), quarterly (every 3 months), half-yearly (every 6 months) or yearly", enum = listOf("monthly", "quarterly", "half-yearly", "yearly")),
+                    Param("month", "integer", "If not monthly: the month of the next charge, 1-12"),
                 ),
                 changesData = true,
             ))
@@ -289,7 +289,7 @@ class AssistantTools(private val container: AppContainer, private val privacy: A
                 val list = container.planning.recurring.first()
                 Prepared.Answer(JSONArray(list.map { r ->
                     JSONObject().put("id", r.id).put("name", scrub(r.name)).put("amount", major(r.amountMinor)).put("type", r.type.name.lowercase())
-                        .put("every", if (r.everyMonths == 12) "yearly" else "monthly")
+                        .put("every", cycleName(r.everyMonths))
                         .put("category", r.categoryName).put("day_of_month", r.dayOfMonth).put("active", r.active)
                         .put("next_charge", if (r.active) r.toRecurring().nextChargeDate().toString() else JSONObject.NULL)
                 }).toString(), "${list.size} subscriptions")
@@ -390,25 +390,31 @@ class AssistantTools(private val container: AppContainer, private val privacy: A
             val cat = findCategory(categories, a.getString("category"), type)
             val day = a.getInt("day_of_month").also { require(it in 1..31) { "day_of_month must be 1-31" } }
             val subName = a.getString("name").trim().take(40).ifEmpty { cat.name }
-            val yearly = a.optString("every").equals("yearly", ignoreCase = true)
-            val billMonth = if (yearly) a.optInt("month", LocalDate.now().monthValue).also { require(it in 1..12) { "month must be 1-12" } } else 0
-            val whenText = if (yearly) {
-                "on $day ${java.time.Month.of(billMonth).getDisplayName(java.time.format.TextStyle.FULL, java.util.Locale.getDefault())} each year"
-            } else {
-                "on the ${day}${suffix(day)} of each month"
+            val every = when (a.optString("every").lowercase()) {
+                "yearly" -> 12
+                "half-yearly" -> 6
+                "quarterly" -> 3
+                else -> 1
+            }
+            val billMonth = if (every > 1) a.optInt("month", LocalDate.now().monthValue).also { require(it in 1..12) { "month must be 1-12" } } else 0
+            val monthName = if (every > 1) java.time.Month.of(billMonth).getDisplayName(java.time.format.TextStyle.FULL, java.util.Locale.getDefault()) else ""
+            val whenText = when (every) {
+                1 -> "on the ${day}${suffix(day)} of each month"
+                12 -> "on $day $monthName each year"
+                else -> "on $day $monthName, then every $every months"
             }
             ProposedChange(ChangeKind.SUBSCRIPTION, "Add ${if (type == TxType.INCOME) "recurring income" else "subscription"} \"$subName\": ${money.format(amount)} $whenText (${cat.name})") {
                 // Start the next time the billing date comes round, so nothing is back-filled.
                 val today = LocalDate.now()
                 val now = YearMonth.now()
-                val start = if (yearly) {
+                val start = if (every > 1) {
                     var m = YearMonth.of(now.year, billMonth)
                     if (m < now || (m == now && today.dayOfMonth > day)) m = m.plusYears(1)
                     m
                 } else {
                     if (today.dayOfMonth <= day) now else now.plusMonths(1)
                 }
-                container.planning.saveRecurring(Recurring(name = subName, amountMinor = amount, type = type, categoryId = cat.id, dayOfMonth = day, startMonth = start.toString(), everyMonths = if (yearly) 12 else 1))
+                container.planning.saveRecurring(Recurring(name = subName, amountMinor = amount, type = type, categoryId = cat.id, dayOfMonth = day, startMonth = start.toString(), everyMonths = every))
                 "Subscription added"
             }
         }
@@ -519,3 +525,10 @@ class AssistantTools(private val container: AppContainer, private val privacy: A
 }
 
 private fun Transaction.date(): LocalDate = LocalDate.ofEpochDay(epochDay)
+
+private fun cycleName(months: Int) = when (months) {
+    12 -> "yearly"
+    6 -> "half-yearly"
+    3 -> "quarterly"
+    else -> "monthly"
+}

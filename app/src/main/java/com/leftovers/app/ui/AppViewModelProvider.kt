@@ -12,6 +12,7 @@ import com.leftovers.app.ui.screens.AssistantViewModel
 import com.leftovers.app.ui.screens.BudgetPlanViewModel
 import com.leftovers.app.ui.screens.BudgetsViewModel
 import com.leftovers.app.ui.screens.CategoriesViewModel
+import com.leftovers.app.ui.screens.DebtsViewModel
 import com.leftovers.app.ui.screens.EditorViewModel
 import com.leftovers.app.ui.screens.GoalDetailViewModel
 import com.leftovers.app.ui.screens.GoalsViewModel
@@ -32,16 +33,17 @@ object AppViewModelProvider {
         }
         initializer { AccountsViewModel(container().accounts, container().settings, container().repository) }
         initializer { RecapViewModel(createSavedStateHandle(), container().repository, container().planning, container().settings) }
-        initializer { HistoryViewModel(container().repository) }
+        initializer { HistoryViewModel(container().repository, container().accounts) }
         initializer { StatsViewModel(container().repository, container().settings) }
         initializer { PlanViewModel(container().repository, container().settings, container().planning) }
         initializer { BudgetsViewModel(container().repository, container().settings, container().planning) }
         initializer { BudgetPlanViewModel(container().settings, container().repository) }
         initializer {
             val c = container()
-            SubscriptionsViewModel(c.planning, c.repository) { c.syncRecurring() }
+            SubscriptionsViewModel(c.planning, c.repository, c.settings) { c.syncRecurring() }
         }
         initializer { GoalsViewModel(container().planning) }
+        initializer { DebtsViewModel(container().planning) }
         initializer { GoalDetailViewModel(createSavedStateHandle(), container().planning) }
         initializer { CategoriesViewModel(container().repository) }
         initializer { SettingsViewModel(container().repository, container().settings, container().backup, container().assistant) }

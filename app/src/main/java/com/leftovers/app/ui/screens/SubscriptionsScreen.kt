@@ -24,6 +24,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
@@ -72,7 +73,11 @@ import com.leftovers.app.util.AmountInput
 import com.leftovers.app.util.LocalMoney
 import com.leftovers.app.util.friendlyLabel
 import com.leftovers.app.util.label
+import com.leftovers.app.data.SettingsRepository
+import com.leftovers.app.data.SubscriptionSuggestion
+import com.leftovers.app.data.findLikelySubscriptions
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -82,12 +87,23 @@ import java.time.YearMonth
 class SubscriptionsViewModel(
     private val planning: PlanningRepository,
     repository: TransactionRepository,
+    private val settings: SettingsRepository,
     private val sync: suspend () -> Unit,
 ) : ViewModel() {
     val items: StateFlow<List<RecurringItem>> =
         planning.recurring.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
     val categories: StateFlow<List<Category>> =
         repository.categories.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** Repeating expenses that look like subscriptions not set up yet. */
+    val suggestions: StateFlow<List<SubscriptionSuggestion>> =
+        combine(repository.allTransactions, planning.recurring, settings.settings) { all, recurring, s ->
+            findLikelySubscriptions(all, recurring, s.dismissedSuggestions)
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    fun dismiss(suggestion: SubscriptionSuggestion) {
+        viewModelScope.launch { settings.dismissSuggestion(suggestion.key) }
+    }
 
     fun save(recurring: Recurring) {
         viewModelScope.launch {
@@ -134,6 +150,7 @@ fun SubscriptionsScreen(
 ) {
     val items by viewModel.items.collectAsStateWithLifecycle()
     val categories by viewModel.categories.collectAsStateWithLifecycle()
+    val suggestions by viewModel.suggestions.collectAsStateWithLifecycle()
     val c = LocalAppColors.current
     val money = LocalMoney.current
     var filter by rememberSaveable { mutableStateOf(TxType.EXPENSE) }
@@ -203,6 +220,29 @@ fun SubscriptionsScreen(
                             )
                         }
                     }
+                }
+            }
+
+            // One suggestion at a time keeps this quiet.
+            suggestions.firstOrNull()?.let { s ->
+                item {
+                    Spacer(Modifier.height(12.dp))
+                    SuggestionCard(
+                        s,
+                        onAdd = {
+                            filter = TxType.EXPENSE
+                            editing = Recurring(
+                                name = s.name.take(30),
+                                amountMinor = s.amountMinor,
+                                type = TxType.EXPENSE,
+                                categoryId = s.categoryId,
+                                dayOfMonth = s.dayOfMonth,
+                                startMonth = YearMonth.now().toString(),
+                            )
+                        },
+                        onDismiss = { viewModel.dismiss(s) },
+                        modifier = Modifier.appear(1),
+                    )
                 }
             }
 
@@ -391,6 +431,7 @@ private fun RecurringRow(item: RecurringItem, onClick: () -> Unit, onToggle: (Bo
                 when {
                     !item.active -> "Paused"
                     item.everyMonths == 12 -> "Yearly · next ${item.toRecurring().nextChargeDate().friendlyLabel()}"
+                    item.everyMonths > 1 -> "Every ${item.everyMonths} months · next ${item.toRecurring().nextChargeDate().friendlyLabel()}"
                     else -> "Every ${ordinal(item.dayOfMonth)} · next ${item.toRecurring().nextChargeDate().friendlyLabel()}"
                 },
                 style = MaterialTheme.typography.bodySmall,
@@ -436,12 +477,19 @@ private fun RecurringEditor(
     var type by rememberSaveable { mutableStateOf(initial.type) }
     var categoryId by rememberSaveable { mutableStateOf(initial.categoryId) }
     var day by rememberSaveable { mutableStateOf(initial.dayOfMonth) }
-    var yearly by rememberSaveable { mutableStateOf(initial.yearly) }
-    // For yearly bills: which month of the year it's charged.
-    var billMonth by rememberSaveable { mutableStateOf(if (initial.yearly) YearMonth.parse(initial.startMonth).monthValue else today.monthValue) }
+    val now = YearMonth.now()
+    var every by rememberSaveable { mutableStateOf(initial.everyMonths.takeIf { it in cycles } ?: 1) }
+    // For bills every few months: the month of the next charge.
+    var billMonth by rememberSaveable {
+        mutableStateOf((if (initial.everyMonths > 1) YearMonth.from(initial.nextChargeDate()) else now).toString())
+    }
     var chargeThisMonth by rememberSaveable { mutableStateOf(true) }
+    var skipNext by rememberSaveable { mutableStateOf(false) }
     val amount = AmountInput.toMinor(amountText) ?: 0L
-    val dueThisMonth = !yearly || billMonth == today.monthValue
+    // Months that can be picked for the next charge: the coming cycle, or the whole year for yearly bills.
+    val monthChoices = (0 until if (every == 12) 12 else every).map { now.plusMonths(it.toLong()) }
+    val nextMonth = YearMonth.parse(billMonth).takeIf { it in monthChoices } ?: now
+    val dueThisMonth = every == 1 || nextMonth == now
     val dayPassed = dueThisMonth && day <= today.dayOfMonth
 
     GlassSheet(onDismiss) {
@@ -478,11 +526,18 @@ private fun RecurringEditor(
                 Modifier.fillMaxWidth(),
             )
             GlassTextField(name, { name = it.take(30) }, placeholder = if (type == TxType.INCOME) "e.g. Salary" else "e.g. Netflix", label = "Name")
-            SegmentedToggle(listOf(false, true), yearly, { if (it) "Yearly" else "Monthly" }, { yearly = it }, Modifier.fillMaxWidth())
-            MoneyField(amountText, { amountText = it }, label = if (yearly) "Amount every year" else "Amount every month")
-            if (yearly && amount > 0) {
+            SegmentedToggle(cycles, every, ::cycleLabel, { every = it }, Modifier.fillMaxWidth())
+            MoneyField(
+                amountText, { amountText = it },
+                label = when (every) {
+                    1 -> "Amount every month"
+                    12 -> "Amount every year"
+                    else -> "Amount every $every months"
+                },
+            )
+            if (every > 1 && amount > 0) {
                 Text(
-                    "About ${LocalMoney.current.format(amount / 12)} a month",
+                    "About ${LocalMoney.current.format(amount / every)} a month",
                     style = MaterialTheme.typography.bodySmall,
                     color = c.textSecondary,
                     modifier = Modifier.padding(start = 6.dp),
@@ -496,19 +551,22 @@ private fun RecurringEditor(
                 }
             }
 
-            if (yearly) {
-                Text("Month", style = MaterialTheme.typography.labelMedium, color = c.textSecondary, modifier = Modifier.padding(start = 6.dp))
+            if (every > 1) {
+                Text(if (every == 12) "Month" else "Next charge", style = MaterialTheme.typography.labelMedium, color = c.textSecondary, modifier = Modifier.padding(start = 6.dp))
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    java.time.Month.entries.forEach { m ->
-                        Chip(m.getDisplayName(java.time.format.TextStyle.SHORT, java.util.Locale.getDefault()), { billMonth = m.value }, selected = billMonth == m.value)
+                    // Yearly lists Jan–Dec; shorter cycles list the coming months.
+                    monthChoices.sortedBy { if (every == 12) it.monthValue else 0 }.forEach { m ->
+                        Chip(m.month.getDisplayName(java.time.format.TextStyle.SHORT, java.util.Locale.getDefault()), { billMonth = m.toString() }, selected = m == nextMonth)
                     }
                 }
             }
+            val monthName = nextMonth.month.getDisplayName(java.time.format.TextStyle.FULL, java.util.Locale.getDefault())
+            val dayText = if (day == 31) "the last day of" else day.toString()
             Text(
-                "${if (type == TxType.INCOME) "Received" else "Deducted"} on " + if (yearly) {
-                    "${if (day == 31) "the last day of" else day.toString()} ${java.time.Month.of(billMonth).getDisplayName(java.time.format.TextStyle.FULL, java.util.Locale.getDefault())} every year"
-                } else {
-                    "the ${if (day == 31) "last day" else ordinal(day)} of every month"
+                "${if (type == TxType.INCOME) "Received" else "Deducted"} on " + when (every) {
+                    1 -> "the ${if (day == 31) "last day" else ordinal(day)} of every month"
+                    12 -> "$dayText $monthName every year"
+                    else -> "$dayText $monthName, then every $every months"
                 },
                 style = MaterialTheme.typography.labelMedium,
                 color = c.textSecondary,
@@ -520,7 +578,7 @@ private fun RecurringEditor(
                 Glass(Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp)) {
                     Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
-                            Text("Log ${if (yearly) "this year's" else "this month's"} ${if (type == TxType.EXPENSE) "payment" else "income"} now", style = MaterialTheme.typography.titleSmall, color = c.textPrimary)
+                            Text("Log ${if (every == 1) "this month's" else "this"} ${if (type == TxType.EXPENSE) "payment" else "income"} now", style = MaterialTheme.typography.titleSmall, color = c.textPrimary)
                             Text(
                                 if (day == today.dayOfMonth) "The ${ordinal(day)} is today" else "The ${ordinal(day)} has already passed this month",
                                 style = MaterialTheme.typography.bodySmall,
@@ -536,25 +594,49 @@ private fun RecurringEditor(
                 }
             }
 
+            if (!isNew && initial.active) {
+                Glass(Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp)) {
+                    Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text("Skip the next one", style = MaterialTheme.typography.titleSmall, color = c.textPrimary)
+                            Text(
+                                "${initial.nextChargeDate().friendlyLabel()} won't be logged; it carries on after",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = c.textSecondary,
+                            )
+                        }
+                        Switch(
+                            checked = skipNext,
+                            onCheckedChange = { skipNext = it },
+                            colors = SwitchDefaults.colors(checkedTrackColor = c.accent, checkedThumbColor = c.onAccent),
+                        )
+                    }
+                }
+            }
+
             PrimaryButton(
                 "Save",
                 {
-                    val now = YearMonth.now()
-                    val start = if (yearly) {
-                        // The next time the chosen month comes round that hasn't been logged yet.
-                        var m = YearMonth.of(now.year, billMonth)
+                    val start = if (every > 1) {
+                        // The chosen next month, unless that one is already logged or the user chose not to log it now.
+                        var m = nextMonth
                         val loggedAlready = initial.lastPostedMonth != null && initial.lastPostedMonth >= m.toString()
-                        if (m < now || loggedAlready || (m == now && dayPassed && isNew && !chargeThisMonth)) m = m.plusYears(1)
+                        if (loggedAlready || (m == now && dayPassed && isNew && !chargeThisMonth)) m = m.plusMonths(every.toLong())
                         m.toString()
                     } else {
                         when {
-                            !isNew && !initial.yearly -> initial.startMonth
+                            !isNew && initial.everyMonths == 1 -> initial.startMonth
                             !isNew -> now.toString()
                             dayPassed && !chargeThisMonth -> now.plusMonths(1).toString()
                             else -> now.toString()
                         }
                     }
-                    onSave(initial.copy(name = name.trim(), amountMinor = amount, type = type, categoryId = categoryId, dayOfMonth = day, startMonth = start, everyMonths = if (yearly) 12 else 1))
+                    var saved = initial.copy(name = name.trim(), amountMinor = amount, type = type, categoryId = categoryId, dayOfMonth = day, startMonth = start, everyMonths = every)
+                    if (skipNext) {
+                        // Marking the next charge as already logged skips it without touching the schedule.
+                        saved = saved.copy(lastPostedMonth = YearMonth.from(saved.nextChargeDate()).toString())
+                    }
+                    onSave(saved)
                 },
                 Modifier.fillMaxWidth(),
                 enabled = name.isNotBlank() && amount > 0 && categories.any { it.id == categoryId && it.type == type },
@@ -568,6 +650,39 @@ private fun RecurringEditor(
                         .align(Alignment.CenterHorizontally)
                         .pressable(onDelete),
                 )
+            }
+        }
+    }
+}
+
+private val cycles = listOf(1, 3, 6, 12)
+
+private fun cycleLabel(months: Int) = when (months) {
+    1 -> "Monthly"
+    12 -> "Yearly"
+    else -> "$months months"
+}
+
+/** "Looks like a subscription": add it with one tap, or say no and it won't ask again. */
+@Composable
+private fun SuggestionCard(s: SubscriptionSuggestion, onAdd: () -> Unit, onDismiss: () -> Unit, modifier: Modifier = Modifier) {
+    val c = LocalAppColors.current
+    val money = LocalMoney.current
+    Glass(modifier.fillMaxWidth(), shape = RoundedCornerShape(24.dp)) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Lucide.Repeat, contentDescription = null, tint = c.accent, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("Looks like a subscription", style = MaterialTheme.typography.labelLarge, color = c.textSecondary)
+            }
+            Text(
+                "${s.name} · ${money.format(s.amountMinor)} around the ${ordinal(s.dayOfMonth)} each month",
+                style = MaterialTheme.typography.titleSmall,
+                color = c.textPrimary,
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Chip("Add it", onAdd, selected = true, icon = Lucide.Plus)
+                Chip("No", onDismiss)
             }
         }
     }

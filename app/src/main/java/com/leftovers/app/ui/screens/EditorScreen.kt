@@ -1,5 +1,11 @@
 package com.leftovers.app.ui.screens
 
+import android.app.Activity
+import android.content.ActivityNotFoundException
+import android.content.Intent
+import android.speech.RecognizerIntent
+import android.widget.Toast
+import com.leftovers.app.util.VoiceEntry
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -230,6 +236,17 @@ class EditorViewModel(
         needCategory = false
     }
 
+    /** Fills in what was said, e.g. "250 for lunch"; anything not understood is left as it was. */
+    fun applySpoken(text: String, categories: List<Category>) {
+        val spoken = VoiceEntry.parse(text, categories.filter { it.type == type }.map { it.id to it.name })
+        spoken.amountMinor?.takeIf { it > 0 }?.let {
+            amountText = AmountInput.fromMinor(it)
+            cursor = null
+        }
+        if (spoken.note.isNotBlank()) note = spoken.note.take(120)
+        spoken.categoryId?.let(::selectCategory)
+    }
+
     fun attachReceipt(uri: Uri, onDone: () -> Unit = {}) {
         viewModelScope.launch {
             val path = ReceiptStore.import(app, uri)
@@ -375,6 +392,22 @@ fun EditorScreen(
         val file = cameraFile
         if (ok && file != null) viewModel.attachReceipt(Uri.fromFile(file)) { file.delete() } else file?.delete()
     }
+    // Android's own speech input; it stays on the phone where offline speech is available.
+    val speech = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        val text = result.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()
+        if (result.resultCode == Activity.RESULT_OK && !text.isNullOrBlank()) viewModel.applySpoken(text, categories)
+    }
+    fun listen() {
+        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
+            .putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            .putExtra(RecognizerIntent.EXTRA_PROMPT, "Say it like \"250 for lunch\"")
+            .putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
+        try {
+            speech.launch(intent)
+        } catch (e: ActivityNotFoundException) {
+            Toast.makeText(context, "Voice input isn't available on this phone", Toast.LENGTH_SHORT).show()
+        }
+    }
 
     Column(
         modifier
@@ -479,6 +512,9 @@ fun EditorScreen(
                             container = if (viewModel.splits.isEmpty()) null else c.accent,
                         )
                     }
+                }
+                if (!viewModel.isEditing) {
+                    RoundButton(Lucide.Mic, "Say it", ::listen, size = 42.dp, tint = c.textSecondary)
                 }
                 val path = viewModel.receiptPath
                 if (path == null) {
@@ -626,7 +662,7 @@ fun EditorScreen(
             containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
             shape = RoundedCornerShape(30.dp),
             title = { Text("Note", style = MaterialTheme.typography.titleLarge) },
-            text = { GlassTextField(draft, { draft = it.take(120) }, placeholder = "e.g. Lunch with friends", focusRequester = focus) },
+            text = { GlassTextField(draft, { draft = it.take(120) }, placeholder = "e.g. Lunch with friends #goa", focusRequester = focus) },
             confirmButton = {
                 TextButton(onClick = {
                     viewModel.note = draft.trim()

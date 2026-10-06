@@ -3,9 +3,21 @@
 All notable changes to Leftovers. Download any version from
 [Releases](https://github.com/saisaharsh3/Leftovers/releases).
 
-## Unreleased
+## 1.1.0
 
+**New**
 - Swipe sideways to move between Home, Activity, Insights and Plan; tabs slide in the direction you go
+- Voice entry: tap the mic on the add screen and say *"250 for lunch"*
+- Filter Activity by account, category or #tag; tags in notes group entries across months with a total
+- Subscriptions every 3 or 6 months, and *Skip the next one* for a single payment
+- Spots repeating expenses that look like subscriptions and offers to add them
+- Total balance shows where it's heading by the end of the month
+- Money owed: track what you lent or borrowed (Plan → Money owed)
+- Share the monthly recap as an image
+- Optional backup password: backups are encrypted with AES-256
+
+**Under the hood**
+- Database upgrades are tested from version 2 to the current one
 - Insights changes month with the arrows (a sideways swipe now switches tabs there too)
 
 ## 1.0.6

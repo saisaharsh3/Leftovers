@@ -195,6 +195,21 @@ interface SmsDao {
     @Query("UPDATE sms_suggestions SET body = '' WHERE length(body) != 64")
     suspend fun scrubRawBodies()
 }
+@Dao
+interface DebtDao {
+    @Query("SELECT * FROM debts ORDER BY createdAt DESC")
+    fun observeAll(): Flow<List<Debt>>
+
+    @Upsert
+    suspend fun upsert(debt: Debt)
+
+    @Delete
+    suspend fun delete(debt: Debt)
+
+    @Query("UPDATE debts SET settled = 1 WHERE settled = 0 AND LOWER(TRIM(person)) = LOWER(TRIM(:person))")
+    suspend fun settle(person: String)
+}
+
 /** Raw table access for backup and restore. */
 @Dao
 interface BackupDao {
@@ -205,8 +220,10 @@ interface BackupDao {
     @Query("SELECT * FROM goal_deposits") suspend fun deposits(): List<GoalDeposit>
     @Query("SELECT * FROM accounts") suspend fun accounts(): List<Account>
     @Query("SELECT * FROM transfers") suspend fun transfers(): List<Transfer>
+    @Query("SELECT * FROM debts") suspend fun debts(): List<Debt>
 
     @Query("DELETE FROM goal_deposits") suspend fun clearDeposits()
+    @Query("DELETE FROM debts") suspend fun clearDebts()
     @Query("DELETE FROM goals") suspend fun clearGoals()
     @Query("DELETE FROM transfers") suspend fun clearTransfers()
     @Query("DELETE FROM transactions") suspend fun clearTransactions()
@@ -221,4 +238,5 @@ interface BackupDao {
     @androidx.room.Insert suspend fun insertDeposits(items: List<GoalDeposit>)
     @androidx.room.Insert suspend fun insertAccounts(items: List<Account>)
     @androidx.room.Insert suspend fun insertTransfers(items: List<Transfer>)
+    @androidx.room.Insert suspend fun insertDebts(items: List<Debt>)
 }

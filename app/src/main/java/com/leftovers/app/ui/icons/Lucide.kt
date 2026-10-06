@@ -15,6 +15,9 @@ object Lucide {
     val ArrowLeft: ImageVector by lazy { lucide("arrow-left", "m12 19-7-7 7-7", "M19 12H5") }
     val ArrowUp: ImageVector by lazy { lucide("arrow-up", "m5 12 7-7 7 7", "M12 19V5") }
     val MessageCircle: ImageVector by lazy { lucide("message-circle", "M7.9 20A9 9 0 1 0 4 16.1L2 22Z") }
+    val Mic: ImageVector by lazy { lucide("mic", "M12 19v3", "M19 10v2a7 7 0 0 1-14 0v-2", "M12 2a3 3 0 0 1 3 3v7a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3Z") }
+    val Share2: ImageVector by lazy { lucide("share-2", "M15 5a3 3 0 1 0 6 0a3 3 0 1 0 -6 0", "M3 12a3 3 0 1 0 6 0a3 3 0 1 0 -6 0", "M15 19a3 3 0 1 0 6 0a3 3 0 1 0 -6 0", "m8.59 13.51 6.83 3.98", "m15.41 6.51-6.82 3.98") }
+    val ListFilter: ImageVector by lazy { lucide("list-filter", "M3 6h18", "M7 12h10", "M10 18h4") }
     val ChevronLeft: ImageVector by lazy { lucide("chevron-left", "m15 18-6-6 6-6") }
     val ChevronRight: ImageVector by lazy { lucide("chevron-right", "m9 18 6-6-6-6") }
     val ChevronDown: ImageVector by lazy { lucide("chevron-down", "m6 9 6 6 6-6") }

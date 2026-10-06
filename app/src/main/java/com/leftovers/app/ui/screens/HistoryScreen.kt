@@ -1,5 +1,15 @@
 package com.leftovers.app.ui.screens
 
+import com.leftovers.app.data.AccountRepository
+import com.leftovers.app.data.allTags
+import com.leftovers.app.data.hashtags
+import com.leftovers.app.ui.components.PrimaryButton
+import com.leftovers.app.ui.components.SecondaryButton
+import com.leftovers.app.ui.icons.CategoryIcons
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.fadeIn
@@ -85,6 +95,13 @@ enum class TypeFilter(val label: String) { ALL("All"), EXPENSE("Spent"), INCOME(
 
 data class DayGroup(val date: LocalDate, val items: List<TransactionItem>)
 
+/** Narrows the list to one account, one category and/or one #tag. A tag looks across all months. */
+data class ActivityFilters(val accountId: Long? = null, val categoryId: Long? = null, val tag: String? = null) {
+    val active get() = accountId != null || categoryId != null || tag != null
+}
+
+data class FilterOption(val id: Long, val name: String, val icon: String, val color: Long)
+
 data class HistoryUiState(
     val month: YearMonth = YearMonth.now(),
     val filter: TypeFilter = TypeFilter.ALL,
@@ -95,15 +112,20 @@ data class HistoryUiState(
     val income: Long = 0,
     val expense: Long = 0,
     val count: Int = 0,
+    val filters: ActivityFilters = ActivityFilters(),
+    val accounts: List<FilterOption> = emptyList(),
+    val categories: List<FilterOption> = emptyList(),
+    val tags: List<String> = emptyList(),
 )
 
-class HistoryViewModel(private val repository: TransactionRepository) : ViewModel() {
+class HistoryViewModel(private val repository: TransactionRepository, accountRepository: AccountRepository) : ViewModel() {
     private val month = MutableStateFlow(YearMonth.now())
     private val filter = MutableStateFlow(TypeFilter.ALL)
     private val query = MutableStateFlow("")
+    private val filters = MutableStateFlow(ActivityFilters())
 
     val state: StateFlow<HistoryUiState> =
-        combine(repository.allTransactions, month, filter, query) { all, m, f, q ->
+        combine(combine(repository.allTransactions, accountRepository.accounts, ::Pair), month, filter, query, filters) { (all, accountList), m, f, q, fl ->
             val monthItems = all.filter { YearMonth.from(it.date) == m }
             val scoped = if (q.isNotBlank()) {
                 val needle = q.trim()
@@ -114,13 +136,18 @@ class HistoryViewModel(private val repository: TransactionRepository) : ViewMode
                         it.categoryName.contains(needle, ignoreCase = true) ||
                         (amount != null && it.amountMinor == amount)
                 }
+            } else if (fl.tag != null) {
+                all.filter { fl.tag in hashtags(it.note) }
             } else {
                 monthItems
             }
+            val narrowed = scoped.filter {
+                (fl.accountId == null || it.accountId == fl.accountId) && (fl.categoryId == null || it.categoryId == fl.categoryId)
+            }
             val filtered = when (f) {
-                TypeFilter.ALL -> scoped
-                TypeFilter.EXPENSE -> scoped.filter { it.type == TxType.EXPENSE }
-                TypeFilter.INCOME -> scoped.filter { it.type == TxType.INCOME }
+                TypeFilter.ALL -> narrowed
+                TypeFilter.EXPENSE -> narrowed.filter { it.type == TxType.EXPENSE }
+                TypeFilter.INCOME -> narrowed.filter { it.type == TxType.INCOME }
             }
             HistoryUiState(
                 month = m,
@@ -131,12 +158,18 @@ class HistoryViewModel(private val repository: TransactionRepository) : ViewMode
                 income = filtered.totalOf(TxType.INCOME),
                 expense = filtered.totalOf(TxType.EXPENSE),
                 count = filtered.size,
+                filters = fl,
+                accounts = if (accountList.size > 1) accountList.map { FilterOption(it.id, it.name, it.icon, it.color) } else emptyList(),
+                categories = all.distinctBy { it.categoryId }.sortedBy { it.categoryName }
+                    .map { FilterOption(it.categoryId, it.categoryName, it.categoryEmoji, it.categoryColor) },
+                tags = all.allTags(),
             )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), HistoryUiState())
 
     fun setMonth(value: YearMonth) { month.value = value }
     fun setFilter(value: TypeFilter) { filter.value = value }
     fun setQuery(value: String) { query.value = value }
+    fun setFilters(value: ActivityFilters) { filters.value = value }
 
     fun delete(item: TransactionItem) {
         viewModelScope.launch { repository.deleteTransaction(item.toTransaction()) }
@@ -163,6 +196,7 @@ fun HistoryScreen(
     var searchOpen by rememberSaveable { mutableStateOf(false) }
     var mode by rememberSaveable { mutableStateOf(ActivityView.LIST) }
     var selectedDay by rememberSaveable { mutableStateOf(LocalDate.now().toEpochDay()) }
+    var filterSheet by rememberSaveable { mutableStateOf(false) }
 
     fun deleteWithUndo(item: TransactionItem) {
         viewModel.delete(item)
@@ -188,6 +222,7 @@ fun HistoryScreen(
                 },
             )
             if (mode == ActivityView.LIST) {
+                RoundButton(Lucide.ListFilter, "Filter", { filterSheet = true })
                 RoundButton(
                     if (searchOpen) Lucide.X else Lucide.Search,
                     if (searchOpen) "Close search" else "Search",
@@ -205,12 +240,15 @@ fun HistoryScreen(
         ) {
             item {
                 if (searchOpen) {
-                    GlassTextField(state.query, viewModel::setQuery, placeholder = "Search notes, categories or amounts")
-                } else {
+                    GlassTextField(state.query, viewModel::setQuery, placeholder = "Search notes, #tags, categories or amounts")
+                } else if (state.filters.tag == null || mode == ActivityView.CALENDAR) {
                     MonthSwitcher(state.month, {
                         viewModel.setMonth(it)
                         selectedDay = (if (it == YearMonth.now()) LocalDate.now() else it.atDay(1)).toEpochDay()
                     })
+                }
+                if (state.filters.active && mode == ActivityView.LIST) {
+                    ActiveFilters(state, onChange = viewModel::setFilters, modifier = Modifier.padding(top = if (searchOpen || state.filters.tag == null) 10.dp else 0.dp))
                 }
                 Spacer(Modifier.height(14.dp))
             }
@@ -236,7 +274,12 @@ fun HistoryScreen(
                 Glass(Modifier.fillMaxWidth().appear(0), strong = true, shape = RoundedCornerShape(30.dp)) {
                     Column(Modifier.padding(22.dp)) {
                         Text(
-                            if (state.query.isNotBlank()) "Spent in results" else "Spent this month",
+                            when {
+                                state.query.isNotBlank() -> "Spent in results"
+                                state.filters.tag != null -> "Spent on #${state.filters.tag} · all time"
+                                state.filters.active -> "Spent this month · filtered"
+                                else -> "Spent this month"
+                            },
                             style = MaterialTheme.typography.labelLarge,
                             color = c.textSecondary,
                         )
@@ -273,8 +316,8 @@ fun HistoryScreen(
 
             if (state.groups.isEmpty()) {
                 item {
-                    if (state.query.isNotBlank()) {
-                        EmptyState(Lucide.Search, "No matches", "Try a different word.")
+                    if (state.query.isNotBlank() || state.filters.active) {
+                        EmptyState(Lucide.Search, "No matches", if (state.filters.active) "Nothing matches these filters." else "Try a different word.")
                     } else {
                         EmptyState(Lucide.ReceiptText, "No entries this month", "Switch to the calendar view to add something you forgot.")
                     }
@@ -306,6 +349,73 @@ fun HistoryScreen(
                         }
                     }
                 }
+            }
+        }
+    }
+
+    if (filterSheet) {
+        FilterSheet(state, onChange = viewModel::setFilters, onDismiss = { filterSheet = false })
+    }
+}
+
+/** The filters in use, each removable with a tap. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ActiveFilters(state: HistoryUiState, onChange: (ActivityFilters) -> Unit, modifier: Modifier = Modifier) {
+    val f = state.filters
+    FlowRow(modifier, horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        state.accounts.firstOrNull { it.id == f.accountId }?.let { Chip(it.name, { onChange(f.copy(accountId = null)) }, icon = Lucide.X, selected = true) }
+        state.categories.firstOrNull { it.id == f.categoryId }?.let { Chip(it.name, { onChange(f.copy(categoryId = null)) }, icon = Lucide.X, selected = true) }
+        f.tag?.let { Chip("#$it", { onChange(f.copy(tag = null)) }, icon = Lucide.X, selected = true) }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun FilterSheet(state: HistoryUiState, onChange: (ActivityFilters) -> Unit, onDismiss: () -> Unit) {
+    val c = LocalAppColors.current
+    val f = state.filters
+    GlassSheet(onDismiss) {
+        Column(
+            Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text("Filter", style = MaterialTheme.typography.headlineSmall, color = c.textPrimary)
+            @Composable
+            fun Section(title: String, content: @Composable () -> Unit) {
+                Text(title, style = MaterialTheme.typography.labelMedium, color = c.textSecondary, modifier = Modifier.padding(start = 6.dp, top = 4.dp))
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) { content() }
+            }
+            if (state.accounts.isNotEmpty()) {
+                Section("Account") {
+                    state.accounts.forEach { a ->
+                        Chip(a.name, { onChange(f.copy(accountId = a.id.takeIf { it != f.accountId })) }, icon = CategoryIcons[a.icon], iconTint = Color(a.color), selected = a.id == f.accountId)
+                    }
+                }
+            }
+            Section("Category") {
+                state.categories.forEach { cat ->
+                    Chip(cat.name, { onChange(f.copy(categoryId = cat.id.takeIf { it != f.categoryId })) }, icon = CategoryIcons[cat.icon], iconTint = Color(cat.color), selected = cat.id == f.categoryId)
+                }
+            }
+            Section("Tag") {
+                if (state.tags.isEmpty()) {
+                    Text(
+                        "Add #tags to notes, like \"Dinner #goa\", to group entries across categories and months.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = c.textTertiary,
+                        modifier = Modifier.padding(start = 6.dp),
+                    )
+                } else {
+                    state.tags.forEach { t ->
+                        Chip("#$t", { onChange(f.copy(tag = t.takeIf { it != f.tag })) }, selected = t == f.tag)
+                    }
+                }
+            }
+            Spacer(Modifier.height(4.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                SecondaryButton("Clear", { onChange(ActivityFilters()) }, Modifier.weight(1f))
+                PrimaryButton("Done", onDismiss, Modifier.weight(1f))
             }
         }
     }

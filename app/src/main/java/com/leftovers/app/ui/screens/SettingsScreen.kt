@@ -1,5 +1,7 @@
 package com.leftovers.app.ui.screens
 
+import com.leftovers.app.util.BackupPasswordException
+import kotlinx.coroutines.Dispatchers
 import android.Manifest
 import android.content.Context
 import android.content.Intent
@@ -84,6 +86,11 @@ class SettingsViewModel(
 ) : ViewModel() {
     val settings: StateFlow<AppSettings?> =
         settingsRepository.settings.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+    val backupPasswordSet: StateFlow<Boolean> = backup.password.isSet
+
+    fun setBackupPassword(password: String?) {
+        viewModelScope.launch(Dispatchers.IO) { backup.password.set(password) }
+    }
 
     fun setCurrency(code: String) {
         viewModelScope.launch { settingsRepository.setCurrency(code) }
@@ -147,11 +154,14 @@ class SettingsViewModel(
         }
     }
 
-    fun restoreFrom(uri: Uri, onResult: (String) -> Unit) {
+    /** [onNeedPassword] is called when the backup is protected and no saved or typed password opens it. */
+    fun restoreFrom(uri: Uri, password: String? = null, onNeedPassword: (wrong: Boolean) -> Unit, onResult: (String) -> Unit) {
         viewModelScope.launch {
-            backup.import(uri).fold(
+            backup.import(uri, password).fold(
                 { onResult("Restored $it entries") },
-                { onResult("Couldn't restore: ${it.message}") },
+                {
+                    if (it is BackupPasswordException) onNeedPassword(password != null) else onResult("Couldn't restore: ${it.message}")
+                },
             )
         }
     }
@@ -195,6 +205,10 @@ fun SettingsScreen(
     var showTime by rememberSaveable { mutableStateOf(false) }
     var showAssistant by rememberSaveable { mutableStateOf(false) }
     var pendingRestore by remember { mutableStateOf<Uri?>(null) }
+    // A protected backup waiting for its password; the flag says the last try was wrong.
+    var lockedRestore by remember { mutableStateOf<Pair<Uri, Boolean>?>(null) }
+    var setPassword by rememberSaveable { mutableStateOf(false) }
+    val passwordSet by viewModel.backupPasswordSet.collectAsStateWithLifecycle()
     fun toast(text: String) = scope.launch { snackbar.showSnackbar(text) }
 
     val createBackup = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
@@ -317,6 +331,10 @@ fun SettingsScreen(
                             if (on) pickBackupFolder.launch(null) else viewModel.disableAutoBackup(context, s.autoBackupDir)
                         })
                         RowDivider()
+                        ToggleRow(Lucide.Lock, "Password-protect backups", passwordSet, { on ->
+                            if (on) setPassword = true else viewModel.setBackupPassword(null)
+                        })
+                        RowDivider()
                         NavRow(Lucide.ReceiptText, "Export to CSV", "Excel, Sheets") {
                             viewModel.export(context) { scope.launch { snackbar.showSnackbar("Nothing to export yet") } }
                         }
@@ -328,10 +346,13 @@ fun SettingsScreen(
                         )
                     }
                 }
-                if (s.autoBackupDir != null) {
+                if (s.autoBackupDir != null || passwordSet) {
                     Text(
-                        "Saves a backup to your chosen folder every week and keeps the last 4." +
-                            if (s.autoBackupLast > 0) " Last backup: ${java.time.Instant.ofEpochMilli(s.autoBackupLast).atZone(java.time.ZoneId.systemDefault()).toLocalDate().friendlyLabel()}." else "",
+                        listOfNotNull(
+                            if (s.autoBackupDir == null) null else "Saves a backup to your chosen folder every week and keeps the last 4." +
+                                if (s.autoBackupLast > 0) " Last backup: ${java.time.Instant.ofEpochMilli(s.autoBackupLast).atZone(java.time.ZoneId.systemDefault()).toLocalDate().friendlyLabel()}." else "",
+                            if (passwordSet) "New backups are encrypted. Restoring one needs the password, and it can't be recovered if forgotten." else null,
+                        ).joinToString(" "),
                         style = MaterialTheme.typography.bodySmall,
                         color = c.textTertiary,
                         modifier = Modifier.padding(start = 8.dp, end = 8.dp, top = 8.dp),
@@ -349,7 +370,7 @@ fun SettingsScreen(
                 ) {
                     Icon(Lucide.Lock, contentDescription = null, tint = c.textTertiary, modifier = Modifier.size(14.dp))
                     Spacer(Modifier.width(6.dp))
-                    Text("Stored only on this device · Leftovers 1.0.6", style = MaterialTheme.typography.bodySmall, color = c.textTertiary, textAlign = TextAlign.Center)
+                    Text("Stored only on this device · Leftovers 1.1.0", style = MaterialTheme.typography.bodySmall, color = c.textTertiary, textAlign = TextAlign.Center)
                 }
             }
             item {
@@ -391,10 +412,65 @@ fun SettingsScreen(
                 confirmButton = {
                     TextButton(onClick = {
                         pendingRestore = null
-                        viewModel.restoreFrom(uri) { toast(it) }
+                        viewModel.restoreFrom(uri, onNeedPassword = { wrong -> lockedRestore = uri to wrong }) { toast(it) }
                     }) { Text("Restore", color = c.textPrimary) }
                 },
                 dismissButton = { TextButton(onClick = { pendingRestore = null }) { Text("Cancel", color = c.textSecondary) } },
+            )
+        }
+
+        lockedRestore?.let { (uri, wrong) ->
+            var typed by remember(uri, wrong) { mutableStateOf("") }
+            AlertDialog(
+                onDismissRequest = { lockedRestore = null },
+                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                shape = RoundedCornerShape(30.dp),
+                title = { Text("This backup has a password") },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        GlassTextField(typed, { typed = it }, placeholder = "Password", password = true)
+                        if (wrong) Text("That password didn't work", style = MaterialTheme.typography.bodySmall, color = c.negative)
+                    }
+                },
+                confirmButton = {
+                    TextButton(enabled = typed.isNotEmpty(), onClick = {
+                        lockedRestore = null
+                        viewModel.restoreFrom(uri, typed, onNeedPassword = { w -> lockedRestore = uri to w }) { toast(it) }
+                    }) { Text("Restore", color = c.textPrimary) }
+                },
+                dismissButton = { TextButton(onClick = { lockedRestore = null }) { Text("Cancel", color = c.textSecondary) } },
+            )
+        }
+
+        if (setPassword) {
+            var first by remember { mutableStateOf("") }
+            var second by remember { mutableStateOf("") }
+            val ok = first.length >= 6 && first == second
+            AlertDialog(
+                onDismissRequest = { setPassword = false },
+                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                shape = RoundedCornerShape(30.dp),
+                title = { Text("Backup password") },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Text(
+                            "Backups you make from now on, including weekly ones, are encrypted with it. Keep it somewhere safe: without it they can't be restored.",
+                            color = c.textSecondary,
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                        GlassTextField(first, { first = it }, placeholder = "At least 6 characters", password = true)
+                        GlassTextField(second, { second = it }, placeholder = "Type it again", password = true)
+                        if (second.isNotEmpty() && first != second) Text("The two don't match", style = MaterialTheme.typography.bodySmall, color = c.negative)
+                    }
+                },
+                confirmButton = {
+                    TextButton(enabled = ok, onClick = {
+                        viewModel.setBackupPassword(first)
+                        setPassword = false
+                        toast("Backups will be password protected")
+                    }) { Text("Turn on", color = if (ok) c.textPrimary else c.textTertiary) }
+                },
+                dismissButton = { TextButton(onClick = { setPassword = false }) { Text("Cancel", color = c.textSecondary) } },
             )
         }
 

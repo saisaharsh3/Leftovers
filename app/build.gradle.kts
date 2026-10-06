@@ -23,8 +23,8 @@ android {
         applicationId = "com.leftovers.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 7
-        versionName = "1.0.6"
+        versionCode = 8
+        versionName = "1.1.0"
     }
 
     signingConfigs {
@@ -56,6 +56,15 @@ android {
     buildFeatures {
         compose = true
     }
+
+    // Database upgrade tests run on the JVM (Robolectric), which reads the debug build's assets;
+    // the schemas go there so release builds stay free of them.
+    testOptions {
+        unitTests.isIncludeAndroidResources = true
+    }
+    sourceSets {
+        getByName("debug").assets.srcDir("$projectDir/schemas")
+    }
 }
 
 ksp {
@@ -67,6 +76,9 @@ dependencies {
     testImplementation(libs.junit)
     // Real org.json for unit tests (the Android stub only throws on the JVM).
     testImplementation(libs.org.json)
+    testImplementation(libs.robolectric)
+    testImplementation(libs.androidx.test.core)
+    testImplementation(libs.androidx.room.testing)
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.lifecycle.runtime.compose)

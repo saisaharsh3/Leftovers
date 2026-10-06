@@ -8,6 +8,7 @@ import com.leftovers.app.data.AppDatabase
 import com.leftovers.app.data.BackupDao
 import com.leftovers.app.data.BudgetPlan
 import com.leftovers.app.data.Category
+import com.leftovers.app.data.Debt
 import com.leftovers.app.data.Goal
 import com.leftovers.app.data.GoalDeposit
 import com.leftovers.app.data.Recurring
@@ -23,12 +24,14 @@ import org.json.JSONObject
 
 /**
  * Saves everything to a single JSON file the user picks (local storage, Google Drive, …)
- * and restores from it. Receipt photos are not included.
+ * and restores from it. Receipt photos are not included. With a backup password set, the file is
+ * encrypted (see [BackupCrypto]).
  */
 class BackupManager(
     private val context: Context,
     private val database: AppDatabase,
     private val settings: SettingsRepository,
+    val password: BackupPassword,
 ) {
     private val dao: BackupDao = database.backupDao()
 
@@ -83,19 +86,31 @@ class BackupManager(
                     JSONObject().put("id", d.id).put("goalId", d.goalId).put("amount", d.amountMinor)
                         .put("day", d.epochDay).put("createdAt", d.createdAt)
                 }))
+                put("debts", JSONArray(dao.debts().map { d ->
+                    JSONObject().put("id", d.id).put("person", d.person).put("amount", d.amountMinor).put("note", d.note)
+                        .put("day", d.epochDay).put("settled", d.settled).put("createdAt", d.createdAt)
+                }))
             }
-            context.contentResolver.openOutputStream(target, "wt")?.use { it.write(json.toString(2).toByteArray()) }
+            val text = password.get()?.let { BackupCrypto.encrypt(json.toString(), it).toString(2) } ?: json.toString(2)
+            context.contentResolver.openOutputStream(target, "wt")?.use { it.write(text.toByteArray()) }
                 ?: error("Couldn't open the file")
             transactions.size
         }
     }
 
-    /** Replaces all data with the backup's contents. */
-    suspend fun import(source: Uri): Result<Int> = withContext(Dispatchers.IO) {
+    /**
+     * Replaces all data with the backup's contents. A protected backup is opened with [typedPassword],
+     * or else the saved backup password; without the right one it fails with [BackupPasswordException].
+     */
+    suspend fun import(source: Uri, typedPassword: String? = null): Result<Int> = withContext(Dispatchers.IO) {
         runCatching {
             val text = context.contentResolver.openInputStream(source)?.use { it.readBytes().decodeToString() }
                 ?: error("Couldn't open the file")
-            val json = JSONObject(text)
+            var json = JSONObject(text)
+            if (BackupCrypto.isEncrypted(json)) {
+                val key = typedPassword ?: password.get() ?: throw BackupPasswordException("This backup has a password")
+                json = JSONObject(BackupCrypto.decrypt(json, key))
+            }
             // "cash-tracker" is the app's previous name; keep accepting those backups.
             require(json.optString("app") in setOf("leftovers", "cash-tracker")) { "This isn't a Leftovers backup" }
 
@@ -135,8 +150,12 @@ class BackupManager(
             val deposits = json.optJSONArray("deposits")?.objects().orEmpty().map {
                 GoalDeposit(it.getLong("id"), it.getLong("goalId"), it.getLong("amount"), it.getLong("day"), it.getLong("createdAt"))
             }
+            val debts = json.optJSONArray("debts")?.objects().orEmpty().map {
+                Debt(it.getLong("id"), it.getString("person"), it.getLong("amount"), it.optString("note"), it.getLong("day"), it.optBoolean("settled"), it.getLong("createdAt"))
+            }
 
             database.withTransaction {
+                dao.clearDebts()
                 dao.clearDeposits()
                 dao.clearGoals()
                 dao.clearTransfers()
@@ -151,6 +170,7 @@ class BackupManager(
                 dao.insertRecurring(recurring)
                 dao.insertGoals(goals)
                 dao.insertDeposits(deposits)
+                dao.insertDebts(debts)
             }
 
             json.optJSONObject("settings")?.let { s ->

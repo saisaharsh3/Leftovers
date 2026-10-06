@@ -26,10 +26,12 @@ today, plan for the things you want, and ask an AI about your money if you'd lik
 
 **Everyday tracking**
 - Keypad-first entry; tap a digit to place a cursor and fix just that digit
+- Or tap the mic and say it: *"250 for lunch"* fills in the amount, note and category
 - Expenses and income with categories, notes, accounts and receipt photos
 - Add forgotten spending for any past day from a date strip or calendar
 - Split one bill across several categories
-- Search every entry by note, category or amount
+- Search every entry by note, category or amount; filter by account, category or #tag
+- Add #tags to notes (*"Dinner #goa"*) to group entries across categories and months, with a total
 - Edit with a tap; swipe left to delete, with undo
 
 **Budgets that make sense day to day**
@@ -40,19 +42,22 @@ today, plan for the things you want, and ask an AI about your money if you'd lik
 - Per-category limits with alerts at 80% and 100%
 
 **Planning**
-- Monthly or yearly subscriptions and recurring income, logged automatically on their day, with a reminder the
-  morning before a bill; yearly bills count as their monthly share in totals
+- Subscriptions and recurring income every month, every 3 or 6 months, or yearly, logged automatically on their
+  day, with a reminder the morning before a bill; longer cycles count as their monthly share in totals
+- Skip a single payment without stopping the subscription
+- Spots repeating expenses that look like a subscription and offers to add them
 - Savings goals that say how much to put aside each month and whether you're on track
 - Accounts (cash, bank, UPI, cards) with live balances, transfers, a breakdown of how each balance adds up,
   and a one-step move of every entry to another account (with undo)
-- Total balance across accounts on Home
+- Total balance across accounts on Home, with where it's heading by the end of the month
+- Money owed: what you lent or borrowed and from whom, settled with a tap and kept out of your budget
 
 **Insights**
 - Daily bar chart you can touch to read any day
 - Category breakdown that opens each category's entries
 - Spending calendar that opens any day's entries
 - Trends: category changes vs last month, weekend spending, where the month is heading
-- Month-over-month comparison and a story-style monthly recap
+- Month-over-month comparison and a story-style monthly recap you can share as an image
 
 **AI assistant** (optional)
 - Connect Claude, ChatGPT, Gemini, Mistral, Groq, DeepSeek, Grok, OpenRouter or your own server, with your own API key
@@ -65,6 +70,7 @@ today, plan for the things you want, and ask an AI about your money if you'd lik
 - Home-screen widgets: *Safe to spend today* (with one-tap add) and *Left this month*
 - Evening reminder, app lock (fingerprint, face or PIN)
 - Backup and restore to a file or Google Drive, weekly automatic backups to a folder you choose, CSV export
+- Optional backup password: backups are encrypted (AES-256) and need it to restore
 - Optional bank-SMS detection that suggests entries for you to confirm
 - Swipe sideways to move between Home, Activity, Insights and Plan
 - Dark glass design with spring animations and high-refresh-rate support; light theme available
@@ -77,6 +83,10 @@ network calls unless you connect the optional AI assistant.
 - The app is excluded from Android's automatic cloud backup, so backups go only where you save them.
 - With app lock on, screenshots are blocked and the app is hidden in the recent-apps preview.
 - SMS detection is off by default. When on, messages are read on the device and nothing is added without your tap.
+- Voice entry uses Android's own speech recognition. It works offline where the phone supports it; otherwise the
+  phone's speech service (usually Google) turns the audio into text, and only that text reaches the app.
+- With a backup password, backup files are encrypted. The password is kept encrypted with an Android Keystore key
+  and is never written into a backup; if it's forgotten, those backups can't be opened.
 - Network access is HTTPS-only and trusts only the system's certificate authorities.
 
 ## AI assistant
@@ -147,7 +157,7 @@ cd Leftovers
 
 ./gradlew assembleDebug        # app/build/outputs/apk/debug/app-debug.apk
 ./gradlew installDebug         # install on a connected phone (USB debugging on)
-./gradlew testDebugUnitTest    # unit tests: budget maths, trends, amount cursor, privacy, every AI provider's format
+./gradlew testDebugUnitTest    # unit tests: budget maths, forecasts, backups, database upgrades, privacy, every AI provider's format
 ```
 
 On Windows use `gradlew.bat`. If Gradle can't find the SDK, create `local.properties` with
