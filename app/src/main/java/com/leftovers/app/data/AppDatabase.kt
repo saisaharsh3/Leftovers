@@ -12,7 +12,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         Category::class, Transaction::class, Recurring::class, Goal::class, GoalDeposit::class,
         Account::class, Transfer::class, SmsSuggestion::class,
     ],
-    version = 5,
+    version = 6,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -29,7 +29,7 @@ abstract class AppDatabase : RoomDatabase() {
         fun build(context: Context): AppDatabase =
             Room.databaseBuilder(context, AppDatabase::class.java, "leftovers.db")
                 .addCallback(SeedCategories)
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
                 .build()
     }
 }
@@ -59,6 +59,13 @@ private val MIGRATION_1_2 = object : Migration(1, 2) {
 }
 
 /** v4 adds accounts, transfers, receipt photos and SMS suggestions. Existing entries go to "Cash". */
+/** v6 adds yearly subscriptions; existing ones stay monthly. */
+private val MIGRATION_5_6 = object : Migration(5, 6) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE `recurring` ADD COLUMN `everyMonths` INTEGER NOT NULL DEFAULT 1")
+    }
+}
+
 /** v5 lets income categories add to the month's budget; on for everything except Salary. */
 private val MIGRATION_4_5 = object : Migration(4, 5) {
     override fun migrate(db: SupportSQLiteDatabase) {

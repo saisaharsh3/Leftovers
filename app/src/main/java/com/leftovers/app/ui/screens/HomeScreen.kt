@@ -197,7 +197,7 @@ fun HomeScreen(
                         Text(greeting(), style = MaterialTheme.typography.bodyMedium, color = c.textSecondary)
                         Text(state.month.label(), style = MaterialTheme.typography.headlineLarge, color = c.textPrimary)
                     }
-                    RoundButton(Lucide.Sparkles, "AI assistant", onOpenAssistant)
+                    RoundButton(Lucide.MessageCircle, "AI assistant", onOpenAssistant)
                     Spacer(Modifier.width(8.dp))
                     RoundButton(Lucide.Settings, "Settings", onOpenSettings)
                 }

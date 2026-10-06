@@ -1,5 +1,6 @@
 package com.leftovers.app.data
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
@@ -8,8 +9,9 @@ import java.time.LocalDate
 import java.time.YearMonth
 
 /**
- * A subscription, bill or recurring income that is logged automatically every month
- * on [dayOfMonth] (clamped to the month's length, so 31 means "last day").
+ * A subscription, bill or recurring income that is logged automatically on [dayOfMonth] (clamped to
+ * the month's length, so 31 means "last day") every [everyMonths] months: 1 = monthly, 12 = yearly,
+ * counted from [startMonth].
  */
 @Entity(
     tableName = "recurring",
@@ -30,19 +32,37 @@ data class Recurring(
     /** Last month a transaction was created for, as "yyyy-MM"; null if never. */
     val lastPostedMonth: String? = null,
     val active: Boolean = true,
+    @ColumnInfo(defaultValue = "1") val everyMonths: Int = 1,
 ) {
+    val yearly: Boolean get() = everyMonths == 12
+
     fun chargeDate(month: YearMonth): LocalDate = month.atDay(dayOfMonth.coerceAtMost(month.lengthOfMonth()))
 
-    /** True when this month's charge hasn't been logged yet. */
+    /** True when [month] is a billing month: on or after the start, on the right cycle. */
+    fun isDueIn(month: YearMonth): Boolean {
+        val start = YearMonth.parse(startMonth)
+        if (month < start) return false
+        val months = (month.year - start.year) * 12 + (month.monthValue - start.monthValue)
+        return months % everyMonths.coerceAtLeast(1) == 0
+    }
+
+    /** True when [month] is a billing month whose charge hasn't been logged yet. */
     fun isPendingIn(month: YearMonth): Boolean =
-        active && startMonth <= month.toString() && (lastPostedMonth == null || lastPostedMonth < month.toString())
+        active && isDueIn(month) && (lastPostedMonth == null || lastPostedMonth < month.toString())
 
     /** The next date this will be charged, from [today] on. */
     fun nextChargeDate(today: LocalDate = LocalDate.now()): LocalDate {
-        val current = YearMonth.from(today)
-        val first = maxOf(current, YearMonth.parse(startMonth))
-        return if (isPendingIn(first)) chargeDate(first) else chargeDate(first.plusMonths(1))
+        var month = maxOf(YearMonth.from(today), YearMonth.parse(startMonth))
+        // At most one cycle ahead (12 months for yearly) plus the current month.
+        repeat(everyMonths.coerceAtLeast(1) + 1) {
+            if (isPendingIn(month)) return chargeDate(month)
+            month = month.plusMonths(1)
+        }
+        return chargeDate(month)
     }
+
+    /** What this costs per month on average (a yearly bill spread over 12 months). */
+    val monthlyShareMinor: Long get() = amountMinor / everyMonths.coerceAtLeast(1)
 }
 
 data class RecurringItem(
@@ -55,11 +75,12 @@ data class RecurringItem(
     val startMonth: String,
     val lastPostedMonth: String?,
     val active: Boolean,
+    val everyMonths: Int,
     val categoryName: String,
     val categoryEmoji: String,
     val categoryColor: Long,
 ) {
-    fun toRecurring() = Recurring(id, name, amountMinor, type, categoryId, dayOfMonth, startMonth, lastPostedMonth, active)
+    fun toRecurring() = Recurring(id, name, amountMinor, type, categoryId, dayOfMonth, startMonth, lastPostedMonth, active, everyMonths)
 }
 
 @Entity(tableName = "goals")

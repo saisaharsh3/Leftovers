@@ -3,6 +3,14 @@
 All notable changes to Leftovers. Download any version from
 [Releases](https://github.com/saisaharsh3/Leftovers/releases).
 
+## 1.0.6
+
+- Yearly subscriptions: pick the month and day; they're logged once a year and count as their monthly
+  share in the Subscriptions and Plan totals. The AI assistant can add them too
+- The AI assistant has its own chat icon, so it no longer looks like the monthly recap
+- Fixed weekly automatic backup sometimes writing a duplicate file on the day it was turned on
+- Subscription totals are rounded to whole amounts
+
 ## 1.0.5
 
 **AI assistant**

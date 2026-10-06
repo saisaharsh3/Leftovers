@@ -149,8 +149,9 @@ fun PlanScreen(
                 Glass(Modifier.fillMaxWidth().appear(1), onClick = onOpenSubscriptions) {
                     Column(Modifier.padding(vertical = 6.dp)) {
                         ListRow(
-                            title = if (active.isEmpty()) "No subscriptions yet" else "${money.format(active.sumOf { it.amountMinor })} every month",
-                            subtitle = if (active.isEmpty()) "Rent, phone, streaming — logged automatically" else "${active.size} active · logged automatically each month",
+                            title = if (active.isEmpty()) "No subscriptions yet" else "${money.formatWhole(active.sumOf { it.toRecurring().monthlyShareMinor })} a month",
+                            // Yearly bills count as their monthly share, matching the Subscriptions screen.
+                            subtitle = if (active.isEmpty()) "Rent, phone, streaming — logged automatically" else "${active.size} active · logged automatically",
                             leading = { IconTile(Lucide.Repeat, c.textPrimary, size = 42.dp) },
                             trailing = { Icon(Lucide.ChevronRight, contentDescription = null, tint = c.textTertiary, modifier = Modifier.size(18.dp)) },
                         )

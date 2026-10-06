@@ -70,7 +70,11 @@ object AutoBackup {
 class AutoBackupWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result {
         val settings = (applicationContext as LeftoversApp).container.settings
-        val dir = settings.settings.first().autoBackupDir ?: return Result.success()
+        val s = settings.settings.first()
+        val dir = s.autoBackupDir ?: return Result.success()
+        // Turning backups on makes one straight away, and the weekly job's first run starts at the
+        // same moment; skip it so the two don't write duplicate files.
+        if (System.currentTimeMillis() - s.autoBackupLast < TimeUnit.DAYS.toMillis(6)) return Result.success()
         return AutoBackup.runNow(applicationContext, Uri.parse(dir)).fold(
             {
                 settings.setAutoBackupDone(System.currentTimeMillis())

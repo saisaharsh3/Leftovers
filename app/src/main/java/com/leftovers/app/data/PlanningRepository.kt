@@ -35,6 +35,11 @@ class PlanningRepository(private val database: AppDatabase) {
                 var month = r.lastPostedMonth?.let { YearMonth.parse(it).plusMonths(1) } ?: YearMonth.parse(r.startMonth)
                 var lastPosted: YearMonth? = null
                 while (month <= currentMonth) {
+                    // Yearly bills are only charged in their billing month.
+                    if (!r.isDueIn(month)) {
+                        month = month.plusMonths(1)
+                        continue
+                    }
                     val date = r.chargeDate(month)
                     if (date > today) break
                     val tx = Transaction(

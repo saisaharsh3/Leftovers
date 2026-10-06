@@ -229,7 +229,7 @@ fun StatsScreen(
                             state.trends.forEach { t ->
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Icon(
-                                        Lucide.Sparkles,
+                                        Lucide.TrendingUp,
                                         contentDescription = null,
                                         tint = when (t.good) {
                                             true -> c.positive

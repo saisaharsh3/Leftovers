@@ -484,7 +484,7 @@ fun AssistantScreen(onBack: () -> Unit, viewModel: AssistantViewModel = viewMode
 private fun ConnectPrompt(modifier: Modifier, onConnect: () -> Unit) {
     val c = LocalAppColors.current
     Column(modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
-        IconTile(Lucide.Sparkles, c.accent, size = 64.dp)
+        IconTile(Lucide.MessageCircle, c.accent, size = 64.dp)
         Spacer(Modifier.height(16.dp))
         Text("Ask about your money, or tell it what to log", style = MaterialTheme.typography.titleLarge, color = c.textPrimary, textAlign = TextAlign.Center)
         Spacer(Modifier.height(8.dp))

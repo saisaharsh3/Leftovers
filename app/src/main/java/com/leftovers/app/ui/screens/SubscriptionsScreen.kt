@@ -140,8 +140,9 @@ fun SubscriptionsScreen(
     var editing by remember { mutableStateOf<Recurring?>(null) }
 
     val active = items.filter { it.active }
-    val monthlyOut = active.filter { it.type == TxType.EXPENSE }.sumOf { it.amountMinor }
-    val monthlyIn = active.filter { it.type == TxType.INCOME }.sumOf { it.amountMinor }
+    // Yearly bills count as their monthly share, so the total matches what to set aside each month.
+    val monthlyOut = active.filter { it.type == TxType.EXPENSE }.sumOf { it.toRecurring().monthlyShareMinor }
+    val monthlyIn = active.filter { it.type == TxType.INCOME }.sumOf { it.toRecurring().monthlyShareMinor }
 
     fun startNew() {
         categories.firstOrNull { it.type == filter }?.let { first ->
@@ -191,7 +192,7 @@ fun SubscriptionsScreen(
                         val income = filter == TxType.INCOME
                         Text(if (income) "Coming in every month" else "Going out every month", style = MaterialTheme.typography.labelLarge, color = c.textSecondary)
                         Spacer(Modifier.height(4.dp))
-                        RollingText(money.format(if (income) monthlyIn else monthlyOut), MaterialTheme.typography.displaySmall, if (income) c.positive else c.textPrimary)
+                        RollingText(money.formatWhole(if (income) monthlyIn else monthlyOut), MaterialTheme.typography.displaySmall, if (income) c.positive else c.textPrimary)
                         val other = if (income) monthlyOut else monthlyIn
                         if (other > 0) {
                             Spacer(Modifier.height(6.dp))
@@ -272,7 +273,7 @@ private fun DeductionCalendar(items: List<RecurringItem>, modifier: Modifier = M
     val money = LocalMoney.current
     val month = YearMonth.now()
     val today = LocalDate.now()
-    val byDay = items.groupBy { it.toRecurring().chargeDate(month).dayOfMonth }
+    val byDay = items.filter { it.toRecurring().isDueIn(month) }.groupBy { it.toRecurring().chargeDate(month).dayOfMonth }
     val leading = month.atDay(1).dayOfWeek.value - 1
     val cells: List<Int?> = List(leading) { null } + (1..month.lengthOfMonth()).toList()
     var selected by rememberSaveable { mutableStateOf(byDay.keys.filter { it >= today.dayOfMonth }.minOrNull() ?: byDay.keys.minOrNull() ?: 1) }
@@ -387,7 +388,11 @@ private fun RecurringRow(item: RecurringItem, onClick: () -> Unit, onToggle: (Bo
         Column(Modifier.weight(1f).alpha(if (item.active) 1f else 0.5f)) {
             Text(item.name, style = MaterialTheme.typography.titleSmall, color = c.textPrimary, maxLines = 1)
             Text(
-                if (item.active) "Every ${ordinal(item.dayOfMonth)} · next ${item.toRecurring().nextChargeDate().friendlyLabel()}" else "Paused",
+                when {
+                    !item.active -> "Paused"
+                    item.everyMonths == 12 -> "Yearly · next ${item.toRecurring().nextChargeDate().friendlyLabel()}"
+                    else -> "Every ${ordinal(item.dayOfMonth)} · next ${item.toRecurring().nextChargeDate().friendlyLabel()}"
+                },
                 style = MaterialTheme.typography.bodySmall,
                 color = c.textSecondary,
                 maxLines = 1,
@@ -431,9 +436,13 @@ private fun RecurringEditor(
     var type by rememberSaveable { mutableStateOf(initial.type) }
     var categoryId by rememberSaveable { mutableStateOf(initial.categoryId) }
     var day by rememberSaveable { mutableStateOf(initial.dayOfMonth) }
+    var yearly by rememberSaveable { mutableStateOf(initial.yearly) }
+    // For yearly bills: which month of the year it's charged.
+    var billMonth by rememberSaveable { mutableStateOf(if (initial.yearly) YearMonth.parse(initial.startMonth).monthValue else today.monthValue) }
     var chargeThisMonth by rememberSaveable { mutableStateOf(true) }
     val amount = AmountInput.toMinor(amountText) ?: 0L
-    val dayPassed = day <= today.dayOfMonth
+    val dueThisMonth = !yearly || billMonth == today.monthValue
+    val dayPassed = dueThisMonth && day <= today.dayOfMonth
 
     GlassSheet(onDismiss) {
         Column(
@@ -469,7 +478,16 @@ private fun RecurringEditor(
                 Modifier.fillMaxWidth(),
             )
             GlassTextField(name, { name = it.take(30) }, placeholder = if (type == TxType.INCOME) "e.g. Salary" else "e.g. Netflix", label = "Name")
-            MoneyField(amountText, { amountText = it }, label = "Amount every month")
+            SegmentedToggle(listOf(false, true), yearly, { if (it) "Yearly" else "Monthly" }, { yearly = it }, Modifier.fillMaxWidth())
+            MoneyField(amountText, { amountText = it }, label = if (yearly) "Amount every year" else "Amount every month")
+            if (yearly && amount > 0) {
+                Text(
+                    "About ${LocalMoney.current.format(amount / 12)} a month",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = c.textSecondary,
+                    modifier = Modifier.padding(start = 6.dp),
+                )
+            }
 
             Text("Category", style = MaterialTheme.typography.labelMedium, color = c.textSecondary, modifier = Modifier.padding(start = 6.dp))
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -478,8 +496,20 @@ private fun RecurringEditor(
                 }
             }
 
+            if (yearly) {
+                Text("Month", style = MaterialTheme.typography.labelMedium, color = c.textSecondary, modifier = Modifier.padding(start = 6.dp))
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    java.time.Month.entries.forEach { m ->
+                        Chip(m.getDisplayName(java.time.format.TextStyle.SHORT, java.util.Locale.getDefault()), { billMonth = m.value }, selected = billMonth == m.value)
+                    }
+                }
+            }
             Text(
-                "${if (type == TxType.INCOME) "Received" else "Deducted"} on the ${if (day == 31) "last day" else ordinal(day)} of every month",
+                "${if (type == TxType.INCOME) "Received" else "Deducted"} on " + if (yearly) {
+                    "${if (day == 31) "the last day of" else day.toString()} ${java.time.Month.of(billMonth).getDisplayName(java.time.format.TextStyle.FULL, java.util.Locale.getDefault())} every year"
+                } else {
+                    "the ${if (day == 31) "last day" else ordinal(day)} of every month"
+                },
                 style = MaterialTheme.typography.labelMedium,
                 color = c.textSecondary,
                 modifier = Modifier.padding(start = 6.dp),
@@ -490,7 +520,7 @@ private fun RecurringEditor(
                 Glass(Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp)) {
                     Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
-                            Text("Log this month's ${if (type == TxType.EXPENSE) "payment" else "income"} now", style = MaterialTheme.typography.titleSmall, color = c.textPrimary)
+                            Text("Log ${if (yearly) "this year's" else "this month's"} ${if (type == TxType.EXPENSE) "payment" else "income"} now", style = MaterialTheme.typography.titleSmall, color = c.textPrimary)
                             Text(
                                 if (day == today.dayOfMonth) "The ${ordinal(day)} is today" else "The ${ordinal(day)} has already passed this month",
                                 style = MaterialTheme.typography.bodySmall,
@@ -509,12 +539,22 @@ private fun RecurringEditor(
             PrimaryButton(
                 "Save",
                 {
-                    val start = when {
-                        !isNew -> initial.startMonth
-                        dayPassed && !chargeThisMonth -> YearMonth.now().plusMonths(1).toString()
-                        else -> YearMonth.now().toString()
+                    val now = YearMonth.now()
+                    val start = if (yearly) {
+                        // The next time the chosen month comes round that hasn't been logged yet.
+                        var m = YearMonth.of(now.year, billMonth)
+                        val loggedAlready = initial.lastPostedMonth != null && initial.lastPostedMonth >= m.toString()
+                        if (m < now || loggedAlready || (m == now && dayPassed && isNew && !chargeThisMonth)) m = m.plusYears(1)
+                        m.toString()
+                    } else {
+                        when {
+                            !isNew && !initial.yearly -> initial.startMonth
+                            !isNew -> now.toString()
+                            dayPassed && !chargeThisMonth -> now.plusMonths(1).toString()
+                            else -> now.toString()
+                        }
                     }
-                    onSave(initial.copy(name = name.trim(), amountMinor = amount, type = type, categoryId = categoryId, dayOfMonth = day, startMonth = start))
+                    onSave(initial.copy(name = name.trim(), amountMinor = amount, type = type, categoryId = categoryId, dayOfMonth = day, startMonth = start, everyMonths = if (yearly) 12 else 1))
                 },
                 Modifier.fillMaxWidth(),
                 enabled = name.isNotBlank() && amount > 0 && categories.any { it.id == categoryId && it.type == type },

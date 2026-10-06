@@ -7,7 +7,7 @@ A fast, private expense tracker for Android. Log a spend in two taps, see what's
 today, plan for the things you want, and ask an AI about your money if you'd like to.
 
 [![Build](https://github.com/saisaharsh3/Leftovers/actions/workflows/build.yml/badge.svg)](https://github.com/saisaharsh3/Leftovers/actions/workflows/build.yml)
-[![Latest release](https://img.shields.io/github/v/release/saisaharsh3/Leftovers)](https://github.com/saisaharsh3/Leftovers/releases/latest)
+[![Download](https://img.shields.io/badge/Download-latest%20APK-CDF46F?logo=android&logoColor=black)](https://github.com/saisaharsh3/Leftovers/releases/latest)
 ![Android 8.0+](https://img.shields.io/badge/Android-8.0%2B-3DDC84?logo=android&logoColor=white)
 ![Kotlin](https://img.shields.io/badge/Kotlin-Jetpack%20Compose-7F52FF?logo=kotlin&logoColor=white)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
@@ -40,7 +40,8 @@ today, plan for the things you want, and ask an AI about your money if you'd lik
 - Per-category limits with alerts at 80% and 100%
 
 **Planning**
-- Subscriptions and recurring income, logged automatically on their day, with a reminder the morning before a bill
+- Monthly or yearly subscriptions and recurring income, logged automatically on their day, with a reminder the
+  morning before a bill; yearly bills count as their monthly share in totals
 - Savings goals that say how much to put aside each month and whether you're on track
 - Accounts (cash, bank, UPI, cards) with live balances, transfers, a breakdown of how each balance adds up,
   and a one-step move of every entry to another account (with undo)
@@ -79,7 +80,7 @@ network calls unless you connect the optional AI assistant.
 
 ## AI assistant
 
-Tap ✨ on Home (or **Settings → AI assistant**), pick a provider, paste an API key and tap **Connect**.
+Tap the chat button on Home (or **Settings → AI assistant**), pick a provider, paste an API key and tap **Connect**.
 Tap **Load models** to see every model your key can use.
 
 | Provider | Get a key | Default model |
@@ -163,7 +164,7 @@ On Windows use `gradlew.bat`. If Gradle can't find the SDK, create `local.proper
 
 ### Publishing a GitHub release
 
-Pushing a tag such as `v1.0.6` runs the [release workflow](.github/workflows/release.yml), which runs
+Pushing a tag such as `v1.2.0` runs the [release workflow](.github/workflows/release.yml), which runs
 the tests, builds a signed APK and attaches it to a GitHub release. It needs these repository secrets
 (**Settings → Secrets and variables → Actions**):
 
@@ -177,8 +178,8 @@ the tests, builds a signed APK and attaches it to a GitHub release. It needs the
 Bump `versionCode` and `versionName` in `app/build.gradle.kts`, then:
 
 ```bash
-git tag v1.0.6
-git push origin v1.0.6
+git tag v1.2.0
+git push origin v1.2.0
 ```
 
 ### Tech stack
