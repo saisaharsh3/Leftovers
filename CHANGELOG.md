@@ -15,7 +15,7 @@ All notable changes to Leftovers. Download any version from
 - Fixes: replies after a confirmed change now appear; *Confirm all* replies once; private notes are reported as private
 
 **App**
-- Back gestures animate smoothly (predictive back now follows your finger)
+- Back gestures no longer stutter: a back swipe now plays the same smooth animation as the back button
 - Unit tests check every AI provider's request and reply format
 
 ## 1.0.4

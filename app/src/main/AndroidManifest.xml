@@ -8,9 +8,12 @@
     <uses-permission android:name="android.permission.RECEIVE_SMS" />
     <uses-feature android:name="android.hardware.telephony" android:required="false" />
 
+    <!-- Predictive back is off: a back swipe acts like the back button (one smooth animation after the
+         swipe), instead of scrubbing two screens under the frosted blur frame by frame, which stuttered. -->
     <application
         android:name=".LeftoversApp"
         android:allowBackup="false"
+        android:enableOnBackInvokedCallback="false"
         android:networkSecurityConfig="@xml/network_security_config"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher"
