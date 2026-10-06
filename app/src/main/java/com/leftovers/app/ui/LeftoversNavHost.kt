@@ -47,6 +47,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NamedNavArgument
 import androidx.navigation.NavBackStackEntry
@@ -120,6 +121,12 @@ private val tabs = listOf(
     Tab(Routes.PLAN, Lucide.Target, "Plan"),
 )
 
+/**
+ * Fixed-length easing for screen changes. A back swipe scrubs these animations with the finger
+ * (predictive back), which works smoothly with tweens but makes spring animations jump.
+ */
+private val navTween = tween<IntOffset>(340, easing = FastOutSlowInEasing)
+
 private fun NavBackStackEntry.route() = destination.route.orEmpty()
 private fun NavBackStackEntry.isTab() = route() in Routes.tabs
 private fun NavBackStackEntry.isAdd() = route().startsWith("add") || route().startsWith("edit")
@@ -170,30 +177,30 @@ fun LeftoversNavHost(openAdd: Boolean = false, onOpenAddHandled: () -> Unit = {}
                             targetState.isAdd() -> slideInVertically(tween(320, easing = FastOutSlowInEasing)) { it / 5 } + fadeIn(tween(220))
                             targetState.isSheet() -> slideInVertically(tween(420, easing = FastOutSlowInEasing)) { it } + fadeIn(tween(200))
                             targetState.isTab() && initialState.isTab() -> fadeIn(tween(260)) + scaleIn(tween(260), initialScale = 0.985f)
-                            else -> slideIntoContainer(SlideDirection.Start, spring(dampingRatio = 1f, stiffness = Spring.StiffnessMediumLow)) + fadeIn(tween(220))
+                            else -> slideIntoContainer(SlideDirection.Start, navTween) + fadeIn(tween(220))
                         }
                     },
                     exitTransition = {
                         when {
                             // Scaling the screen behind would re-render its frosted blur every frame.
                             targetState.isAdd() -> fadeOut(tween(220))
-                            targetState.isSheet() -> fadeOut(tween(300)) + scaleOut(tween(300), targetScale = 0.96f)
+                            targetState.isSheet() -> fadeOut(tween(300))
                             targetState.isTab() && initialState.isTab() -> fadeOut(tween(180))
-                            else -> slideOutOfContainer(SlideDirection.Start, spring(dampingRatio = 1f, stiffness = Spring.StiffnessMediumLow)) { it / 4 } + fadeOut(tween(220))
+                            else -> slideOutOfContainer(SlideDirection.Start, navTween) { it / 4 } + fadeOut(tween(220))
                         }
                     },
                     popEnterTransition = {
                         when {
                             initialState.isAdd() -> fadeIn(tween(220))
-                            initialState.isSheet() -> fadeIn(tween(300)) + scaleIn(tween(300), initialScale = 0.96f)
-                            else -> slideIntoContainer(SlideDirection.End, spring(dampingRatio = 1f, stiffness = Spring.StiffnessMediumLow)) { it / 4 } + fadeIn(tween(220))
+                            initialState.isSheet() -> fadeIn(tween(300))
+                            else -> slideIntoContainer(SlideDirection.End, navTween) { it / 4 } + fadeIn(tween(220))
                         }
                     },
                     popExitTransition = {
                         when {
                             initialState.isAdd() -> slideOutVertically(tween(260, easing = FastOutSlowInEasing)) { it / 5 } + fadeOut(tween(200))
                             initialState.isSheet() -> slideOutVertically(tween(360, easing = FastOutSlowInEasing)) { it } + fadeOut(tween(260))
-                            else -> slideOutOfContainer(SlideDirection.End, spring(dampingRatio = 1f, stiffness = Spring.StiffnessMediumLow)) + fadeOut(tween(220))
+                            else -> slideOutOfContainer(SlideDirection.End, navTween) + fadeOut(tween(220))
                         }
                     },
                 ) {

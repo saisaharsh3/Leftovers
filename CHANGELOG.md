@@ -3,6 +3,21 @@
 All notable changes to Leftovers. Download any version from
 [Releases](https://github.com/saisaharsh3/Leftovers/releases).
 
+## 1.0.5
+
+**AI assistant**
+- More providers: Mistral, Groq, DeepSeek, Grok (xAI), OpenRouter and any OpenAI-compatible HTTPS server
+- *Load models* lists the models your key can use; *Answer style* switches between Quick and Thorough
+- Much faster: answers in seconds instead of minutes (lighter thinking, fewer round trips, Gemini Flash-Lite by default)
+- Photograph or pick a screenshot of a bill and it proposes entries by category, adding up to what you paid
+- Finds entries by date, and asks which one when several match instead of guessing
+- Redesigned chat: message bubbles, typing indicator, clear action cards with Confirm / Not now
+- Fixes: replies after a confirmed change now appear; *Confirm all* replies once; private notes are reported as private
+
+**App**
+- Back gestures animate smoothly (predictive back now follows your finger)
+- Unit tests check every AI provider's request and reply format
+
 ## 1.0.4
 
 **AI assistant (optional)**

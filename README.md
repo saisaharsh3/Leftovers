@@ -54,9 +54,10 @@ today, plan for the things you want, and ask an AI about your money if you'd lik
 - Month-over-month comparison and a story-style monthly recap
 
 **AI assistant** (optional)
-- Connect Claude, ChatGPT or Gemini with your own API key
+- Connect Claude, ChatGPT, Gemini, Mistral, Groq, DeepSeek, Grok, OpenRouter or your own server, with your own API key
 - Ask questions like *"How much did I spend on food this month?"* or *"Am I on track with my budget?"*
 - Tell it what to do: *"Add 250 for coffee today"*, *"Move yesterday's lunch to Cash"*, *"Set a 5,000 limit on Shopping"*
+- Snap a bill or receipt and it suggests the entries, split by category
 - Every change it proposes waits for you to tap **Apply**. See [AI assistant](#ai-assistant) below.
 
 **Extras**
@@ -79,33 +80,50 @@ network calls unless you connect the optional AI assistant.
 ## AI assistant
 
 Tap ✨ on Home (or **Settings → AI assistant**), pick a provider, paste an API key and tap **Connect**.
+Tap **Load models** to see every model your key can use.
 
-| Provider | Get a key | Suggested models |
+| Provider | Get a key | Default model |
 | --- | --- | --- |
-| Claude | [console.anthropic.com](https://console.anthropic.com/settings/keys) | `claude-opus-5-5` (default), `claude-sonnet-5-5`, `claude-haiku-4-5` |
-| ChatGPT | [platform.openai.com](https://platform.openai.com/api-keys) | `gpt-5`, `gpt-5-mini` |
-| Gemini | [aistudio.google.com](https://aistudio.google.com/api-keys) | `gemini-flash-latest` (default), `gemini-3.8-flash`, `gemini-pro-latest` |
+| Claude | [console.anthropic.com](https://console.anthropic.com/settings/keys) | `claude-opus-5-5` (also `claude-sonnet-5-5`, `claude-haiku-4-5`) |
+| ChatGPT | [platform.openai.com](https://platform.openai.com/api-keys) | `gpt-5-mini` |
+| Gemini | [aistudio.google.com](https://aistudio.google.com/api-keys) | `gemini-flash-lite-latest` (fastest; also `gemini-flash-latest`, `gemini-pro-latest`) |
+| Mistral | [console.mistral.ai](https://console.mistral.ai/api-keys) | `mistral-small-latest` |
+| Groq | [console.groq.com](https://console.groq.com/keys) | `llama-3.3-70b-versatile` |
+| DeepSeek | [platform.deepseek.com](https://platform.deepseek.com/api_keys) | `deepseek-chat` |
+| Grok (xAI) | [console.x.ai](https://console.x.ai) | `grok-4` |
+| OpenRouter | [openrouter.ai](https://openrouter.ai/keys) | `openrouter/auto` (one key for many models) |
+| Custom | your server | any OpenAI-compatible HTTPS server, e.g. one you host yourself |
 
-You can type any other model your key can use. Usage is billed by the provider to your own account.
+Usage is billed by the provider to your own account. **Answer style** switches between *Quick*
+(the default: a few seconds per answer) and *Thorough* (the model thinks longer).
 
-**What it can do:** look up an overview, totals for any period, entries, subscriptions and goals;
-add, edit or delete entries; set the monthly budget and category limits; add or stop subscriptions;
-move money between accounts; and add to savings goals.
+**What it can do**
 
-**Guardrails:**
+- Answer questions: totals for any period, biggest expenses, budget progress, subscriptions, goals.
+- Log, edit and delete entries, including by date (*"Move the parking from October 3 to October 5"*).
+  If several entries match, it asks which one instead of guessing.
+- Set the monthly budget and category limits, add or stop subscriptions, move money between accounts,
+  and add to savings goals.
+- **Read bills:** tap the camera in the chat to take a photo or pick a screenshot of a bill or receipt.
+  It proposes one entry per category, dated from the bill, with any discount or tax spread so the
+  entries add up to what you paid.
 
-- **Nothing changes without you.** Each change appears as a card with **Apply** and **Cancel**. Turn off
-  *Let it propose changes* for read-only use.
-- **It sees only what a question needs.** The AI asks for data through specific commands (totals first,
-  at most 50 entries at a time), and each reply shows what was shared.
-- **Personal details stay hidden.** Notes are never sent unless you turn on *Share entry notes*. Card and
-  account numbers, UPI IDs, phone numbers and emails are blanked out first. Receipt photos and SMS are never sent.
+**Guardrails**
+
+- **Nothing changes without you.** Each change appears as a card with **Confirm** and **Not now**
+  (*Confirm all* when there are several). Turn off *Let it propose changes* for read-only use.
+- **It sees only what a question needs.** It already knows your category and account names; amounts come
+  through specific commands (totals first, at most 50 entries at a time), and each reply shows what it looked at.
+- **Personal details stay hidden.** Notes stay on the phone unless you turn on *Share entry notes*. Card and
+  account numbers, UPI IDs, phone numbers and emails are blanked out first. Saved receipt photos and SMS are
+  never sent; a photo goes only when you attach it, resized and re-encoded so location and camera data are removed.
 - **Your key is protected.** It's encrypted with an Android Keystore key, never included in backups, and
-  deleted when you disconnect.
+  deleted when you disconnect. Custom servers must use HTTPS.
 - **Nothing is kept.** Chats aren't saved on the phone. The AI is told to treat your data as data, not
   instructions, and each message is limited in how many steps and changes it can make.
 
-What you send is handled under the chosen provider's privacy policy.
+What you send is handled under the chosen provider's privacy policy (DeepSeek stores data in China;
+OpenRouter passes requests on to the model's own provider).
 
 ## Install
 
@@ -127,7 +145,7 @@ cd Leftovers
 
 ./gradlew assembleDebug        # app/build/outputs/apk/debug/app-debug.apk
 ./gradlew installDebug         # install on a connected phone (USB debugging on)
-./gradlew testDebugUnitTest    # unit tests: budget maths, trends, amount cursor, privacy scrubbing
+./gradlew testDebugUnitTest    # unit tests: budget maths, trends, amount cursor, privacy, every AI provider's format
 ```
 
 On Windows use `gradlew.bat`. If Gradle can't find the SDK, create `local.properties` with
@@ -145,7 +163,7 @@ On Windows use `gradlew.bat`. If Gradle can't find the SDK, create `local.proper
 
 ### Publishing a GitHub release
 
-Pushing a tag such as `v1.0.5` runs the [release workflow](.github/workflows/release.yml), which runs
+Pushing a tag such as `v1.0.6` runs the [release workflow](.github/workflows/release.yml), which runs
 the tests, builds a signed APK and attaches it to a GitHub release. It needs these repository secrets
 (**Settings → Secrets and variables → Actions**):
 
@@ -159,8 +177,8 @@ the tests, builds a signed APK and attaches it to a GitHub release. It needs the
 Bump `versionCode` and `versionName` in `app/build.gradle.kts`, then:
 
 ```bash
-git tag v1.0.5
-git push origin v1.0.5
+git tag v1.0.6
+git push origin v1.0.6
 ```
 
 ### Tech stack

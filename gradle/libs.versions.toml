@@ -1,5 +1,6 @@
 [versions]
 junit = "4.13.2"
+orgjson = "20240303"
 agp = "9.4.1"
 kotlin = "2.4.20"
 ksp = "2.3.12"
@@ -20,6 +21,7 @@ exif = "1.4.2"
 
 [libraries]
 junit = { group = "junit", name = "junit", version.ref = "junit" }
+org-json = { group = "org.json", name = "json", version.ref = "orgjson" }
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 androidx-activity-compose = { group = "androidx.activity", name = "activity-compose", version.ref = "activityCompose" }
 androidx-lifecycle-runtime-compose = { group = "androidx.lifecycle", name = "lifecycle-runtime-compose", version.ref = "lifecycle" }

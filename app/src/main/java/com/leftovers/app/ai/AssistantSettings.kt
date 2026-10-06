@@ -13,15 +13,60 @@ import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
-/** The AI services the assistant can talk to. Users bring their own API key. */
-enum class AiProvider(val label: String, val defaultModel: String, val suggestedModels: List<String>, val keyHint: String) {
-    CLAUDE("Claude", "claude-opus-5-5", listOf("claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-4-5"), "sk-ant-…"),
-    OPENAI("ChatGPT", "gpt-5", listOf("gpt-5", "gpt-5-mini"), "sk-…"),
-    // "-latest" aliases follow Google's current models, so the default doesn't go stale when one is retired.
-    GEMINI("Gemini", "gemini-flash-latest", listOf("gemini-flash-latest", "gemini-3.8-flash", "gemini-pro-latest"), "AIza… or AQ.…"),
+/** How a provider's API is called. Most providers speak the OpenAI Chat Completions format. */
+enum class ApiStyle { CLAUDE, OPENAI, GEMINI }
+
+/**
+ * The AI services the assistant can talk to. Users bring their own API key. Model names change
+ * often, so the setup sheet can also load the live list from the provider.
+ */
+enum class AiProvider(
+    val label: String,
+    val style: ApiStyle,
+    /** Base URL for the API; null means the user enters it (custom servers). */
+    val baseUrl: String?,
+    val defaultModel: String,
+    val suggestedModels: List<String>,
+    val keyHint: String,
+    val keyUrl: String?,
+    /** Shown in the setup sheet when there's something specific to know about this provider. */
+    val note: String? = null,
+) {
+    CLAUDE("Claude", ApiStyle.CLAUDE, "https://api.anthropic.com/v1", "claude-opus-5-5",
+        listOf("claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-4-5"), "sk-ant-…", "https://console.anthropic.com/settings/keys"),
+    OPENAI("ChatGPT", ApiStyle.OPENAI, "https://api.openai.com/v1", "gpt-5-mini",
+        listOf("gpt-5-mini", "gpt-5"), "sk-…", "https://platform.openai.com/api-keys"),
+    // "-latest" aliases follow Google's current models; Flash-Lite answers in a second or two.
+    GEMINI("Gemini", ApiStyle.GEMINI, "https://generativelanguage.googleapis.com/v1beta", "gemini-flash-lite-latest",
+        listOf("gemini-flash-lite-latest", "gemini-flash-latest", "gemini-pro-latest"), "AIza… or AQ.…", "https://aistudio.google.com/api-keys"),
+    MISTRAL("Mistral", ApiStyle.OPENAI, "https://api.mistral.ai/v1", "mistral-small-latest",
+        listOf("mistral-small-latest", "mistral-medium-latest", "mistral-large-latest"), "API key", "https://console.mistral.ai/api-keys",
+        note = "Based in the EU."),
+    GROQ("Groq", ApiStyle.OPENAI, "https://api.groq.com/openai/v1", "llama-3.3-70b-versatile",
+        listOf("llama-3.3-70b-versatile"), "gsk_…", "https://console.groq.com/keys",
+        note = "Very fast. Pick a model that supports tool use; tap Load models to see what your key can use."),
+    DEEPSEEK("DeepSeek", ApiStyle.OPENAI, "https://api.deepseek.com/v1", "deepseek-chat",
+        listOf("deepseek-chat"), "sk-…", "https://platform.deepseek.com/api_keys",
+        note = "DeepSeek stores data on servers in China, under its own privacy policy."),
+    GROK("Grok", ApiStyle.OPENAI, "https://api.x.ai/v1", "grok-4",
+        listOf("grok-4"), "xai-…", "https://console.x.ai",
+        note = "By xAI. Tap Load models to see the current Grok models."),
+    OPENROUTER("OpenRouter", ApiStyle.OPENAI, "https://openrouter.ai/api/v1", "openrouter/auto",
+        listOf("openrouter/auto"), "sk-or-…", "https://openrouter.ai/keys",
+        note = "One key for many models. OpenRouter passes your request on to the model's own provider, so both handle it."),
+    CUSTOM("Custom", ApiStyle.OPENAI, null, "",
+        emptyList(), "API key (if the server needs one)", null,
+        note = "Any OpenAI-compatible server over HTTPS, e.g. one you host yourself. Only connect to servers you trust."),
 }
 
-data class AssistantConfig(val provider: AiProvider, val model: String, val apiKey: String)
+/** [thorough] trades speed for more careful answers (more model "thinking"). */
+data class AssistantConfig(
+    val provider: AiProvider,
+    val model: String,
+    val apiKey: String,
+    val baseUrl: String,
+    val thorough: Boolean = false,
+)
 
 /**
  * Which AI is connected. The API key is encrypted with a key held in the Android Keystore,
@@ -36,6 +81,13 @@ class AssistantSettings(context: Context) {
     val lastProvider: AiProvider get() = AiProvider.entries.firstOrNull { it.name == prefs.getString(PROVIDER, null) } ?: AiProvider.CLAUDE
     fun lastModel(provider: AiProvider): String =
         prefs.getString(MODEL, null)?.takeIf { lastProvider == provider } ?: provider.defaultModel
+    val lastCustomUrl: String get() = prefs.getString(BASE_URL, null).orEmpty()
+    val thorough: Boolean get() = prefs.getBoolean(THOROUGH, false)
+
+    fun setThorough(value: Boolean) {
+        prefs.edit().putBoolean(THOROUGH, value).apply()
+        _config.value = load()
+    }
 
     private val _privacy = MutableStateFlow(loadPrivacy())
     val privacy: StateFlow<AssistantPrivacy> = _privacy.asStateFlow()
@@ -51,11 +103,14 @@ class AssistantSettings(context: Context) {
         allowChanges = prefs.getBoolean(ALLOW_CHANGES, true),
     )
 
-    fun connect(provider: AiProvider, model: String, apiKey: String) {
+    /** [customUrl] is required for [AiProvider.CUSTOM] and must be HTTPS. */
+    fun connect(provider: AiProvider, model: String, apiKey: String, customUrl: String = "") {
+        val url = provider.baseUrl ?: requireHttps(customUrl)
         prefs.edit()
             .putString(PROVIDER, provider.name)
             .putString(MODEL, model.trim().ifEmpty { provider.defaultModel })
             .putString(KEY, KeyVault.encrypt(apiKey.trim()))
+            .putString(BASE_URL, url)
             .apply()
         _config.value = load()
     }
@@ -68,7 +123,8 @@ class AssistantSettings(context: Context) {
     private fun load(): AssistantConfig? {
         val provider = AiProvider.entries.firstOrNull { it.name == prefs.getString(PROVIDER, null) } ?: return null
         val key = prefs.getString(KEY, null)?.let(KeyVault::decrypt) ?: return null
-        return AssistantConfig(provider, prefs.getString(MODEL, null) ?: provider.defaultModel, key)
+        val url = provider.baseUrl ?: prefs.getString(BASE_URL, null) ?: return null
+        return AssistantConfig(provider, prefs.getString(MODEL, null) ?: provider.defaultModel, key, url, prefs.getBoolean(THOROUGH, false))
     }
 
     private companion object {
@@ -77,6 +133,8 @@ class AssistantSettings(context: Context) {
         const val KEY = "api_key"
         const val SHARE_NOTES = "share_notes"
         const val ALLOW_CHANGES = "allow_changes"
+        const val BASE_URL = "base_url"
+        const val THOROUGH = "thorough"
     }
 }
 
@@ -110,4 +168,11 @@ private object KeyVault {
         cipher.init(Cipher.DECRYPT_MODE, secretKey(), GCMParameterSpec(128, bytes, 0, 12))
         String(cipher.doFinal(bytes, 12, bytes.size - 12))
     }.getOrNull()
+}
+
+/** Normalises a custom server address; only HTTPS is allowed so keys and data are never sent in the clear. */
+fun requireHttps(url: String): String {
+    val u = url.trim().trimEnd('/')
+    require(u.startsWith("https://") && u.length > "https://".length) { "The server address must start with https://" }
+    return u.removeSuffix("/chat/completions")
 }

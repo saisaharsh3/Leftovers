@@ -1,8 +1,8 @@
 # Third-party notices
 
 Leftovers bundles the following assets. Library dependencies (AndroidX, Kotlin, Haze) are
-fetched by Gradle and keep their own licences (Apache 2.0). JUnit (EPL 1.0) is used only to run
-the tests and is not part of the app.
+fetched by Gradle and keep their own licences (Apache 2.0). JUnit (EPL 1.0) and org.json (public domain) are used
+only to run the tests and are not part of the app.
 
 ## Manrope typeface
 

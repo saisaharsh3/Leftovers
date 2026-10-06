@@ -349,7 +349,7 @@ fun SettingsScreen(
                 ) {
                     Icon(Lucide.Lock, contentDescription = null, tint = c.textTertiary, modifier = Modifier.size(14.dp))
                     Spacer(Modifier.width(6.dp))
-                    Text("Stored only on this device · Leftovers 1.0.4", style = MaterialTheme.typography.bodySmall, color = c.textTertiary, textAlign = TextAlign.Center)
+                    Text("Stored only on this device · Leftovers 1.0.5", style = MaterialTheme.typography.bodySmall, color = c.textTertiary, textAlign = TextAlign.Center)
                 }
             }
             item {
