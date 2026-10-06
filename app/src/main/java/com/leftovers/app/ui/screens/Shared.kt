@@ -1,5 +1,9 @@
 package com.leftovers.app.ui.screens
 
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -184,11 +188,20 @@ fun GlassSheet(onDismiss: () -> Unit, content: @Composable () -> Unit) {
         containerColor = MaterialTheme.colorScheme.surfaceContainer,
         shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp),
         scrimColor = c.background.copy(alpha = 0.6f),
-        modifier = Modifier.border(
-            1.dp,
-            com.leftovers.app.ui.components.glassBorder(c),
-            RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp),
-        ),
+        // Only the top edge gets the glass highlight. A full border follows the sheet's measured size,
+        // which can end above its content (e.g. after the keyboard closes) and left a line across the form.
+        modifier = Modifier.drawWithContent {
+            drawContent()
+            val r = 32.dp.toPx()
+            val w = 1.dp.toPx()
+            val edge = Path().apply {
+                moveTo(w / 2, r)
+                arcTo(Rect(w / 2, w / 2, 2 * r, 2 * r), 180f, 90f, false)
+                lineTo(size.width - r, w / 2)
+                arcTo(Rect(size.width - 2 * r, w / 2, size.width - w / 2, 2 * r), 270f, 90f, false)
+            }
+            drawPath(edge, c.borderTop, style = Stroke(w))
+        },
     ) {
         Box(Modifier.navigationBarsPadding()) { content() }
     }

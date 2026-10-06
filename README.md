@@ -26,7 +26,6 @@ today, plan for the things you want, and ask an AI about your money if you'd lik
 
 **Everyday tracking**
 - Keypad-first entry; tap a digit to place a cursor and fix just that digit
-- Or tap the mic and say it: *"250 for lunch"* fills in the amount, note and category
 - Expenses and income with categories, notes, accounts and receipt photos
 - Add forgotten spending for any past day from a date strip or calendar
 - Split one bill across several categories
@@ -83,8 +82,6 @@ network calls unless you connect the optional AI assistant.
 - The app is excluded from Android's automatic cloud backup, so backups go only where you save them.
 - With app lock on, screenshots are blocked and the app is hidden in the recent-apps preview.
 - SMS detection is off by default. When on, messages are read on the device and nothing is added without your tap.
-- Voice entry uses Android's own speech recognition. It works offline where the phone supports it; otherwise the
-  phone's speech service (usually Google) turns the audio into text, and only that text reaches the app.
 - With a backup password, backup files are encrypted. The password is kept encrypted with an Android Keystore key
   and is never written into a backup; if it's forgotten, those backups can't be opened.
 - Network access is HTTPS-only and trusts only the system's certificate authorities.

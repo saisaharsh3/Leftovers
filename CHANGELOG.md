@@ -3,6 +3,13 @@
 All notable changes to Leftovers. Download any version from
 [Releases](https://github.com/saisaharsh3/Leftovers/releases).
 
+## 1.1.1
+
+- Calmer add screen: the note sits on its own line, the account is one tap-to-change button, and repeat,
+  split and receipt are small icons. A long note no longer pushes the receipt button off screen
+- Removed voice entry
+- Sheets (like *Money owed*) no longer show a stray outline where the keyboard was
+
 ## 1.1.0
 
 **New**

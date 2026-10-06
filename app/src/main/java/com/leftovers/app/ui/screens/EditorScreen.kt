@@ -1,11 +1,8 @@
 package com.leftovers.app.ui.screens
 
-import android.app.Activity
-import android.content.ActivityNotFoundException
-import android.content.Intent
-import android.speech.RecognizerIntent
-import android.widget.Toast
-import com.leftovers.app.util.VoiceEntry
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -236,17 +233,6 @@ class EditorViewModel(
         needCategory = false
     }
 
-    /** Fills in what was said, e.g. "250 for lunch"; anything not understood is left as it was. */
-    fun applySpoken(text: String, categories: List<Category>) {
-        val spoken = VoiceEntry.parse(text, categories.filter { it.type == type }.map { it.id to it.name })
-        spoken.amountMinor?.takeIf { it > 0 }?.let {
-            amountText = AmountInput.fromMinor(it)
-            cursor = null
-        }
-        if (spoken.note.isNotBlank()) note = spoken.note.take(120)
-        spoken.categoryId?.let(::selectCategory)
-    }
-
     fun attachReceipt(uri: Uri, onDone: () -> Unit = {}) {
         viewModelScope.launch {
             val path = ReceiptStore.import(app, uri)
@@ -392,22 +378,6 @@ fun EditorScreen(
         val file = cameraFile
         if (ok && file != null) viewModel.attachReceipt(Uri.fromFile(file)) { file.delete() } else file?.delete()
     }
-    // Android's own speech input; it stays on the phone where offline speech is available.
-    val speech = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-        val text = result.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()
-        if (result.resultCode == Activity.RESULT_OK && !text.isNullOrBlank()) viewModel.applySpoken(text, categories)
-    }
-    fun listen() {
-        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
-            .putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-            .putExtra(RecognizerIntent.EXTRA_PROMPT, "Say it like \"250 for lunch\"")
-            .putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
-        try {
-            speech.launch(intent)
-        } catch (e: ActivityNotFoundException) {
-            Toast.makeText(context, "Voice input isn't available on this phone", Toast.LENGTH_SHORT).show()
-        }
-    }
 
     Column(
         modifier
@@ -483,42 +453,41 @@ fun EditorScreen(
                     },
                 )
             }
-            Spacer(Modifier.height(14.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Chip(
-                    text = viewModel.note.ifBlank { "Note" }.let { if (it.length > 18) it.take(17) + "…" else it },
-                    onClick = { showNote = true },
-                    icon = Lucide.PenLine,
-                    iconTint = c.textSecondary,
-                )
+            Spacer(Modifier.height(16.dp))
+            // A long note is cut short here rather than pushing the buttons below off screen.
+            NotePill(viewModel.note, onClick = { showNote = true }, modifier = Modifier.padding(horizontal = 32.dp).widthIn(max = 320.dp))
+            Spacer(Modifier.height(10.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                if (accounts.size > 1) {
+                    AccountPicker(accounts, viewModel.accountId) { viewModel.accountId = it }
+                }
                 if (!viewModel.isEditing) {
-                    Chip(
-                        "Monthly",
-                        onClick = {
-                            viewModel.repeatMonthly = !viewModel.repeatMonthly
-                            if (viewModel.repeatMonthly) viewModel.splits.clear()
+                    val repeating = viewModel.repeatMonthly
+                    RoundButton(
+                        Lucide.Repeat,
+                        if (repeating) "Don't repeat" else "Repeat every month",
+                        {
+                            viewModel.repeatMonthly = !repeating
+                            if (!repeating) viewModel.splits.clear()
                         },
-                        icon = Lucide.Repeat,
-                        iconTint = c.textSecondary,
-                        selected = viewModel.repeatMonthly,
+                        size = 40.dp,
+                        tint = if (repeating) c.onAccent else c.textSecondary,
+                        container = if (repeating) c.accent else null,
                     )
-                    if (!viewModel.repeatMonthly) {
+                    if (!repeating) {
                         RoundButton(
                             Lucide.ChartPie,
                             "Split across categories",
                             { showSplit = true },
-                            size = 42.dp,
+                            size = 40.dp,
                             tint = if (viewModel.splits.isEmpty()) c.textSecondary else c.onAccent,
                             container = if (viewModel.splits.isEmpty()) null else c.accent,
                         )
                     }
                 }
-                if (!viewModel.isEditing) {
-                    RoundButton(Lucide.Mic, "Say it", ::listen, size = 42.dp, tint = c.textSecondary)
-                }
                 val path = viewModel.receiptPath
                 if (path == null) {
-                    RoundButton(Lucide.Camera, "Attach receipt", { receiptMenu = true }, size = 42.dp, tint = c.textSecondary)
+                    RoundButton(Lucide.Camera, "Attach receipt", { receiptMenu = true }, size = 40.dp, tint = c.textSecondary)
                 } else {
                     ReceiptThumb(path, onOpen = { viewReceipt = true }, onRemove = viewModel::removeReceipt)
                 }
@@ -530,17 +499,6 @@ fun EditorScreen(
                     color = c.accent,
                     modifier = Modifier.padding(top = 10.dp),
                 )
-            }
-            if (accounts.size > 1) {
-                Spacer(Modifier.height(10.dp))
-                LazyRow(
-                    contentPadding = PaddingValues(horizontal = 16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                ) {
-                    items(accounts, key = { it.id }) { a ->
-                        SmallChip(a.name, CategoryIcons[a.icon], Color(a.color), selected = viewModel.accountId == a.id) { viewModel.accountId = a.id }
-                    }
-                }
             }
         }
 
@@ -691,23 +649,84 @@ fun EditorScreen(
     }
 }
 
+/** The note on one line, cut short with "…" when it's long. */
 @Composable
-private fun SmallChip(text: String, icon: androidx.compose.ui.graphics.vector.ImageVector, tint: Color, selected: Boolean, onClick: () -> Unit) {
+private fun NotePill(note: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
     val c = LocalAppColors.current
-    val bg by animateColorAsState(if (selected) c.glassStrong.copy(alpha = c.glassStrong.alpha * 1.8f) else Color.Transparent, label = "smallChip")
     Row(
-        Modifier
-            .height(32.dp)
-            .pressable(onClick, pressedScale = 0.94f)
+        modifier
+            .height(40.dp)
+            .pressable(onClick, pressedScale = 0.97f)
             .clip(RoundedCornerShape(50))
-            .background(bg)
-            .border(1.dp, if (selected) tint.copy(alpha = 0.6f) else c.borderBottom, RoundedCornerShape(50))
-            .padding(horizontal = 12.dp),
+            .background(c.glass)
+            .border(1.dp, c.borderBottom, RoundedCornerShape(50))
+            .padding(horizontal = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(14.dp))
-        Spacer(Modifier.width(6.dp))
-        Text(text, style = MaterialTheme.typography.labelMedium, color = if (selected) c.textPrimary else c.textSecondary)
+        Icon(Lucide.PenLine, contentDescription = null, tint = c.textSecondary, modifier = Modifier.size(16.dp))
+        Spacer(Modifier.width(8.dp))
+        Text(
+            note.ifBlank { "Add a note" },
+            style = MaterialTheme.typography.labelLarge,
+            color = if (note.isBlank()) c.textTertiary else c.textPrimary,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+/** The account this entry goes to; tap to pick another. */
+@Composable
+private fun AccountPicker(accounts: List<AccountWithBalance>, selectedId: Long?, onSelect: (Long) -> Unit) {
+    val c = LocalAppColors.current
+    var open by remember { mutableStateOf(false) }
+    val current = accounts.firstOrNull { it.id == selectedId } ?: accounts.first()
+    Box {
+        Row(
+            Modifier
+                .height(40.dp)
+                .pressable({ open = true }, pressedScale = 0.95f)
+                .clip(RoundedCornerShape(50))
+                .background(c.glass)
+                .border(1.dp, c.borderBottom, RoundedCornerShape(50))
+                .padding(start = 12.dp, end = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(CategoryIcons[current.icon], contentDescription = null, tint = Color(current.color), modifier = Modifier.size(16.dp))
+            Spacer(Modifier.width(6.dp))
+            Text(
+                current.name,
+                style = MaterialTheme.typography.labelLarge,
+                color = c.textPrimary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.widthIn(max = 110.dp),
+            )
+            Spacer(Modifier.width(4.dp))
+            Icon(Lucide.ChevronDown, contentDescription = "Change account", tint = c.textTertiary, modifier = Modifier.size(14.dp))
+        }
+        DropdownMenu(
+            expanded = open,
+            onDismissRequest = { open = false },
+            shape = RoundedCornerShape(20.dp),
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+        ) {
+            accounts.forEach { a ->
+                DropdownMenuItem(
+                    text = { Text(a.name, color = c.textPrimary) },
+                    leadingIcon = { Icon(CategoryIcons[a.icon], contentDescription = null, tint = Color(a.color), modifier = Modifier.size(18.dp)) },
+                    trailingIcon = if (a.id == current.id) {
+                        { Icon(Lucide.Check, contentDescription = "Selected", tint = c.accent, modifier = Modifier.size(18.dp)) }
+                    } else {
+                        null
+                    },
+                    onClick = {
+                        onSelect(a.id)
+                        open = false
+                    },
+                )
+            }
+        }
     }
 }
 
