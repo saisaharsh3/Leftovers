@@ -48,7 +48,7 @@ today, plan for the things you want, and ask an AI about your money if you'd lik
 - Total balance across accounts on Home
 
 **Insights**
-- Daily bar chart you can touch to read any day; swipe sideways to change month
+- Daily bar chart you can touch to read any day
 - Category breakdown that opens each category's entries
 - Spending calendar that opens any day's entries
 - Trends: category changes vs last month, weekend spending, where the month is heading
@@ -66,6 +66,7 @@ today, plan for the things you want, and ask an AI about your money if you'd lik
 - Evening reminder, app lock (fingerprint, face or PIN)
 - Backup and restore to a file or Google Drive, weekly automatic backups to a folder you choose, CSV export
 - Optional bank-SMS detection that suggests entries for you to confirm
+- Swipe sideways to move between Home, Activity, Insights and Plan
 - Dark glass design with spring animations and high-refresh-rate support; light theme available
 
 ## Privacy

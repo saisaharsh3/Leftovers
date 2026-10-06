@@ -31,8 +31,6 @@ import com.leftovers.app.ui.components.pressable
 import com.leftovers.app.data.Trend
 import com.leftovers.app.data.spendingTrends
 import com.leftovers.app.util.Money
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -151,23 +149,9 @@ fun StatsScreen(
         onBack = null,
         actions = { RoundButton(Lucide.Sparkles, "Monthly recap", { onOpenRecap(state.month) }) },
     ) { padding ->
-        val swipeThreshold = with(androidx.compose.ui.platform.LocalDensity.current) { 90.dp.toPx() }
+        // Sideways swipes switch tabs here like everywhere else; the arrows change month.
         LazyColumn(
-            Modifier
-                .fillMaxSize()
-                // Swipe sideways anywhere (except along the chart) to change month.
-                .pointerInput(state.month) {
-                    var dx = 0f
-                    detectHorizontalDragGestures(
-                        onDragStart = { dx = 0f },
-                        onDragEnd = {
-                            when {
-                                dx > swipeThreshold -> viewModel.setMonth(state.month.minusMonths(1))
-                                dx < -swipeThreshold && state.month < YearMonth.now() -> viewModel.setMonth(state.month.plusMonths(1))
-                            }
-                        },
-                    ) { _, amount -> dx += amount }
-                },
+            Modifier.fillMaxSize(),
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = padding.calculateTopPadding() + 12.dp, bottom = DockClearance),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {

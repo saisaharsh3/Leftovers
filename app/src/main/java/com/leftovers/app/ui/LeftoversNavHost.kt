@@ -13,13 +13,13 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -47,6 +47,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NamedNavArgument
@@ -109,7 +111,9 @@ private object Routes {
     fun goal(id: Long) = "goals/$id"
     fun recap(month: String) = "recap/$month"
 
-    val tabs = setOf(HOME, ACTIVITY, INSIGHTS, PLAN)
+    /** In dock order, left to right; a sideways swipe moves to the neighbour. */
+    val tabOrder = listOf(HOME, ACTIVITY, INSIGHTS, PLAN)
+    val tabs = tabOrder.toSet()
 }
 
 private data class Tab(val route: String, val icon: ImageVector, val label: String)
@@ -131,6 +135,10 @@ private fun NavBackStackEntry.route() = destination.route.orEmpty()
 private fun NavBackStackEntry.isTab() = route() in Routes.tabs
 private fun NavBackStackEntry.isAdd() = route().startsWith("add") || route().startsWith("edit")
 private fun NavBackStackEntry.isSheet() = route().startsWith("recap")
+
+/** Which way to slide between two tabs: forward when moving right along the dock. */
+private fun tabDirection(from: NavBackStackEntry, to: NavBackStackEntry) =
+    if (Routes.tabOrder.indexOf(to.route()) > Routes.tabOrder.indexOf(from.route())) SlideDirection.Start else SlideDirection.End
 
 /** Registers a screen and hands its animation scope to shared-element modifiers. */
 private fun NavGraphBuilder.screen(
@@ -164,19 +172,41 @@ fun LeftoversNavHost(openAdd: Boolean = false, onOpenAddHandled: () -> Unit = {}
         }
     }
 
+    val swipeThreshold = with(LocalDensity.current) { 72.dp.toPx() }
+
     SharedTransitionLayout(Modifier.fillMaxSize()) {
         CompositionLocalProvider(LocalSharedTransitionScope provides this) {
             Box(Modifier.fillMaxSize()) {
                 NavHost(
                     navController = nav,
                     startDestination = Routes.HOME,
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        // Swipe sideways on a tab to move to the next one. Anything inside that handles its own
+                        // sideways drag (swipeable rows, scrolling card rows, the chart) gets it first.
+                        .pointerInput(currentRoute) {
+                            val index = Routes.tabOrder.indexOf(currentRoute)
+                            if (index < 0) return@pointerInput
+                            var dx = 0f
+                            detectHorizontalDragGestures(
+                                onDragStart = { dx = 0f },
+                                onDragEnd = {
+                                    val next = when {
+                                        dx < -swipeThreshold -> index + 1
+                                        dx > swipeThreshold -> index - 1
+                                        else -> index
+                                    }
+                                    if (next != index && next in Routes.tabOrder.indices) nav.switchTab(Routes.tabOrder[next])
+                                },
+                            ) { _, amount -> dx += amount }
+                        },
                     enterTransition = {
                         when {
                             // Add and edit slide up like a sheet: moving a finished layout is cheap and never stretches text.
                             targetState.isAdd() -> slideInVertically(tween(320, easing = FastOutSlowInEasing)) { it / 5 } + fadeIn(tween(220))
                             targetState.isSheet() -> slideInVertically(tween(420, easing = FastOutSlowInEasing)) { it } + fadeIn(tween(200))
-                            targetState.isTab() && initialState.isTab() -> fadeIn(tween(260)) + scaleIn(tween(260), initialScale = 0.985f)
+                            targetState.isTab() && initialState.isTab() ->
+                                slideIntoContainer(tabDirection(initialState, targetState), tween(300, easing = FastOutSlowInEasing)) { it / 6 } + fadeIn(tween(240))
                             else -> slideIntoContainer(SlideDirection.Start, navTween) + fadeIn(tween(220))
                         }
                     },
@@ -185,7 +215,8 @@ fun LeftoversNavHost(openAdd: Boolean = false, onOpenAddHandled: () -> Unit = {}
                             // Scaling the screen behind would re-render its frosted blur every frame.
                             targetState.isAdd() -> fadeOut(tween(220))
                             targetState.isSheet() -> fadeOut(tween(300))
-                            targetState.isTab() && initialState.isTab() -> fadeOut(tween(180))
+                            targetState.isTab() && initialState.isTab() ->
+                                slideOutOfContainer(tabDirection(initialState, targetState), tween(300, easing = FastOutSlowInEasing)) { it / 6 } + fadeOut(tween(180))
                             else -> slideOutOfContainer(SlideDirection.Start, navTween) { it / 4 } + fadeOut(tween(220))
                         }
                     },

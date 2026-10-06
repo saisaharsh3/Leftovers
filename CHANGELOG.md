@@ -3,6 +3,11 @@
 All notable changes to Leftovers. Download any version from
 [Releases](https://github.com/saisaharsh3/Leftovers/releases).
 
+## Unreleased
+
+- Swipe sideways to move between Home, Activity, Insights and Plan; tabs slide in the direction you go
+- Insights changes month with the arrows (a sideways swipe now switches tabs there too)
+
 ## 1.0.6
 
 - Yearly subscriptions: pick the month and day; they're logged once a year and count as their monthly
