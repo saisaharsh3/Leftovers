@@ -26,6 +26,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -37,6 +38,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.leftovers.app.data.BudgetPlan
 import com.leftovers.app.data.Category
 import com.leftovers.app.data.DailyBudget
+import com.leftovers.app.data.MonthBudget
 import com.leftovers.app.data.PlanningRepository
 import com.leftovers.app.data.SettingsRepository
 import com.leftovers.app.data.TransactionRepository
@@ -79,6 +81,7 @@ data class BudgetsUiState(
     val month: YearMonth = YearMonth.now(),
     val plan: BudgetPlan = BudgetPlan(),
     val overallBudget: Long = 0,
+    val breakdown: MonthBudget = MonthBudget(0, 0, 0),
     val totalSpent: Long = 0,
     val daysLeft: Int = 1,
     val today: DailyBudget? = null,
@@ -102,7 +105,8 @@ class BudgetsViewModel(
         planning.goals,
     ) { s, categories, all, recurring, goals ->
         val items = all.filter { YearMonth.from(it.date) == month }
-        val budget = s.plan.budgetFor(month, all)
+        val breakdown = s.plan.breakdownFor(month, all)
+        val budget = breakdown.total
         val pending = recurring.pendingExpenses(month)
         val spentByCategory = items.filter { it.type == TxType.EXPENSE }
             .groupBy { it.categoryId }
@@ -111,6 +115,7 @@ class BudgetsViewModel(
             month = month,
             plan = s.plan,
             overallBudget = budget,
+            breakdown = breakdown,
             totalSpent = items.totalOf(TxType.EXPENSE),
             daysLeft = month.lengthOfMonth() - LocalDate.now().dayOfMonth + 1,
             today = dailyBudget(budget, items, pending),
@@ -180,13 +185,27 @@ fun BudgetsScreen(
                     val left = state.overallBudget - state.totalSpent
                     val used = if (state.overallBudget > 0) state.totalSpent.toFloat() / state.overallBudget else 1f
                     Glass(Modifier.fillMaxWidth().appear(0), strong = true, shape = RoundedCornerShape(32.dp)) {
-                        Column(Modifier.padding(vertical = 22.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Column(Modifier.fillMaxWidth().padding(vertical = 22.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                             Gauge(used, Modifier.size(240.dp), thickness = 16.dp) {
-                                Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
+                                Column(Modifier.align(Alignment.Center).fillMaxWidth().padding(horizontal = 32.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                                     Text(if (left >= 0) "Left" else "Over by", style = MaterialTheme.typography.labelLarge, color = c.textSecondary)
                                     RollingText(money.format(abs(left)), MaterialTheme.typography.displaySmall, if (left >= 0) c.textPrimary else c.negative)
-                                    Text("Spent ${money.format(state.totalSpent)} of ${money.format(state.overallBudget)}", style = MaterialTheme.typography.bodySmall, color = c.textSecondary)
+                                    Text("Spent ${money.format(state.totalSpent)} of ${money.format(state.overallBudget)}", style = MaterialTheme.typography.bodySmall, color = c.textSecondary, textAlign = TextAlign.Center)
                                 }
+                            }
+                            val b = state.breakdown
+                            if (b.income > 0 || b.carried > 0) {
+                                Text(
+                                    buildString {
+                                        append("${money.format(b.planned)} plan")
+                                        if (b.income > 0) append(" + ${money.format(b.income)} extra income")
+                                        if (b.carried > 0) append(" + ${money.format(b.carried)} carried over")
+                                    },
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = c.textSecondary,
+                                    textAlign = TextAlign.Center,
+                                    modifier = Modifier.padding(horizontal = 20.dp),
+                                )
                             }
                         }
                     }

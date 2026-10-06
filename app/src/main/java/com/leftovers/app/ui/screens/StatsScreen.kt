@@ -19,8 +19,15 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.text.style.TextAlign
+import com.leftovers.app.ui.components.RowDivider
+import com.leftovers.app.util.friendlyLabel
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -81,6 +88,8 @@ data class StatsUiState(
     val daily: List<Long> = emptyList(),
     val count: Int = 0,
     val max: TransactionItem? = null,
+    /** This month's entries of the chosen type, newest first. */
+    val items: List<TransactionItem> = emptyList(),
 )
 
 class StatsViewModel(repository: TransactionRepository, settings: SettingsRepository) : ViewModel() {
@@ -103,6 +112,7 @@ class StatsViewModel(repository: TransactionRepository, settings: SettingsReposi
                 daily = daily.toList(),
                 count = ofType.size,
                 max = ofType.maxByOrNull { it.amountMinor },
+                items = ofType,
             )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), StatsUiState())
 
@@ -111,7 +121,10 @@ class StatsViewModel(repository: TransactionRepository, settings: SettingsReposi
 }
 
 @Composable
-fun StatsScreen(onOpenRecap: (YearMonth) -> Unit, viewModel: StatsViewModel = viewModel(factory = AppViewModelProvider.Factory)) {
+fun StatsScreen(
+    onOpenRecap: (YearMonth) -> Unit,
+    onOpenTransaction: (Long) -> Unit,
+    viewModel: StatsViewModel = viewModel(factory = AppViewModelProvider.Factory)) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val c = LocalAppColors.current
     val money = LocalMoney.current
@@ -234,12 +247,55 @@ fun StatsScreen(onOpenRecap: (YearMonth) -> Unit, viewModel: StatsViewModel = vi
             item {
                 Glass(Modifier.fillMaxWidth().appear(3)) {
                     Column(Modifier.padding(16.dp)) {
-                        SpendingCalendar(state.month, state.daily)
+                        var selectedDay by rememberSaveable(state.month) { mutableStateOf<Int?>(null) }
+                        SpendingCalendar(
+                            state.month,
+                            state.daily,
+                            selected = selectedDay,
+                            onSelect = { selectedDay = if (selectedDay == it) null else it },
+                        )
                         Spacer(Modifier.height(12.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                             Legend(c.positive, "Lighter day")
                             Legend(c.warning, "Typical")
                             Legend(c.negative, "Heavier")
+                        }
+                        AnimatedContent(selectedDay, label = "dayDetail") { day ->
+                            if (day == null) {
+                                Text(
+                                    "Tap a day to see what you ${if (state.type == TxType.EXPENSE) "spent" else "received"}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = c.textTertiary,
+                                    modifier = Modifier.fillMaxWidth().padding(top = 14.dp),
+                                    textAlign = TextAlign.Center,
+                                )
+                            } else {
+                                val date = state.month.atDay(day)
+                                val entries = state.items.filter { it.date == date }
+                                Column(Modifier.fillMaxWidth().padding(top = 14.dp)) {
+                                    RowDivider()
+                                    Row(Modifier.padding(top = 12.dp, bottom = 4.dp, start = 4.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                                        Text(date.friendlyLabel(), style = MaterialTheme.typography.titleSmall, color = c.textPrimary, modifier = Modifier.weight(1f))
+                                        Text(
+                                            money.format(entries.sumOf { it.amountMinor }),
+                                            style = MaterialTheme.typography.titleMedium,
+                                            color = if (state.type == TxType.INCOME) c.positive else c.textPrimary,
+                                        )
+                                    }
+                                    if (entries.isEmpty()) {
+                                        Text(
+                                            if (state.type == TxType.EXPENSE) "No spending on this day" else "No income on this day",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = c.textTertiary,
+                                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 6.dp),
+                                        )
+                                    } else {
+                                        entries.forEach { item ->
+                                            TransactionRow(item, onClick = { onOpenTransaction(item.id) })
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                 }

@@ -203,6 +203,7 @@ fun LeftoversNavHost(openAdd: Boolean = false, onOpenAddHandled: () -> Unit = {}
                             onOpenTransaction = { nav.navigate(Routes.edit(it)) },
                             onReviewSms = { s -> nav.navigate(Routes.add(s.epochDay, s.amountMinor, s.merchant, s.id)) },
                             onOpenRecap = { nav.navigate(Routes.recap(it.toString())) },
+                            onOpenAccounts = { nav.navigate(Routes.ACCOUNTS) },
                         )
                     }
                     screen(Routes.ACTIVITY) {
@@ -211,7 +212,12 @@ fun LeftoversNavHost(openAdd: Boolean = false, onOpenAddHandled: () -> Unit = {}
                             onAddForDay = { nav.navigate(Routes.add(day = it.toEpochDay())) },
                         )
                     }
-                    screen(Routes.INSIGHTS) { StatsScreen(onOpenRecap = { nav.navigate(Routes.recap(it.toString())) }) }
+                    screen(Routes.INSIGHTS) {
+                        StatsScreen(
+                            onOpenRecap = { nav.navigate(Routes.recap(it.toString())) },
+                            onOpenTransaction = { nav.navigate(Routes.edit(it)) },
+                        )
+                    }
                     screen(Routes.PLAN) {
                         PlanScreen(
                             onOpenBudget = { nav.navigate(Routes.BUDGET) },

@@ -113,9 +113,6 @@ import java.time.YearMonth
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 
-/** A frequent entry the user can repeat in one tap. */
-data class QuickPick(val categoryId: Long, val amountMinor: Long, val note: String, val icon: String, val color: Long, val label: String)
-
 /** Drives the keypad editor for adding a new entry or editing an existing one. */
 class EditorViewModel(
     savedState: SavedStateHandle,
@@ -212,13 +209,6 @@ class EditorViewModel(
         needCategory = false
     }
 
-    fun applyQuickPick(pick: QuickPick) {
-        amountText = AmountInput.fromMinor(pick.amountMinor)
-        categoryId = pick.categoryId
-        note = pick.note
-        needCategory = false
-    }
-
     fun attachReceipt(uri: Uri, onDone: () -> Unit = {}) {
         viewModelScope.launch {
             val path = ReceiptStore.import(app, uri)
@@ -240,23 +230,6 @@ class EditorViewModel(
         val since = LocalDate.now().minusDays(120).toEpochDay()
         val usage = items.filter { it.epochDay >= since }.groupingBy { it.categoryId }.eachCount()
         return all.filter { it.type == type }.sortedByDescending { usage[it.id] ?: 0 }
-    }
-
-    /** Entries repeated at least twice recently, e.g. the daily coffee. */
-    fun quickPicks(items: List<TransactionItem>): List<QuickPick> {
-        val since = LocalDate.now().minusDays(120).toEpochDay()
-        return items.asSequence()
-            .filter { it.type == type && it.epochDay >= since }
-            .groupBy { Triple(it.categoryId, it.amountMinor, it.note.trim()) }
-            .filter { it.value.size >= 2 }
-            .entries
-            .sortedByDescending { it.value.size }
-            .take(6)
-            .map { (key, list) ->
-                val first = list.first()
-                QuickPick(key.first, key.second, key.third, first.categoryEmoji, first.categoryColor, key.third.ifBlank { first.categoryName })
-            }
-            .toList()
     }
 
     /**
@@ -460,29 +433,6 @@ fun EditorScreen(
                 ) {
                     items(accounts, key = { it.id }) { a ->
                         SmallChip(a.name, CategoryIcons[a.icon], Color(a.color), selected = viewModel.accountId == a.id) { viewModel.accountId = a.id }
-                    }
-                }
-            }
-            val picks = remember(history, viewModel.type) { viewModel.quickPicks(history) }
-            if (!viewModel.isEditing && picks.isNotEmpty()) {
-                Spacer(Modifier.height(18.dp))
-                Text("Quick add", style = MaterialTheme.typography.labelMedium, color = c.textTertiary)
-                Spacer(Modifier.height(8.dp))
-                LazyRow(
-                    contentPadding = PaddingValues(horizontal = 16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    items(picks) { pick ->
-                        Glass(shape = RoundedCornerShape(18.dp), onClick = { viewModel.applyQuickPick(pick) }) {
-                            Row(Modifier.padding(horizontal = 12.dp, vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Icon(CategoryIcons[pick.icon], contentDescription = null, tint = Color(pick.color), modifier = Modifier.size(16.dp))
-                                Spacer(Modifier.width(8.dp))
-                                Column {
-                                    Text(pick.label, style = MaterialTheme.typography.labelMedium, color = c.textPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                    Text(money.format(pick.amountMinor), style = MaterialTheme.typography.labelSmall, color = c.textSecondary)
-                                }
-                            }
-                        }
                     }
                 }
             }

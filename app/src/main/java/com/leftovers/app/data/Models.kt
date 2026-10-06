@@ -1,5 +1,6 @@
 package com.leftovers.app.data
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
@@ -18,6 +19,8 @@ data class Category(
     val type: TxType,
     /** Monthly budget in minor units (cents/paise); null when no budget is set. */
     val budgetMinor: Long? = null,
+    /** Income only: money logged here is added on top of that month's budget (gifts, bonuses). */
+    @ColumnInfo(defaultValue = "0") val addsToBudget: Boolean = false,
 )
 
 /** Amounts are stored in minor units (amount × 100) so money math never uses floating point. */
@@ -61,6 +64,7 @@ data class TransactionItem(
     val categoryColor: Long,
     val accountId: Long?,
     val receiptPath: String?,
+    val addsToBudget: Boolean = false,
 ) {
     val date: LocalDate get() = LocalDate.ofEpochDay(epochDay)
 

@@ -1,12 +1,7 @@
 package com.leftovers.app.ui.components
 
 import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
@@ -58,17 +53,14 @@ fun Modifier.frosted(colors: AppColors = LocalAppColors.current): Modifier = haz
     },
 )
 
-/** Soft, slowly drifting light behind every screen. */
+/**
+ * Soft light behind every screen. It stays still: the frosted bars blur it, so animating it would
+ * re-run that blur on every frame even when nothing else moves.
+ */
 @Composable
 fun AuroraBackground(modifier: Modifier = Modifier) {
     val c = LocalAppColors.current
-    val transition = rememberInfiniteTransition(label = "aurora")
-    val drift by transition.animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(tween(22_000, easing = LinearEasing), RepeatMode.Reverse),
-        label = "drift",
-    )
+    val drift = 0.5f
     Canvas(
         modifier
             .fillMaxSize()

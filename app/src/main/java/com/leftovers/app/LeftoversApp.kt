@@ -72,6 +72,7 @@ class AppContainer(private val context: Context) {
 
     /** Logs subscriptions/recurring income that have come due, then checks budgets. */
     suspend fun syncRecurring() {
+        settings.ensureCarryStart()
         val account = settings.settings.first().defaultAccountId
         planning.postDueRecurring(account)
             .filter { it.type == TxType.EXPENSE }

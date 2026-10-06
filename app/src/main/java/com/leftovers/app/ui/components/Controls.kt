@@ -52,9 +52,11 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.leftovers.app.ui.icons.CategoryIcons
 import com.leftovers.app.ui.icons.Lucide
@@ -250,7 +252,7 @@ fun <T> SegmentedToggle(
         val offset by animateDpAsState(segment * index, spring(dampingRatio = 0.78f, stiffness = 520f), label = "thumb")
         Box(
             Modifier
-                .offset(x = offset)
+                .offset { IntOffset(offset.roundToPx(), 0) }
                 .width(segment)
                 .fillMaxHeight()
                 .clip(CircleShape)
@@ -310,24 +312,42 @@ fun Chip(
 
 /**
  * Text whose characters roll vertically when they change — used for money so updates feel alive.
- * Characters are keyed from the right so digits stay aligned as the number grows.
+ * Characters are keyed from the right so digits stay aligned as the number grows. The text shrinks
+ * to fit the available width instead of being clipped on the right.
  */
 @Composable
 fun RollingText(text: String, style: TextStyle, color: Color, modifier: Modifier = Modifier) {
-    Row(modifier) {
-        val chars = text.toList()
-        chars.forEachIndexed { i, ch ->
-            key(chars.size - i) {
-                AnimatedContent(
-                    targetState = ch,
-                    transitionSpec = {
-                        val up = targetState > initialState
-                        (slideInVertically(spring(dampingRatio = 0.8f, stiffness = 400f)) { if (up) it else -it } + fadeIn(tween(180)))
-                            .togetherWith(slideOutVertically(tween(180)) { if (up) -it else it } + fadeOut(tween(120)))
-                            .using(SizeTransform(clip = true))
-                    },
-                    label = "roll",
-                ) { c -> Text(c.toString(), style = style, color = color) }
+    BoxWithConstraints(modifier) {
+        val measurer = rememberTextMeasurer()
+        val maxWidth = constraints.maxWidth
+        val fitted = remember(text, style, maxWidth) {
+            var s = style
+            if (constraints.hasBoundedWidth && s.fontSize.isSp) {
+                while (measurer.measure(text, s).size.width > maxWidth && s.fontSize.value > 14f) {
+                    s = s.copy(
+                        fontSize = s.fontSize * 0.92f,
+                        lineHeight = if (s.lineHeight.isSp) s.lineHeight * 0.92f else s.lineHeight,
+                    )
+                }
+            }
+            s
+        }
+        Row(Modifier.align(Alignment.Center)) {
+            val chars = text.toList()
+            chars.forEachIndexed { i, ch ->
+                key(chars.size - i) {
+                    AnimatedContent(
+                        targetState = ch,
+                        transitionSpec = {
+                            val up = targetState > initialState
+                            (slideInVertically(spring(dampingRatio = 0.8f, stiffness = 400f)) { if (up) it else -it } + fadeIn(tween(180)))
+                                .togetherWith(slideOutVertically(tween(180)) { if (up) -it else it } + fadeOut(tween(120)))
+                                .using(SizeTransform(clip = true))
+                        },
+                        contentAlignment = Alignment.Center,
+                        label = "roll",
+                    ) { c -> Text(c.toString(), style = fitted, color = color, maxLines = 1, softWrap = false) }
+                }
             }
         }
     }

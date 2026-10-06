@@ -12,7 +12,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         Category::class, Transaction::class, Recurring::class, Goal::class, GoalDeposit::class,
         Account::class, Transfer::class, SmsSuggestion::class,
     ],
-    version = 4,
+    version = 5,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -29,7 +29,7 @@ abstract class AppDatabase : RoomDatabase() {
         fun build(context: Context): AppDatabase =
             Room.databaseBuilder(context, AppDatabase::class.java, "leftovers.db")
                 .addCallback(SeedCategories)
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
                 .build()
     }
 }
@@ -59,6 +59,14 @@ private val MIGRATION_1_2 = object : Migration(1, 2) {
 }
 
 /** v4 adds accounts, transfers, receipt photos and SMS suggestions. Existing entries go to "Cash". */
+/** v5 lets income categories add to the month's budget; on for everything except Salary. */
+private val MIGRATION_4_5 = object : Migration(4, 5) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE `categories` ADD COLUMN `addsToBudget` INTEGER NOT NULL DEFAULT 0")
+        db.execSQL("UPDATE `categories` SET `addsToBudget` = 1 WHERE `type` = 'INCOME' AND `name` <> 'Salary'")
+    }
+}
+
 private val MIGRATION_3_4 = object : Migration(3, 4) {
     override fun migrate(db: SupportSQLiteDatabase) {
         db.execSQL(
@@ -105,8 +113,8 @@ private object SeedCategories : RoomDatabase.Callback() {
         seedAccounts(db)
         DefaultCategories.forEach { c ->
             db.execSQL(
-                "INSERT INTO categories (name, emoji, color, type) VALUES (?, ?, ?, ?)",
-                arrayOf<Any>(c.name, c.emoji, c.color, c.type.name),
+                "INSERT INTO categories (name, emoji, color, type, addsToBudget) VALUES (?, ?, ?, ?, ?)",
+                arrayOf<Any>(c.name, c.emoji, c.color, c.type.name, if (c.addsToBudget) 1 else 0),
             )
         }
     }
@@ -181,8 +189,8 @@ val DefaultCategories = listOf(
     Category(name = "Gifts", emoji = "gift", color = Palette.LIME, type = TxType.EXPENSE),
     Category(name = "Other", emoji = "package", color = Palette.SLATE, type = TxType.EXPENSE),
     Category(name = "Salary", emoji = "briefcase", color = Palette.MINT, type = TxType.INCOME),
-    Category(name = "Freelance", emoji = "laptop", color = Palette.SKY, type = TxType.INCOME),
-    Category(name = "Investments", emoji = "trending-up", color = Palette.LIME, type = TxType.INCOME),
-    Category(name = "Gifts", emoji = "party", color = Palette.AMBER, type = TxType.INCOME),
-    Category(name = "Other", emoji = "coins", color = Palette.LILAC, type = TxType.INCOME),
+    Category(name = "Freelance", emoji = "laptop", color = Palette.SKY, type = TxType.INCOME, addsToBudget = true),
+    Category(name = "Investments", emoji = "trending-up", color = Palette.LIME, type = TxType.INCOME, addsToBudget = true),
+    Category(name = "Gifts", emoji = "party", color = Palette.AMBER, type = TxType.INCOME, addsToBudget = true),
+    Category(name = "Other", emoji = "coins", color = Palette.LILAC, type = TxType.INCOME, addsToBudget = true),
 )

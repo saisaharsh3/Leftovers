@@ -153,9 +153,15 @@ fun DailyBars(values: List<Long>, highlight: Int?, modifier: Modifier = Modifier
     }
 }
 
-/** Calendar tinted by how each day compares with the average spending day. */
+/** Calendar tinted by how each day compares with the average spending day. Days can be tapped. */
 @Composable
-fun SpendingCalendar(month: YearMonth, daily: List<Long>, modifier: Modifier = Modifier) {
+fun SpendingCalendar(
+    month: YearMonth,
+    daily: List<Long>,
+    modifier: Modifier = Modifier,
+    selected: Int? = null,
+    onSelect: ((Int) -> Unit)? = null,
+) {
     val c = LocalAppColors.current
     val today = LocalDate.now()
     val spendDays = daily.filter { it > 0 }
@@ -184,15 +190,22 @@ fun SpendingCalendar(month: YearMonth, daily: List<Long>, modifier: Modifier = M
                             else -> c.negative
                         }
                         val isToday = month.atDay(day) == today
+                        val isSelected = day == selected
                         Box(
                             Modifier
                                 .matchParentSize()
+                                .then(if (onSelect != null) Modifier.pressable({ onSelect(day) }, pressedScale = 0.9f) else Modifier)
                                 .clip(shape)
-                                .background(tone?.copy(alpha = 0.22f) ?: Color.Transparent)
-                                .then(if (isToday) Modifier.border(1.5.dp, c.textPrimary, shape) else Modifier),
+                                .background(
+                                    when {
+                                        isSelected -> c.accent.copy(alpha = 0.9f)
+                                        else -> tone?.copy(alpha = 0.22f) ?: Color.Transparent
+                                    },
+                                )
+                                .then(if (isToday && !isSelected) Modifier.border(1.5.dp, c.textPrimary, shape) else Modifier),
                             contentAlignment = Alignment.Center,
                         ) {
-                            Text(day.toString(), style = MaterialTheme.typography.labelMedium, color = tone ?: c.textTertiary)
+                            Text(day.toString(), style = MaterialTheme.typography.labelMedium, color = if (isSelected) c.onAccent else tone ?: c.textTertiary)
                         }
                     }
                 }

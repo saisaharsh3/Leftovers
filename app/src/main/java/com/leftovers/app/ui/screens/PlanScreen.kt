@@ -245,7 +245,7 @@ private fun BudgetHero(state: PlanUiState, onOpen: () -> Unit, onEdit: () -> Uni
     Glass(modifier.fillMaxWidth(), strong = true, shape = RoundedCornerShape(32.dp), onClick = onOpen) {
         Column(Modifier.padding(22.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             Gauge(used, Modifier.size(220.dp)) {
-                Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
+                Column(Modifier.align(Alignment.Center).fillMaxWidth().padding(horizontal = 28.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(if (left >= 0) "Left this month" else "Over budget", style = MaterialTheme.typography.labelLarge, color = c.textSecondary)
                     RollingText(money.format(abs(left)), MaterialTheme.typography.headlineLarge, if (left >= 0) c.textPrimary else c.negative)
                     Text("of ${money.format(state.budget)}", style = MaterialTheme.typography.bodySmall, color = c.textSecondary)

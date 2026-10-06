@@ -47,10 +47,14 @@ class BackupManager(
                     put("yearly", s.plan.yearlyMinor)
                     put("split", s.plan.split.name)
                     put("custom", BudgetPlan.encodeCustom(s.plan.custom))
+                    put("carryMode", s.plan.carry.name)
+                    put("carryChoices", BudgetPlan.encodeChoices(s.plan.carryChoices))
+                    s.plan.carryFrom?.let { put("carryFrom", it.toString()) }
                 })
                 put("categories", JSONArray(dao.categories().map { c ->
                     JSONObject().put("id", c.id).put("name", c.name).put("icon", c.emoji).put("color", c.color)
                         .put("type", c.type.name).put("budget", c.budgetMinor ?: JSONObject.NULL)
+                        .put("addsToBudget", c.addsToBudget)
                 }))
                 put("accounts", JSONArray(dao.accounts().map { a ->
                     JSONObject().put("id", a.id).put("name", a.name).put("icon", a.icon).put("color", a.color)
@@ -99,7 +103,11 @@ class BackupManager(
             fun JSONArray.objects() = (0 until length()).map { getJSONObject(it) }
 
             val categories = json.getJSONArray("categories").objects().map {
-                Category(it.getLong("id"), it.getString("name"), it.getString("icon"), it.getLong("color"), TxType.valueOf(it.getString("type")), it.longOrNull("budget"))
+                val type = TxType.valueOf(it.getString("type"))
+                val name = it.getString("name")
+                // Older backups predate the flag: use the same default as the database migration.
+                val adds = it.optBoolean("addsToBudget", type == TxType.INCOME && name != "Salary")
+                Category(it.getLong("id"), name, it.getString("icon"), it.getLong("color"), type, it.longOrNull("budget"), adds)
             }
             val accounts = json.optJSONArray("accounts")?.objects().orEmpty().map {
                 Account(it.getLong("id"), it.getString("name"), it.getString("icon"), it.getLong("color"), it.getLong("opening"), it.getLong("createdAt"))
@@ -152,6 +160,9 @@ class BackupManager(
                         yearlyMinor = s.getLong("yearly"),
                         split = com.leftovers.app.data.YearSplit.valueOf(s.getString("split")),
                         custom = BudgetPlan.decodeCustom(s.optString("custom")),
+                        carry = com.leftovers.app.data.CarryMode.entries.firstOrNull { it.name == s.optString("carryMode") } ?: com.leftovers.app.data.CarryMode.ASK,
+                        carryChoices = BudgetPlan.decodeChoices(s.optString("carryChoices")),
+                        carryFrom = s.optString("carryFrom").takeIf { it.isNotEmpty() }?.let { runCatching { java.time.YearMonth.parse(it) }.getOrNull() },
                     ),
                 )
             }

@@ -26,6 +26,8 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -105,7 +107,7 @@ fun CategoriesScreen(
             Box(Modifier.frosted().navigationBarsPadding().padding(16.dp)) {
                 PrimaryButton(
                     "New category",
-                    { editing = Category(name = "", emoji = CategoryIcons.keys.first(), color = Palette.all.first(), type = tab) },
+                    { editing = Category(name = "", emoji = CategoryIcons.keys.first(), color = Palette.all.first(), type = tab, addsToBudget = tab == TxType.INCOME) },
                     Modifier.fillMaxWidth(),
                     icon = Lucide.Plus,
                 )
@@ -129,12 +131,36 @@ fun CategoriesScreen(
                                 title = cat.name,
                                 leading = { CategoryIcon(cat.emoji, cat.color, size = 42.dp) },
                                 trailing = {
-                                    RoundButton(Lucide.Trash2, "Delete ${cat.name}", { confirmDelete = cat }, size = 36.dp, tint = c.textTertiary)
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        if (cat.type == TxType.INCOME) {
+                                            Switch(
+                                                checked = cat.addsToBudget,
+                                                onCheckedChange = { viewModel.save(cat.copy(addsToBudget = it)) },
+                                                colors = SwitchDefaults.colors(
+                                                    checkedTrackColor = c.accent,
+                                                    checkedThumbColor = c.onAccent,
+                                                    uncheckedTrackColor = c.glass,
+                                                    uncheckedBorderColor = c.borderTop,
+                                                    uncheckedThumbColor = c.textSecondary,
+                                                ),
+                                            )
+                                            Spacer(Modifier.width(8.dp))
+                                        }
+                                        RoundButton(Lucide.Trash2, "Delete ${cat.name}", { confirmDelete = cat }, size = 36.dp, tint = c.textTertiary)
+                                    }
                                 },
                                 onClick = { editing = cat },
                             )
                         }
                     }
+                }
+                if (tab == TxType.INCOME) {
+                    Text(
+                        "Switched on: money you receive in that category is added to the month's budget, like a gift or bonus. Leave Salary off if your budget already comes from it.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = c.textTertiary,
+                        modifier = Modifier.padding(start = 8.dp, end = 8.dp, top = 8.dp),
+                    )
                 }
             }
         }

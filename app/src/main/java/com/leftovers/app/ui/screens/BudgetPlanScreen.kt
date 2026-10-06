@@ -52,6 +52,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.leftovers.app.data.BudgetMode
 import com.leftovers.app.data.BudgetPlan
+import com.leftovers.app.data.CarryMode
 import com.leftovers.app.data.SettingsRepository
 import com.leftovers.app.data.TransactionItem
 import com.leftovers.app.data.TransactionRepository
@@ -92,6 +93,9 @@ class BudgetPlanViewModel(
     var split by mutableStateOf(YearSplit.EVEN)
     /** Custom per-month amounts as typed, keyed by month number. */
     val customText = mutableStateMapOf<Int, String>()
+    var carry by mutableStateOf(CarryMode.ASK)
+    private var carryFrom: YearMonth? = null
+    private var carryChoices: Map<YearMonth, Boolean> = emptyMap()
 
     val transactions: StateFlow<List<TransactionItem>> =
         repository.allTransactions.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
@@ -105,6 +109,9 @@ class BudgetPlanViewModel(
             yearlyText = plan.yearlyMinor.takeIf { it > 0 }?.let(AmountInput::fromMinor).orEmpty()
             split = plan.split
             plan.custom.forEach { (m, v) -> customText[m] = AmountInput.fromMinor(v) }
+            carry = plan.carry
+            carryFrom = plan.carryFrom
+            carryChoices = plan.carryChoices
             loaded = true
         }
     }
@@ -115,6 +122,9 @@ class BudgetPlanViewModel(
         yearlyMinor = AmountInput.toMinor(yearlyText) ?: 0,
         split = split,
         custom = customText.mapNotNull { (m, t) -> AmountInput.toMinor(t)?.let { m to it } }.toMap(),
+        carry = carry,
+        carryFrom = carryFrom,
+        carryChoices = carryChoices,
     )
 
     fun fillEvenly() {
@@ -229,6 +239,28 @@ fun BudgetPlanScreen(
                                     color = c.textSecondary,
                                 )
                             }
+                        }
+                    }
+                }
+            }
+
+            if (viewModel.mode == BudgetMode.MONTHLY || viewModel.split != YearSplit.SMART) {
+                item {
+                    Glass(Modifier.fillMaxWidth()) {
+                        Column(Modifier.padding(18.dp)) {
+                            Text("Money left at the end of a month", style = MaterialTheme.typography.titleSmall, color = c.textPrimary)
+                            Spacer(Modifier.height(2.dp))
+                            Text(
+                                when (viewModel.carry) {
+                                    CarryMode.ASK -> "When a month ends, Home asks whether to add what's left to the next month."
+                                    CarryMode.ALWAYS -> "What's left is always added to the next month."
+                                    CarryMode.NEVER -> "Every month starts fresh with its planned amount."
+                                } + " Overspending is never taken away.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = c.textSecondary,
+                            )
+                            Spacer(Modifier.height(12.dp))
+                            SegmentedToggle(CarryMode.entries, viewModel.carry, { it.label }, { viewModel.carry = it }, Modifier.fillMaxWidth())
                         }
                     }
                 }

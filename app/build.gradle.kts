@@ -23,8 +23,8 @@ android {
         applicationId = "com.leftovers.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 2
-        versionName = "1.0.1"
+        versionCode = 3
+        versionName = "1.0.2"
     }
 
     signingConfigs {
@@ -64,6 +64,7 @@ ksp {
 }
 
 dependencies {
+    testImplementation(libs.junit)
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.lifecycle.runtime.compose)

@@ -10,6 +10,7 @@ import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import java.time.YearMonth
 import java.util.Currency
 import java.util.Locale
 
@@ -49,6 +50,9 @@ class SettingsRepository(context: Context) {
                 yearlyMinor = p[YEARLY_BUDGET] ?: 0L,
                 split = YearSplit.entries.firstOrNull { it.name == p[YEAR_SPLIT] } ?: YearSplit.EVEN,
                 custom = BudgetPlan.decodeCustom(p[CUSTOM_SPLIT]),
+                carry = CarryMode.entries.firstOrNull { it.name == p[CARRY_MODE] } ?: CarryMode.ASK,
+                carryFrom = p[CARRY_FROM]?.let { runCatching { YearMonth.parse(it) }.getOrNull() },
+                carryChoices = BudgetPlan.decodeChoices(p[CARRY_CHOICES]),
             ),
             budgetAlerts = p[BUDGET_ALERTS] ?: true,
             defaultAccountId = p[DEFAULT_ACCOUNT] ?: 1L,
@@ -76,6 +80,21 @@ class SettingsRepository(context: Context) {
         it[YEARLY_BUDGET] = plan.yearlyMinor
         it[YEAR_SPLIT] = plan.split.name
         it[CUSTOM_SPLIT] = BudgetPlan.encodeCustom(plan.custom)
+        it[CARRY_MODE] = plan.carry.name
+        if (plan.carryChoices.isNotEmpty()) it[CARRY_CHOICES] = BudgetPlan.encodeChoices(plan.carryChoices)
+        val from = plan.carryFrom ?: it[CARRY_FROM]?.let { raw -> runCatching { YearMonth.parse(raw) }.getOrNull() }
+        if (plan.isSet) it[CARRY_FROM] = (from ?: YearMonth.now()).toString() else it.remove(CARRY_FROM)
+    }
+
+    /** Records whether [month]'s leftover moves into the following month. */
+    suspend fun setCarryChoice(month: YearMonth, carry: Boolean) = store.edit {
+        it[CARRY_CHOICES] = BudgetPlan.encodeChoices(BudgetPlan.decodeChoices(it[CARRY_CHOICES]) + (month to carry))
+    }
+
+    /** Budgets saved before carry-over existed start carrying from the current month. */
+    suspend fun ensureCarryStart() = store.edit {
+        val set = (it[MONTHLY_BUDGET] ?: 0L) > 0 || (it[YEARLY_BUDGET] ?: 0L) > 0
+        if (set && it[CARRY_FROM] == null) it[CARRY_FROM] = YearMonth.now().toString()
     }
     suspend fun setBudgetAlerts(enabled: Boolean) = store.edit { it[BUDGET_ALERTS] = enabled }
     suspend fun setDefaultAccount(id: Long) = store.edit { it[DEFAULT_ACCOUNT] = id }
@@ -102,7 +121,7 @@ class SettingsRepository(context: Context) {
 
     suspend fun clearBudgetData() = store.edit {
         listOf(MONTHLY_BUDGET, YEARLY_BUDGET).forEach(it::remove)
-        listOf(BUDGET_MODE, YEAR_SPLIT, CUSTOM_SPLIT).forEach(it::remove)
+        listOf(BUDGET_MODE, YEAR_SPLIT, CUSTOM_SPLIT, CARRY_FROM, CARRY_MODE, CARRY_CHOICES).forEach(it::remove)
         it.remove(SENT_ALERTS)
     }
 
@@ -116,6 +135,9 @@ class SettingsRepository(context: Context) {
         val BUDGET_MODE = stringPreferencesKey("budget_mode")
         val YEAR_SPLIT = stringPreferencesKey("year_split")
         val CUSTOM_SPLIT = stringPreferencesKey("custom_split")
+        val CARRY_MODE = stringPreferencesKey("carry_mode")
+        val CARRY_CHOICES = stringPreferencesKey("carry_choices")
+        val CARRY_FROM = stringPreferencesKey("carry_from")
         val BUDGET_ALERTS = booleanPreferencesKey("budget_alerts")
         val SENT_ALERTS = stringSetPreferencesKey("sent_alerts")
         val DEFAULT_ACCOUNT = longPreferencesKey("default_account")

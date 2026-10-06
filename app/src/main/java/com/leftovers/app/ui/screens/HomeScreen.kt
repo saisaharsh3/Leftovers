@@ -36,6 +36,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.leftovers.app.data.AccountRepository
 import com.leftovers.app.data.DailyBudget
 import com.leftovers.app.data.GoalWithSaved
 import com.leftovers.app.data.PlanningRepository
@@ -57,10 +58,12 @@ import com.leftovers.app.ui.components.Glass
 import com.leftovers.app.ui.components.IconTile
 import com.leftovers.app.ui.components.ListRow
 import com.leftovers.app.ui.components.LocalHazeState
+import com.leftovers.app.ui.components.PrimaryButton
 import com.leftovers.app.ui.components.ProgressLine
 import com.leftovers.app.ui.components.RollingText
 import com.leftovers.app.ui.components.RoundButton
 import com.leftovers.app.ui.components.RowDivider
+import com.leftovers.app.ui.components.SecondaryButton
 import com.leftovers.app.ui.components.SectionHeader
 import com.leftovers.app.ui.components.StatTile
 import com.leftovers.app.ui.components.appear
@@ -96,21 +99,27 @@ data class HomeUiState(
     val smsSuggestions: List<SmsSuggestion> = emptyList(),
     /** Last month, when its recap hasn't been seen yet. */
     val recapMonth: YearMonth? = null,
+    /** Last month's leftover, while the user hasn't decided whether to carry it over. */
+    val carryPrompt: Long? = null,
+    /** Sum of every account's balance; null until accounts load. */
+    val balance: Long? = null,
+    val accountCount: Int = 0,
 )
 
 class HomeViewModel(
     repository: TransactionRepository,
-    settings: SettingsRepository,
+    private val settings: SettingsRepository,
     planning: PlanningRepository,
     private val sms: SmsRepository,
+    accounts: AccountRepository,
 ) : ViewModel() {
     val state: StateFlow<HomeUiState> = combine(
-        repository.allTransactions,
+        combine(repository.allTransactions, accounts.accounts, ::Pair),
         settings.settings,
         planning.recurring,
         planning.goals,
         sms.suggestions,
-    ) { all, s, recurring, goals, suggestions ->
+    ) { (all, accountList), s, recurring, goals, suggestions ->
         val month = YearMonth.now()
         val todayDate = LocalDate.now()
         val items = all.filter { YearMonth.from(it.date) == month }
@@ -134,8 +143,15 @@ class HomeViewModel(
             recapMonth = month.minusMonths(1).takeIf { prev ->
                 todayDate.dayOfMonth <= 10 && s.recapSeen != prev.toString() && all.any { YearMonth.from(it.date) == prev }
             },
+            carryPrompt = s.plan.pendingCarry(month, all),
+            balance = accountList.sumOf { it.balanceMinor },
+            accountCount = accountList.size,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), HomeUiState())
+
+    fun answerCarry(carry: Boolean) {
+        viewModelScope.launch { settings.setCarryChoice(YearMonth.now().minusMonths(1), carry) }
+    }
 
     fun dismissSms(id: Long) {
         viewModelScope.launch { sms.dismiss(id) }
@@ -153,6 +169,7 @@ fun HomeScreen(
     onOpenTransaction: (Long) -> Unit,
     onReviewSms: (SmsSuggestion) -> Unit,
     onOpenRecap: (YearMonth) -> Unit,
+    onOpenAccounts: () -> Unit,
     viewModel: HomeViewModel = viewModel(factory = AppViewModelProvider.Factory),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -199,7 +216,53 @@ fun HomeScreen(
                 }
             }
 
+            state.carryPrompt?.let { left ->
+                item {
+                    val prev = state.month.minusMonths(1).month.getDisplayName(java.time.format.TextStyle.FULL, java.util.Locale.getDefault())
+                    val next = state.month.month.getDisplayName(java.time.format.TextStyle.FULL, java.util.Locale.getDefault())
+                    Glass(Modifier.fillMaxWidth().padding(bottom = 12.dp).appear(1), strong = true) {
+                        Column(Modifier.padding(18.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                IconTile(Lucide.PiggyBank, c.positive, size = 44.dp)
+                                Spacer(Modifier.width(14.dp))
+                                Column(Modifier.weight(1f)) {
+                                    Text("$prev ended with ${money.format(left)} left", style = MaterialTheme.typography.titleSmall, color = c.textPrimary)
+                                    Text("Add it to $next's budget?", style = MaterialTheme.typography.bodySmall, color = c.textSecondary)
+                                }
+                            }
+                            Spacer(Modifier.height(14.dp))
+                            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                SecondaryButton("No thanks", { viewModel.answerCarry(false) }, Modifier.weight(1f))
+                                PrimaryButton("Carry over", { viewModel.answerCarry(true) }, Modifier.weight(1f))
+                            }
+                        }
+                    }
+                }
+            }
+
             item { TodayCard(state, onOpenBudget, Modifier.appear(1)) }
+
+            state.balance?.let { balance ->
+                item {
+                    Glass(Modifier.fillMaxWidth().padding(top = 12.dp).appear(2), onClick = onOpenAccounts) {
+                        Row(Modifier.padding(18.dp), verticalAlignment = Alignment.CenterVertically) {
+                            IconTile(Lucide.Wallet, c.textPrimary, size = 44.dp)
+                            Spacer(Modifier.width(14.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text("Total balance", style = MaterialTheme.typography.labelLarge, color = c.textSecondary)
+                                RollingText(money.formatWhole(balance), MaterialTheme.typography.headlineSmall, if (balance < 0) c.negative else c.textPrimary)
+                            }
+                            Text(
+                                if (state.accountCount == 1) "1 account" else "${state.accountCount} accounts",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = c.textSecondary,
+                            )
+                            Spacer(Modifier.width(6.dp))
+                            Icon(Lucide.ChevronRight, contentDescription = null, tint = c.textTertiary, modifier = Modifier.size(18.dp))
+                        }
+                    }
+                }
+            }
 
             if (state.smsSuggestions.isNotEmpty()) {
                 item { SectionHeader("Detected payments", Modifier.appear(2)) }

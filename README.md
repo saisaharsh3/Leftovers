@@ -24,7 +24,7 @@ today, and plan for the things you want.
 ## Features
 
 **Everyday tracking**
-- Keypad-first entry with quick picks for things you buy often
+- Keypad-first entry
 - Expenses and income, with categories, notes, accounts and receipt photos
 - Add forgotten spending for any past day from a date strip or the calendar view
 - Edit with a tap, swipe left to delete with undo
@@ -32,12 +32,14 @@ today, and plan for the things you want.
 **Budgets that make sense day to day**
 - Monthly budget, or a yearly budget split evenly, with smart rollover, or custom per month
 - *Safe to spend today*: what's left, minus bills still due, spread over the remaining days
+- Income like gifts or bonuses adds to that month's budget; choose per income category
+- When a month ends, choose whether what's left carries into the next month (or set it to always or never)
 - Per-category limits and alerts at 80% and 100%
 
 **Planning**
 - Subscriptions and recurring income, logged automatically on their billing day; turn on *Monthly* while adding to make any entry repeat
 - Savings goals that tell you how much to put aside each month, and whether you're on track
-- Accounts (cash, bank, UPI, cards) with live balances and transfers
+- Accounts (cash, bank, UPI, cards) with live balances and transfers, and your total balance on Home
 
 **Insights**
 - Daily bar chart, category breakdown, spending calendar and month-over-month comparison
