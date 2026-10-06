@@ -1,5 +1,13 @@
 package com.leftovers.app.ui.screens
 
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
+import com.leftovers.app.ui.components.CategoryIcon
+import com.leftovers.app.ui.components.PrimaryButton
+import com.leftovers.app.ui.components.SecondaryButton
 import android.app.Application
 import android.graphics.Bitmap
 import android.net.Uri
@@ -8,6 +16,8 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -84,7 +94,10 @@ import com.leftovers.app.data.TransactionItem
 import com.leftovers.app.data.TransactionRepository
 import com.leftovers.app.data.TxType
 import com.leftovers.app.ui.AppViewModelProvider
+import com.leftovers.app.ui.components.AmountCursor
+import com.leftovers.app.ui.components.AmountEdit
 import com.leftovers.app.ui.components.Chip
+import com.leftovers.app.ui.components.applyKey
 import com.leftovers.app.ui.components.Glass
 import com.leftovers.app.ui.components.Keypad
 import com.leftovers.app.ui.components.KeypadKey
@@ -112,6 +125,9 @@ import java.time.LocalDate
 import java.time.YearMonth
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
+
+/** A slice of a split entry: [amountMinor] goes to [categoryId]; the rest stays with the main category. */
+data class SplitPart(val categoryId: Long, val amountMinor: Long)
 
 /** Drives the keypad editor for adding a new entry or editing an existing one. */
 class EditorViewModel(
@@ -142,6 +158,9 @@ class EditorViewModel(
         private set
     /** When on, saving also creates a subscription that repeats on this day every month. */
     var repeatMonthly by mutableStateOf(false)
+    /** Other categories that take part of the amount; saved as separate entries. */
+    val splits = mutableStateListOf<SplitPart>()
+    val splitTotal: Long get() = splits.sumOf { it.amountMinor }
     var needCategory by mutableStateOf(false)
         private set
     var loaded by mutableStateOf(!isEditing)
@@ -179,22 +198,24 @@ class EditorViewModel(
 
     val amountMinor: Long get() = AmountInput.toMinor(amountText) ?: 0L
 
+    /** Where the keypad types; null means the end, with no visible caret. */
+    var cursor by mutableStateOf<Int?>(null)
+        private set
+
+    fun placeCursor(position: Int?) {
+        cursor = position?.coerceIn(0, amountText.length)
+    }
+
     fun onKey(key: KeypadKey) {
-        val next = when (key) {
-            is KeypadKey.Digit -> if (amountText == "0") key.value.toString() else amountText + key.value
-            KeypadKey.Dot -> when {
-                '.' in amountText -> amountText
-                amountText.isEmpty() -> "0."
-                else -> "$amountText."
-            }
-            KeypadKey.DoubleZero -> if (amountText.isEmpty() || amountText == "0") amountText else amountText + "00"
-            KeypadKey.Erase -> amountText.dropLast(1)
-        }
-        AmountInput.sanitize(next)?.let { amountText = it }
+        val placed = cursor
+        val result = applyKey(AmountEdit(amountText, placed ?: amountText.length), key) ?: return
+        amountText = result.text
+        cursor = if (placed == null) null else result.cursor
     }
 
     fun clearAmount() {
         amountText = ""
+        cursor = null
     }
 
     fun onTypeChange(newType: TxType) {
@@ -243,10 +264,27 @@ class EditorViewModel(
             needCategory = true
             return false
         }
+        val parts = if (isEditing || repeatMonthly) emptyList() else splits.toList()
+        // The main category keeps whatever the split parts don't take.
+        if (amountMinor - parts.sumOf { it.amountMinor } <= 0) return false
         val savedType = type
-        val savedAmount = amountMinor
+        val savedAmount = amountMinor - parts.sumOf { it.amountMinor }
         val savedDate = date
         viewModelScope.launch {
+            parts.forEach { part ->
+                repository.saveTransaction(
+                    Transaction(
+                        amountMinor = part.amountMinor,
+                        type = savedType,
+                        categoryId = part.categoryId,
+                        epochDay = savedDate.toEpochDay(),
+                        note = note.trim(),
+                        createdAt = createdAt,
+                        accountId = accountId,
+                    ),
+                )
+                if (savedType == TxType.EXPENSE) budgetAlerts.checkAfterExpense(savedDate, part.categoryId)
+            }
             repository.saveTransaction(
                 Transaction(
                     id = if (isEditing) id else 0,
@@ -284,6 +322,7 @@ class EditorViewModel(
             onDone(
                 when {
                     isEditing -> "Changes saved"
+                    parts.isNotEmpty() -> "${describe(savedAmount + parts.sumOf { it.amountMinor })} split across ${parts.size + 1} categories"
                     repeats -> "${describe(savedAmount)} added · repeats every ${ordinal(savedDate.dayOfMonth)}"
                     else -> "${describe(savedAmount)} added to $name$whenText"
                 },
@@ -323,6 +362,7 @@ fun EditorScreen(
     val history by viewModel.history.collectAsStateWithLifecycle()
     var showCalendar by rememberSaveable { mutableStateOf(false) }
     var showNote by rememberSaveable { mutableStateOf(false) }
+    var showSplit by rememberSaveable { mutableStateOf(false) }
     var confirmDelete by rememberSaveable { mutableStateOf(false) }
     var receiptMenu by rememberSaveable { mutableStateOf(false) }
     var viewReceipt by rememberSaveable { mutableStateOf(false) }
@@ -374,22 +414,39 @@ fun EditorScreen(
             verticalArrangement = Arrangement.Center,
         ) {
             val display = money.groupInput(viewModel.amountText)
-            val size = when (display.length) {
-                in 0..5 -> 64
-                in 6..7 -> 54
-                in 8..9 -> 44
-                else -> 36
+            val targetSize = when (display.length) {
+                in 0..5 -> 64f
+                in 6..7 -> 54f
+                in 8..9 -> 44f
+                else -> 36f
             }
+            // Ease between sizes as digits are added instead of jumping.
+            val size by animateFloatAsState(targetSize, spring(dampingRatio = 0.9f, stiffness = 500f), label = "amountSize")
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(money.symbol, style = MaterialTheme.typography.headlineMedium, color = c.textTertiary)
+                Text(
+                    money.symbol,
+                    style = MaterialTheme.typography.headlineMedium,
+                    color = c.textTertiary,
+                    // Tapping the symbol puts the caret before the first digit.
+                    modifier = Modifier.pressable({ if (viewModel.amountText.isNotEmpty()) viewModel.placeCursor(0) }, pressedScale = 0.9f),
+                )
                 Spacer(Modifier.width(6.dp))
+                val raw = viewModel.amountText
+                val placed = viewModel.cursor
                 RollingText(
                     text = display,
                     style = MaterialTheme.typography.displayLarge.copy(fontSize = size.sp, lineHeight = (size * 1.1).sp),
                     color = when {
-                        viewModel.amountText.isEmpty() -> c.textTertiary
+                        raw.isEmpty() -> c.textTertiary
                         viewModel.type == TxType.INCOME -> c.positive
                         else -> c.textPrimary
+                    },
+                    caretAfter = if (placed != null && raw.isNotEmpty()) AmountCursor.displayAfter(display, raw, placed) else null,
+                    caretColor = c.accent,
+                    onCharTap = if (raw.isEmpty()) null else { i ->
+                        val pos = AmountCursor.rawAfter(display, raw, i)
+                        // Tapping where the caret already is hides it again.
+                        viewModel.placeCursor(if (pos == placed) null else pos)
                     },
                 )
             }
@@ -404,11 +461,24 @@ fun EditorScreen(
                 if (!viewModel.isEditing) {
                     Chip(
                         "Monthly",
-                        onClick = { viewModel.repeatMonthly = !viewModel.repeatMonthly },
+                        onClick = {
+                            viewModel.repeatMonthly = !viewModel.repeatMonthly
+                            if (viewModel.repeatMonthly) viewModel.splits.clear()
+                        },
                         icon = Lucide.Repeat,
                         iconTint = c.textSecondary,
                         selected = viewModel.repeatMonthly,
                     )
+                    if (!viewModel.repeatMonthly) {
+                        RoundButton(
+                            Lucide.ChartPie,
+                            "Split across categories",
+                            { showSplit = true },
+                            size = 42.dp,
+                            tint = if (viewModel.splits.isEmpty()) c.textSecondary else c.onAccent,
+                            container = if (viewModel.splits.isEmpty()) null else c.accent,
+                        )
+                    }
                 }
                 val path = viewModel.receiptPath
                 if (path == null) {
@@ -486,6 +556,16 @@ fun EditorScreen(
                     .padding(16.dp),
             )
         }
+    }
+
+    if (showSplit) {
+        SplitSheet(
+            total = viewModel.amountMinor,
+            mainCategory = categories.find { it.id == viewModel.categoryId },
+            categories = categories.filter { it.type == viewModel.type },
+            parts = viewModel.splits,
+            onDismiss = { showSplit = false },
+        )
     }
 
     if (receiptMenu) {
@@ -697,5 +777,90 @@ private fun DateStrip(selected: LocalDate, onSelect: (LocalDate) -> Unit, onOpen
             }
         }
         RoundButton(Lucide.Calendar, "Pick a date", onOpenCalendar, size = 52.dp, modifier = Modifier.padding(end = 16.dp))
+    }
+}
+
+/** Moves parts of the amount into other categories; the main category keeps the rest. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun SplitSheet(
+    total: Long,
+    mainCategory: Category?,
+    categories: List<Category>,
+    parts: MutableList<SplitPart>,
+    onDismiss: () -> Unit,
+) {
+    val c = LocalAppColors.current
+    val money = LocalMoney.current
+    var pick by rememberSaveable { mutableStateOf<Long?>(null) }
+    var amountText by rememberSaveable { mutableStateOf("") }
+    val rest = total - parts.sumOf { it.amountMinor }
+    val partMinor = AmountInput.toMinor(amountText) ?: 0L
+
+    GlassSheet(onDismiss) {
+        Column(
+            Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            Text("Split ${money.format(total)}", style = MaterialTheme.typography.headlineSmall, color = c.textPrimary)
+            if (total <= 0) {
+                Text("Type the full amount first, then split it here.", style = MaterialTheme.typography.bodySmall, color = c.textSecondary)
+                return@Column
+            }
+            Text(
+                "Each part is saved as its own entry with the same date and note.",
+                style = MaterialTheme.typography.bodySmall,
+                color = c.textSecondary,
+            )
+            Glass(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(vertical = 6.dp)) {
+                    com.leftovers.app.ui.components.ListRow(
+                        mainCategory?.name ?: "Main category",
+                        subtitle = if (mainCategory == null) "Pick one on the add screen" else "Keeps the rest",
+                        leading = { if (mainCategory != null) CategoryIcon(mainCategory.emoji, mainCategory.color, size = 38.dp) },
+                        trailing = { Text(money.format(rest), style = MaterialTheme.typography.titleSmall, color = if (rest > 0) c.textPrimary else c.negative) },
+                    )
+                    parts.forEachIndexed { i, part ->
+                        val cat = categories.find { it.id == part.categoryId }
+                        com.leftovers.app.ui.components.RowDivider()
+                        com.leftovers.app.ui.components.ListRow(
+                            cat?.name ?: "Category",
+                            leading = { if (cat != null) CategoryIcon(cat.emoji, cat.color, size = 38.dp) },
+                            trailing = {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(money.format(part.amountMinor), style = MaterialTheme.typography.titleSmall, color = c.textPrimary)
+                                    Spacer(Modifier.width(8.dp))
+                                    RoundButton(Lucide.X, "Remove part", { parts.removeAt(i) }, size = 32.dp, tint = c.textTertiary)
+                                }
+                            },
+                        )
+                    }
+                }
+            }
+            Text("Add a part", style = MaterialTheme.typography.labelMedium, color = c.textSecondary, modifier = Modifier.padding(start = 6.dp))
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                categories.filter { it.id != mainCategory?.id }.forEach { cat ->
+                    Chip(cat.name, onClick = { pick = cat.id }, icon = CategoryIcons[cat.emoji], iconTint = Color(cat.color), selected = pick == cat.id)
+                }
+            }
+            MoneyField(amountText, { amountText = it }, label = "Amount for this part")
+            PrimaryButton(
+                "Add part",
+                {
+                    val id = pick ?: return@PrimaryButton
+                    val existing = parts.indexOfFirst { it.categoryId == id }
+                    if (existing >= 0) parts[existing] = parts[existing].copy(amountMinor = parts[existing].amountMinor + partMinor)
+                    else parts += SplitPart(id, partMinor)
+                    amountText = ""
+                    pick = null
+                },
+                Modifier.fillMaxWidth(),
+                enabled = pick != null && partMinor > 0 && partMinor < rest,
+            )
+            if (rest <= 0) {
+                Text("The parts add up to the whole amount. Leave something for ${mainCategory?.name ?: "the main category"}.", style = MaterialTheme.typography.bodySmall, color = c.negative)
+            }
+            SecondaryButton("Done", onDismiss, Modifier.fillMaxWidth())
+        }
     }
 }

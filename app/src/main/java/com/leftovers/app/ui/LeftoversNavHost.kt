@@ -173,14 +173,17 @@ fun LeftoversNavHost(openAdd: Boolean = false, onOpenAddHandled: () -> Unit = {}
                     },
                     exitTransition = {
                         when {
-                            targetState.isAdd() || targetState.isSheet() -> fadeOut(tween(300)) + scaleOut(tween(300), targetScale = 0.96f)
+                            // Scaling the screen behind would re-render its frosted blur every frame.
+                            targetState.isAdd() -> fadeOut(tween(220))
+                            targetState.isSheet() -> fadeOut(tween(300)) + scaleOut(tween(300), targetScale = 0.96f)
                             targetState.isTab() && initialState.isTab() -> fadeOut(tween(180))
                             else -> slideOutOfContainer(SlideDirection.Start, spring(dampingRatio = 1f, stiffness = Spring.StiffnessMediumLow)) { it / 4 } + fadeOut(tween(220))
                         }
                     },
                     popEnterTransition = {
                         when {
-                            initialState.isAdd() || initialState.isSheet() -> fadeIn(tween(300)) + scaleIn(tween(300), initialScale = 0.96f)
+                            initialState.isAdd() -> fadeIn(tween(220))
+                            initialState.isSheet() -> fadeIn(tween(300)) + scaleIn(tween(300), initialScale = 0.96f)
                             else -> slideIntoContainer(SlideDirection.End, spring(dampingRatio = 1f, stiffness = Spring.StiffnessMediumLow)) { it / 4 } + fadeIn(tween(220))
                         }
                     },

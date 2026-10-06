@@ -1,0 +1,3 @@
+# Compile all of the app's own code ahead of time so the first open of each screen is smooth.
+HSPLLcom/leftovers/app/**;->**(**)**
+Lcom/leftovers/app/**;

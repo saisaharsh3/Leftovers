@@ -19,6 +19,18 @@ class AccountRepository(
         return used
     }
 
+    /** Re-files every entry of one account under another; returns the moved ids so it can be undone. */
+    suspend fun moveEntries(fromId: Long, toId: Long): List<Long> {
+        val ids = transactionDao.idsForAccount(fromId)
+        setAccount(ids, toId)
+        return ids
+    }
+
+    suspend fun setAccount(ids: List<Long>, accountId: Long) {
+        // SQLite caps the number of query parameters, so update in batches.
+        ids.chunked(500).forEach { transactionDao.setAccount(it, accountId) }
+    }
+
     suspend fun saveTransfer(transfer: Transfer) = transferDao.upsert(transfer)
     suspend fun deleteTransfer(transfer: Transfer) = transferDao.delete(transfer)
 }

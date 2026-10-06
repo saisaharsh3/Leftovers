@@ -20,6 +20,19 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.ui.draw.rotate
+import com.leftovers.app.ui.components.pressable
+import com.leftovers.app.data.Trend
+import com.leftovers.app.data.spendingTrends
+import com.leftovers.app.util.Money
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -90,6 +103,7 @@ data class StatsUiState(
     val max: TransactionItem? = null,
     /** This month's entries of the chosen type, newest first. */
     val items: List<TransactionItem> = emptyList(),
+    val trends: List<Trend> = emptyList(),
 )
 
 class StatsViewModel(repository: TransactionRepository, settings: SettingsRepository) : ViewModel() {
@@ -113,6 +127,7 @@ class StatsViewModel(repository: TransactionRepository, settings: SettingsReposi
                 count = ofType.size,
                 max = ofType.maxByOrNull { it.amountMinor },
                 items = ofType,
+                trends = spendingTrends(all, m, t, Money(s.currencyCode)::formatWhole),
             )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), StatsUiState())
 
@@ -136,8 +151,23 @@ fun StatsScreen(
         onBack = null,
         actions = { RoundButton(Lucide.Sparkles, "Monthly recap", { onOpenRecap(state.month) }) },
     ) { padding ->
+        val swipeThreshold = with(androidx.compose.ui.platform.LocalDensity.current) { 90.dp.toPx() }
         LazyColumn(
-            Modifier.fillMaxSize(),
+            Modifier
+                .fillMaxSize()
+                // Swipe sideways anywhere (except along the chart) to change month.
+                .pointerInput(state.month) {
+                    var dx = 0f
+                    detectHorizontalDragGestures(
+                        onDragStart = { dx = 0f },
+                        onDragEnd = {
+                            when {
+                                dx > swipeThreshold -> viewModel.setMonth(state.month.minusMonths(1))
+                                dx < -swipeThreshold && state.month < YearMonth.now() -> viewModel.setMonth(state.month.plusMonths(1))
+                            }
+                        },
+                    ) { _, amount -> dx += amount }
+                },
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = padding.calculateTopPadding() + 12.dp, bottom = DockClearance),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
@@ -179,8 +209,40 @@ fun StatsScreen(
                             highlight = if (state.month == YearMonth.from(today)) today.dayOfMonth - 1 else null,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(120.dp),
+                                .height(150.dp),
+                            tooltip = { i -> "${state.month.atDay(i + 1).shortLabel()} · ${money.format(state.daily.getOrElse(i) { 0L })}" },
                         )
+                        Text(
+                            "Touch the bars to see each day",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = c.textTertiary,
+                            modifier = Modifier.padding(top = 6.dp),
+                        )
+                    }
+                }
+            }
+
+            if (state.trends.isNotEmpty()) {
+                item {
+                    Glass(Modifier.fillMaxWidth().padding(top = 12.dp).appear(1)) {
+                        Column(Modifier.padding(horizontal = 18.dp, vertical = 14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            state.trends.forEach { t ->
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        Lucide.Sparkles,
+                                        contentDescription = null,
+                                        tint = when (t.good) {
+                                            true -> c.positive
+                                            false -> c.warning
+                                            null -> c.accent
+                                        },
+                                        modifier = Modifier.size(16.dp),
+                                    )
+                                    Spacer(Modifier.width(10.dp))
+                                    Text(t.text, style = MaterialTheme.typography.bodyMedium, color = c.textPrimary)
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -236,8 +298,17 @@ fun StatsScreen(
                             }
                         }
                         Spacer(Modifier.height(18.dp))
+                        var openCategory by rememberSaveable(state.month, state.type) { mutableStateOf<Long?>(null) }
                         state.categories.forEach { cat ->
-                            CategoryShare(cat, state.total)
+                            val open = openCategory == cat.categoryId
+                            CategoryShare(cat, state.total, open) { openCategory = if (open) null else cat.categoryId }
+                            AnimatedVisibility(open, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
+                                Column(Modifier.padding(start = 30.dp, bottom = 6.dp)) {
+                                    state.items.filter { it.categoryId == cat.categoryId }.forEach { item ->
+                                        TransactionRow(item, onClick = { onOpenTransaction(item.id) }, subtitle = item.date.friendlyLabel())
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -315,11 +386,12 @@ private fun Legend(color: Color, text: String) {
 }
 
 @Composable
-private fun CategoryShare(cat: CategoryTotal, total: Long) {
+private fun CategoryShare(cat: CategoryTotal, total: Long, open: Boolean, onClick: () -> Unit) {
     val c = LocalAppColors.current
     val money = LocalMoney.current
     val share = if (total > 0) cat.totalMinor.toFloat() / total else 0f
-    Row(Modifier.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+    val turn by animateFloatAsState(if (open) 90f else 0f, label = "chevron")
+    Row(Modifier.fillMaxWidth().pressable(onClick, pressedScale = 0.98f).padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
         CategoryIcon(cat.emoji, cat.color, size = 38.dp)
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
@@ -334,6 +406,8 @@ private fun CategoryShare(cat: CategoryTotal, total: Long) {
                 Text("${(share * 100).roundToInt()}%", style = MaterialTheme.typography.labelSmall, color = c.textSecondary)
             }
         }
+        Spacer(Modifier.width(8.dp))
+        Icon(Lucide.ChevronRight, contentDescription = if (open) "Hide entries" else "Show entries", tint = c.textTertiary, modifier = Modifier.size(16.dp).rotate(turn))
     }
 }
 

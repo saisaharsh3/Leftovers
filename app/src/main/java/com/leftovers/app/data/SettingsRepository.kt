@@ -33,6 +33,12 @@ data class AppSettings(
     val smsDetection: Boolean,
     /** Month (yyyy-MM) whose recap the user has already opened or dismissed. */
     val recapSeen: String,
+    /** Folder (document tree uri) for weekly automatic backups; null when off. */
+    val autoBackupDir: String? = null,
+    /** When the last automatic backup finished (epoch millis), 0 if never. */
+    val autoBackupLast: Long = 0,
+    /** Notify the day before a subscription is charged. */
+    val billReminders: Boolean = true,
 )
 
 class SettingsRepository(context: Context) {
@@ -61,6 +67,9 @@ class SettingsRepository(context: Context) {
             appLock = p[APP_LOCK] ?: false,
             smsDetection = p[SMS] ?: false,
             recapSeen = p[RECAP_SEEN].orEmpty(),
+            autoBackupDir = p[AUTO_BACKUP_DIR],
+            autoBackupLast = p[AUTO_BACKUP_LAST] ?: 0L,
+            billReminders = p[BILL_REMINDERS] ?: true,
         )
     }
 
@@ -105,6 +114,9 @@ class SettingsRepository(context: Context) {
     suspend fun setAppLock(enabled: Boolean) = store.edit { it[APP_LOCK] = enabled }
     suspend fun setSmsDetection(enabled: Boolean) = store.edit { it[SMS] = enabled }
     suspend fun setRecapSeen(month: String) = store.edit { it[RECAP_SEEN] = month }
+    suspend fun setAutoBackupDir(dir: String?) = store.edit { if (dir == null) it.remove(AUTO_BACKUP_DIR) else it[AUTO_BACKUP_DIR] = dir }
+    suspend fun setAutoBackupDone(at: Long) = store.edit { it[AUTO_BACKUP_LAST] = at }
+    suspend fun setBillReminders(enabled: Boolean) = store.edit { it[BILL_REMINDERS] = enabled }
 
     /** Records that an alert was shown; returns false if it had already been sent. */
     suspend fun markAlertSent(key: String): Boolean {
@@ -146,6 +158,9 @@ class SettingsRepository(context: Context) {
         val APP_LOCK = booleanPreferencesKey("app_lock")
         val SMS = booleanPreferencesKey("sms_detection")
         val RECAP_SEEN = stringPreferencesKey("recap_seen")
+        val AUTO_BACKUP_DIR = stringPreferencesKey("auto_backup_dir")
+        val AUTO_BACKUP_LAST = longPreferencesKey("auto_backup_last")
+        val BILL_REMINDERS = booleanPreferencesKey("bill_reminders")
 
         fun defaultCurrencyCode(): String =
             runCatching { Currency.getInstance(Locale.getDefault()).currencyCode }.getOrNull() ?: "USD"

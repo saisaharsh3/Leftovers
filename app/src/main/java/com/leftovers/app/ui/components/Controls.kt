@@ -44,6 +44,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.foundation.clickable
+import androidx.compose.ui.draw.drawWithContent
+import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -316,7 +322,27 @@ fun Chip(
  * to fit the available width instead of being clipped on the right.
  */
 @Composable
-fun RollingText(text: String, style: TextStyle, color: Color, modifier: Modifier = Modifier) {
+fun RollingText(
+    text: String,
+    style: TextStyle,
+    color: Color,
+    modifier: Modifier = Modifier,
+    /** Draw a blinking caret after this character index (-1 = before the first); null hides it. */
+    caretAfter: Int? = null,
+    caretColor: Color = color,
+    onCharTap: ((Int) -> Unit)? = null,
+) {
+    var blinkOn by remember { mutableStateOf(true) }
+    if (caretAfter != null) {
+        // Toggle twice a second rather than animating, so the caret costs two frames a second.
+        LaunchedEffect(caretAfter, text) {
+            blinkOn = true
+            while (true) {
+                delay(530)
+                blinkOn = !blinkOn
+            }
+        }
+    }
     BoxWithConstraints(modifier) {
         val measurer = rememberTextMeasurer()
         val maxWidth = constraints.maxWidth
@@ -336,7 +362,28 @@ fun RollingText(text: String, style: TextStyle, color: Color, modifier: Modifier
             val chars = text.toList()
             chars.forEachIndexed { i, ch ->
                 key(chars.size - i) {
+                    val caretHere = when (caretAfter) {
+                        null -> 0
+                        -1 -> if (i == 0) -1 else 0
+                        i -> 1
+                        else -> 0
+                    }
                     AnimatedContent(
+                        modifier = Modifier
+                            .then(if (onCharTap != null) Modifier.clickable(interactionSource = null, indication = null) { onCharTap(i) } else Modifier)
+                            .drawWithContent {
+                                drawContent()
+                                if (caretHere != 0 && blinkOn) {
+                                    val x = if (caretHere > 0) size.width else 0f
+                                    val w = 3.dp.toPx()
+                                    drawRoundRect(
+                                        caretColor,
+                                        topLeft = androidx.compose.ui.geometry.Offset(x - w / 2, size.height * 0.14f),
+                                        size = androidx.compose.ui.geometry.Size(w, size.height * 0.72f),
+                                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(w / 2, w / 2),
+                                    )
+                                }
+                            },
                         targetState = ch,
                         transitionSpec = {
                             val up = targetState > initialState

@@ -12,7 +12,10 @@ import com.leftovers.app.data.TransactionRepository
 import com.leftovers.app.data.TxType
 import com.leftovers.app.util.BackupManager
 import com.leftovers.app.util.BudgetAlertManager
+import com.leftovers.app.util.AutoBackup
+import com.leftovers.app.util.BillReminders
 import com.leftovers.app.util.Reminders
+import com.leftovers.app.widget.MonthBudgetWidget
 import com.leftovers.app.widget.SafeToSpendWidget
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -35,6 +38,7 @@ class LeftoversApp : Application() {
         container = AppContainer(this)
         container.budgetAlerts.createChannel()
         Reminders.createChannel(this)
+        BillReminders.createChannel(this)
         container.start()
     }
 }
@@ -60,7 +64,18 @@ class AppContainer(private val context: Context) {
                 .collectLatest {
                     delay(600)
                     runCatching { SafeToSpendWidget().updateAll(context) }
+                    runCatching { MonthBudgetWidget().updateAll(context) }
                 }
+        }
+        scope.launch {
+            settings.settings.map { it.autoBackupDir != null }
+                .distinctUntilChanged()
+                .collect { AutoBackup.schedule(context, it) }
+        }
+        scope.launch {
+            settings.settings.map { it.billReminders }
+                .distinctUntilChanged()
+                .collect { BillReminders.schedule(context, it) }
         }
         // Reschedule the reminder whenever its settings change.
         scope.launch {

@@ -21,7 +21,12 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -41,6 +46,7 @@ import androidx.compose.ui.unit.sp
 import com.leftovers.app.ui.theme.LocalAppColors
 import java.time.LocalDate
 import java.time.YearMonth
+import kotlin.math.abs
 
 data class ChartSlice(val value: Float, val color: Color)
 
@@ -113,18 +119,51 @@ fun Gauge(
     }
 }
 
-/** One rounded bar per day; today is highlighted, other days are softer. */
+/**
+ * One rounded bar per day; today is highlighted, other days are softer. Touching the chart picks
+ * the bar under the finger and shows [tooltip] for it; it stays until the chart is touched again.
+ */
 @Composable
-fun DailyBars(values: List<Long>, highlight: Int?, modifier: Modifier = Modifier) {
+fun DailyBars(values: List<Long>, highlight: Int?, modifier: Modifier = Modifier, tooltip: ((Int) -> String)? = null) {
     val c = LocalAppColors.current
     val measurer = rememberTextMeasurer()
     val labelStyle = MaterialTheme.typography.labelSmall.copy(color = c.textTertiary, fontSize = 10.sp)
+    val tipStyle = MaterialTheme.typography.labelMedium.copy(color = c.textPrimary)
+    val tipBg = MaterialTheme.colorScheme.surfaceContainerHighest
     val progress = remember(values) { Animatable(0f) }
     LaunchedEffect(values) { progress.animateTo(1f, tween(900, easing = FastOutSlowInEasing)) }
-    Canvas(modifier) {
+    var touched by remember(values) { mutableStateOf<Int?>(null) }
+    val input = if (tooltip == null || values.isEmpty()) Modifier else Modifier.pointerInput(values.size) {
+        fun indexAt(x: Float) = (x / (size.width.toFloat() / values.size)).toInt().coerceIn(0, values.size - 1)
+        awaitEachGesture {
+            val down = awaitFirstDown(requireUnconsumed = false)
+            val first = indexAt(down.position.x)
+            // A tap on the bar that is already showing hides it again.
+            val clearOnUp = touched == first
+            touched = first
+            var moved = false
+            while (true) {
+                val change = awaitPointerEvent().changes.firstOrNull() ?: break
+                if (!change.pressed) break
+                // Let a vertical scroll of the page win; follow the finger only while it isn't scrolling.
+                if (change.isConsumed) continue
+                val delta = change.position - change.previousPosition
+                if (abs(delta.x) > abs(delta.y)) change.consume()
+                val i = indexAt(change.position.x)
+                if (i != touched) {
+                    moved = true
+                    touched = i
+                }
+            }
+            if (clearOnUp && !moved) touched = null
+        }
+    }
+    Canvas(modifier.then(input)) {
         if (values.isEmpty()) return@Canvas
+        val tipH = if (tooltip != null) 30.dp.toPx() else 0f
         val labelH = 18.dp.toPx()
-        val chartH = size.height - labelH
+        val chartTop = tipH
+        val chartH = size.height - labelH - chartTop
         val max = (values.maxOrNull() ?: 0L).coerceAtLeast(1L).toFloat()
         val slot = size.width / values.size
         val barW = (slot * 0.56f).coerceAtMost(10.dp.toPx())
@@ -133,7 +172,8 @@ fun DailyBars(values: List<Long>, highlight: Int?, modifier: Modifier = Modifier
             val local = ((progress.value * values.size * 1.6f) - i * 0.6f).coerceIn(0f, 1f)
             val h = if (v > 0) (chartH * (v / max) * local).coerceAtLeast(barW) else 2.dp.toPx()
             val x = slot * i + (slot - barW) / 2
-            val active = highlight == null || i == highlight
+            val focus = touched ?: highlight
+            val active = focus == null || i == focus
             val brush = if (v == 0L) {
                 Brush.verticalGradient(listOf(c.glassStrong, c.glassStrong))
             } else {
@@ -143,12 +183,23 @@ fun DailyBars(values: List<Long>, highlight: Int?, modifier: Modifier = Modifier
                     endY = chartH,
                 )
             }
-            drawRoundRect(brush, Offset(x, chartH - h), Size(barW, h), CornerRadius(barW / 2, barW / 2))
+            drawRoundRect(brush, Offset(x, chartTop + chartH - h), Size(barW, h), CornerRadius(barW / 2, barW / 2))
             val day = i + 1
             if (day == 1 || day % 5 == 0) {
                 val layout = measurer.measure(day.toString(), labelStyle)
-                drawText(layout, topLeft = Offset(slot * i + slot / 2 - layout.size.width / 2f, chartH + 4.dp.toPx()))
+                drawText(layout, topLeft = Offset(slot * i + slot / 2 - layout.size.width / 2f, chartTop + chartH + 4.dp.toPx()))
             }
+        }
+        val sel = touched
+        if (tooltip != null && sel != null) {
+            val center = slot * sel + slot / 2
+            drawLine(c.textTertiary, Offset(center, tipH), Offset(center, chartTop + chartH), strokeWidth = 1.dp.toPx())
+            val layout = measurer.measure(tooltip(sel), tipStyle)
+            val padX = 10.dp.toPx()
+            val w = layout.size.width + padX * 2
+            val left = (center - w / 2).coerceIn(0f, (size.width - w).coerceAtLeast(0f))
+            drawRoundRect(tipBg, Offset(left, 0f), Size(w, tipH - 4.dp.toPx()), CornerRadius(12.dp.toPx(), 12.dp.toPx()))
+            drawText(layout, topLeft = Offset(left + padX, (tipH - 4.dp.toPx() - layout.size.height) / 2))
         }
     }
 }

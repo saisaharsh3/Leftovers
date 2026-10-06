@@ -22,6 +22,11 @@ fun Modifier.sharedContainer(key: String): Modifier {
     val shared = LocalSharedTransitionScope.current ?: return this
     val animated = LocalNavAnimatedScope.current ?: return this
     return with(shared) {
-        this@sharedContainer.sharedBounds(rememberSharedContentState(key), animated)
+        // Scale the finished layout instead of re-measuring the whole screen on every frame.
+        this@sharedContainer.sharedBounds(
+            rememberSharedContentState(key),
+            animated,
+            resizeMode = SharedTransitionScope.ResizeMode.scaleToBounds(),
+        )
     }
 }

@@ -25,7 +25,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -99,6 +101,14 @@ class AccountsViewModel(private val repository: AccountRepository, private val s
         }
     }
 
+    fun moveEntries(from: Long, to: Long, onDone: (List<Long>) -> Unit) {
+        viewModelScope.launch { onDone(repository.moveEntries(from, to)) }
+    }
+
+    fun undoMove(ids: List<Long>, backTo: Long) {
+        viewModelScope.launch { repository.setAccount(ids, backTo) }
+    }
+
     fun transfer(from: Long, to: Long, amount: Long, note: String) {
         viewModelScope.launch {
             repository.saveTransfer(Transfer(fromAccountId = from, toAccountId = to, amountMinor = amount, epochDay = LocalDate.now().toEpochDay(), note = note))
@@ -126,6 +136,7 @@ fun AccountsScreen(
     val scope = rememberCoroutineScope()
     var editing by remember { mutableStateOf<Account?>(null) }
     var transferring by rememberSaveable { mutableStateOf(false) }
+    var moving by remember { mutableStateOf<Account?>(null) }
 
     GlassScreen(
         title = "Accounts",
@@ -223,6 +234,14 @@ fun AccountsScreen(
                 viewModel.save(a, makeDefault)
                 editing = null
             },
+            onMoveEntries = if (account.id != 0L && accounts.size >= 2) {
+                {
+                    moving = account
+                    editing = null
+                }
+            } else {
+                null
+            },
             onDelete = if (account.id != 0L && account.id != defaultId) {
                 {
                     viewModel.delete(account) { used ->
@@ -234,6 +253,30 @@ fun AccountsScreen(
                 null
             },
         )
+    }
+
+    moving?.let { source ->
+        MoveEntriesSheet(
+            source = source,
+            targets = accounts.filter { it.id != source.id },
+            onDismiss = { moving = null },
+        ) { target ->
+            moving = null
+            viewModel.moveEntries(source.id, target.id) { ids ->
+                scope.launch {
+                    if (ids.isEmpty()) {
+                        snackbar.showSnackbar("${source.name} had no entries to move")
+                    } else {
+                        val result = snackbar.showSnackbar(
+                            "Moved ${ids.size} ${if (ids.size == 1) "entry" else "entries"} to ${target.name}",
+                            actionLabel = "Undo",
+                            duration = SnackbarDuration.Long,
+                        )
+                        if (result == SnackbarResult.ActionPerformed) viewModel.undoMove(ids, source.id)
+                    }
+                }
+            }
+        }
     }
 
     if (transferring && accounts.size >= 2) {
@@ -257,6 +300,7 @@ private fun AccountEditor(
     isDefault: Boolean,
     onDismiss: () -> Unit,
     onSave: (Account, Boolean) -> Unit,
+    onMoveEntries: (() -> Unit)?,
     onDelete: (() -> Unit)?,
 ) {
     val c = LocalAppColors.current
@@ -309,6 +353,9 @@ private fun AccountEditor(
                 Modifier.fillMaxWidth(),
                 enabled = name.isNotBlank(),
             )
+            if (onMoveEntries != null) {
+                SecondaryButton("Move its entries to another account", onMoveEntries, Modifier.fillMaxWidth(), icon = Lucide.Repeat)
+            }
             if (onDelete != null) {
                 Text("Delete account", style = MaterialTheme.typography.labelLarge, color = c.negative, modifier = Modifier.align(Alignment.CenterHorizontally).pressable(onDelete))
             }
@@ -348,6 +395,37 @@ private fun TransferSheet(
             MoneyField(amount, { amount = it }, label = "Amount", large = true)
             GlassTextField(note, { note = it.take(60) }, placeholder = "e.g. ATM withdrawal", label = "Note (optional)")
             PrimaryButton("Transfer", { onSave(from, to, minor, note.trim()) }, Modifier.fillMaxWidth(), enabled = minor > 0 && from != to)
+        }
+    }
+}
+
+/** Picks where every entry of [source] should go, e.g. before deleting an account. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun MoveEntriesSheet(
+    source: Account,
+    targets: List<AccountWithBalance>,
+    onDismiss: () -> Unit,
+    onMove: (AccountWithBalance) -> Unit,
+) {
+    val c = LocalAppColors.current
+    var to by rememberSaveable { mutableStateOf(targets.first().id) }
+    GlassSheet(onDismiss) {
+        Column(
+            Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            Text("Move entries from ${source.name}", style = MaterialTheme.typography.headlineSmall, color = c.textPrimary)
+            Text(
+                "Every expense and income logged in ${source.name} moves to the account you pick, and both balances update. Transfers stay as they are.",
+                style = MaterialTheme.typography.bodySmall,
+                color = c.textSecondary,
+            )
+            Text("Move to", style = MaterialTheme.typography.labelMedium, color = c.textSecondary, modifier = Modifier.padding(start = 6.dp))
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                targets.forEach { a -> Chip(a.name, onClick = { to = a.id }, icon = CategoryIcons[a.icon], iconTint = Color(a.color), selected = to == a.id) }
+            }
+            PrimaryButton("Move entries", { targets.find { it.id == to }?.let(onMove) }, Modifier.fillMaxWidth())
         }
     }
 }

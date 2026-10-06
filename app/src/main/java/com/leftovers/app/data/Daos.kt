@@ -50,6 +50,12 @@ interface TransactionDao {
     @Query("SELECT COUNT(*) FROM transactions WHERE accountId = :accountId")
     suspend fun countForAccount(accountId: Long): Int
 
+    @Query("SELECT id FROM transactions WHERE accountId = :accountId")
+    suspend fun idsForAccount(accountId: Long): List<Long>
+
+    @Query("UPDATE transactions SET accountId = :accountId WHERE id IN (:ids)")
+    suspend fun setAccount(ids: List<Long>, accountId: Long)
+
     @Query("SELECT receiptPath FROM transactions WHERE receiptPath IS NOT NULL")
     suspend fun receiptPaths(): List<String>
 }

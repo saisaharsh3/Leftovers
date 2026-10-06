@@ -38,6 +38,18 @@
         </receiver>
 
         <receiver
+            android:name=".widget.MonthBudgetWidgetReceiver"
+            android:exported="true"
+            android:label="Left this month">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/month_budget_widget" />
+        </receiver>
+
+        <receiver
             android:name=".util.SmsReceiver"
             android:exported="true"
             android:permission="android.permission.BROADCAST_SMS">

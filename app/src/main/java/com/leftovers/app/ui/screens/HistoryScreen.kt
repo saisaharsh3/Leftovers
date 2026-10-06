@@ -69,6 +69,7 @@ import com.leftovers.app.ui.components.appear
 import com.leftovers.app.ui.components.pressable
 import com.leftovers.app.ui.icons.Lucide
 import com.leftovers.app.ui.theme.LocalAppColors
+import com.leftovers.app.util.AmountInput
 import com.leftovers.app.util.LocalMoney
 import com.leftovers.app.util.friendlyLabel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -106,7 +107,13 @@ class HistoryViewModel(private val repository: TransactionRepository) : ViewMode
             val monthItems = all.filter { YearMonth.from(it.date) == m }
             val scoped = if (q.isNotBlank()) {
                 val needle = q.trim()
-                all.filter { it.note.contains(needle, ignoreCase = true) || it.categoryName.contains(needle, ignoreCase = true) }
+                // "430" or "1,250.50" also finds entries of exactly that amount.
+                val amount = AmountInput.toMinor(needle.replace(",", ""))
+                all.filter {
+                    it.note.contains(needle, ignoreCase = true) ||
+                        it.categoryName.contains(needle, ignoreCase = true) ||
+                        (amount != null && it.amountMinor == amount)
+                }
             } else {
                 monthItems
             }
@@ -198,7 +205,7 @@ fun HistoryScreen(
         ) {
             item {
                 if (searchOpen) {
-                    GlassTextField(state.query, viewModel::setQuery, placeholder = "Search notes or categories")
+                    GlassTextField(state.query, viewModel::setQuery, placeholder = "Search notes, categories or amounts")
                 } else {
                     MonthSwitcher(state.month, {
                         viewModel.setMonth(it)

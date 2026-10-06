@@ -2,6 +2,7 @@ package com.leftovers.app.ui.screens
 
 import android.Manifest
 import android.content.Context
+import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -64,7 +65,9 @@ import com.leftovers.app.ui.components.SectionHeader
 import com.leftovers.app.ui.components.SegmentedToggle
 import com.leftovers.app.ui.icons.Lucide
 import com.leftovers.app.ui.theme.LocalAppColors
+import com.leftovers.app.util.AutoBackup
 import com.leftovers.app.util.BackupManager
+import com.leftovers.app.util.friendlyLabel
 import com.leftovers.app.util.CsvExporter
 import com.leftovers.app.util.Reminders
 import com.leftovers.app.util.Money
@@ -103,6 +106,31 @@ class SettingsViewModel(
 
     fun setAppLock(enabled: Boolean) {
         viewModelScope.launch { settingsRepository.setAppLock(enabled) }
+    }
+
+    fun setBillReminders(enabled: Boolean) {
+        viewModelScope.launch { settingsRepository.setBillReminders(enabled) }
+    }
+
+    /** Remembers [tree] for weekly backups and makes the first one straight away. */
+    fun enableAutoBackup(context: Context, tree: Uri, onResult: (String) -> Unit) {
+        viewModelScope.launch {
+            settingsRepository.setAutoBackupDir(tree.toString())
+            AutoBackup.runNow(context, tree).fold(
+                {
+                    settingsRepository.setAutoBackupDone(System.currentTimeMillis())
+                    onResult("Backed up $it entries. Next backup in a week")
+                },
+                { onResult("Couldn't back up to that folder: ${it.message}") },
+            )
+        }
+    }
+
+    fun disableAutoBackup(context: Context, dir: String?) {
+        viewModelScope.launch {
+            settingsRepository.setAutoBackupDir(null)
+            dir?.let { runCatching { context.contentResolver.releasePersistableUriPermission(Uri.parse(it), Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION) } }
+        }
     }
 
     fun setSmsDetection(enabled: Boolean) {
@@ -171,6 +199,14 @@ fun SettingsScreen(
         if (uri != null) viewModel.backupTo(uri) { toast(it) }
     }
     val openBackup = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> pendingRestore = uri }
+    val pickBackupFolder = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { tree ->
+        if (tree != null) {
+            runCatching {
+                context.contentResolver.takePersistableUriPermission(tree, Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+            }
+            viewModel.enableAutoBackup(context, tree) { toast(it) }
+        }
+    }
     val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
     val smsPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         viewModel.setSmsDetection(granted)
@@ -209,6 +245,11 @@ fun SettingsScreen(
                     Column(Modifier.padding(vertical = 6.dp)) {
                         ToggleRow(Lucide.Lock, "App lock", s.appLock, { on ->
                             if (on && !canLock(context)) toast("Set up a screen lock on your phone first") else viewModel.setAppLock(on)
+                        })
+                        RowDivider()
+                        ToggleRow(Lucide.Repeat, "Remind me before bills", s.billReminders, { on ->
+                            if (on && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+                            viewModel.setBillReminders(on)
                         })
                         RowDivider()
                         ToggleRow(Lucide.Bell, "Daily reminder", s.reminderEnabled, { on ->
@@ -260,6 +301,10 @@ fun SettingsScreen(
                         RowDivider()
                         NavRow(Lucide.Repeat, "Restore", "From a backup file") { openBackup.launch(arrayOf("application/json", "*/*")) }
                         RowDivider()
+                        ToggleRow(Lucide.CalendarClock, "Weekly automatic backup", s.autoBackupDir != null, { on ->
+                            if (on) pickBackupFolder.launch(null) else viewModel.disableAutoBackup(context, s.autoBackupDir)
+                        })
+                        RowDivider()
                         NavRow(Lucide.ReceiptText, "Export to CSV", "Excel, Sheets") {
                             viewModel.export(context) { scope.launch { snackbar.showSnackbar("Nothing to export yet") } }
                         }
@@ -270,6 +315,15 @@ fun SettingsScreen(
                             onClick = { confirmWipe = true },
                         )
                     }
+                }
+                if (s.autoBackupDir != null) {
+                    Text(
+                        "Saves a backup to your chosen folder every week and keeps the last 4." +
+                            if (s.autoBackupLast > 0) " Last backup: ${java.time.Instant.ofEpochMilli(s.autoBackupLast).atZone(java.time.ZoneId.systemDefault()).toLocalDate().friendlyLabel()}." else "",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = c.textTertiary,
+                        modifier = Modifier.padding(start = 8.dp, end = 8.dp, top = 8.dp),
+                    )
                 }
             }
 
@@ -283,7 +337,7 @@ fun SettingsScreen(
                 ) {
                     Icon(Lucide.Lock, contentDescription = null, tint = c.textTertiary, modifier = Modifier.size(14.dp))
                     Spacer(Modifier.width(6.dp))
-                    Text("Stored only on this device · Leftovers 1.0.2", style = MaterialTheme.typography.bodySmall, color = c.textTertiary, textAlign = TextAlign.Center)
+                    Text("Stored only on this device · Leftovers 1.0.3", style = MaterialTheme.typography.bodySmall, color = c.textTertiary, textAlign = TextAlign.Center)
                 }
             }
             item {

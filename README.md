@@ -24,9 +24,11 @@ today, and plan for the things you want.
 ## Features
 
 **Everyday tracking**
-- Keypad-first entry
+- Keypad-first entry; tap a digit to place a cursor and fix just that digit
 - Expenses and income, with categories, notes, accounts and receipt photos
 - Add forgotten spending for any past day from a date strip or the calendar view
+- Split one bill across several categories
+- Search every entry by note, category or amount
 - Edit with a tap, swipe left to delete with undo
 
 **Budgets that make sense day to day**
@@ -39,15 +41,18 @@ today, and plan for the things you want.
 **Planning**
 - Subscriptions and recurring income, logged automatically on their billing day; turn on *Monthly* while adding to make any entry repeat
 - Savings goals that tell you how much to put aside each month, and whether you're on track
-- Accounts (cash, bank, UPI, cards) with live balances and transfers, and your total balance on Home
+- Accounts (cash, bank, UPI, cards) with live balances and transfers, and your total balance on Home; move every entry from one account to another in one go, with undo
+- A reminder the morning before a subscription is charged
 
 **Insights**
-- Daily bar chart, category breakdown, spending calendar and month-over-month comparison
+- Daily bar chart you can touch to read each day, category breakdown with each category's entries, a spending calendar that opens any day, and month-over-month comparison
+- Trends such as category changes vs last month, weekend spending and where the month is heading
+- Swipe sideways to move between months
 - A story-style monthly recap
 
 **Extras**
-- Home-screen widget with a one-tap add button
-- Evening reminder, app lock (fingerprint, face or PIN), backup and restore to a file or Google Drive, CSV export
+- Home-screen widgets: safe to spend today (with a one-tap add button) and what's left this month
+- Evening reminder, app lock (fingerprint, face or PIN), backup and restore to a file or Google Drive, weekly automatic backups to a folder you choose, CSV export
 - Optional bank-SMS detection that suggests entries for you to confirm
 - Dark glass design with smooth, spring-based animations; light theme available
 
@@ -119,7 +124,7 @@ git push origin v1.0.0
 
 - Kotlin, Jetpack Compose, Material 3
 - Room (SQLite) with versioned migrations, DataStore for settings
-- WorkManager (reminders), Glance (widget), Biometric (app lock)
+- WorkManager (reminders, automatic backups), Glance (widgets), Biometric (app lock)
 - [Haze](https://github.com/chrisbanes/haze) for frosted-glass blur
 - [Lucide](https://lucide.dev) icons and the [Manrope](https://github.com/davelab6/manrope) typeface
 
