@@ -63,6 +63,7 @@ class MainActivity : FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
+        preferHighestRefreshRate()
         val container = (application as LeftoversApp).container
         openAddRequest = intent.getBooleanExtra(EXTRA_OPEN_ADD, false)
         lifecycleScope.launch {
@@ -144,6 +145,21 @@ class MainActivity : FragmentActivity() {
     override fun onStop() {
         super.onStop()
         backgroundedAt = SystemClock.elapsedRealtime()
+    }
+
+    /** Ask for the fastest mode at the current resolution (90/120 Hz on phones that have it). */
+    private fun preferHighestRefreshRate() {
+        val display = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            display
+        } else {
+            @Suppress("DEPRECATION")
+            windowManager.defaultDisplay
+        } ?: return
+        val current = display.mode
+        val best = display.supportedModes
+            .filter { it.physicalWidth == current.physicalWidth && it.physicalHeight == current.physicalHeight }
+            .maxByOrNull { it.refreshRate } ?: return
+        window.attributes = window.attributes.apply { preferredDisplayModeId = best.modeId }
     }
 
     private fun authenticate() {
