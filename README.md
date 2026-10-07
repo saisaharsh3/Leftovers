@@ -215,6 +215,12 @@ app/src/main/java/com/leftovers/app/
 - The `INTERNET` permission is used only by the AI assistant, after you connect a provider.
 - Receipt photos aren't included in backups.
 
+## Contributing
+
+Contributions are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md), pick an
+[issue](https://github.com/saisaharsh3/Leftovers/issues), and open your pull request against the **`dev`** branch.
+Changes are tested from `dev` before they reach `main` and a release.
+
 ## License
 
 [MIT](LICENSE). Third-party assets are listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

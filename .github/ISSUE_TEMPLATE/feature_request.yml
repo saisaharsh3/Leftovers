@@ -1,0 +1,29 @@
+name: Feature request
+description: Suggest an idea or improvement
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What would you like?
+      description: Describe the feature and the problem it solves.
+    validations:
+      required: true
+  - type: textarea
+    id: how
+    attributes:
+      label: How might it work?
+      description: Where it would appear in the app and how you'd use it. Sketches welcome.
+  - type: textarea
+    id: privacy
+    attributes:
+      label: Privacy
+      description: Does it need new permissions, network access or personal data? Leftovers keeps data on the phone by default.
+  - type: dropdown
+    id: help
+    attributes:
+      label: Would you like to build it?
+      options:
+        - "Yes, I'd like to work on it"
+        - "Maybe, with some guidance"
+        - "No, just suggesting"
