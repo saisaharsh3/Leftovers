@@ -10,8 +10,9 @@ All notable changes to Leftovers. Download any version from
 - Smoother swipes in Activity: a deleted row slides away and the list closes the gap smoothly, and swiping
   right opens the editor without the row jumping back underneath it. The edit and delete icons slide in
   and out with the row instead of popping
-- The *Undo* message after deleting now appears above the tab bar (it was hidden behind it) and stays for
-  10 seconds
+- Undo after deleting now looks like the rest of the app, sits above the tab bar (it was hidden behind it),
+  and stays for 8 seconds even if you switch tabs, so a delete made while swiping between tabs can be undone
+- Swiping an entry left shows a small red *Delete* once letting go would delete it
 - Plan's last section is now called *More*, since it holds Money owed as well as setup
 - Test builds (*Leftovers Dev*) have an amber icon so they're never mistaken for the real app
 

@@ -220,8 +220,6 @@ fun GlassScreen(
     actions: @Composable RowScope.() -> Unit = {},
     bottomBar: @Composable () -> Unit = {},
     snackbar: SnackbarHostState? = null,
-    /** True on tabs, so messages appear above the floating tab bar instead of behind it. */
-    snackbarAboveDock: Boolean = false,
     content: @Composable (PaddingValues) -> Unit,
 ) {
     val c = LocalAppColors.current
@@ -234,9 +232,7 @@ fun GlassScreen(
             if (snackbar != null) {
                 SnackbarHost(
                     snackbar,
-                    Modifier
-                        .navigationBarsPadding()
-                        .padding(bottom = if (snackbarAboveDock) 92.dp else 0.dp),
+                    Modifier.navigationBarsPadding(),
                 ) { data ->
                     Snackbar(
                         data,

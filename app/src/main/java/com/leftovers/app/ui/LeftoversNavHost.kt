@@ -1,5 +1,11 @@
 package com.leftovers.app.ui
 
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.runtime.rememberCoroutineScope
+import com.leftovers.app.ui.components.LocalUndo
+import com.leftovers.app.ui.components.UndoBar
+import com.leftovers.app.ui.components.UndoRequest
+import com.leftovers.app.ui.components.UndoState
 import android.net.Uri
 import androidx.compose.animation.AnimatedContentTransitionScope.SlideDirection
 import androidx.compose.animation.AnimatedVisibility
@@ -160,12 +166,21 @@ fun LeftoversNavHost(openAdd: Boolean = false, onOpenAddHandled: () -> Unit = {}
     val back: () -> Unit = { nav.popBackStack() }
     val idArg = listOf(navArgument("id") { type = NavType.LongType })
     var toast by remember { mutableStateOf<String?>(null) }
+    val appScope = rememberCoroutineScope()
+    val undo = remember { UndoState(appScope) }
+    val onTab = currentRoute in Routes.tabs
 
     LaunchedEffect(toast) {
         if (toast != null) {
             delay(2400)
             toast = null
         }
+    }
+    // Each Undo stays for its full time, whichever tab the user moves to.
+    LaunchedEffect(undo.current) {
+        val shown = undo.current ?: return@LaunchedEffect
+        delay(UndoState.VISIBLE_MS)
+        undo.dismiss(shown)
     }
     LaunchedEffect(openAdd) {
         if (openAdd) {
@@ -177,7 +192,7 @@ fun LeftoversNavHost(openAdd: Boolean = false, onOpenAddHandled: () -> Unit = {}
     val swipeThreshold = with(LocalDensity.current) { 72.dp.toPx() }
 
     SharedTransitionLayout(Modifier.fillMaxSize()) {
-        CompositionLocalProvider(LocalSharedTransitionScope provides this) {
+        CompositionLocalProvider(LocalSharedTransitionScope provides this, LocalUndo provides undo) {
             Box(Modifier.fillMaxSize()) {
                 NavHost(
                     navController = nav,
@@ -342,6 +357,24 @@ fun LeftoversNavHost(openAdd: Boolean = false, onOpenAddHandled: () -> Unit = {}
                             onTab = { nav.switchTab(it) },
                             onAdd = { nav.navigate(Routes.add()) },
                         )
+                    }
+                }
+
+                // Sits just above the tab bar, or at the bottom on screens without one.
+                val undoLift by animateDpAsState(if (onTab) 92.dp else 16.dp, label = "undoLift")
+                var lastUndo by remember { mutableStateOf<UndoRequest?>(null) }
+                undo.current?.let { lastUndo = it }
+                AnimatedVisibility(
+                    visible = undo.current != null,
+                    enter = slideInVertically(spring(dampingRatio = 0.8f, stiffness = Spring.StiffnessMediumLow)) { it } + fadeIn(),
+                    exit = slideOutVertically(tween(220)) { it } + fadeOut(tween(160)),
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .navigationBarsPadding()
+                        .padding(start = 16.dp, end = 16.dp, bottom = undoLift),
+                ) {
+                    lastUndo?.let { request ->
+                        UndoBar(request, onUndo = { undo.undo(request) }, onDismiss = { undo.dismiss(request) })
                     }
                 }
 

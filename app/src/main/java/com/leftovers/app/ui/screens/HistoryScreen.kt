@@ -1,5 +1,11 @@
 package com.leftovers.app.ui.screens
 
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.ui.layout.onSizeChanged
+import com.leftovers.app.ui.components.LocalUndo
+import androidx.compose.animation.expandHorizontally
+import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.ui.platform.LocalDensity
 import kotlin.math.abs
 import androidx.compose.animation.AnimatedVisibility
@@ -42,9 +48,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.SnackbarDuration
-import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.SwipeToDismissBox
 import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
@@ -184,9 +187,8 @@ class HistoryViewModel(private val repository: TransactionRepository, accountRep
         viewModelScope.launch { repository.deleteTransaction(item.toTransaction()) }
     }
 
-    fun restore(item: TransactionItem) {
-        viewModelScope.launch { repository.saveTransaction(item.toTransaction()) }
-    }
+    /** Puts a deleted entry back. Runs outside this screen, so Undo works after switching tabs. */
+    suspend fun restore(item: TransactionItem) = repository.saveTransaction(item.toTransaction())
 }
 
 private enum class ActivityView { LIST, CALENDAR }
@@ -200,8 +202,7 @@ fun HistoryScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val c = LocalAppColors.current
     val money = LocalMoney.current
-    val snackbar = remember { SnackbarHostState() }
-    val scope = rememberCoroutineScope()
+    val undo = LocalUndo.current
     var searchOpen by rememberSaveable { mutableStateOf(false) }
     var mode by rememberSaveable { mutableStateOf(ActivityView.LIST) }
     var selectedDay by rememberSaveable { mutableStateOf(LocalDate.now().toEpochDay()) }
@@ -209,24 +210,12 @@ fun HistoryScreen(
 
     fun deleteWithUndo(item: TransactionItem) {
         viewModel.delete(item)
-        scope.launch {
-            snackbar.currentSnackbarData?.dismiss()
-            // Long enough to notice and undo a delete made by mistake.
-            val result = snackbar.showSnackbar(
-                "Deleted ${money.format(item.amountMinor)}",
-                actionLabel = "Undo",
-                withDismissAction = true,
-                duration = SnackbarDuration.Long,
-            )
-            if (result == SnackbarResult.ActionPerformed) viewModel.restore(item)
-        }
+        undo.show("Deleted ${item.note.ifBlank { item.categoryName }} · ${money.format(item.amountMinor)}") { viewModel.restore(item) }
     }
 
     GlassScreen(
         title = "Activity",
         onBack = null,
-        snackbar = snackbar,
-        snackbarAboveDock = true,
         actions = {
             RoundButton(
                 if (mode == ActivityView.LIST) Lucide.Calendar else Lucide.ReceiptText,
@@ -487,34 +476,57 @@ private fun SwipeableRow(item: TransactionItem, onDelete: () -> Unit, onEdit: ()
             // Everything follows the row's position, so it slides in and out with the finger
             // instead of popping in or vanishing. At rest it is fully transparent (rows are glass).
             fun shown(): Float = (abs(runCatching { state.requireOffset() }.getOrDefault(0f)) / reveal).coerceIn(0f, 1f)
+            // Letting go past about half the width deletes; warn from that point on.
+            var rowWidth by remember { mutableFloatStateOf(0f) }
+            val pastPoint by remember {
+                derivedStateOf { rowWidth > 0f && -runCatching { state.requireOffset() }.getOrDefault(0f) >= rowWidth * 0.5f }
+            }
             Box(
                 Modifier
                     .fillMaxSize()
+                    .onSizeChanged { rowWidth = it.width.toFloat() }
                     .graphicsLayer { alpha = shown() }
                     .background((if (editing) c.textSecondary else c.negative).copy(alpha = 0.18f))
                     .padding(horizontal = 24.dp),
                 contentAlignment = if (editing) Alignment.CenterStart else Alignment.CenterEnd,
             ) {
-                Icon(
-                    if (editing) Lucide.Pencil else Lucide.Trash2,
-                    contentDescription = if (editing) "Edit" else "Delete",
-                    tint = if (editing) c.textPrimary else c.negative,
-                    modifier = Modifier
-                        .size(20.dp)
-                        .graphicsLayer {
-                            val t = shown()
-                            // Slides out from the edge it's revealed at, growing as it comes.
-                            translationX = (1f - t) * travel * (if (editing) -1f else 1f)
-                            scaleX = 0.7f + 0.3f * t
-                            scaleY = 0.7f + 0.3f * t
-                        },
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.graphicsLayer {
+                        val t = shown()
+                        // Slides out from the edge it's revealed at, growing as it comes.
+                        translationX = (1f - t) * travel * (if (editing) -1f else 1f)
+                        scaleX = 0.7f + 0.3f * t
+                        scaleY = 0.7f + 0.3f * t
+                    },
+                ) {
+                    // A small warning once letting go would delete; Undo covers mistakes.
+                    AnimatedVisibility(
+                        visible = !editing && pastPoint,
+                        enter = fadeIn(tween(120)) + expandHorizontally(expandFrom = Alignment.End),
+                        exit = fadeOut(tween(120)) + shrinkHorizontally(shrinkTowards = Alignment.End),
+                    ) {
+                        Text(
+                            "Delete",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = c.negative,
+                            modifier = Modifier.padding(end = 10.dp),
+                        )
+                    }
+                    Icon(
+                        if (editing) Lucide.Pencil else Lucide.Trash2,
+                        contentDescription = if (editing) "Edit" else "Delete",
+                        tint = if (editing) c.textPrimary else c.negative,
+                        modifier = Modifier.size(20.dp),
+                    )
+                }
             }
         },
     ) {
         TransactionRow(item, onClick = onEdit)
     }
     }
+
 }
 
 private const val ROW_COLLAPSE_MS = 240
