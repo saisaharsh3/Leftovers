@@ -44,6 +44,9 @@ android {
         debug {
             applicationIdSuffix = ".dev"
             versionNameSuffix = "-dev"
+            // Signed with the release key when it's available (local builds, and CI builds of dev), so each
+            // new Leftovers Dev installs over the last one instead of failing with "App not installed".
+            signingConfigs.findByName("release")?.let { signingConfig = it }
         }
         release {
             signingConfigs.findByName("release")?.let { signingConfig = it }

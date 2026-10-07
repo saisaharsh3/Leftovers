@@ -42,9 +42,12 @@ On Windows use `gradlew.bat`. Keep your branch up to date with `git pull --rebas
 Debug builds install as a separate app called **Leftovers Dev** (amber icon), next to the real Leftovers, with their own
 empty data. Restore a backup into it (Settings → Restore) to test with realistic data.
 
-- **Without a computer:** every push to `dev` and every pull request is built by GitHub Actions. Open the
-  run under [Actions](https://github.com/saisaharsh3/Leftovers/actions), download **leftovers-debug** at
-  the bottom, unzip it and install `app-debug.apk` on the phone.
+- **On the phone:** every push to `dev` is published as a **Dev build** pre-release on the
+  [Releases](https://github.com/saisaharsh3/Leftovers/releases) page. Open it and install `leftovers-dev.apk`.
+  Each new dev build installs over the last one.
+- **Pull requests:** GitHub Actions builds them too. Open the run under
+  [Actions](https://github.com/saisaharsh3/Leftovers/actions), download **leftovers-debug**, unzip it and install
+  `app-debug.apk` (it may need the previous Leftovers Dev uninstalled first).
 - **With a computer:** `git switch dev && git pull`, then `./gradlew installDebug` with the phone connected.
   To try a pull request before merging it: `gh pr checkout <number>`, then `./gradlew installDebug`.
 

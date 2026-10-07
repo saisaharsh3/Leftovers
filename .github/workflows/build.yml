@@ -38,3 +38,45 @@ jobs:
           name: leftovers-debug
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
+
+  # Each push to dev is published as a "Dev build" pre-release with the APK attached, so it can be
+  # downloaded and installed straight from the phone. It never replaces the real latest release.
+  dev-build:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: gradle/actions/setup-gradle@v6
+
+      - name: Build Leftovers Dev, signed with the release key
+        env:
+          SIGNING_KEYSTORE_BASE64: ${{ secrets.SIGNING_KEYSTORE_BASE64 }}
+          SIGNING_STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD }}
+          SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
+          SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
+        run: |
+          if [ -n "$SIGNING_KEYSTORE_BASE64" ]; then
+            echo "$SIGNING_KEYSTORE_BASE64" | base64 --decode > release.jks
+            export SIGNING_STORE_FILE=release.jks
+          fi
+          ./gradlew assembleDebug --stacktrace
+          rm -f release.jks
+
+      - name: Publish the Dev build pre-release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp app/build/outputs/apk/debug/app-debug.apk leftovers-dev.apk
+          notes="Test build of the dev branch ($(git rev-parse --short HEAD)): $(git log -1 --format=%s).
+          Installs as **Leftovers Dev** (amber icon) next to the real app, with its own data. Not for everyday use."
+          gh release delete dev-build --yes --cleanup-tag || true
+          gh release create dev-build leftovers-dev.apk --prerelease --target "$GITHUB_SHA"             --title "Dev build $(date -u +'%d %b %H:%M') UTC" --notes "$notes"
