@@ -41,6 +41,8 @@ data class AppSettings(
     val billReminders: Boolean = true,
     /** Subscription suggestions the user said no to. */
     val dismissedSuggestions: Set<String> = emptySet(),
+    /** How long deleted entries are kept for restoring, in days; 0 means forever. */
+    val deletedKeepDays: Int = 90,
 )
 
 class SettingsRepository(context: Context) {
@@ -73,6 +75,7 @@ class SettingsRepository(context: Context) {
             autoBackupLast = p[AUTO_BACKUP_LAST] ?: 0L,
             billReminders = p[BILL_REMINDERS] ?: true,
             dismissedSuggestions = p[DISMISSED_SUGGESTIONS].orEmpty(),
+            deletedKeepDays = p[DELETED_KEEP_DAYS] ?: 90,
         )
     }
 
@@ -120,6 +123,7 @@ class SettingsRepository(context: Context) {
     suspend fun setAutoBackupDir(dir: String?) = store.edit { if (dir == null) it.remove(AUTO_BACKUP_DIR) else it[AUTO_BACKUP_DIR] = dir }
     suspend fun setAutoBackupDone(at: Long) = store.edit { it[AUTO_BACKUP_LAST] = at }
     suspend fun setBillReminders(enabled: Boolean) = store.edit { it[BILL_REMINDERS] = enabled }
+    suspend fun setDeletedKeepDays(days: Int) = store.edit { it[DELETED_KEEP_DAYS] = days }
     suspend fun dismissSuggestion(key: String) = store.edit { it[DISMISSED_SUGGESTIONS] = it[DISMISSED_SUGGESTIONS].orEmpty() + key }
 
     /** Records that an alert was shown; returns false if it had already been sent. */
@@ -157,6 +161,7 @@ class SettingsRepository(context: Context) {
         val BUDGET_ALERTS = booleanPreferencesKey("budget_alerts")
         val SENT_ALERTS = stringSetPreferencesKey("sent_alerts")
         val DISMISSED_SUGGESTIONS = stringSetPreferencesKey("dismissed_suggestions")
+        val DELETED_KEEP_DAYS = intPreferencesKey("deleted_keep_days")
         val DEFAULT_ACCOUNT = longPreferencesKey("default_account")
         val REMINDER = booleanPreferencesKey("reminder")
         val REMINDER_TIME = intPreferencesKey("reminder_time")

@@ -45,7 +45,8 @@ data class EmailPayment(val amountMinor: Long, val merchant: String, val sender:
  * Reads payment emails over IMAP. Security and privacy rules:
  * - TLS only (port 993), with the server's certificate and host name checked. There is no plain-text fallback.
  * - The inbox is opened read-only and messages are read with PEEK, so nothing is changed or marked as read.
- * - Only recent messages that mention a payment are asked for, at most [MAX_MESSAGES] at a time.
+ * - Only recent messages that mention a payment are asked for, and only those from a bank, card or payment
+ *   service ([BankSenders]) are opened, at most [MAX_MESSAGES] at a time.
  * - Emails are read in memory; only the amount, merchant, date and a hash of the message ID are kept.
  */
 object EmailChecker {
@@ -119,12 +120,16 @@ object EmailChecker {
             val words: Array<SearchTerm> = searchWords.flatMap { listOf(SubjectTerm(it), BodyTerm(it)) }.toTypedArray()
             // IMAP dates are whole days, so the exact time is checked again below.
             val term = AndTerm(ReceivedDateTerm(ComparisonTerm.GE, Date(since)), OrTerm(words))
-            val messages = inbox.search(term).filter { (it.receivedDate ?: it.sentDate)?.time?.let { t -> t >= since } ?: false }
+            val found = inbox.search(term)
+            // Only the envelope (sender, subject, date) is fetched first. Messages that aren't from a bank,
+            // card or payment service are skipped here, without ever opening them.
+            inbox.fetch(found, FetchProfile().apply { add(FetchProfile.Item.ENVELOPE) })
+            val bankMail = found
+                .filter { (it.receivedDate ?: it.sentDate)?.time?.let { t -> t >= since } ?: false }
+                .filter { m -> (m.from?.firstOrNull() as? InternetAddress)?.let { BankSenders.isBank(it.address.orEmpty(), it.personal.orEmpty()) } ?: false }
                 .sortedByDescending { (it.receivedDate ?: it.sentDate).time }
                 .take(MAX_MESSAGES)
-                .toTypedArray()
-            inbox.fetch(messages, FetchProfile().apply { add(FetchProfile.Item.ENVELOPE) })
-            return messages.mapNotNull { m -> runCatching { paymentIn(m) }.getOrNull() }
+            return bankMail.mapNotNull { m -> runCatching { paymentIn(m) }.getOrNull() }
         } finally {
             inbox.close(false)
         }

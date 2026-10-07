@@ -3,6 +3,16 @@
 All notable changes to Leftovers. Download any version from
 [Releases](https://github.com/saisaharsh3/Leftovers/releases).
 
+## 1.2.1
+
+- **Deleted entries** (Settings → Data): everything you delete is kept so you can restore it later. Filter by
+  when it was deleted (today, 7 days, 30 days or any dates), restore or delete for good one by one or all at
+  once, and choose how long to keep them (30 days, 90 days, 1 year or forever). Receipt photos come back too
+- Email detection reads only alerts from banks, cards and payment apps. Shop receipts, LinkedIn, newsletters,
+  bank offers and loan promotions are skipped without being opened
+- Fixed: Undo didn't bring back an entry that was the only one on its day
+- Smoother Activity list: deleted rows fade out while the rest glide into place, and Undo slides them back
+
 ## 1.2.0
 
 - **Payments from email:** connect Gmail, Yahoo, iCloud, Zoho or any IMAP mailbox with an app password

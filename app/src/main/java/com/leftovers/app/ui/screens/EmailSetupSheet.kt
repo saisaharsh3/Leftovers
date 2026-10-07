@@ -146,7 +146,8 @@ fun EmailSetupSheet(onDismiss: () -> Unit, viewModel: EmailSetupViewModel = view
             // What happens, before anything is entered.
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 listOf(
-                    "Looks only at recent emails that mention a payment, and never changes or marks them as read",
+                    "Reads only payment alerts from banks, cards and payment apps; shops, social networks and promotions are skipped unopened",
+                    "Never changes your mail or marks it as read",
                     "Keeps just the amount, merchant and date; email text never leaves the phone or gets saved",
                     "Your app password is encrypted on this phone and deleted when you disconnect",
                     "Nothing is added until you confirm it on Home",

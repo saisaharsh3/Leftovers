@@ -217,6 +217,36 @@ interface DebtDao {
     suspend fun settle(person: String)
 }
 
+@Dao
+interface DeletedDao {
+    @Query(
+        """
+        SELECT d.*, c.name AS categoryName, c.emoji AS categoryEmoji, c.color AS categoryColor
+        FROM deleted_transactions d LEFT JOIN categories c ON c.id = d.categoryId
+        ORDER BY d.deletedAt DESC
+        """,
+    )
+    fun observeAll(): Flow<List<DeletedItem>>
+
+    @Query("SELECT COUNT(*) FROM deleted_transactions")
+    fun count(): Flow<Int>
+
+    @Upsert
+    suspend fun upsert(entry: DeletedTransaction)
+
+    @Query("SELECT * FROM deleted_transactions WHERE id IN (:ids)")
+    suspend fun getByIds(ids: List<Long>): List<DeletedTransaction>
+
+    @Query("SELECT * FROM deleted_transactions WHERE deletedAt < :before")
+    suspend fun olderThan(before: Long): List<DeletedTransaction>
+
+    @Query("SELECT * FROM deleted_transactions")
+    suspend fun getAll(): List<DeletedTransaction>
+
+    @Query("DELETE FROM deleted_transactions WHERE id IN (:ids)")
+    suspend fun delete(ids: List<Long>)
+}
+
 /** Raw table access for backup and restore. */
 @Dao
 interface BackupDao {
@@ -231,6 +261,7 @@ interface BackupDao {
 
     @Query("DELETE FROM goal_deposits") suspend fun clearDeposits()
     @Query("DELETE FROM debts") suspend fun clearDebts()
+    @Query("DELETE FROM deleted_transactions") suspend fun clearDeleted()
     @Query("DELETE FROM goals") suspend fun clearGoals()
     @Query("DELETE FROM transfers") suspend fun clearTransfers()
     @Query("DELETE FROM transactions") suspend fun clearTransactions()

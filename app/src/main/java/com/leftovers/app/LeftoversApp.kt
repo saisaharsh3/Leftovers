@@ -50,7 +50,7 @@ class AppContainer(private val context: Context) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     val settings = SettingsRepository(context)
-    val repository = TransactionRepository(database.transactionDao(), database.categoryDao(), database.recurringDao())
+    val repository = TransactionRepository(database.transactionDao(), database.categoryDao(), database.recurringDao(), database.deletedDao())
     val planning = PlanningRepository(database)
     val accounts = AccountRepository(database.accountDao(), database.transferDao(), database.transactionDao())
     val sms = SmsRepository(database.smsDao(), database.transactionDao())
@@ -69,6 +69,12 @@ class AppContainer(private val context: Context) {
                     runCatching { SafeToSpendWidget().updateAll(context) }
                     runCatching { MonthBudgetWidget().updateAll(context) }
                 }
+        }
+        // Clear deleted entries older than the user's chosen keep period.
+        scope.launch {
+            settings.settings.map { it.deletedKeepDays }
+                .distinctUntilChanged()
+                .collect { repository.purgeDeleted(it) }
         }
         scope.launch {
             emailAccount.connection.map { it != null }

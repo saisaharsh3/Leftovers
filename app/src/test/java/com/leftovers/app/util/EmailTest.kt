@@ -14,6 +14,7 @@ import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import java.util.Properties
@@ -73,24 +74,35 @@ class EmailCheckerTest {
             saveChanges()
         }
 
-    @Test fun findsOnlyPaymentsAndLeavesMailUnread() {
+    @Test fun findsOnlyBankPaymentsAndLeavesMailUnread() {
         val user = mail.setUser("me@example.com", "me", "secret")
-        user.deliver(message("\"HDFC Bank\" <alerts@hdfcbank.net>", "Transaction alert") {
+        // Bank alerts: these count.
+        user.deliver(message("\"HDFC Bank InstaAlerts\" <alerts@hdfcbank.net>", "Transaction alert") {
             setText("Rs.250.00 debited from A/c XX1234 to VPA zomato@icici on 07-10-26.")
         })
-        user.deliver(message("Shop <deals@shop.com>", "Big sale") {
-            setText("Get 50% off on every order above ₹999. Order now!")
-        })
-        user.deliver(message("Friend <friend@example.com>", "Dinner?") {
-            setText("Are we still on for dinner tonight?")
-        })
-        user.deliver(message("\"Swiggy Orders\" <noreply@swiggy.in>", "Your order is confirmed") {
+        user.deliver(message("\"ICICI Bank Credit Card\" <credit_cards@icicibank.com>", "Transaction on your card") {
             setContent(
                 MimeMultipart("alternative").apply {
-                    addBodyPart(MimeBodyPart().apply { setText("Order total: Rs 432.50. Paid via UPI.", "UTF-8") })
-                    addBodyPart(MimeBodyPart().apply { setContent("<p>Order total: <b>&#8377;432.50</b></p>", "text/html; charset=UTF-8") })
+                    addBodyPart(MimeBodyPart().apply { setText("INR 432.50 spent on ICICI Bank Card XX9876 at Swiggy on 07-Oct-26.", "UTF-8") })
+                    addBodyPart(MimeBodyPart().apply { setContent("<p>INR <b>432.50</b> spent at Swiggy</p>", "text/html; charset=UTF-8") })
                 },
             )
+        })
+        // Not banks, or not payments: all skipped.
+        user.deliver(message("\"Swiggy Orders\" <noreply@swiggy.in>", "Your order is confirmed") {
+            setText("Order total: Rs 432.50. Paid via UPI.")
+        })
+        user.deliver(message("LinkedIn <jobs-noreply@linkedin.com>", "Jobs paying ₹25,00,000 a year") {
+            setText("New jobs for you. Salary up to ₹25,00,000. Payment of relocation bonus.")
+        })
+        user.deliver(message("\"HDFC Bank\" <offers@hdfcbank.net>", "Cashback offer") {
+            setText("Get 10% cashback offer on card spends above Rs 5,000. Apply now!")
+        })
+        user.deliver(message("\"Axis Bank\" <loans@axisbank.com>", "Pre-approved loan") {
+            setText("You are eligible for a pre-approved loan of Rs 5,00,000. Payment in easy EMIs.")
+        })
+        user.deliver(message("Friend <friend@example.com>", "Dinner?") {
+            setText("I paid Rs 800 for dinner, send me half?")
         })
 
         val store = session.getStore("imap")
@@ -99,6 +111,7 @@ class EmailCheckerTest {
 
         assertEquals(listOf(25_000L, 43_250L), found.map { it.amountMinor }.sorted())
         assertEquals(setOf("Zomato", "Swiggy"), found.map { it.merchant }.toSet())
+        assertEquals(setOf("HDFC Bank InstaAlerts", "ICICI Bank Credit Card"), found.map { it.sender }.toSet())
 
         // Nothing was marked as read.
         session.getStore("imap").use { s ->
@@ -106,5 +119,26 @@ class EmailCheckerTest {
             val inbox = s.getFolder("INBOX").apply { open(Folder.READ_ONLY) }
             inbox.messages.forEach { assertFalse(it.isSet(Flags.Flag.SEEN)) }
         }
+    }
+}
+
+class BankSendersTest {
+    @Test fun banksCardsAndPaymentApps() {
+        assertTrue(BankSenders.isBank("alerts@hdfcbank.net", "HDFC Bank InstaAlerts"))
+        assertTrue(BankSenders.isBank("credit_cards@icicibank.com", ""))
+        assertTrue(BankSenders.isBank("no-reply@alerts.chase.com", "Chase"))
+        assertTrue(BankSenders.isBank("noreply@paytm.com", "Paytm"))
+        // Unknown bank, but clearly one.
+        assertTrue(BankSenders.isBank("alerts@mylocalcoop.org", "Coop Bank Alerts"))
+    }
+
+    @Test fun everythingElse() {
+        assertFalse(BankSenders.isBank("jobs-noreply@linkedin.com", "LinkedIn"))
+        assertFalse(BankSenders.isBank("noreply@swiggy.in", "Swiggy Orders"))
+        assertFalse(BankSenders.isBank("auto-confirm@amazon.in", "Amazon.in"))
+        assertFalse(BankSenders.isBank("news@substack.com", "Weekly money newsletter"))
+        assertFalse(BankSenders.isBank("friend@example.com", "Friend"))
+        // A shop's name can't make it look like a bank.
+        assertFalse(BankSenders.isBank("offers@flipkart.com", "Flipkart Credit Card offers"))
     }
 }

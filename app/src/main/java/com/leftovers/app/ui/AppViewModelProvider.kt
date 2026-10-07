@@ -13,6 +13,7 @@ import com.leftovers.app.ui.screens.BudgetPlanViewModel
 import com.leftovers.app.ui.screens.BudgetsViewModel
 import com.leftovers.app.ui.screens.CategoriesViewModel
 import com.leftovers.app.ui.screens.DebtsViewModel
+import com.leftovers.app.ui.screens.DeletedViewModel
 import com.leftovers.app.ui.screens.EditorViewModel
 import com.leftovers.app.ui.screens.EmailSetupViewModel
 import com.leftovers.app.ui.screens.GoalDetailViewModel
@@ -45,6 +46,7 @@ object AppViewModelProvider {
         }
         initializer { GoalsViewModel(container().planning) }
         initializer { DebtsViewModel(container().planning) }
+        initializer { DeletedViewModel(container().repository, container().settings) }
         initializer { GoalDetailViewModel(createSavedStateHandle(), container().planning) }
         initializer { CategoriesViewModel(container().repository) }
         initializer { SettingsViewModel(container().repository, container().settings, container().backup, container().assistant) }

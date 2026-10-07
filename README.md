@@ -35,7 +35,7 @@ today, plan for the things you want, and ask an AI about your money if you'd lik
 - Split one bill across several categories
 - Search every entry by note, category or amount; filter by account, category or #tag
 - Add #tags to notes (*"Dinner #goa"*) to group entries across categories and months, with a total
-- Edit with a tap; swipe left to delete, with undo
+- Edit with a tap; swipe left to delete, with undo. Deleted entries can be restored later from Settings
 
 **Budgets that make sense day to day**
 - Monthly budget, or a yearly one split evenly, by smart rollover, or custom per month
@@ -74,8 +74,7 @@ today, plan for the things you want, and ask an AI about your money if you'd lik
 - Evening reminder, app lock (fingerprint, face or PIN)
 - Backup and restore to a file or Google Drive, weekly automatic backups to a folder you choose, CSV export
 - Optional backup password: backups are encrypted (AES-256) and need it to restore
-- Optional payment detection from bank SMS and from email (bank alerts and shop receipts), suggesting entries
-  for you to confirm. One payment never shows up twice, even when it arrives by both SMS and email
+- Optional payment detection from bank SMS and from bank email alerts, suggesting entries for you to confirm. One payment never shows up twice, even when it arrives by both SMS and email
 - Swipe sideways to move between Home, Activity, Insights and Plan
 - Dark glass design with spring animations and high-refresh-rate support; light theme available
 
@@ -89,8 +88,8 @@ network calls unless you connect the optional AI assistant or an email account.
 - SMS detection is off by default. When on, messages are read on the device and nothing is added without your tap.
 - Email detection is off by default and signs in with an *app password* (Gmail, Yahoo, iCloud, Zoho or any
   IMAP server with SSL). It connects only to your mail server, over TLS with the certificate checked. The inbox
-  is opened read-only, so nothing is changed or marked as read, and only recent emails that mention a payment
-  are read, in memory. Only the amount, merchant and date are kept, never the email. The address and app
+  is opened read-only, so nothing is changed or marked as read. Only alerts from banks, cards and payment apps
+  are opened (shops, social networks, newsletters and promotions are skipped unopened), and they're read in memory. Only the amount, merchant and date are kept, never the email. The address and app
   password are encrypted with an Android Keystore key, never backed up, and deleted when you disconnect.
 - With a backup password, backup files are encrypted. The password is kept encrypted with an Android Keystore key
   and is never written into a backup; if it's forgotten, those backups can't be opened.

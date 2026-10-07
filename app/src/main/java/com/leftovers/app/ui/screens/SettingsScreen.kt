@@ -193,6 +193,7 @@ fun SettingsScreen(
     onBack: () -> Unit,
     onManageCategories: () -> Unit,
     onOpenAccounts: () -> Unit,
+    onOpenDeleted: () -> Unit,
     viewModel: SettingsViewModel = viewModel(factory = AppViewModelProvider.Factory),
 ) {
     val settings by viewModel.settings.collectAsStateWithLifecycle()
@@ -205,6 +206,7 @@ fun SettingsScreen(
     var showTime by rememberSaveable { mutableStateOf(false) }
     var showAssistant by rememberSaveable { mutableStateOf(false) }
     var showEmail by rememberSaveable { mutableStateOf(false) }
+    val deletedCount by (LocalContext.current.applicationContext as com.leftovers.app.LeftoversApp).container.repository.deletedCount.collectAsStateWithLifecycle(0)
     val emailConnection by (LocalContext.current.applicationContext as com.leftovers.app.LeftoversApp).container.emailAccount.connection.collectAsStateWithLifecycle()
     var pendingRestore by remember { mutableStateOf<Uri?>(null) }
     // A protected backup waiting for its password; the flag says the last try was wrong.
@@ -330,6 +332,8 @@ fun SettingsScreen(
                         }
                         RowDivider()
                         NavRow(Lucide.Repeat, "Restore", "From a backup file") { openBackup.launch(arrayOf("application/json", "*/*")) }
+                        RowDivider()
+                        NavRow(Lucide.History, "Deleted entries", if (deletedCount == 0) "None" else "$deletedCount", onOpenDeleted)
                         RowDivider()
                         ToggleRow(Lucide.CalendarClock, "Weekly automatic backup", s.autoBackupDir != null, { on ->
                             if (on) pickBackupFolder.launch(null) else viewModel.disableAutoBackup(context, s.autoBackupDir)

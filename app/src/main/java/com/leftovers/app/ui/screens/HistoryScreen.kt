@@ -1,5 +1,15 @@
 package com.leftovers.app.ui.screens
 
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.drawOutline
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.ui.unit.IntOffset
+import com.leftovers.app.ui.components.glassBorder
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.ui.layout.onSizeChanged
@@ -9,11 +19,7 @@ import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.ui.platform.LocalDensity
 import kotlin.math.abs
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.EnterTransition
-import androidx.compose.animation.shrinkVertically
-import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
-import kotlinx.coroutines.delay
 import com.leftovers.app.data.AccountRepository
 import com.leftovers.app.data.allTags
 import com.leftovers.app.data.hashtags
@@ -51,7 +57,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SwipeToDismissBox
 import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
-import androidx.compose.material3.rememberSwipeToDismissBoxState
+import androidx.compose.material3.SwipeToDismissBoxDefaults
+import androidx.compose.material3.SwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -99,6 +106,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.YearMonth
@@ -243,7 +251,9 @@ fun HistoryScreen(
             Modifier.fillMaxSize(),
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = padding.calculateTopPadding() + 12.dp, bottom = DockClearance),
         ) {
-            item {
+            // Everything in the list moves together when rows are removed or come back, so nothing overlaps.
+            item(key = "top") {
+                Column(Modifier.animateItem(fadeInSpec = null, fadeOutSpec = null, placementSpec = listMotion)) {
                 if (searchOpen) {
                     GlassTextField(state.query, viewModel::setQuery, placeholder = "Search notes, #tags, categories or amounts")
                 } else if (state.filters.tag == null || mode == ActivityView.CALENDAR) {
@@ -256,6 +266,7 @@ fun HistoryScreen(
                     ActiveFilters(state, onChange = viewModel::setFilters, modifier = Modifier.padding(top = if (searchOpen || state.filters.tag == null) 10.dp else 0.dp))
                 }
                 Spacer(Modifier.height(14.dp))
+                }
             }
 
             if (mode == ActivityView.CALENDAR) {
@@ -275,7 +286,8 @@ fun HistoryScreen(
                 return@LazyColumn
             }
 
-            item {
+            item(key = "summary") {
+                Column(Modifier.animateItem(fadeInSpec = null, fadeOutSpec = null, placementSpec = listMotion)) {
                 Glass(Modifier.fillMaxWidth().appear(0), strong = true, shape = RoundedCornerShape(30.dp)) {
                     Column(Modifier.padding(22.dp)) {
                         Text(
@@ -317,6 +329,7 @@ fun HistoryScreen(
                             .padding(top = 12.dp),
                     )
                 }
+                }
             }
 
             if (state.groups.isEmpty()) {
@@ -329,11 +342,14 @@ fun HistoryScreen(
                 }
             }
 
+            // Each entry is its own list item (drawn to look like one card per day), so deleting one, or
+            // bringing it back with Undo, animates: it fades and the rest of the list glides into place.
             state.groups.forEachIndexed { groupIndex, group ->
                 item(key = "header-${group.date}") {
                     val spent = group.items.filter { it.type == TxType.EXPENSE }.sumOf { it.amountMinor }
                     Row(
                         Modifier
+                            .animateItem(fadeInSpec = tween(220), placementSpec = listMotion, fadeOutSpec = tween(160))
                             .fillMaxWidth()
                             .padding(start = 6.dp, end = 6.dp, top = 22.dp, bottom = 8.dp)
                             .appear(groupIndex + 1),
@@ -342,15 +358,17 @@ fun HistoryScreen(
                         if (spent > 0) Text(money.format(spent), style = MaterialTheme.typography.labelLarge, color = c.textSecondary)
                     }
                 }
-                item(key = "group-${group.date}") {
-                    Glass(Modifier.fillMaxWidth().appear(groupIndex + 1)) {
-                        Column(Modifier.padding(vertical = 4.dp)) {
-                            group.items.forEachIndexed { i, item ->
-                                if (i > 0) RowDivider()
-                                key(item.id) {
-                                    SwipeableRow(item, onDelete = { deleteWithUndo(item) }, onEdit = { onOpenTransaction(item.id) })
-                                }
-                            }
+                group.items.forEachIndexed { i, item ->
+                    item(key = "tx-${item.id}") {
+                        CardSlice(
+                            first = i == 0,
+                            last = i == group.items.lastIndex,
+                            modifier = Modifier
+                                .animateItem(fadeInSpec = tween(220), placementSpec = listMotion, fadeOutSpec = tween(160))
+                                .appear(groupIndex + 1),
+                        ) {
+                            if (i > 0) RowDivider()
+                            SwipeableRow(item, onDelete = { deleteWithUndo(item) }, onEdit = { onOpenTransaction(item.id) })
                         }
                     }
                 }
@@ -430,30 +448,16 @@ private fun FilterSheet(state: HistoryUiState, onChange: (ActivityFilters) -> Un
 @Composable
 private fun SwipeableRow(item: TransactionItem, onDelete: () -> Unit, onEdit: () -> Unit) {
     val c = LocalAppColors.current
-    val state = rememberSwipeToDismissBoxState()
+    // Plain remember, not saved: a row brought back by Undo must start in place. A saved "swiped away"
+    // state came back with it and deleted the entry again straight away.
+    val threshold = SwipeToDismissBoxDefaults.positionalThreshold
+    val state = remember { SwipeToDismissBoxState(SwipeToDismissBoxValue.Settled, threshold) }
     val scope = rememberCoroutineScope()
-    var removing by remember { mutableStateOf(false) }
-    // A row left swiped open by the edit gesture is put back as soon as the list shows again.
-    LaunchedEffect(Unit) {
-        if (state.settledValue == SwipeToDismissBoxValue.StartToEnd) state.snapTo(SwipeToDismissBoxValue.Settled)
-    }
-    // Close the gap smoothly first, then delete, so the list doesn't jump.
-    LaunchedEffect(removing) {
-        if (removing) {
-            delay(ROW_COLLAPSE_MS.toLong())
-            onDelete()
-        }
-    }
-    AnimatedVisibility(
-        visible = !removing,
-        enter = EnterTransition.None,
-        exit = shrinkVertically(tween(ROW_COLLAPSE_MS, easing = FastOutSlowInEasing)) + fadeOut(tween(ROW_COLLAPSE_MS - 60)),
-    ) {
     SwipeToDismissBox(
         state = state,
         onDismiss = { value ->
             when (value) {
-                SwipeToDismissBoxValue.EndToStart -> removing = true
+                SwipeToDismissBoxValue.EndToStart -> onDelete()
                 SwipeToDismissBoxValue.StartToEnd -> {
                     onEdit()
                     // Snap back while the editor covers the list, instead of animating under it.
@@ -525,11 +529,42 @@ private fun SwipeableRow(item: TransactionItem, onDelete: () -> Unit, onEdit: ()
     ) {
         TransactionRow(item, onClick = onEdit)
     }
-    }
-
 }
 
-private const val ROW_COLLAPSE_MS = 240
+/** How rows glide into place when one is removed or comes back: smooth, no bounce. */
+private val listMotion = spring<IntOffset>(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow)
+
+/**
+ * One row of a day's card. Rows are separate list items so they can animate on their own, but together they
+ * draw as one rounded glass card: the first rounds the top, the last the bottom, and the outline only runs
+ * along the outside.
+ */
+@Composable
+private fun CardSlice(first: Boolean, last: Boolean, modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
+    val c = LocalAppColors.current
+    val r = 28.dp
+    val shape = RoundedCornerShape(
+        topStart = if (first) r else 0.dp, topEnd = if (first) r else 0.dp,
+        bottomStart = if (last) r else 0.dp, bottomEnd = if (last) r else 0.dp,
+    )
+    Column(
+        modifier
+            .fillMaxWidth()
+            .clip(shape)
+            .background(c.glass)
+            .drawWithContent {
+                drawContent()
+                val w = 1.dp.toPx()
+                val outline = shape.createOutline(size, layoutDirection, this)
+                // Leave out the edges shared with the rows above and below.
+                clipRect(top = if (first) 0f else w, bottom = if (last) size.height else size.height - w) {
+                    drawOutline(outline, if (first) glassBorder(c) else SolidColor(c.borderBottom), style = Stroke(w * 2))
+                }
+            }
+            .padding(top = if (first) 4.dp else 0.dp, bottom = if (last) 4.dp else 0.dp),
+        content = content,
+    )
+}
 
 /** Month grid showing how much was spent each day. Future days are disabled. */
 @Composable

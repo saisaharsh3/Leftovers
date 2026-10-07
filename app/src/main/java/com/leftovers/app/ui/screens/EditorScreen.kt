@@ -337,8 +337,8 @@ class EditorViewModel(
     fun delete(onDone: () -> Unit) {
         viewModelScope.launch {
             repository.getTransaction(id)?.let {
+                // The photo stays with the entry in Deleted entries until it's removed for good.
                 repository.deleteTransaction(it)
-                ReceiptStore.delete(it.receiptPath)
             }
             onDone()
         }

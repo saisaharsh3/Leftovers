@@ -81,6 +81,7 @@ import com.leftovers.app.ui.screens.BudgetPlanScreen
 import com.leftovers.app.ui.screens.BudgetsScreen
 import com.leftovers.app.ui.screens.CategoriesScreen
 import com.leftovers.app.ui.screens.DebtsScreen
+import com.leftovers.app.ui.screens.DeletedScreen
 import com.leftovers.app.ui.screens.EditorScreen
 import com.leftovers.app.ui.screens.GoalDetailScreen
 import com.leftovers.app.ui.screens.GoalsScreen
@@ -100,6 +101,7 @@ private object Routes {
     const val INSIGHTS = "insights"
     const val PLAN = "plan"
     const val DEBTS = "debts"
+    const val DELETED = "deleted"
     const val ADD = "add?day={day}&amount={amount}&note={note}&sms={sms}"
     const val EDIT = "edit/{id}"
     const val BUDGET = "budget"
@@ -293,6 +295,7 @@ fun LeftoversNavHost(openAdd: Boolean = false, onOpenAddHandled: () -> Unit = {}
                         )
                     }
                     screen(Routes.DEBTS) { DebtsScreen(onBack = back) }
+                    screen(Routes.DELETED) { DeletedScreen(onBack = back) }
                     screen(
                         Routes.ADD,
                         listOf(
@@ -340,6 +343,7 @@ fun LeftoversNavHost(openAdd: Boolean = false, onOpenAddHandled: () -> Unit = {}
                             onBack = back,
                             onManageCategories = { nav.navigate(Routes.CATEGORIES) },
                             onOpenAccounts = { nav.navigate(Routes.ACCOUNTS) },
+                            onOpenDeleted = { nav.navigate(Routes.DELETED) },
                         )
                     }
                     screen(Routes.CATEGORIES) { CategoriesScreen(onBack = back) }

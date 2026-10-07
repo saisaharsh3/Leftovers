@@ -10,9 +10,9 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 @Database(
     entities = [
         Category::class, Transaction::class, Recurring::class, Goal::class, GoalDeposit::class,
-        Account::class, Transfer::class, SmsSuggestion::class, Debt::class,
+        Account::class, Transfer::class, SmsSuggestion::class, Debt::class, DeletedTransaction::class,
     ],
-    version = 8,
+    version = 9,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -25,6 +25,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun smsDao(): SmsDao
     abstract fun backupDao(): BackupDao
     abstract fun debtDao(): DebtDao
+    abstract fun deletedDao(): DeletedDao
 
     companion object {
         fun build(context: Context): AppDatabase =
@@ -32,6 +33,17 @@ abstract class AppDatabase : RoomDatabase() {
                 .addCallback(SeedCategories)
                 .addMigrations(*ALL_MIGRATIONS)
                 .build()
+    }
+}
+
+/** v9 keeps deleted entries so they can be restored. */
+private val MIGRATION_8_9 = object : Migration(8, 9) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `deleted_transactions` (`id` INTEGER NOT NULL, `amountMinor` INTEGER NOT NULL, " +
+                "`type` TEXT NOT NULL, `categoryId` INTEGER NOT NULL, `epochDay` INTEGER NOT NULL, `note` TEXT NOT NULL, " +
+                "`createdAt` INTEGER NOT NULL, `accountId` INTEGER, `receiptPath` TEXT, `deletedAt` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+        )
     }
 }
 
@@ -223,4 +235,4 @@ val DefaultCategories = listOf(
 
 /** Every upgrade step, oldest first; also used by the migration tests. */
 internal val ALL_MIGRATIONS: Array<Migration>
-    get() = arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8)
+    get() = arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9)

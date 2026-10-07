@@ -156,6 +156,8 @@ class BackupManager(
 
             database.withTransaction {
                 dao.clearDebts()
+                // Deleted entries belong to the data being replaced.
+                dao.clearDeleted()
                 dao.clearDeposits()
                 dao.clearGoals()
                 dao.clearTransfers()
