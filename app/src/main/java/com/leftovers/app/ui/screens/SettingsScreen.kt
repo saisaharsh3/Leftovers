@@ -204,6 +204,8 @@ fun SettingsScreen(
     var confirmWipe by rememberSaveable { mutableStateOf(false) }
     var showTime by rememberSaveable { mutableStateOf(false) }
     var showAssistant by rememberSaveable { mutableStateOf(false) }
+    var showEmail by rememberSaveable { mutableStateOf(false) }
+    val emailConnection by (LocalContext.current.applicationContext as com.leftovers.app.LeftoversApp).container.emailAccount.connection.collectAsStateWithLifecycle()
     var pendingRestore by remember { mutableStateOf<Uri?>(null) }
     // A protected backup waiting for its password; the flag says the last try was wrong.
     var lockedRestore by remember { mutableStateOf<Pair<Uri, Boolean>?>(null) }
@@ -280,6 +282,8 @@ fun SettingsScreen(
                         ToggleRow(Lucide.Smartphone, "Detect bank SMS", s.smsDetection, { on ->
                             if (on) smsPermission.launch(Manifest.permission.RECEIVE_SMS) else viewModel.setSmsDetection(false)
                         })
+                        RowDivider()
+                        NavRow(Lucide.Mail, "Detect payments in email", emailConnection?.address ?: "Off") { showEmail = true }
                     }
                 }
                 if (s.smsDetection) {
@@ -390,6 +394,7 @@ fun SettingsScreen(
         }
 
         if (showAssistant) AssistantSetupSheet(onDismiss = { showAssistant = false })
+        if (showEmail) EmailSetupSheet(onDismiss = { showEmail = false })
 
         if (showCurrency) {
             CurrencyPickerSheet(

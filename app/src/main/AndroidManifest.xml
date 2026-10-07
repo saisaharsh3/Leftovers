@@ -2,7 +2,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    <!-- Only used by the optional AI assistant, and only after the user connects one. -->
+    <!-- Only used by the optional AI assistant and email detection, after the user connects them. -->
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- Only used when the user turns on bank SMS detection. -->
     <uses-permission android:name="android.permission.RECEIVE_SMS" />
@@ -13,6 +13,7 @@
     <application
         android:name=".LeftoversApp"
         android:allowBackup="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
         android:enableOnBackInvokedCallback="false"
         android:networkSecurityConfig="@xml/network_security_config"
         android:icon="@mipmap/ic_launcher"

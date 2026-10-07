@@ -5,6 +5,10 @@ All notable changes to Leftovers. Download any version from
 
 ## Unreleased
 
+- **Payments from email:** connect Gmail, Yahoo, iCloud, Zoho or any IMAP mailbox with an app password
+  (Settings → Detect payments in email). Bank alerts and shop receipts show up on Home to confirm, like SMS.
+  Read-only over TLS, only payment emails, nothing but the amount, merchant and date is kept, and the
+  password is encrypted and deleted on disconnect
 - SMS detection no longer suggests a payment twice when the bank sends two alerts, or when you've already
   logged it yourself
 - Smoother swipes in Activity: a deleted row slides away and the list closes the gap smoothly, and swiping

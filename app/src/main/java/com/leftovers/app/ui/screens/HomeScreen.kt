@@ -288,9 +288,11 @@ fun HomeScreen(
                                 if (i > 0) RowDivider()
                                 ListRow(
                                     title = s.merchant.ifBlank { "Bank payment" },
-                                    subtitle = java.time.LocalDate.ofEpochDay(s.epochDay).friendlyLabel() +
-                                        (if (s.sender.isNotBlank()) " · ${s.sender}" else " · bank SMS"),
-                                    leading = { IconTile(Lucide.Smartphone, c.textPrimary, size = 42.dp) },
+                                    subtitle = java.time.LocalDate.ofEpochDay(s.epochDay).friendlyLabel() + " · " +
+                                        s.sender.ifBlank { if (s.source == SmsSuggestion.SOURCE_EMAIL) "email" else "bank SMS" },
+                                    leading = {
+                                        IconTile(if (s.source == SmsSuggestion.SOURCE_EMAIL) Lucide.Mail else Lucide.Smartphone, c.textPrimary, size = 42.dp)
+                                    },
                                     trailing = {
                                         Row(verticalAlignment = Alignment.CenterVertically) {
                                             Text(money.format(s.amountMinor), style = MaterialTheme.typography.titleSmall, color = c.textPrimary)

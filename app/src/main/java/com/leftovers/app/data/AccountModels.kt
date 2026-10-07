@@ -1,5 +1,6 @@
 package com.leftovers.app.data
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
@@ -49,7 +50,7 @@ data class Transfer(
     val createdAt: Long = System.currentTimeMillis(),
 )
 
-/** A payment spotted in a bank SMS, waiting for the user to confirm or dismiss it. */
+/** A payment spotted in a bank SMS or an email, waiting for the user to confirm or dismiss it. */
 @Entity(tableName = "sms_suggestions")
 data class SmsSuggestion(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
@@ -57,6 +58,14 @@ data class SmsSuggestion(
     val merchant: String,
     val sender: String,
     val epochDay: Long,
+    /** A hash for spotting repeats, never the message itself. */
     val body: String,
     val receivedAt: Long = System.currentTimeMillis(),
-)
+    /** Where it was spotted: [SOURCE_SMS] or [SOURCE_EMAIL]. */
+    @ColumnInfo(defaultValue = SOURCE_SMS) val source: String = SOURCE_SMS,
+) {
+    companion object {
+        const val SOURCE_SMS = "sms"
+        const val SOURCE_EMAIL = "email"
+    }
+}

@@ -62,6 +62,14 @@ android {
         compose = true
     }
 
+    packaging {
+        resources {
+            // The Jakarta Mail jars each carry the same licence files (credited in THIRD_PARTY_NOTICES.md).
+            // Their META-INF/javamail.* provider lists are kept: the library needs them at run time.
+            excludes += setOf("META-INF/NOTICE.md", "META-INF/LICENSE.md", "META-INF/NOTICE", "META-INF/LICENSE")
+        }
+    }
+
     // Database upgrade tests run on the JVM (Robolectric), which reads the debug build's assets;
     // the schemas go there so release builds stay free of them.
     testOptions {
@@ -84,6 +92,8 @@ dependencies {
     testImplementation(libs.robolectric)
     testImplementation(libs.androidx.test.core)
     testImplementation(libs.androidx.room.testing)
+    // A throwaway in-memory mail server for testing email detection.
+    testImplementation(libs.greenmail)
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.lifecycle.runtime.compose)
@@ -113,4 +123,6 @@ dependencies {
     implementation(libs.androidx.biometric)
     implementation(libs.androidx.fragment)
     implementation(libs.androidx.exifinterface)
+    // Email payment detection (IMAP over TLS). Only used when the user connects a mailbox.
+    implementation(libs.angus.mail)
 }

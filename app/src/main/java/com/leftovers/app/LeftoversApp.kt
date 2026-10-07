@@ -57,6 +57,7 @@ class AppContainer(private val context: Context) {
     val backup = BackupManager(context, database, settings, com.leftovers.app.util.BackupPassword(context))
     val budgetAlerts = BudgetAlertManager(context, repository, settings)
     val assistant = AssistantSettings(context)
+    val emailAccount = com.leftovers.app.util.EmailAccount(context)
 
     fun start() {
         scope.launch { sms.scrubRawBodies() }
@@ -68,6 +69,11 @@ class AppContainer(private val context: Context) {
                     runCatching { SafeToSpendWidget().updateAll(context) }
                     runCatching { MonthBudgetWidget().updateAll(context) }
                 }
+        }
+        scope.launch {
+            emailAccount.connection.map { it != null }
+                .distinctUntilChanged()
+                .collect { com.leftovers.app.util.EmailSync.schedule(context, it) }
         }
         scope.launch {
             settings.settings.map { it.autoBackupDir != null }

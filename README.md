@@ -74,18 +74,24 @@ today, plan for the things you want, and ask an AI about your money if you'd lik
 - Evening reminder, app lock (fingerprint, face or PIN)
 - Backup and restore to a file or Google Drive, weekly automatic backups to a folder you choose, CSV export
 - Optional backup password: backups are encrypted (AES-256) and need it to restore
-- Optional bank-SMS detection that suggests entries for you to confirm
+- Optional payment detection from bank SMS and from email (bank alerts and shop receipts), suggesting entries
+  for you to confirm. One payment never shows up twice, even when it arrives by both SMS and email
 - Swipe sideways to move between Home, Activity, Insights and Plan
 - Dark glass design with spring animations and high-refresh-rate support; light theme available
 
 ## Privacy
 
 Everything stays on your device. There are no accounts, ads or analytics, and the app makes no
-network calls unless you connect the optional AI assistant.
+network calls unless you connect the optional AI assistant or an email account.
 
 - The app is excluded from Android's automatic cloud backup, so backups go only where you save them.
 - With app lock on, screenshots are blocked and the app is hidden in the recent-apps preview.
 - SMS detection is off by default. When on, messages are read on the device and nothing is added without your tap.
+- Email detection is off by default and signs in with an *app password* (Gmail, Yahoo, iCloud, Zoho or any
+  IMAP server with SSL). It connects only to your mail server, over TLS with the certificate checked. The inbox
+  is opened read-only, so nothing is changed or marked as read, and only recent emails that mention a payment
+  are read, in memory. Only the amount, merchant and date are kept, never the email. The address and app
+  password are encrypted with an Android Keystore key, never backed up, and deleted when you disconnect.
 - With a backup password, backup files are encrypted. The password is kept encrypted with an Android Keystore key
   and is never written into a backup; if it's forgotten, those backups can't be opened.
 - Network access is HTTPS-only and trusts only the system's certificate authorities.
@@ -217,7 +223,7 @@ app/src/main/java/com/leftovers/app/
 
 - **Bank SMS detection** uses the `RECEIVE_SMS` permission, which Google Play restricts to default SMS
   apps and a few exceptions. It works for direct APK installs; remove it before publishing to Play.
-- The `INTERNET` permission is used only by the AI assistant, after you connect a provider.
+- The `INTERNET` permission is used only by the AI assistant and email detection, after you connect them.
 - Receipt photos aren't included in backups.
 
 ## Contributing

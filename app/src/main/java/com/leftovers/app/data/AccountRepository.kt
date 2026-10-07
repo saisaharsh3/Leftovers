@@ -40,15 +40,16 @@ class SmsRepository(private val dao: SmsDao, private val transactionDao: Transac
 
     /**
      * Stores a detected payment unless it's a repeat: the same message again, or the same amount already
-     * suggested or logged around the same time (see [DuplicatePayments]).
+     * suggested or logged around the same time (see [DuplicatePayments]). Returns whether it was added.
      */
-    suspend fun add(suggestion: SmsSuggestion) {
-        if (dao.countWithBody(suggestion.body) > 0) return
+    suspend fun add(suggestion: SmsSuggestion): Boolean {
+        if (dao.countWithBody(suggestion.body) > 0) return false
         val from = suggestion.receivedAt - DuplicatePayments.WINDOW_MS
         val to = suggestion.receivedAt + DuplicatePayments.WINDOW_MS
         val seen = dao.amountsBetween(from, to) + transactionDao.expenseAmountsBetween(from, to)
-        if (DuplicatePayments.isDuplicate(suggestion.amountMinor, suggestion.receivedAt, seen)) return
+        if (DuplicatePayments.isDuplicate(suggestion.amountMinor, suggestion.receivedAt, seen)) return false
         dao.insert(suggestion)
+        return true
     }
 
     suspend fun dismiss(id: Long) = dao.delete(id)
