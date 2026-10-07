@@ -1,5 +1,11 @@
 package com.leftovers.app.ui.screens
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import kotlinx.coroutines.delay
 import com.leftovers.app.data.AccountRepository
 import com.leftovers.app.data.allTags
 import com.leftovers.app.data.hashtags
@@ -34,6 +40,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.SwipeToDismissBox
@@ -202,7 +209,13 @@ fun HistoryScreen(
         viewModel.delete(item)
         scope.launch {
             snackbar.currentSnackbarData?.dismiss()
-            val result = snackbar.showSnackbar("Deleted ${money.format(item.amountMinor)}", actionLabel = "Undo", withDismissAction = true)
+            // Long enough to notice and undo a delete made by mistake.
+            val result = snackbar.showSnackbar(
+                "Deleted ${money.format(item.amountMinor)}",
+                actionLabel = "Undo",
+                withDismissAction = true,
+                duration = SnackbarDuration.Long,
+            )
             if (result == SnackbarResult.ActionPerformed) viewModel.restore(item)
         }
     }
@@ -211,6 +224,7 @@ fun HistoryScreen(
         title = "Activity",
         onBack = null,
         snackbar = snackbar,
+        snackbarAboveDock = true,
         actions = {
             RoundButton(
                 if (mode == ActivityView.LIST) Lucide.Calendar else Lucide.ReceiptText,
@@ -426,18 +440,40 @@ private fun FilterSheet(state: HistoryUiState, onChange: (ActivityFilters) -> Un
 private fun SwipeableRow(item: TransactionItem, onDelete: () -> Unit, onEdit: () -> Unit) {
     val c = LocalAppColors.current
     val state = rememberSwipeToDismissBoxState()
-    LaunchedEffect(state.currentValue) {
-        when (state.currentValue) {
-            SwipeToDismissBoxValue.EndToStart -> onDelete()
-            SwipeToDismissBoxValue.StartToEnd -> {
-                onEdit()
-                state.reset()
-            }
-            SwipeToDismissBoxValue.Settled -> Unit
+    val scope = rememberCoroutineScope()
+    var removing by remember { mutableStateOf(false) }
+    // A row left swiped open by the edit gesture is put back as soon as the list shows again.
+    LaunchedEffect(Unit) {
+        if (state.settledValue == SwipeToDismissBoxValue.StartToEnd) state.snapTo(SwipeToDismissBoxValue.Settled)
+    }
+    // Close the gap smoothly first, then delete, so the list doesn't jump.
+    LaunchedEffect(removing) {
+        if (removing) {
+            delay(ROW_COLLAPSE_MS.toLong())
+            onDelete()
         }
     }
+    AnimatedVisibility(
+        visible = !removing,
+        enter = EnterTransition.None,
+        exit = shrinkVertically(tween(ROW_COLLAPSE_MS, easing = FastOutSlowInEasing)) + fadeOut(tween(ROW_COLLAPSE_MS - 60)),
+    ) {
     SwipeToDismissBox(
         state = state,
+        onDismiss = { value ->
+            when (value) {
+                SwipeToDismissBoxValue.EndToStart -> removing = true
+                SwipeToDismissBoxValue.StartToEnd -> {
+                    onEdit()
+                    // Snap back while the editor covers the list, instead of animating under it.
+                    scope.launch {
+                        delay(400)
+                        state.snapTo(SwipeToDismissBoxValue.Settled)
+                    }
+                }
+                SwipeToDismissBoxValue.Settled -> Unit
+            }
+        },
         backgroundContent = {
             // Rows are see-through glass, so only draw the action layer while a swipe is in progress.
             if (state.dismissDirection == SwipeToDismissBoxValue.Settled) return@SwipeToDismissBox
@@ -461,7 +497,10 @@ private fun SwipeableRow(item: TransactionItem, onDelete: () -> Unit, onEdit: ()
     ) {
         TransactionRow(item, onClick = onEdit)
     }
+    }
 }
+
+private const val ROW_COLLAPSE_MS = 240
 
 /** Month grid showing how much was spent each day. Future days are disabled. */
 @Composable

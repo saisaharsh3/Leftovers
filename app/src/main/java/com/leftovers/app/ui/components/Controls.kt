@@ -1,5 +1,7 @@
 package com.leftovers.app.ui.components
 
+import androidx.compose.material3.Snackbar
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.animateColorAsState
@@ -218,14 +220,35 @@ fun GlassScreen(
     actions: @Composable RowScope.() -> Unit = {},
     bottomBar: @Composable () -> Unit = {},
     snackbar: SnackbarHostState? = null,
+    /** True on tabs, so messages appear above the floating tab bar instead of behind it. */
+    snackbarAboveDock: Boolean = false,
     content: @Composable (PaddingValues) -> Unit,
 ) {
+    val c = LocalAppColors.current
     Scaffold(
         containerColor = Color.Transparent,
         contentWindowInsets = WindowInsets(0),
         topBar = { GlassHeader(title, onBack, subtitle, actions) },
         bottomBar = bottomBar,
-        snackbarHost = { if (snackbar != null) SnackbarHost(snackbar) },
+        snackbarHost = {
+            if (snackbar != null) {
+                SnackbarHost(
+                    snackbar,
+                    Modifier
+                        .navigationBarsPadding()
+                        .padding(bottom = if (snackbarAboveDock) 92.dp else 0.dp),
+                ) { data ->
+                    Snackbar(
+                        data,
+                        shape = RoundedCornerShape(20.dp),
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                        contentColor = c.textPrimary,
+                        actionColor = c.accent,
+                        dismissActionContentColor = c.textSecondary,
+                    )
+                }
+            }
+        },
     ) { padding ->
         Box(
             Modifier
