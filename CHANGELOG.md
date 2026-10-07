@@ -3,7 +3,23 @@
 All notable changes to Leftovers. Download any version from
 [Releases](https://github.com/saisaharsh3/Leftovers/releases).
 
-## 1.2.1
+## 1.2.2
+
+- Home: *Spent this month* and *Income* open Activity on the matching tab, and an income card under
+  *Upcoming* (like Salary) opens Subscriptions on Income
+- Activity: the Income tab's card shows income; tapping an entry logged by a subscription or recurring income
+  opens Subscriptions (swipe right still edits that one entry); swiping right now says *Edit*
+- Budget: tapping the *Left* card opens the budget editor
+- Plan: Accounts removed from *More* (it's on Home)
+- Add screen: only today is labelled; other days show their weekday
+- AI chat keeps answering if you leave the screen, the conversation is still there when you return, and a
+  *Stop* button cancels an answer
+- Subscription totals no longer show paise
+
+## 1.2.1 (withdrawn)
+
+Replaced by 1.2.2. Everything below is included in it.
+
 
 - **Deleted entries** (Settings → Data): everything you delete is kept so you can restore it later. Filter by
   when it was deleted (today, 7 days, 30 days or any dates), restore or delete for good one by one or all at

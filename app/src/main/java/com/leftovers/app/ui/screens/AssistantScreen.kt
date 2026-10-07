@@ -1,5 +1,8 @@
 package com.leftovers.app.ui.screens
 
+import androidx.activity.compose.LocalActivity
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.foundation.background
@@ -137,6 +140,8 @@ class AssistantViewModel(private val container: AppContainer, private val assist
     private val pending = mutableMapOf<Long, Pair<ToolCall, ProposedChange>>()
     private var rounds = 0
     private var changesThisMessage = 0
+    /** The request being answered, so Stop can cancel it. */
+    private var job: Job? = null
 
     init {
         // A new provider, key or privacy setting starts a fresh conversation.
@@ -162,7 +167,7 @@ class AssistantViewModel(private val container: AppContainer, private val assist
             return
         }
         busy = true
-        viewModelScope.launch {
+        job = viewModelScope.launch {
             val image = runCatching { com.leftovers.app.ai.ImagePrep.prepare(context, photo) }
             cleanup()
             image.onSuccess { img ->
@@ -202,6 +207,19 @@ class AssistantViewModel(private val container: AppContainer, private val assist
 
     fun decideAll(apply: Boolean) = pending.keys.toList().forEach { decide(it, apply) }
 
+    /**
+     * Stops the answer being worked on. The provider's history may be half-finished at that point, so the
+     * next message starts a fresh conversation (what's on screen stays).
+     */
+    fun stop() {
+        if (!busy) return
+        job?.cancel()
+        job = null
+        busy = false
+        dropSession()
+        items += ChatItem.Note(nextKey++, "Stopped. Your next message starts afresh.")
+    }
+
     fun reset(note: String? = null) {
         dropSession()
         items.clear()
@@ -228,10 +246,12 @@ class AssistantViewModel(private val container: AppContainer, private val assist
     /** Runs one exchange with the model; named so it can never resolve to Kotlin's scope function `run`. */
     private fun runTurn(step: suspend () -> ModelTurn) {
         busy = true
-        viewModelScope.launch {
+        job = viewModelScope.launch {
             try {
                 var turn = step()
                 while (!handle(turn)) turn = session!!.sendToolResults(takeResults())
+            } catch (e: CancellationException) {
+                throw e // Stopped by the user; stop() already tidied up.
             } catch (e: AiException) {
                 items += ChatItem.Note(nextKey++, e.message ?: "Something went wrong", error = true)
                 // A failed request can leave the provider's history half-finished; start clean next time.
@@ -240,7 +260,10 @@ class AssistantViewModel(private val container: AppContainer, private val assist
                 dropSession()
                 items += ChatItem.Note(nextKey++, "Something went wrong: ${e.message}", error = true)
             } finally {
-                busy = false
+                if (job == coroutineContext[Job]) {
+                    busy = false
+                    job = null
+                }
             }
         }
     }
@@ -314,7 +337,15 @@ private val suggestions = listOf(
 )
 
 @Composable
-fun AssistantScreen(onBack: () -> Unit, viewModel: AssistantViewModel = viewModel(factory = AppViewModelProvider.Factory)) {
+fun AssistantScreen(
+    onBack: () -> Unit,
+    // Kept by the activity, not this screen: going back doesn't stop an answer, and the chat is still here
+    // on return. It lives only in memory and is gone when the app closes.
+    viewModel: AssistantViewModel = viewModel(
+        viewModelStoreOwner = LocalActivity.current as androidx.activity.ComponentActivity,
+        factory = AppViewModelProvider.Factory,
+    ),
+) {
     val c = LocalAppColors.current
     val config by viewModel.config.collectAsStateWithLifecycle()
     var input by rememberSaveable { mutableStateOf("") }
@@ -389,20 +420,25 @@ fun AssistantScreen(onBack: () -> Unit, viewModel: AssistantViewModel = viewMode
                         singleLine = false,
                     )
                     Spacer(Modifier.width(8.dp))
-                    RoundButton(
-                        Lucide.ArrowUp, "Send",
-                        {
-                            val file = cameraFile
-                            viewModel.send(input, attached, context.applicationContext) { file?.delete() }
-                            input = ""
-                            attached = null
-                            cameraFile = null
-                        },
-                        size = 52.dp,
-                        tint = c.onAccent,
-                        container = c.accent,
-                        enabled = !locked && (input.isNotBlank() || attached != null),
-                    )
+                    if (viewModel.busy) {
+                        // While it's answering, the send button becomes Stop.
+                        RoundButton(Lucide.Square, "Stop", viewModel::stop, size = 52.dp, tint = c.textPrimary, container = c.glassStrong)
+                    } else {
+                        RoundButton(
+                            Lucide.ArrowUp, "Send",
+                            {
+                                val file = cameraFile
+                                viewModel.send(input, attached, context.applicationContext) { file?.delete() }
+                                input = ""
+                                attached = null
+                                cameraFile = null
+                            },
+                            size = 52.dp,
+                            tint = c.onAccent,
+                            container = c.accent,
+                            enabled = !locked && (input.isNotBlank() || attached != null),
+                        )
+                    }
                 }
                 }
             }

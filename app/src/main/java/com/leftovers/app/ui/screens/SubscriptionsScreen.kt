@@ -146,6 +146,8 @@ private val templates = listOf(
 @Composable
 fun SubscriptionsScreen(
     onBack: () -> Unit,
+    /** Open on recurring income instead of payments. */
+    startOnIncome: Boolean = false,
     viewModel: SubscriptionsViewModel = viewModel(factory = AppViewModelProvider.Factory),
 ) {
     val items by viewModel.items.collectAsStateWithLifecycle()
@@ -153,7 +155,7 @@ fun SubscriptionsScreen(
     val suggestions by viewModel.suggestions.collectAsStateWithLifecycle()
     val c = LocalAppColors.current
     val money = LocalMoney.current
-    var filter by rememberSaveable { mutableStateOf(TxType.EXPENSE) }
+    var filter by rememberSaveable { mutableStateOf(if (startOnIncome) TxType.INCOME else TxType.EXPENSE) }
     var editing by remember { mutableStateOf<Recurring?>(null) }
 
     val active = items.filter { it.active }
@@ -214,7 +216,7 @@ fun SubscriptionsScreen(
                         if (other > 0) {
                             Spacer(Modifier.height(6.dp))
                             Text(
-                                if (income) "−${money.format(other)} going out" else "+${money.format(other)} coming in",
+                                if (income) "−${money.formatWhole(other)} going out" else "+${money.formatWhole(other)} coming in",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = if (income) c.textSecondary else c.positive,
                             )

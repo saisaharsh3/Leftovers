@@ -817,11 +817,7 @@ private fun DateStrip(selected: LocalDate, onSelect: (LocalDate) -> Unit, onOpen
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
                     Text(
-                        when (day) {
-                            today -> "Today"
-                            today.minusDays(1) -> "Yday"
-                            else -> day.format(stripDay)
-                        },
+                        if (day == today) "Today" else day.format(stripDay),
                         style = MaterialTheme.typography.labelSmall,
                         color = fg.copy(alpha = 0.7f),
                         maxLines = 1,

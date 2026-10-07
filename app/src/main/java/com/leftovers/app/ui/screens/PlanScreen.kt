@@ -115,7 +115,6 @@ fun PlanScreen(
     onOpenGoals: () -> Unit,
     onOpenGoal: (Long) -> Unit,
     onOpenCategories: () -> Unit,
-    onOpenAccounts: () -> Unit,
     onOpenDebts: () -> Unit,
     viewModel: PlanViewModel = viewModel(factory = AppViewModelProvider.Factory),
 ) {
@@ -211,14 +210,6 @@ fun PlanScreen(
                             leading = { IconTile(Lucide.SlidersHorizontal, c.textPrimary, size = 42.dp) },
                             trailing = { Icon(Lucide.ChevronRight, contentDescription = null, tint = c.textTertiary, modifier = Modifier.size(18.dp)) },
                             onClick = onEditPlan,
-                        )
-                        RowDivider()
-                        ListRow(
-                            "Accounts",
-                            subtitle = "Cash, bank, cards and transfers",
-                            leading = { IconTile(Lucide.Wallet, c.textPrimary, size = 42.dp) },
-                            trailing = { Icon(Lucide.ChevronRight, contentDescription = null, tint = c.textTertiary, modifier = Modifier.size(18.dp)) },
-                            onClick = onOpenAccounts,
                         )
                         RowDivider()
                         ListRow(

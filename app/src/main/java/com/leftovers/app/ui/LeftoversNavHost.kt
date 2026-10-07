@@ -81,6 +81,8 @@ import com.leftovers.app.ui.screens.BudgetPlanScreen
 import com.leftovers.app.ui.screens.BudgetsScreen
 import com.leftovers.app.ui.screens.CategoriesScreen
 import com.leftovers.app.ui.screens.DebtsScreen
+import com.leftovers.app.ui.screens.TypeFilter
+import com.leftovers.app.data.TxType
 import com.leftovers.app.ui.screens.DeletedScreen
 import com.leftovers.app.ui.screens.EditorScreen
 import com.leftovers.app.ui.screens.GoalDetailScreen
@@ -106,7 +108,8 @@ private object Routes {
     const val EDIT = "edit/{id}"
     const val BUDGET = "budget"
     const val BUDGET_PLAN = "budget/plan"
-    const val SUBSCRIPTIONS = "subscriptions"
+    const val SUBSCRIPTIONS = "subscriptions?income={income}"
+    fun subscriptions(income: Boolean = false) = "subscriptions?income=$income"
     const val GOALS = "goals"
     const val GOAL = "goals/{id}"
     const val ACCOUNTS = "accounts"
@@ -168,6 +171,8 @@ fun LeftoversNavHost(openAdd: Boolean = false, onOpenAddHandled: () -> Unit = {}
     val back: () -> Unit = { nav.popBackStack() }
     val idArg = listOf(navArgument("id") { type = NavType.LongType })
     var toast by remember { mutableStateOf<String?>(null) }
+    // A filter Home asked Activity to open with.
+    var activityRequest by remember { mutableStateOf<TypeFilter?>(null) }
     val appScope = rememberCoroutineScope()
     val undo = remember { UndoState(appScope) }
     val onTab = currentRoute in Routes.tabs
@@ -257,8 +262,15 @@ fun LeftoversNavHost(openAdd: Boolean = false, onOpenAddHandled: () -> Unit = {}
                     screen(Routes.HOME) {
                         HomeScreen(
                             onOpenBudget = { nav.navigate(Routes.BUDGET) },
-                            onOpenActivity = { nav.switchTab(Routes.ACTIVITY) },
-                            onOpenSubscriptions = { nav.navigate(Routes.SUBSCRIPTIONS) },
+                            onOpenActivity = { type ->
+                                activityRequest = when (type) {
+                                    TxType.EXPENSE -> TypeFilter.EXPENSE
+                                    TxType.INCOME -> TypeFilter.INCOME
+                                    null -> TypeFilter.ALL
+                                }
+                                nav.switchTab(Routes.ACTIVITY)
+                            },
+                            onOpenSubscriptions = { income -> nav.navigate(Routes.subscriptions(income)) },
                             onOpenGoal = { nav.navigate(Routes.goal(it)) },
                             onOpenGoals = { nav.navigate(Routes.GOALS) },
                             onOpenSettings = { nav.navigate(Routes.SETTINGS) },
@@ -274,6 +286,9 @@ fun LeftoversNavHost(openAdd: Boolean = false, onOpenAddHandled: () -> Unit = {}
                         HistoryScreen(
                             onOpenTransaction = { nav.navigate(Routes.edit(it)) },
                             onAddForDay = { nav.navigate(Routes.add(day = it.toEpochDay())) },
+                            onOpenSubscriptions = { income -> nav.navigate(Routes.subscriptions(income)) },
+                            requestedFilter = activityRequest,
+                            onRequestHandled = { activityRequest = null },
                         )
                     }
                     screen(Routes.INSIGHTS) {
@@ -286,11 +301,10 @@ fun LeftoversNavHost(openAdd: Boolean = false, onOpenAddHandled: () -> Unit = {}
                         PlanScreen(
                             onOpenBudget = { nav.navigate(Routes.BUDGET) },
                             onEditPlan = { nav.navigate(Routes.BUDGET_PLAN) },
-                            onOpenSubscriptions = { nav.navigate(Routes.SUBSCRIPTIONS) },
+                            onOpenSubscriptions = { nav.navigate(Routes.subscriptions()) },
                             onOpenGoals = { nav.navigate(Routes.GOALS) },
                             onOpenGoal = { nav.navigate(Routes.goal(it)) },
                             onOpenCategories = { nav.navigate(Routes.CATEGORIES) },
-                            onOpenAccounts = { nav.navigate(Routes.ACCOUNTS) },
                             onOpenDebts = { nav.navigate(Routes.DEBTS) },
                         )
                     }
@@ -328,12 +342,14 @@ fun LeftoversNavHost(openAdd: Boolean = false, onOpenAddHandled: () -> Unit = {}
                         BudgetsScreen(
                             onBack = back,
                             onEditPlan = { nav.navigate(Routes.BUDGET_PLAN) },
-                            onOpenSubscriptions = { nav.navigate(Routes.SUBSCRIPTIONS) },
+                            onOpenSubscriptions = { nav.navigate(Routes.subscriptions()) },
                             onOpenGoals = { nav.navigate(Routes.GOALS) },
                         )
                     }
                     screen(Routes.BUDGET_PLAN) { BudgetPlanScreen(onBack = back) }
-                    screen(Routes.SUBSCRIPTIONS) { SubscriptionsScreen(onBack = back) }
+                    screen(Routes.SUBSCRIPTIONS, listOf(navArgument("income") { type = NavType.BoolType; defaultValue = false })) { entry ->
+                        SubscriptionsScreen(onBack = back, startOnIncome = entry.arguments?.getBoolean("income") == true)
+                    }
                     screen(Routes.GOALS) { GoalsScreen(onBack = back, onOpenGoal = { nav.navigate(Routes.goal(it)) }) }
                     screen(Routes.GOAL, idArg) { GoalDetailScreen(onBack = back) }
                     screen(Routes.ACCOUNTS) { AccountsScreen(onBack = back) }

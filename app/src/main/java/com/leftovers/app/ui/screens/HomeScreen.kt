@@ -165,8 +165,10 @@ class HomeViewModel(
 @Composable
 fun HomeScreen(
     onOpenBudget: () -> Unit,
-    onOpenActivity: () -> Unit,
-    onOpenSubscriptions: () -> Unit,
+    /** Opens Activity on spending, income, or everything (null). */
+    onOpenActivity: (TxType?) -> Unit,
+    /** Opens Subscriptions on payments, or on recurring income when true. */
+    onOpenSubscriptions: (income: Boolean) -> Unit,
     onOpenGoal: (Long) -> Unit,
     onOpenGoals: () -> Unit,
     onOpenSettings: () -> Unit,
@@ -321,7 +323,7 @@ fun HomeScreen(
                         icon = Lucide.ArrowUpRight,
                         iconTint = c.negative,
                         modifier = Modifier.weight(1f),
-                        onClick = onOpenActivity,
+                        onClick = { onOpenActivity(TxType.EXPENSE) },
                     )
                     StatTile(
                         label = "Income",
@@ -329,16 +331,16 @@ fun HomeScreen(
                         icon = Lucide.ArrowDownLeft,
                         iconTint = c.positive,
                         modifier = Modifier.weight(1f),
-                        onClick = onOpenActivity,
+                        onClick = { onOpenActivity(TxType.INCOME) },
                     )
                 }
             }
 
             if (state.upcoming.isNotEmpty()) {
-                item { SectionHeader("Upcoming", Modifier.appear(3), action = "Manage", onAction = onOpenSubscriptions) }
+                item { SectionHeader("Upcoming", Modifier.appear(3), action = "Manage", onAction = { onOpenSubscriptions(false) }) }
                 item {
                     LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.appear(3)) {
-                        items(state.upcoming, key = { it.id }) { r -> UpcomingCard(r, onOpenSubscriptions) }
+                        items(state.upcoming, key = { it.id }) { r -> UpcomingCard(r) { onOpenSubscriptions(r.type == TxType.INCOME) } }
                     }
                 }
             }
@@ -352,7 +354,7 @@ fun HomeScreen(
                 }
             }
 
-            item { SectionHeader("Recent", Modifier.appear(5), action = if (state.recent.isNotEmpty()) "See all" else null, onAction = onOpenActivity) }
+            item { SectionHeader("Recent", Modifier.appear(5), action = if (state.recent.isNotEmpty()) "See all" else null, onAction = { onOpenActivity(null) }) }
             item {
                 Glass(Modifier.fillMaxWidth().appear(5)) {
                     if (state.recent.isEmpty()) {

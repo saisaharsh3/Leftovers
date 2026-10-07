@@ -19,6 +19,7 @@ object Lucide {
     val Mail: ImageVector by lazy { lucide("mail", "M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1 -2 2h-16a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2Z", "m22 7-8.991 5.727a2 2 0 0 1-2.009 0L2 7") }
     val RotateCcw: ImageVector by lazy { lucide("rotate-ccw", "M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8", "M3 3v5h5") }
     val History: ImageVector by lazy { lucide("history", "M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8", "M3 3v5h5", "M12 7v5l4 2") }
+    val Square: ImageVector by lazy { lucide("square", "M7 5h10a2 2 0 0 1 2 2v10a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2v-10a2 2 0 0 1 2 -2Z") }
     val ListFilter: ImageVector by lazy { lucide("list-filter", "M3 6h18", "M7 12h10", "M10 18h4") }
     val ChevronLeft: ImageVector by lazy { lucide("chevron-left", "m15 18-6-6 6-6") }
     val ChevronRight: ImageVector by lazy { lucide("chevron-right", "m9 18 6-6-6-6") }

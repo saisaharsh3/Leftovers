@@ -137,7 +137,7 @@ Usage is billed by the provider to your own account. **Answer style** switches b
   never sent; a photo goes only when you attach it, resized and re-encoded so location and camera data are removed.
 - **Your key is protected.** It's encrypted with an Android Keystore key, never included in backups, and
   deleted when you disconnect. Custom servers must use HTTPS.
-- **Nothing is kept.** Chats aren't saved on the phone. The AI is told to treat your data as data, not
+- **Nothing is kept.** Chats are held in memory only (so an answer can finish while you look elsewhere) and are gone when the app closes. The AI is told to treat your data as data, not
   instructions, and each message is limited in how many steps and changes it can make.
 
 What you send is handled under the chosen provider's privacy policy (DeepSeek stores data in China;

@@ -184,7 +184,8 @@ fun BudgetsScreen(
                 item {
                     val left = state.overallBudget - state.totalSpent
                     val used = if (state.overallBudget > 0) state.totalSpent.toFloat() / state.overallBudget else 1f
-                    Glass(Modifier.fillMaxWidth().appear(0), strong = true, shape = RoundedCornerShape(32.dp)) {
+                    // Tapping the gauge opens the budget editor.
+                    Glass(Modifier.fillMaxWidth().appear(0), strong = true, shape = RoundedCornerShape(32.dp), onClick = onEditPlan) {
                         Column(Modifier.fillMaxWidth().padding(vertical = 22.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                             Gauge(used, Modifier.size(240.dp), thickness = 16.dp) {
                                 Column(Modifier.align(Alignment.Center).fillMaxWidth().padding(horizontal = 32.dp), horizontalAlignment = Alignment.CenterHorizontally) {
