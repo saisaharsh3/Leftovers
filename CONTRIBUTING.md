@@ -37,6 +37,17 @@ git switch -c my-change upstream/dev
 
 On Windows use `gradlew.bat`. Keep your branch up to date with `git pull --rebase upstream dev`.
 
+## Testing changes from `dev`
+
+Debug builds install as a separate app called **Leftovers Dev**, next to the real Leftovers, with their own
+empty data. Restore a backup into it (Settings → Restore) to test with realistic data.
+
+- **Without a computer:** every push to `dev` and every pull request is built by GitHub Actions. Open the
+  run under [Actions](https://github.com/saisaharsh3/Leftovers/actions), download **leftovers-debug** at
+  the bottom, unzip it and install `app-debug.apk` on the phone.
+- **With a computer:** `git switch dev && git pull`, then `./gradlew installDebug` with the phone connected.
+  To try a pull request before merging it: `gh pr checkout <number>`, then `./gradlew installDebug`.
+
 ## What a good pull request looks like
 
 - **One change per pull request**, with a clear title such as *"Add AMOLED theme"*.

@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="docs/icon.svg" width="96" alt="Leftovers app icon" />
+
 # Leftovers
 
 **Know what's left.**
@@ -157,6 +159,7 @@ cd Leftovers
 ./gradlew testDebugUnitTest    # unit tests: budget maths, forecasts, backups, database upgrades, privacy, every AI provider's format
 ```
 
+Debug builds install as a separate app, **Leftovers Dev**, so they never touch the real app's data.
 On Windows use `gradlew.bat`. If Gradle can't find the SDK, create `local.properties` with
 `sdk.dir=/path/to/Android/Sdk` (Android Studio does this for you).
 

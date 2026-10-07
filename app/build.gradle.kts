@@ -40,6 +40,11 @@ android {
     }
 
     buildTypes {
+        // Test builds install next to the real app (as "Leftovers Dev") instead of replacing it.
+        debug {
+            applicationIdSuffix = ".dev"
+            versionNameSuffix = "-dev"
+        }
         release {
             signingConfigs.findByName("release")?.let { signingConfig = it }
             isMinifyEnabled = true

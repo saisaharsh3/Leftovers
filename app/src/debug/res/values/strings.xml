@@ -1,0 +1,4 @@
+<resources>
+    <!-- Test builds install next to the real app, under their own name. -->
+    <string name="app_name">Leftovers Dev</string>
+</resources>
