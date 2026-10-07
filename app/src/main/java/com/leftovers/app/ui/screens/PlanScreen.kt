@@ -152,23 +152,40 @@ fun PlanScreen(
 
             item { SectionHeader("Subscriptions", Modifier.appear(1), action = "Manage", onAction = onOpenSubscriptions) }
             item {
-                val active = state.recurring.filter { it.active && it.type == TxType.EXPENSE }
-                Glass(Modifier.fillMaxWidth().appear(1), onClick = onOpenSubscriptions) {
+                // Payments and recurring income both count; yearly ones as their monthly share, like the Subscriptions screen.
+                val active = state.recurring.filter { it.active }
+                val out = active.filter { it.type == TxType.EXPENSE }.sumOf { it.toRecurring().monthlyShareMinor }
+                val incoming = active.filter { it.type == TxType.INCOME }.sumOf { it.toRecurring().monthlyShareMinor }
+                Glass(Modifier.fillMaxWidth().appear(1), onClick = { onOpenSubscriptions() }) {
                     Column(Modifier.padding(vertical = 6.dp)) {
                         ListRow(
-                            title = if (active.isEmpty()) "No subscriptions yet" else "${money.formatWhole(active.sumOf { it.toRecurring().monthlyShareMinor })} a month",
-                            // Yearly bills count as their monthly share, matching the Subscriptions screen.
-                            subtitle = if (active.isEmpty()) "Rent, phone, streaming — logged automatically" else "${active.size} active · logged automatically",
+                            title = when {
+                                active.isEmpty() -> "No subscriptions yet"
+                                out > 0 -> "${money.formatWhole(out)} a month"
+                                else -> "+${money.formatWhole(incoming)} a month"
+                            },
+                            subtitle = when {
+                                active.isEmpty() -> "Rent, phone, streaming, salary — logged automatically"
+                                out > 0 && incoming > 0 -> "${active.size} active · +${money.formatWhole(incoming)} coming in"
+                                else -> "${active.size} active · logged automatically"
+                            },
                             leading = { IconTile(Lucide.Repeat, c.textPrimary, size = 42.dp) },
                             trailing = { Icon(Lucide.ChevronRight, contentDescription = null, tint = c.textTertiary, modifier = Modifier.size(18.dp)) },
                         )
                         active.sortedBy { it.toRecurring().nextChargeDate() }.take(3).forEach { r ->
+                            val income = r.type == TxType.INCOME
                             RowDivider()
                             ListRow(
                                 title = r.name,
                                 subtitle = "Next ${r.toRecurring().nextChargeDate().friendlyLabel()}",
                                 leading = { CategoryIcon(r.categoryEmoji, r.categoryColor, size = 42.dp) },
-                                trailing = { Text(money.format(r.amountMinor), style = MaterialTheme.typography.titleSmall, color = c.textPrimary) },
+                                trailing = {
+                                    Text(
+                                        (if (income) "+" else "") + money.format(r.amountMinor),
+                                        style = MaterialTheme.typography.titleSmall,
+                                        color = if (income) c.positive else c.textPrimary,
+                                    )
+                                },
                             )
                         }
                     }

@@ -10,7 +10,10 @@ All notable changes to Leftovers. Download any version from
 - Detection keywords: add your own words for bank messages the built-in rules miss, and test any message
   to see what would be suggested (Settings, under SMS and email detection) (#4)
 - Repeat every month: the calendar unlocks later days, so a salary or bill can start on its real date
-- Deleting an entry logged by a subscription or recurring income can stop that subscription too
+- Deleting an entry logged by a subscription or recurring income can stop that subscription too, including
+  repeats added without a note
+- Plan counts recurring income too (e.g. "8 active · +₹75,000 coming in")
+- New recurring income shows income templates (Salary, Freelance, Rent received, Interest…), not Netflix and Rent
 - Subscriptions and recurring income can be paid from or into a chosen account (e.g. salary into the bank)
 - Settings: *Report a problem or suggest an idea* opens GitHub issues
 - Budget: the header button is gone; a small pencil on the budget card shows it opens the editor
