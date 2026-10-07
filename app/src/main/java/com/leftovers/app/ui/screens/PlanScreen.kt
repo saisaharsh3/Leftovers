@@ -201,7 +201,7 @@ fun PlanScreen(
                 }
             }
 
-            item { SectionHeader("Setup", Modifier.appear(3)) }
+            item { SectionHeader("More", Modifier.appear(3)) }
             item {
                 Glass(Modifier.fillMaxWidth().appear(3)) {
                     Column(Modifier.padding(vertical = 6.dp)) {

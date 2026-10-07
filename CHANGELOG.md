@@ -3,6 +3,13 @@
 All notable changes to Leftovers. Download any version from
 [Releases](https://github.com/saisaharsh3/Leftovers/releases).
 
+## Unreleased
+
+- SMS detection no longer suggests a payment twice when the bank sends two alerts, or when you've already
+  logged it yourself
+- Plan's last section is now called *More*, since it holds Money owed as well as setup
+- Test builds (*Leftovers Dev*) have an amber icon so they're never mistaken for the real app
+
 ## 1.1.1
 
 - Calmer add screen: the note sits on its own line, the account is one tap-to-change button, and repeat,
