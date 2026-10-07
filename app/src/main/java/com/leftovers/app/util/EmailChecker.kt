@@ -30,6 +30,7 @@ import jakarta.mail.search.ReceivedDateTerm
 import jakarta.mail.search.SearchTerm
 import jakarta.mail.search.SubjectTerm
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import java.security.MessageDigest
 import java.time.Instant
@@ -86,10 +87,11 @@ object EmailChecker {
         val password = account.password() ?: return@withContext Result.failure(IllegalStateException("Not connected"))
         val now = System.currentTimeMillis()
         val since = if (connection.lastCheckedAt == 0L) now - FIRST_LOOK_BACK_MS else connection.lastCheckedAt - OVERLAP_MS
+        val keywords = container.settings.settings.first().detectionKeywords
         runCatching {
             val found = Session.getInstance(properties(connection.host)).getStore("imaps").use { store ->
                 store.connect(connection.host, connection.address, password)
-                findPayments(store, since)
+                findPayments(store, since, keywords)
             }
             var added = 0
             found.forEach { p ->
@@ -113,7 +115,7 @@ object EmailChecker {
     }
 
     /** Payment emails received since [since] in an already signed-in [store]. */
-    fun findPayments(store: Store, since: Long): List<EmailPayment> {
+    fun findPayments(store: Store, since: Long, keywords: Collection<String> = emptyList()): List<EmailPayment> {
         val inbox = store.getFolder("INBOX")
         inbox.open(Folder.READ_ONLY)
         try {
@@ -129,18 +131,18 @@ object EmailChecker {
                 .filter { m -> (m.from?.firstOrNull() as? InternetAddress)?.let { BankSenders.isBank(it.address.orEmpty(), it.personal.orEmpty()) } ?: false }
                 .sortedByDescending { (it.receivedDate ?: it.sentDate).time }
                 .take(MAX_MESSAGES)
-            return bankMail.mapNotNull { m -> runCatching { paymentIn(m) }.getOrNull() }
+            return bankMail.mapNotNull { m -> runCatching { paymentIn(m, keywords) }.getOrNull() }
         } finally {
             inbox.close(false)
         }
     }
 
-    private fun paymentIn(m: Message): EmailPayment? {
+    private fun paymentIn(m: Message, keywords: Collection<String>): EmailPayment? {
         val from = m.from?.firstOrNull() as? InternetAddress
         val senderName = from?.personal?.takeIf { it.isNotBlank() } ?: from?.address?.substringBefore('@').orEmpty()
         val subject = m.subject.orEmpty()
         val body = textOf(m, 0).take(20_000)
-        val parsed = EmailParser.parse(subject, senderName, body) ?: return null
+        val parsed = EmailParser.parse(subject, senderName, body, keywords) ?: return null
         val sentAt = (m.sentDate ?: m.receivedDate)?.time ?: return null
         val key = (m as? MimeMessage)?.messageID ?: "${from?.address}|$sentAt|$subject"
         return EmailPayment(parsed.amountMinor, parsed.merchant, senderName.take(40), sentAt, key)

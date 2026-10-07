@@ -116,6 +116,14 @@ class SettingsViewModel(
         viewModelScope.launch { settingsRepository.setAppLock(enabled) }
     }
 
+    fun setAiEnabled(enabled: Boolean) {
+        viewModelScope.launch { settingsRepository.setAiEnabled(enabled) }
+    }
+
+    fun setDetectionKeywords(words: Set<String>) {
+        viewModelScope.launch { settingsRepository.setDetectionKeywords(words) }
+    }
+
     fun setBillReminders(enabled: Boolean) {
         viewModelScope.launch { settingsRepository.setBillReminders(enabled) }
     }
@@ -206,6 +214,7 @@ fun SettingsScreen(
     var showTime by rememberSaveable { mutableStateOf(false) }
     var showAssistant by rememberSaveable { mutableStateOf(false) }
     var showEmail by rememberSaveable { mutableStateOf(false) }
+    var showKeywords by rememberSaveable { mutableStateOf(false) }
     val deletedCount by (LocalContext.current.applicationContext as com.leftovers.app.LeftoversApp).container.repository.deletedCount.collectAsStateWithLifecycle(0)
     val emailConnection by (LocalContext.current.applicationContext as com.leftovers.app.LeftoversApp).container.emailAccount.connection.collectAsStateWithLifecycle()
     var pendingRestore by remember { mutableStateOf<Uri?>(null) }
@@ -286,6 +295,10 @@ fun SettingsScreen(
                         })
                         RowDivider()
                         NavRow(Lucide.Mail, "Detect payments in email", emailConnection?.address ?: "Off") { showEmail = true }
+                        if (s.smsDetection || emailConnection != null) {
+                            RowDivider()
+                            NavRow(Lucide.Tag, "Detection keywords", if (s.detectionKeywords.isEmpty()) "Test a message" else "${s.detectionKeywords.size} added") { showKeywords = true }
+                        }
                     }
                 }
                 if (s.smsDetection) {
@@ -303,7 +316,12 @@ fun SettingsScreen(
                 val assistant by viewModel.assistant.config.collectAsStateWithLifecycle()
                 Glass(Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(vertical = 6.dp)) {
-                        NavRow(Lucide.MessageCircle, "AI assistant", assistant?.let { "${it.provider.label} · connected" } ?: "Not connected") { showAssistant = true }
+                        // Off hides the assistant everywhere (the chat button on Home and these settings).
+                        ToggleRow(Lucide.Sparkles, "AI features", s.aiEnabled, { viewModel.setAiEnabled(it) })
+                        if (s.aiEnabled) {
+                            RowDivider()
+                            NavRow(Lucide.MessageCircle, "AI assistant", assistant?.let { "${it.provider.label} · connected" } ?: "Not connected") { showAssistant = true }
+                        }
                     }
                 }
             }
@@ -399,6 +417,7 @@ fun SettingsScreen(
 
         if (showAssistant) AssistantSetupSheet(onDismiss = { showAssistant = false })
         if (showEmail) EmailSetupSheet(onDismiss = { showEmail = false })
+        if (showKeywords) DetectionSheet(s.detectionKeywords, viewModel::setDetectionKeywords, onDismiss = { showKeywords = false })
 
         if (showCurrency) {
             CurrencyPickerSheet(

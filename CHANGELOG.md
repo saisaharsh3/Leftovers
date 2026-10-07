@@ -3,6 +3,14 @@
 All notable changes to Leftovers. Download any version from
 [Releases](https://github.com/saisaharsh3/Leftovers/releases).
 
+## Unreleased
+
+- Home: choose one account on the balance card, like switching wallets; balance, spending, income and
+  recent entries follow it, and Spent / Income open Activity filtered to it (#4)
+- Detection keywords: add your own words for bank messages the built-in rules miss, and test any message
+  to see what would be suggested (Settings, under SMS and email detection) (#4)
+- AI features switch: turn it off to hide the assistant everywhere (#4)
+
 ## 1.2.2
 
 - Home: *Spent this month* and *Income* open Activity on the matching tab, and an income card under

@@ -38,10 +38,10 @@ object EmailParser {
     data class Parsed(val amountMinor: Long, val merchant: String)
 
     /** [senderName] is the display name of the From address, e.g. "Swiggy" or "HDFC Bank Alerts". */
-    fun parse(subject: String, senderName: String, body: String): Parsed? {
+    fun parse(subject: String, senderName: String, body: String, extraWords: Collection<String> = emptyList()): Parsed? {
         val text = (subject + "\n" + body).take(20_000)
         if (skip.containsMatchIn(text)) return null
-        if (!paidWords.containsMatchIn(text)) return null
+        if (!paidWords.containsMatchIn(text) && extraWords.none { it.isNotBlank() && text.contains(it.trim(), ignoreCase = true) }) return null
         if (creditOnly.containsMatchIn(text) && !Regex("""\bdebited\b""", RegexOption.IGNORE_CASE).containsMatchIn(text)) return null
         if (promo.containsMatchIn(text) && !confirmed.containsMatchIn(text)) return null
 

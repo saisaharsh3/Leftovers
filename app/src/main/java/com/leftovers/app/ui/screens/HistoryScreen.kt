@@ -121,6 +121,9 @@ data class ActivityFilters(val accountId: Long? = null, val categoryId: Long? = 
     val active get() = accountId != null || categoryId != null || tag != null
 }
 
+/** How another screen asks Activity to open: which tab, and optionally one account. */
+data class ActivityRequest(val filter: TypeFilter, val accountId: Long? = null)
+
 data class FilterOption(val id: Long, val name: String, val icon: String, val color: Long)
 
 data class HistoryUiState(
@@ -220,7 +223,7 @@ fun HistoryScreen(
     onAddForDay: (LocalDate) -> Unit,
     onOpenSubscriptions: (income: Boolean) -> Unit = {},
     /** Opens on this month with this filter (e.g. from Home's Spent or Income); null when not asked. */
-    requestedFilter: TypeFilter? = null,
+    requestedFilter: ActivityRequest? = null,
     onRequestHandled: () -> Unit = {},
     viewModel: HistoryViewModel = viewModel(factory = AppViewModelProvider.Factory),
 ) {
@@ -237,9 +240,9 @@ fun HistoryScreen(
             mode = ActivityView.LIST
             searchOpen = false
             viewModel.setQuery("")
-            viewModel.setFilters(ActivityFilters())
+            viewModel.setFilters(ActivityFilters(accountId = it.accountId))
             viewModel.setMonth(YearMonth.now())
-            viewModel.setFilter(it)
+            viewModel.setFilter(it.filter)
             onRequestHandled()
         }
     }

@@ -52,7 +52,8 @@ today, plan for the things you want, and ask an AI about your money if you'd lik
 - Savings goals that say how much to put aside each month and whether you're on track
 - Accounts (cash, bank, UPI, cards) with live balances, transfers, a breakdown of how each balance adds up,
   and a one-step move of every entry to another account (with undo)
-- Total balance across accounts on Home, with where it's heading by the end of the month
+- Total balance across accounts on Home, with where it's heading by the end of the month; switch it to one
+  account (like a wallet) to see just that account's balance, spending and income
 - Money owed: what you lent or borrowed and from whom, settled with a tap and kept out of your budget
 
 **Insights**
@@ -68,13 +69,15 @@ today, plan for the things you want, and ask an AI about your money if you'd lik
 - Tell it what to do: *"Add 250 for coffee today"*, *"Move yesterday's lunch to Cash"*, *"Set a 5,000 limit on Shopping"*
 - Snap a bill or receipt and it suggests the entries, split by category
 - Every change it proposes waits for you to tap **Apply**. See [AI assistant](#ai-assistant) below.
+- Not using it? Turn off **AI features** in Settings and it disappears from the app
 
 **Extras**
 - Home-screen widgets: *Safe to spend today* (with one-tap add) and *Left this month*
 - Evening reminder, app lock (fingerprint, face or PIN)
 - Backup and restore to a file or Google Drive, weekly automatic backups to a folder you choose, CSV export
 - Optional backup password: backups are encrypted (AES-256) and need it to restore
-- Optional payment detection from bank SMS and from bank email alerts, suggesting entries for you to confirm. One payment never shows up twice, even when it arrives by both SMS and email
+- Optional payment detection from bank SMS and from bank email alerts, suggesting entries for you to confirm.
+  Add your own keywords for banks it misses, and test any message to see what it would suggest. One payment never shows up twice, even when it arrives by both SMS and email
 - Swipe sideways to move between Home, Activity, Insights and Plan
 - Dark glass design with spring animations and high-refresh-rate support; light theme available
 

@@ -80,6 +80,7 @@ import com.leftovers.app.ui.screens.AssistantScreen
 import com.leftovers.app.ui.screens.BudgetPlanScreen
 import com.leftovers.app.ui.screens.BudgetsScreen
 import com.leftovers.app.ui.screens.CategoriesScreen
+import com.leftovers.app.ui.screens.ActivityRequest
 import com.leftovers.app.ui.screens.DebtsScreen
 import com.leftovers.app.ui.screens.TypeFilter
 import com.leftovers.app.data.TxType
@@ -172,7 +173,7 @@ fun LeftoversNavHost(openAdd: Boolean = false, onOpenAddHandled: () -> Unit = {}
     val idArg = listOf(navArgument("id") { type = NavType.LongType })
     var toast by remember { mutableStateOf<String?>(null) }
     // A filter Home asked Activity to open with.
-    var activityRequest by remember { mutableStateOf<TypeFilter?>(null) }
+    var activityRequest by remember { mutableStateOf<ActivityRequest?>(null) }
     val appScope = rememberCoroutineScope()
     val undo = remember { UndoState(appScope) }
     val onTab = currentRoute in Routes.tabs
@@ -262,12 +263,13 @@ fun LeftoversNavHost(openAdd: Boolean = false, onOpenAddHandled: () -> Unit = {}
                     screen(Routes.HOME) {
                         HomeScreen(
                             onOpenBudget = { nav.navigate(Routes.BUDGET) },
-                            onOpenActivity = { type ->
-                                activityRequest = when (type) {
+                            onOpenActivity = { type, accountId ->
+                                val filter = when (type) {
                                     TxType.EXPENSE -> TypeFilter.EXPENSE
                                     TxType.INCOME -> TypeFilter.INCOME
                                     null -> TypeFilter.ALL
                                 }
+                                activityRequest = ActivityRequest(filter, accountId)
                                 nav.switchTab(Routes.ACTIVITY)
                             },
                             onOpenSubscriptions = { income -> nav.navigate(Routes.subscriptions(income)) },

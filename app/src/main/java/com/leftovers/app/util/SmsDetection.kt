@@ -30,14 +30,26 @@ object SmsParser {
 
     data class Parsed(val amountMinor: Long, val merchant: String)
 
-    fun parse(body: String): Parsed? {
-        if (ignore.containsMatchIn(body)) return null
-        if (!debitWords.containsMatchIn(body)) return null
+    /** What the parser made of a message, with a plain reason; used by the "Test a message" box. */
+    data class Check(val parsed: Parsed?, val reason: String)
+
+    /** [extraWords] are the user's own keywords that also mark a message as a payment. */
+    fun parse(body: String, extraWords: Collection<String> = emptyList()): Parsed? = check(body, extraWords).parsed
+
+    fun check(body: String, extraWords: Collection<String> = emptyList()): Check {
+        ignore.find(body)?.let { return Check(null, "Skipped: it says \"${it.value}\", like an OTP, a reminder or a failed payment.") }
+        val custom = extraWords.firstOrNull { it.isNotBlank() && body.contains(it.trim(), ignoreCase = true) }
+        if (!debitWords.containsMatchIn(body) && custom == null) {
+            return Check(null, "Not a payment: no word like \"debited\", \"spent\" or \"paid\". If your bank uses another word, add it as a keyword.")
+        }
         // "credited" alone means money came in; ignore unless the message also says debited.
-        if (creditOnly.containsMatchIn(body) && !Regex("debited", RegexOption.IGNORE_CASE).containsMatchIn(body)) return null
-        val value = amount.find(body)?.groupValues?.get(1)?.replace(",", "") ?: return null
-        val minor = runCatching { BigDecimal(value).movePointRight(2).toLong() }.getOrNull() ?: return null
-        if (minor <= 0) return null
+        if (creditOnly.containsMatchIn(body) && !Regex("debited", RegexOption.IGNORE_CASE).containsMatchIn(body)) {
+            return Check(null, "Skipped: it's money coming in (credited, received or refund).")
+        }
+        val value = amount.find(body)?.groupValues?.get(1)?.replace(",", "")
+            ?: return Check(null, "No amount found. It needs Rs, INR or ₹ before the number.")
+        val minor = runCatching { BigDecimal(value).movePointRight(2).toLong() }.getOrNull()?.takeIf { it > 0 }
+            ?: return Check(null, "No amount found. It needs Rs, INR or ₹ before the number.")
         val who = merchant.find(body)?.groupValues?.get(1)?.trim()
             ?.substringBefore('@')
             ?.replace(Regex("""^(vpa|upi|merchant)\s+""", RegexOption.IGNORE_CASE), "")
@@ -45,7 +57,8 @@ object SmsParser {
             ?.takeIf { it.length >= 2 && !it.contains("a/c", true) && !it.matches(Regex("""[xX*\d ]+""")) }
             ?.replaceFirstChar { it.uppercase() }
             .orEmpty()
-        return Parsed(minor, who)
+        val via = if (custom != null && !debitWords.containsMatchIn(body)) " (found by your keyword \"${custom.trim()}\")" else ""
+        return Check(Parsed(minor, who), "Payment$via")
     }
 }
 
@@ -58,12 +71,14 @@ class SmsReceiver : BroadcastReceiver() {
         val messages = Telephony.Sms.Intents.getMessagesFromIntent(intent) ?: return
         val sender = messages.firstOrNull()?.originatingAddress.orEmpty()
         val body = messages.joinToString("") { it.messageBody.orEmpty() }
-        val parsed = SmsParser.parse(body) ?: return
         val container = (context.applicationContext as LeftoversApp).container
         val pending = goAsync()
         CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
             try {
-                if (container.settings.settings.first().smsDetection) {
+                val s = container.settings.settings.first()
+                // The user's own keywords count too, for banks the built-in words miss.
+                val parsed = if (s.smsDetection) SmsParser.parse(body, s.detectionKeywords) else null
+                if (parsed != null) {
                     container.sms.add(
                         SmsSuggestion(
                             amountMinor = parsed.amountMinor,

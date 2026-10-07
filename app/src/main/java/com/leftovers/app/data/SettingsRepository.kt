@@ -43,6 +43,12 @@ data class AppSettings(
     val dismissedSuggestions: Set<String> = emptySet(),
     /** How long deleted entries are kept for restoring, in days; 0 means forever. */
     val deletedKeepDays: Int = 90,
+    /** Show the AI assistant (chat button and settings). Off hides it everywhere. */
+    val aiEnabled: Boolean = true,
+    /** The account Home is showing; null means all accounts. */
+    val homeAccountId: Long? = null,
+    /** Extra words that mark a bank message as a payment, for banks the built-in rules miss. */
+    val detectionKeywords: Set<String> = emptySet(),
 )
 
 class SettingsRepository(context: Context) {
@@ -76,6 +82,9 @@ class SettingsRepository(context: Context) {
             billReminders = p[BILL_REMINDERS] ?: true,
             dismissedSuggestions = p[DISMISSED_SUGGESTIONS].orEmpty(),
             deletedKeepDays = p[DELETED_KEEP_DAYS] ?: 90,
+            aiEnabled = p[AI_ENABLED] ?: true,
+            homeAccountId = p[HOME_ACCOUNT],
+            detectionKeywords = p[DETECTION_KEYWORDS].orEmpty(),
         )
     }
 
@@ -123,6 +132,9 @@ class SettingsRepository(context: Context) {
     suspend fun setAutoBackupDir(dir: String?) = store.edit { if (dir == null) it.remove(AUTO_BACKUP_DIR) else it[AUTO_BACKUP_DIR] = dir }
     suspend fun setAutoBackupDone(at: Long) = store.edit { it[AUTO_BACKUP_LAST] = at }
     suspend fun setBillReminders(enabled: Boolean) = store.edit { it[BILL_REMINDERS] = enabled }
+    suspend fun setAiEnabled(enabled: Boolean) = store.edit { it[AI_ENABLED] = enabled }
+    suspend fun setHomeAccount(id: Long?) = store.edit { if (id == null) it.remove(HOME_ACCOUNT) else it[HOME_ACCOUNT] = id }
+    suspend fun setDetectionKeywords(words: Set<String>) = store.edit { it[DETECTION_KEYWORDS] = words }
     suspend fun setDeletedKeepDays(days: Int) = store.edit { it[DELETED_KEEP_DAYS] = days }
     suspend fun dismissSuggestion(key: String) = store.edit { it[DISMISSED_SUGGESTIONS] = it[DISMISSED_SUGGESTIONS].orEmpty() + key }
 
@@ -162,6 +174,9 @@ class SettingsRepository(context: Context) {
         val SENT_ALERTS = stringSetPreferencesKey("sent_alerts")
         val DISMISSED_SUGGESTIONS = stringSetPreferencesKey("dismissed_suggestions")
         val DELETED_KEEP_DAYS = intPreferencesKey("deleted_keep_days")
+        val AI_ENABLED = booleanPreferencesKey("ai_enabled")
+        val HOME_ACCOUNT = longPreferencesKey("home_account")
+        val DETECTION_KEYWORDS = stringSetPreferencesKey("detection_keywords")
         val DEFAULT_ACCOUNT = longPreferencesKey("default_account")
         val REMINDER = booleanPreferencesKey("reminder")
         val REMINDER_TIME = intPreferencesKey("reminder_time")
