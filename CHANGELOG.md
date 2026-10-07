@@ -3,7 +3,7 @@
 All notable changes to Leftovers. Download any version from
 [Releases](https://github.com/saisaharsh3/Leftovers/releases).
 
-## Unreleased
+## 1.3.0
 
 - Home: choose one account on the balance card, like switching wallets; balance, spending, income and
   recent entries follow it, and Spent / Income open Activity filtered to it (#4)
