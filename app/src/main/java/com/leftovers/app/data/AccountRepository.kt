@@ -35,12 +35,20 @@ class AccountRepository(
     suspend fun deleteTransfer(transfer: Transfer) = transferDao.delete(transfer)
 }
 
-class SmsRepository(private val dao: SmsDao) {
+class SmsRepository(private val dao: SmsDao, private val transactionDao: TransactionDao) {
     val suggestions: Flow<List<SmsSuggestion>> = dao.observeAll()
 
-    /** Stores a detected payment unless the same message was already seen. */
+    /**
+     * Stores a detected payment unless it's a repeat: the same message again, or the same amount already
+     * suggested or logged around the same time (see [DuplicatePayments]).
+     */
     suspend fun add(suggestion: SmsSuggestion) {
-        if (dao.countWithBody(suggestion.body) == 0) dao.insert(suggestion)
+        if (dao.countWithBody(suggestion.body) > 0) return
+        val from = suggestion.receivedAt - DuplicatePayments.WINDOW_MS
+        val to = suggestion.receivedAt + DuplicatePayments.WINDOW_MS
+        val seen = dao.amountsBetween(from, to) + transactionDao.expenseAmountsBetween(from, to)
+        if (DuplicatePayments.isDuplicate(suggestion.amountMinor, suggestion.receivedAt, seen)) return
+        dao.insert(suggestion)
     }
 
     suspend fun dismiss(id: Long) = dao.delete(id)

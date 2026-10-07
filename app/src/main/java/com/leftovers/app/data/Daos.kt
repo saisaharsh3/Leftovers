@@ -50,6 +50,10 @@ interface TransactionDao {
     @Query("SELECT COUNT(*) FROM transactions WHERE accountId = :accountId")
     suspend fun countForAccount(accountId: Long): Int
 
+    /** Expenses logged (by creation time) between [from] and [to], for duplicate checks. */
+    @Query("SELECT amountMinor, createdAt AS at FROM transactions WHERE type = 'EXPENSE' AND createdAt BETWEEN :from AND :to")
+    suspend fun expenseAmountsBetween(from: Long, to: Long): List<AmountAt>
+
     @Query("SELECT id FROM transactions WHERE accountId = :accountId")
     suspend fun idsForAccount(accountId: Long): List<Long>
 
@@ -190,6 +194,9 @@ interface SmsDao {
 
     @Query("SELECT COUNT(*) FROM sms_suggestions WHERE body = :body")
     suspend fun countWithBody(body: String): Int
+
+    @Query("SELECT amountMinor, receivedAt AS at FROM sms_suggestions WHERE receivedAt BETWEEN :from AND :to")
+    suspend fun amountsBetween(from: Long, to: Long): List<AmountAt>
 
     /** Older versions stored whole messages; anything that isn't a 64-char hash gets cleared. */
     @Query("UPDATE sms_suggestions SET body = '' WHERE length(body) != 64")
