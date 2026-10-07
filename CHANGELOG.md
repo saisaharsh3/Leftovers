@@ -13,7 +13,10 @@ All notable changes to Leftovers. Download any version from
 - Fixed: Undo didn't bring back an entry that was the only one on its day
 - Smoother Activity list: deleted rows fade out while the rest glide into place, and Undo slides them back
 
-## 1.2.0
+## 1.2.0 (withdrawn)
+
+Replaced by 1.2.1 because Undo could fail to bring back an entry. Everything below is included in 1.2.1.
+
 
 - **Payments from email:** connect Gmail, Yahoo, iCloud, Zoho or any IMAP mailbox with an app password
   (Settings → Detect payments in email). Bank alerts and shop receipts show up on Home to confirm, like SMS.
