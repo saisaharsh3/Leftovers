@@ -3,7 +3,7 @@
 All notable changes to Leftovers. Download any version from
 [Releases](https://github.com/saisaharsh3/Leftovers/releases).
 
-## Unreleased
+## 1.2.0
 
 - **Payments from email:** connect Gmail, Yahoo, iCloud, Zoho or any IMAP mailbox with an app password
   (Settings → Detect payments in email). Bank alerts and shop receipts show up on Home to confirm, like SMS.
