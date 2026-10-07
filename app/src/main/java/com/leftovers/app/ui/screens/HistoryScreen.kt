@@ -1,5 +1,7 @@
 package com.leftovers.app.ui.screens
 
+import androidx.compose.ui.platform.LocalDensity
+import kotlin.math.abs
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.shrinkVertically
@@ -475,13 +477,20 @@ private fun SwipeableRow(item: TransactionItem, onDelete: () -> Unit, onEdit: ()
             }
         },
         backgroundContent = {
-            // Rows are see-through glass, so only draw the action layer while a swipe is in progress.
-            if (state.dismissDirection == SwipeToDismissBoxValue.Settled) return@SwipeToDismissBox
-            val editing = state.dismissDirection == SwipeToDismissBoxValue.StartToEnd
+            // Keep the last direction while the row springs back, so the icon doesn't swap mid-way.
+            val direction = state.dismissDirection
+            var lastDirection by remember { mutableStateOf(SwipeToDismissBoxValue.StartToEnd) }
+            if (direction != SwipeToDismissBoxValue.Settled) lastDirection = direction
+            val editing = lastDirection == SwipeToDismissBoxValue.StartToEnd
+            val reveal = with(LocalDensity.current) { 96.dp.toPx() }
+            val travel = with(LocalDensity.current) { 56.dp.toPx() }
+            // Everything follows the row's position, so it slides in and out with the finger
+            // instead of popping in or vanishing. At rest it is fully transparent (rows are glass).
+            fun shown(): Float = (abs(runCatching { state.requireOffset() }.getOrDefault(0f)) / reveal).coerceIn(0f, 1f)
             Box(
                 Modifier
                     .fillMaxSize()
-                    .graphicsLayer { alpha = (state.progress * 3f).coerceIn(0f, 1f) }
+                    .graphicsLayer { alpha = shown() }
                     .background((if (editing) c.textSecondary else c.negative).copy(alpha = 0.18f))
                     .padding(horizontal = 24.dp),
                 contentAlignment = if (editing) Alignment.CenterStart else Alignment.CenterEnd,
@@ -490,7 +499,15 @@ private fun SwipeableRow(item: TransactionItem, onDelete: () -> Unit, onEdit: ()
                     if (editing) Lucide.Pencil else Lucide.Trash2,
                     contentDescription = if (editing) "Edit" else "Delete",
                     tint = if (editing) c.textPrimary else c.negative,
-                    modifier = Modifier.size(20.dp),
+                    modifier = Modifier
+                        .size(20.dp)
+                        .graphicsLayer {
+                            val t = shown()
+                            // Slides out from the edge it's revealed at, growing as it comes.
+                            translationX = (1f - t) * travel * (if (editing) -1f else 1f)
+                            scaleX = 0.7f + 0.3f * t
+                            scaleY = 0.7f + 0.3f * t
+                        },
                 )
             }
         },

@@ -8,7 +8,8 @@ All notable changes to Leftovers. Download any version from
 - SMS detection no longer suggests a payment twice when the bank sends two alerts, or when you've already
   logged it yourself
 - Smoother swipes in Activity: a deleted row slides away and the list closes the gap smoothly, and swiping
-  right opens the editor without the row jumping back underneath it
+  right opens the editor without the row jumping back underneath it. The edit and delete icons slide in
+  and out with the row instead of popping
 - The *Undo* message after deleting now appears above the tab bar (it was hidden behind it) and stays for
   10 seconds
 - Plan's last section is now called *More*, since it holds Money owed as well as setup
