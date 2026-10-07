@@ -13,5 +13,6 @@ the full text is in [third_party/manrope/OFL.txt](third_party/manrope/OFL.txt).
 ## Lucide icons
 
 Icon outlines in `app/src/main/java/com/leftovers/app/ui/icons/Lucide.kt` were converted from
-[Lucide](https://lucide.dev). Licensed under the ISC License; the full text is in
+[Lucide](https://lucide.dev). The app icon (`app/src/main/res/drawable/ic_launcher_foreground.xml`, and
+`docs/icon.svg` in the README) is Lucide's "wallet" icon on a plain background. Licensed under the ISC License; the full text is in
 [third_party/lucide/LICENSE](third_party/lucide/LICENSE).
