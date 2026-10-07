@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -160,7 +161,6 @@ fun BudgetsScreen(
         title = "Budget",
         subtitle = state.month.label(),
         onBack = onBack,
-        actions = { RoundButton(Lucide.SlidersHorizontal, "Budget plan", onEditPlan) },
     ) { padding ->
         LazyColumn(
             Modifier.fillMaxSize(),
@@ -186,6 +186,13 @@ fun BudgetsScreen(
                     val used = if (state.overallBudget > 0) state.totalSpent.toFloat() / state.overallBudget else 1f
                     // Tapping the gauge opens the budget editor.
                     Glass(Modifier.fillMaxWidth().appear(0), strong = true, shape = RoundedCornerShape(32.dp), onClick = onEditPlan) {
+                        // A small pencil says the card opens the budget editor.
+                        Icon(
+                            Lucide.Pencil,
+                            contentDescription = "Edit budget",
+                            tint = c.textSecondary,
+                            modifier = Modifier.align(Alignment.TopEnd).padding(18.dp).size(18.dp),
+                        )
                         Column(Modifier.fillMaxWidth().padding(vertical = 22.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                             Gauge(used, Modifier.size(240.dp), thickness = 16.dp) {
                                 Column(Modifier.align(Alignment.Center).fillMaxWidth().padding(horizontal = 32.dp), horizontalAlignment = Alignment.CenterHorizontally) {

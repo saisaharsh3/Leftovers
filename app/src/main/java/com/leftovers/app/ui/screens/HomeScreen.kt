@@ -121,7 +121,6 @@ data class HomeUiState(
     val accounts: List<AccountWithBalance> = emptyList(),
     /** The account Home is showing, or null for all of them. */
     val selectedAccount: AccountWithBalance? = null,
-    val aiEnabled: Boolean = true,
 )
 
 class HomeViewModel(
@@ -173,7 +172,6 @@ class HomeViewModel(
             forecast = if (selected == null) forecastMonthEnd(accountList.sumOf { it.balanceMinor }, all, recurring, todayDate) else null,
             accounts = accountList,
             selectedAccount = selected,
-            aiEnabled = s.aiEnabled,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), HomeUiState())
 
@@ -232,10 +230,8 @@ fun HomeScreen(
                         Text(greeting(), style = MaterialTheme.typography.bodyMedium, color = c.textSecondary)
                         Text(state.month.label(), style = MaterialTheme.typography.headlineLarge, color = c.textPrimary)
                     }
-                    if (state.aiEnabled) {
-                        RoundButton(Lucide.MessageCircle, "AI assistant", onOpenAssistant)
-                        Spacer(Modifier.width(8.dp))
-                    }
+                    RoundButton(Lucide.MessageCircle, "AI assistant", onOpenAssistant)
+                    Spacer(Modifier.width(8.dp))
                     RoundButton(Lucide.Settings, "Settings", onOpenSettings)
                 }
             }

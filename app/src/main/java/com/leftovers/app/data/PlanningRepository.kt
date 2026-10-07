@@ -55,7 +55,7 @@ class PlanningRepository(private val database: AppDatabase) {
                         categoryId = r.categoryId,
                         epochDay = date.toEpochDay(),
                         note = r.name,
-                        accountId = accountId,
+                        accountId = r.accountId ?: accountId,
                     )
                     transactionDao.upsert(tx)
                     posted += tx

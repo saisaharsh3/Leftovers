@@ -1,5 +1,7 @@
 package com.leftovers.app.ui.screens
 
+import com.leftovers.app.data.AccountRepository
+import com.leftovers.app.data.AccountWithBalance
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -87,6 +89,7 @@ import java.time.YearMonth
 class SubscriptionsViewModel(
     private val planning: PlanningRepository,
     repository: TransactionRepository,
+    accountRepository: AccountRepository,
     private val settings: SettingsRepository,
     private val sync: suspend () -> Unit,
 ) : ViewModel() {
@@ -94,6 +97,8 @@ class SubscriptionsViewModel(
         planning.recurring.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
     val categories: StateFlow<List<Category>> =
         repository.categories.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+    val accounts: StateFlow<List<AccountWithBalance>> =
+        accountRepository.accounts.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     /** Repeating expenses that look like subscriptions not set up yet. */
     val suggestions: StateFlow<List<SubscriptionSuggestion>> =
@@ -152,6 +157,7 @@ fun SubscriptionsScreen(
 ) {
     val items by viewModel.items.collectAsStateWithLifecycle()
     val categories by viewModel.categories.collectAsStateWithLifecycle()
+    val accounts by viewModel.accounts.collectAsStateWithLifecycle()
     val suggestions by viewModel.suggestions.collectAsStateWithLifecycle()
     val c = LocalAppColors.current
     val money = LocalMoney.current
@@ -293,6 +299,7 @@ fun SubscriptionsScreen(
         RecurringEditor(
             initial = recurring,
             categories = categories,
+            accounts = accounts,
             onDismiss = { editing = null },
             onSave = {
                 viewModel.save(it)
@@ -467,6 +474,7 @@ private fun RecurringRow(item: RecurringItem, onClick: () -> Unit, onToggle: (Bo
 private fun RecurringEditor(
     initial: Recurring,
     categories: List<Category>,
+    accounts: List<AccountWithBalance>,
     onDismiss: () -> Unit,
     onSave: (Recurring) -> Unit,
     onDelete: (() -> Unit)?,
@@ -487,6 +495,7 @@ private fun RecurringEditor(
     }
     var chargeThisMonth by rememberSaveable { mutableStateOf(true) }
     var skipNext by rememberSaveable { mutableStateOf(false) }
+    var accountId by rememberSaveable { mutableStateOf(initial.accountId) }
     val amount = AmountInput.toMinor(amountText) ?: 0L
     // Months that can be picked for the next charge: the coming cycle, or the whole year for yearly bills.
     val monthChoices = (0 until if (every == 12) 12 else every).map { now.plusMonths(it.toLong()) }
@@ -550,6 +559,20 @@ private fun RecurringEditor(
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 categories.filter { it.type == type }.forEach { cat ->
                     Chip(cat.name, icon = CategoryIcons[cat.emoji], iconTint = Color(cat.color), selected = cat.id == categoryId, onClick = { categoryId = cat.id })
+                }
+            }
+
+            if (accounts.size > 1) {
+                Text(
+                    if (type == TxType.INCOME) "Paid into" else "Paid from",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = c.textSecondary,
+                    modifier = Modifier.padding(start = 6.dp),
+                )
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    accounts.forEach { a ->
+                        Chip(a.name, { accountId = a.id }, icon = CategoryIcons[a.icon], iconTint = Color(a.color), selected = accountId == a.id)
+                    }
                 }
             }
 
@@ -633,7 +656,7 @@ private fun RecurringEditor(
                             else -> now.toString()
                         }
                     }
-                    var saved = initial.copy(name = name.trim(), amountMinor = amount, type = type, categoryId = categoryId, dayOfMonth = day, startMonth = start, everyMonths = every)
+                    var saved = initial.copy(name = name.trim(), amountMinor = amount, type = type, categoryId = categoryId, dayOfMonth = day, startMonth = start, everyMonths = every, accountId = accountId)
                     if (skipNext) {
                         // Marking the next charge as already logged skips it without touching the schedule.
                         saved = saved.copy(lastPostedMonth = YearMonth.from(saved.nextChargeDate()).toString())

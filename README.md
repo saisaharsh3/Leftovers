@@ -69,7 +69,6 @@ today, plan for the things you want, and ask an AI about your money if you'd lik
 - Tell it what to do: *"Add 250 for coffee today"*, *"Move yesterday's lunch to Cash"*, *"Set a 5,000 limit on Shopping"*
 - Snap a bill or receipt and it suggests the entries, split by category
 - Every change it proposes waits for you to tap **Apply**. See [AI assistant](#ai-assistant) below.
-- Not using it? Turn off **AI features** in Settings and it disappears from the app
 
 **Extras**
 - Home-screen widgets: *Safe to spend today* (with one-tap add) and *Left this month*

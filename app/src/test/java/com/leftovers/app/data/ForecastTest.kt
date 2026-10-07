@@ -10,7 +10,7 @@ private fun tx(day: LocalDate, amount: Long, note: String = "", category: Long =
     TransactionItem(0, amount, type, category, day.toEpochDay(), note, 0, "Food", "food", 0, null, null)
 
 private fun sub(name: String, amount: Long, day: Int, start: String, type: TxType = TxType.EXPENSE, every: Int = 1, lastPosted: String? = null, category: Long = 2) =
-    RecurringItem(0, name, amount, type, category, day, start, lastPosted, true, every, "Bills", "bills", 0)
+    RecurringItem(0, name, amount, type, category, day, start, lastPosted, true, every, null, "Bills", "bills", 0)
 
 class ForecastTest {
     private val today = LocalDate.of(2026, 10, 10)

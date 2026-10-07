@@ -1,5 +1,9 @@
 package com.leftovers.app.ui.screens
 
+import com.leftovers.app.data.RecurringItem
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -316,6 +320,7 @@ class EditorViewModel(
                         startMonth = month,
                         // The entry just saved is this month's charge.
                         lastPostedMonth = month,
+                        accountId = accountId,
                     ),
                 )
             }
@@ -334,12 +339,22 @@ class EditorViewModel(
         return true
     }
 
-    fun delete(onDone: () -> Unit) {
+    /** The subscription or recurring income that logged this entry, if any. */
+    suspend fun linkedSubscription(): RecurringItem? {
+        val tx = repository.getTransaction(id) ?: return null
+        return planning.recurring.first().firstOrNull {
+            it.type == tx.type && it.categoryId == tx.categoryId && it.name.equals(tx.note.trim(), ignoreCase = true)
+        }
+    }
+
+    /** Deletes the entry; with [stopRepeating], also removes the subscription that logged it (past entries stay). */
+    fun delete(stopRepeating: RecurringItem? = null, onDone: () -> Unit) {
         viewModelScope.launch {
             repository.getTransaction(id)?.let {
                 // The photo stays with the entry in Deleted entries until it's removed for good.
                 repository.deleteTransaction(it)
             }
+            stopRepeating?.let { planning.deleteRecurring(it.toRecurring()) }
             onDone()
         }
     }
@@ -469,6 +484,7 @@ fun EditorScreen(
                         {
                             viewModel.repeatMonthly = !repeating
                             if (!repeating) viewModel.splits.clear()
+                            if (repeating && viewModel.date > LocalDate.now()) viewModel.date = LocalDate.now()
                         },
                         size = 40.dp,
                         tint = if (repeating) c.onAccent else c.textSecondary,
@@ -494,7 +510,12 @@ fun EditorScreen(
             }
             AnimatedVisibility(viewModel.repeatMonthly, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
                 Text(
-                    "Logged now and again on the ${ordinal(viewModel.date.dayOfMonth)} of every month",
+                    if (viewModel.date > LocalDate.now()) {
+                        "First logged on ${viewModel.date.friendlyLabel()}, then the ${ordinal(viewModel.date.dayOfMonth)} of every month · tap the calendar to change"
+                    } else {
+                        "Logged now and again on the ${ordinal(viewModel.date.dayOfMonth)} of every month · tap the calendar to pick any day"
+                    },
+                    textAlign = TextAlign.Center,
                     style = MaterialTheme.typography.labelMedium,
                     color = c.accent,
                     modifier = Modifier.padding(top = 10.dp),
@@ -589,7 +610,8 @@ fun EditorScreen(
         val pickerState = rememberDatePickerState(
             initialSelectedDateMillis = viewModel.date.atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli(),
             selectableDates = object : SelectableDates {
-                override fun isSelectableDate(utcTimeMillis: Long) = utcTimeMillis <= todayUtc
+                // A repeating entry can start on a later day, e.g. salary on the 30th.
+                override fun isSelectableDate(utcTimeMillis: Long) = viewModel.repeatMonthly || utcTimeMillis <= todayUtc
             },
         )
         DatePickerDialog(
@@ -605,7 +627,7 @@ fun EditorScreen(
         ) {
             DatePicker(
                 pickerState,
-                title = { Text("Which day was it?", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(start = 24.dp, top = 20.dp)) },
+                title = { Text(if (viewModel.repeatMonthly) "Which day does it repeat from?" else "Which day was it?", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(start = 24.dp, top = 20.dp)) },
                 colors = DatePickerDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
             )
         }
@@ -632,16 +654,40 @@ fun EditorScreen(
     }
 
     if (confirmDelete) {
+        val linked by produceState<RecurringItem?>(null) { value = viewModel.linkedSubscription() }
+        var stopRepeating by remember { mutableStateOf(true) }
         AlertDialog(
             onDismissRequest = { confirmDelete = false },
             containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
             shape = RoundedCornerShape(30.dp),
             title = { Text("Delete this entry?") },
-            text = { Text("This can't be undone.", color = c.textSecondary) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text("You can restore it later from Settings → Deleted entries.", color = c.textSecondary)
+                    linked?.let { r ->
+                        Row(
+                            Modifier.fillMaxWidth().pressable({ stopRepeating = !stopRepeating }, pressedScale = 0.98f),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                "Also stop the ${if (r.type == TxType.INCOME) "recurring income" else "subscription"} \"${r.name}\"",
+                                color = c.textPrimary,
+                                style = MaterialTheme.typography.bodyMedium,
+                                modifier = Modifier.weight(1f),
+                            )
+                            Switch(
+                                checked = stopRepeating,
+                                onCheckedChange = { stopRepeating = it },
+                                colors = SwitchDefaults.colors(checkedTrackColor = c.accent, checkedThumbColor = c.onAccent),
+                            )
+                        }
+                    }
+                }
+            },
             confirmButton = {
                 TextButton(onClick = {
                     confirmDelete = false
-                    viewModel.delete(onClose)
+                    viewModel.delete(linked?.takeIf { stopRepeating }, onClose)
                 }) { Text("Delete", color = c.negative) }
             },
             dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("Cancel", color = c.textSecondary) } },

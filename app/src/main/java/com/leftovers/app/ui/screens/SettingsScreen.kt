@@ -116,10 +116,6 @@ class SettingsViewModel(
         viewModelScope.launch { settingsRepository.setAppLock(enabled) }
     }
 
-    fun setAiEnabled(enabled: Boolean) {
-        viewModelScope.launch { settingsRepository.setAiEnabled(enabled) }
-    }
-
     fun setDetectionKeywords(words: Set<String>) {
         viewModelScope.launch { settingsRepository.setDetectionKeywords(words) }
     }
@@ -316,12 +312,7 @@ fun SettingsScreen(
                 val assistant by viewModel.assistant.config.collectAsStateWithLifecycle()
                 Glass(Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(vertical = 6.dp)) {
-                        // Off hides the assistant everywhere (the chat button on Home and these settings).
-                        ToggleRow(Lucide.Sparkles, "AI features", s.aiEnabled, { viewModel.setAiEnabled(it) })
-                        if (s.aiEnabled) {
-                            RowDivider()
-                            NavRow(Lucide.MessageCircle, "AI assistant", assistant?.let { "${it.provider.label} · connected" } ?: "Not connected") { showAssistant = true }
-                        }
+                        NavRow(Lucide.MessageCircle, "AI assistant", assistant?.let { "${it.provider.label} · connected" } ?: "Not connected") { showAssistant = true }
                     }
                 }
             }
@@ -397,6 +388,17 @@ fun SettingsScreen(
                     Icon(Lucide.Lock, contentDescription = null, tint = c.textTertiary, modifier = Modifier.size(14.dp))
                     Spacer(Modifier.width(6.dp))
                     Text("Stored only on this device · Leftovers 1.2.2", style = MaterialTheme.typography.bodySmall, color = c.textTertiary, textAlign = TextAlign.Center)
+                }
+            }
+            item {
+                val uriHandler = LocalUriHandler.current
+                Glass(Modifier.fillMaxWidth().padding(top = 24.dp)) {
+                    Column(Modifier.padding(vertical = 6.dp)) {
+                        // Opens GitHub's issue forms (bug report or feature request) in the browser.
+                        NavRow(Lucide.MessageCircle, "Report a problem or suggest an idea", "GitHub") {
+                            uriHandler.openUri("https://github.com/saisaharsh3/Leftovers/issues/new/choose")
+                        }
+                    }
                 }
             }
             item {

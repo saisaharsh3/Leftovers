@@ -33,6 +33,8 @@ data class Recurring(
     val lastPostedMonth: String? = null,
     val active: Boolean = true,
     @ColumnInfo(defaultValue = "1") val everyMonths: Int = 1,
+    /** The account it's paid from or into; null uses the default account. */
+    val accountId: Long? = null,
 ) {
     val yearly: Boolean get() = everyMonths == 12
 
@@ -76,11 +78,12 @@ data class RecurringItem(
     val lastPostedMonth: String?,
     val active: Boolean,
     val everyMonths: Int,
+    val accountId: Long?,
     val categoryName: String,
     val categoryEmoji: String,
     val categoryColor: Long,
 ) {
-    fun toRecurring() = Recurring(id, name, amountMinor, type, categoryId, dayOfMonth, startMonth, lastPostedMonth, active, everyMonths)
+    fun toRecurring() = Recurring(id, name, amountMinor, type, categoryId, dayOfMonth, startMonth, lastPostedMonth, active, everyMonths, accountId)
 }
 
 @Entity(tableName = "goals")
