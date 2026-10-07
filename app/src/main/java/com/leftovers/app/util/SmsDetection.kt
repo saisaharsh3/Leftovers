@@ -22,7 +22,6 @@ object SmsParser {
     private val debitWords = Regex("""\b(debited|spent|paid|sent|withdrawn|purchase|txn of|debit)\b""", RegexOption.IGNORE_CASE)
     private val creditOnly = Regex("""\b(credited|received|refund|cashback)\b""", RegexOption.IGNORE_CASE)
     private val ignore = Regex("""\b(otp|one time password|due|will be debited|requested|declined|failed)\b""", RegexOption.IGNORE_CASE)
-    private val amount = Regex("""(?:rs\.?|inr|₹)\s*([0-9][0-9,]*(?:\.[0-9]{1,2})?)""", RegexOption.IGNORE_CASE)
     private val merchant = Regex(
         """\b(?:at|to|towards|vpa|info:?)\s+([A-Za-z0-9@._&' -]{2,40}?)(?=\s+(?:on|via|ref|upi|txn|avl|avail|from|using)\b|[.,;]|$)""",
         RegexOption.IGNORE_CASE,
@@ -46,10 +45,9 @@ object SmsParser {
         if (creditOnly.containsMatchIn(body) && !Regex("debited", RegexOption.IGNORE_CASE).containsMatchIn(body)) {
             return Check(null, "Skipped: it's money coming in (credited, received or refund).")
         }
-        val value = amount.find(body)?.groupValues?.get(1)?.replace(",", "")
-            ?: return Check(null, "No amount found. It needs Rs, INR or ₹ before the number.")
-        val minor = runCatching { BigDecimal(value).movePointRight(2).toLong() }.getOrNull()?.takeIf { it > 0 }
-            ?: return Check(null, "No amount found. It needs Rs, INR or ₹ before the number.")
+        // Any currency, symbol or code, before or after the number (see MoneyText).
+        val minor = MoneyText.find(body)
+            ?: return Check(null, "No amount found. It needs a currency next to the number, like Rs 250, $12.50 or 45 AED.")
         val who = merchant.find(body)?.groupValues?.get(1)?.trim()
             ?.substringBefore('@')
             ?.replace(Regex("""^(vpa|upi|merchant)\s+""", RegexOption.IGNORE_CASE), "")

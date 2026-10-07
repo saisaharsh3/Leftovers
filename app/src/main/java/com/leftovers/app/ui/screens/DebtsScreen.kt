@@ -1,5 +1,14 @@
 package com.leftovers.app.ui.screens
 
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.material3.Icon
+import androidx.compose.foundation.layout.size
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.platform.LocalContext
+import com.leftovers.app.util.ReceiptStore
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -157,6 +166,9 @@ fun DebtsScreen(onBack: () -> Unit, viewModel: DebtsViewModel = viewModel(factor
                                     color = c.textSecondary,
                                     modifier = Modifier.weight(1f),
                                 )
+                                if (d.receiptPath != null) {
+                                    Icon(Lucide.Camera, contentDescription = "Has a photo", tint = c.textTertiary, modifier = Modifier.padding(end = 8.dp).size(14.dp))
+                                }
                                 Text(
                                     (if (d.amountMinor > 0) "Lent " else "Borrowed ") + money.format(abs(d.amountMinor)),
                                     style = MaterialTheme.typography.labelLarge,
@@ -199,9 +211,35 @@ private fun DebtEditor(initial: Debt, people: List<String>, onDismiss: () -> Uni
     var person by rememberSaveable { mutableStateOf(initial.person) }
     var amountText by rememberSaveable { mutableStateOf(if (initial.amountMinor != 0L) AmountInput.fromMinor(abs(initial.amountMinor)) else "") }
     var note by rememberSaveable { mutableStateOf(initial.note) }
+    var photo by rememberSaveable { mutableStateOf(initial.receiptPath) }
+    var viewPhoto by remember { mutableStateOf(false) }
+    var cameraFile by remember { mutableStateOf<java.io.File?>(null) }
     val amount = AmountInput.toMinor(amountText) ?: 0L
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
 
-    GlassSheet(onDismiss) {
+    fun attach(uri: Uri, cleanup: () -> Unit = {}) {
+        scope.launch {
+            val path = ReceiptStore.import(context, uri)
+            cleanup()
+            if (path != null) {
+                if (photo != initial.receiptPath) ReceiptStore.delete(photo)
+                photo = path
+            }
+        }
+    }
+    val pickImage = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri -> if (uri != null) attach(uri) }
+    val takePhoto = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok ->
+        val file = cameraFile
+        if (ok && file != null) attach(Uri.fromFile(file)) { file.delete() } else file?.delete()
+    }
+    // A photo added but not saved is thrown away.
+    val close = {
+        if (photo != initial.receiptPath) ReceiptStore.delete(photo)
+        onDismiss()
+    }
+
+    GlassSheet(close) {
         Column(
             Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 16.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
@@ -217,13 +255,36 @@ private fun DebtEditor(initial: Debt, people: List<String>, onDismiss: () -> Uni
             }
             MoneyField(amountText, { amountText = it }, label = "Amount")
             GlassTextField(note, { note = it.take(60) }, placeholder = "e.g. Dinner at Toit", label = "Note")
+            // A photo of the bill, a chat screenshot or a payment receipt.
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                val current = photo
+                if (current != null) {
+                    ReceiptThumb(current, onOpen = { viewPhoto = true }, onRemove = {
+                        if (current != initial.receiptPath) ReceiptStore.delete(current)
+                        photo = null
+                    })
+                    Text("Photo attached", style = MaterialTheme.typography.bodySmall, color = c.textSecondary)
+                } else {
+                    Chip("Take a photo", {
+                        val (uri, file) = ReceiptStore.newCameraUri(context)
+                        cameraFile = file
+                        takePhoto.launch(uri)
+                    }, icon = Lucide.Camera)
+                    Chip("Add a screenshot", { pickImage.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }, icon = Lucide.ReceiptText)
+                }
+            }
             Spacer(Modifier.height(2.dp))
             PrimaryButton(
                 "Save",
-                { onSave(initial.copy(person = person.trim(), amountMinor = if (lent) amount else -amount, note = note.trim())) },
+                {
+                    // A replaced photo is removed once the new one is saved.
+                    if (initial.receiptPath != null && initial.receiptPath != photo) ReceiptStore.delete(initial.receiptPath)
+                    onSave(initial.copy(person = person.trim(), amountMinor = if (lent) amount else -amount, note = note.trim(), receiptPath = photo))
+                },
                 Modifier.fillMaxWidth(),
                 enabled = person.isNotBlank() && amount > 0,
             )
+            if (viewPhoto) photo?.let { ReceiptViewer(it) { viewPhoto = false } }
             if (onDelete != null) {
                 Text(
                     "Delete",

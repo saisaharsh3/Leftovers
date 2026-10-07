@@ -21,13 +21,9 @@ object EmailParser {
     private val promo = Regex("""(\d+\s?% off|\boffer\b|\bsale\b|\bcoupon\b|\bdeal of)""", RegexOption.IGNORE_CASE)
     private val confirmed = Regex("""\b(debited|charged|paid|payment successful|order confirmed|order placed)\b""", RegexOption.IGNORE_CASE)
 
-    private val amount = Regex(
-        """(?:rs\.?|inr|₹|usd|us\$|\$|eur|€|gbp|£)\s*([0-9][0-9,]*(?:\.[0-9]{1,2})?)""",
-        RegexOption.IGNORE_CASE,
-    )
-    /** Amounts next to these words are the one that was paid. */
-    private val totalNear = Regex(
-        """(?:order total|grand total|total paid|amount paid|total amount|amount|total)\s*[:\-]?\s*(?:rs\.?|inr|₹|usd|us\$|\$|eur|€|gbp|£)\s*([0-9][0-9,]*(?:\.[0-9]{1,2})?)""",
+    /** An amount right after one of these words is the one that was paid. */
+    private val totalLabel = Regex(
+        """(?:order total|grand total|total paid|amount paid|total amount|amount|total)\s*[:\-]?""",
         RegexOption.IGNORE_CASE,
     )
     private val merchantWords = Regex(
@@ -45,9 +41,8 @@ object EmailParser {
         if (creditOnly.containsMatchIn(text) && !Regex("""\bdebited\b""", RegexOption.IGNORE_CASE).containsMatchIn(text)) return null
         if (promo.containsMatchIn(text) && !confirmed.containsMatchIn(text)) return null
 
-        val value = (totalNear.find(text) ?: amount.find(text))?.groupValues?.get(1)?.replace(",", "") ?: return null
-        val minor = runCatching { BigDecimal(value).movePointRight(2).toLong() }.getOrNull() ?: return null
-        if (minor <= 0) return null
+        // Any currency (see MoneyText); a total-like label wins over the first amount mentioned.
+        val minor = MoneyText.after(totalLabel, text) ?: MoneyText.find(text) ?: return null
 
         val named = merchantWords.find(text)?.groupValues?.get(1)?.trim()
             ?.substringBefore('@')

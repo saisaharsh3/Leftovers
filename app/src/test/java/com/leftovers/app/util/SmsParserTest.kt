@@ -28,6 +28,12 @@ class SmsParserTest {
         assertNull(SmsParser.parse("Rs 2,000 credited to your account", listOf("account")))
     }
 
+    @Test fun otherCurrencies() {
+        assertEquals(1_250L, SmsParser.parse("USD 12.50 spent on your card at AMAZON")!!.amountMinor)
+        assertEquals(4_500L, SmsParser.parse("AED 45.00 debited from your account at CARREFOUR")!!.amountMinor)
+        assertEquals(1_999L, SmsParser.parse("You paid €19.99 to Netflix")!!.amountMinor)
+    }
+
     @Test fun explainsWhyNot() {
         assertTrue(SmsParser.check("Your OTP is 4321").reason.startsWith("Skipped"))
         assertTrue(SmsParser.check("Hello, your parcel is on the way").reason.startsWith("Not a payment"))

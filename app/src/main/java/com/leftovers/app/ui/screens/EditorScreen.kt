@@ -1,5 +1,6 @@
 package com.leftovers.app.ui.screens
 
+import com.leftovers.app.data.allTags
 import com.leftovers.app.data.RecurringItem
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
@@ -199,7 +200,12 @@ class EditorViewModel(
                 }
                 loaded = true
             }
-            if (accountId == null) accountId = settings.settings.first().defaultAccountId
+            if (accountId == null) {
+                // The account Home is showing, if one is picked there; otherwise the default account.
+                val s = settings.settings.first()
+                val known = accountRepository.accounts.first().map { it.id }
+                accountId = s.homeAccountId?.takeIf { it in known } ?: s.defaultAccountId
+            }
         }
     }
 
@@ -609,24 +615,37 @@ fun EditorScreen(
         val pickerState = rememberDatePickerState(
             initialSelectedDateMillis = viewModel.date.atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli(),
             selectableDates = object : SelectableDates {
-                // A repeating entry can start on a later day, e.g. salary on the 30th.
-                override fun isSelectableDate(utcTimeMillis: Long) = viewModel.repeatMonthly || utcTimeMillis <= todayUtc
+                // Every day can be tapped; a later day is only accepted for a repeating entry (see below).
+                override fun isSelectableDate(utcTimeMillis: Long) = true
             },
         )
         DatePickerDialog(
             onDismissRequest = { showCalendar = false },
             colors = DatePickerDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
             confirmButton = {
-                TextButton(onClick = {
+                val laterDay = (pickerState.selectedDateMillis ?: 0L) > todayUtc && !viewModel.repeatMonthly
+                TextButton(enabled = !laterDay, onClick = {
                     pickerState.selectedDateMillis?.let { viewModel.date = Instant.ofEpochMilli(it).atZone(ZoneOffset.UTC).toLocalDate() }
                     showCalendar = false
-                }) { Text("Done", color = c.textPrimary) }
+                }) { Text("Done", color = if (laterDay) c.textTertiary else c.textPrimary) }
             },
             dismissButton = { TextButton(onClick = { showCalendar = false }) { Text("Cancel", color = c.textSecondary) } },
         ) {
             DatePicker(
                 pickerState,
-                title = { Text(if (viewModel.repeatMonthly) "Which day does it repeat from?" else "Which day was it?", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(start = 24.dp, top = 20.dp)) },
+                title = {
+                    val laterDay = (pickerState.selectedDateMillis ?: 0L) > todayUtc && !viewModel.repeatMonthly
+                    if (laterDay) {
+                        Text(
+                            "Later days are for repeating entries. Close this and tap Repeat (↻) to pick this day.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = c.warning,
+                            modifier = Modifier.padding(start = 24.dp, end = 24.dp, top = 20.dp),
+                        )
+                    } else {
+                        Text(if (viewModel.repeatMonthly) "Which day does it repeat from?" else "Which day was it?", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(start = 24.dp, top = 20.dp))
+                    }
+                },
                 colors = DatePickerDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
             )
         }
@@ -641,7 +660,25 @@ fun EditorScreen(
             containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
             shape = RoundedCornerShape(30.dp),
             title = { Text("Note", style = MaterialTheme.typography.titleLarge) },
-            text = { GlassTextField(draft, { draft = it.take(120) }, placeholder = "e.g. Lunch with friends #goa", focusRequester = focus) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    GlassTextField(draft, { draft = it.take(120) }, placeholder = "e.g. Lunch with friends #goa", focusRequester = focus)
+                    // While a #tag is being typed, offer tags used before that start the same way.
+                    val typing = Regex("""#([\p{L}\p{N}_-]*)$""").find(draft)
+                    val usedTags = remember(history) { history.allTags() }
+                    val matches = typing?.let { m ->
+                        val start = m.groupValues[1].lowercase()
+                        usedTags.filter { it.startsWith(start) && it != start }.take(6)
+                    }.orEmpty()
+                    if (matches.isNotEmpty()) {
+                        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            matches.forEach { tag ->
+                                Chip("#$tag", { draft = draft.substring(0, typing!!.range.first) + "#$tag " })
+                            }
+                        }
+                    }
+                }
+            },
             confirmButton = {
                 TextButton(onClick = {
                     viewModel.note = draft.trim()
@@ -782,7 +819,7 @@ private fun rememberReceiptBitmap(path: String, maxSide: Int): Bitmap? {
 }
 
 @Composable
-private fun ReceiptThumb(path: String, onOpen: () -> Unit, onRemove: () -> Unit) {
+internal fun ReceiptThumb(path: String, onOpen: () -> Unit, onRemove: () -> Unit) {
     val c = LocalAppColors.current
     val bitmap = rememberReceiptBitmap(path, 200)
     Box {
@@ -810,7 +847,7 @@ private fun ReceiptThumb(path: String, onOpen: () -> Unit, onRemove: () -> Unit)
 }
 
 @Composable
-private fun ReceiptViewer(path: String, onDismiss: () -> Unit) {
+internal fun ReceiptViewer(path: String, onDismiss: () -> Unit) {
     val bitmap = rememberReceiptBitmap(path, 2000)
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Box(

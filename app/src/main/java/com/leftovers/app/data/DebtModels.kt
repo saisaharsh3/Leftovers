@@ -15,6 +15,8 @@ data class Debt(
     val epochDay: Long = LocalDate.now().toEpochDay(),
     val settled: Boolean = false,
     val createdAt: Long = System.currentTimeMillis(),
+    /** A photo of a bill or note, kept in the app's private files. */
+    val receiptPath: String? = null,
 )
 
 /** Everything still open with one person; [netMinor] is positive when they owe you. */

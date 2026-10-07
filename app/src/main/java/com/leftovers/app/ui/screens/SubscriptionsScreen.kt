@@ -169,6 +169,7 @@ fun SubscriptionsScreen(
     val money = LocalMoney.current
     var filter by rememberSaveable { mutableStateOf(if (startOnIncome) TxType.INCOME else TxType.EXPENSE) }
     var editing by remember { mutableStateOf<Recurring?>(null) }
+    var showAll by rememberSaveable { mutableStateOf(false) }
 
     val active = items.filter { it.active }
     // Yearly bills count as their monthly share, so the total matches what to set aside each month.
@@ -275,7 +276,9 @@ fun SubscriptionsScreen(
                 Spacer(Modifier.height(12.dp))
             }
 
+            // Active ones by their next charge, soonest first, then paused ones. Five show; the rest open on request.
             val shown = items.filter { it.type == filter }
+                .sortedWith(compareBy<RecurringItem>({ !it.active }, { it.toRecurring().nextChargeDate() }))
             item {
                 Glass(Modifier.fillMaxWidth().appear(2)) {
                     if (shown.isEmpty()) {
@@ -290,9 +293,20 @@ fun SubscriptionsScreen(
                         )
                     } else {
                         Column(Modifier.padding(vertical = 6.dp)) {
-                            shown.forEachIndexed { i, item ->
+                            val visible = if (showAll) shown else shown.take(5)
+                            visible.forEachIndexed { i, item ->
                                 if (i > 0) RowDivider()
                                 RecurringRow(item, onClick = { editing = item.toRecurring() }, onToggle = { viewModel.setActive(item, it) })
+                            }
+                            if (shown.size > 5) {
+                                RowDivider()
+                                Text(
+                                    if (showAll) "Show less" else "Show all ${shown.size}",
+                                    style = MaterialTheme.typography.labelLarge,
+                                    color = c.accent,
+                                    textAlign = TextAlign.Center,
+                                    modifier = Modifier.fillMaxWidth().pressable({ showAll = !showAll }).padding(vertical = 14.dp),
+                                )
                             }
                         }
                     }

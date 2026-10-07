@@ -116,6 +116,10 @@ class SettingsViewModel(
         viewModelScope.launch { settingsRepository.setAppLock(enabled) }
     }
 
+    fun setBackupPhotos(enabled: Boolean) {
+        viewModelScope.launch { settingsRepository.setBackupPhotos(enabled) }
+    }
+
     fun setDetectionKeywords(words: Set<String>) {
         viewModelScope.launch { settingsRepository.setDetectionKeywords(words) }
     }
@@ -348,6 +352,8 @@ fun SettingsScreen(
                             if (on) pickBackupFolder.launch(null) else viewModel.disableAutoBackup(context, s.autoBackupDir)
                         })
                         RowDivider()
+                        ToggleRow(Lucide.Camera, "Include photos in backups", s.backupPhotos, { viewModel.setBackupPhotos(it) })
+                        RowDivider()
                         ToggleRow(Lucide.Lock, "Password-protect backups", passwordSet, { on ->
                             if (on) setPassword = true else viewModel.setBackupPassword(null)
                         })
@@ -363,11 +369,12 @@ fun SettingsScreen(
                         )
                     }
                 }
-                if (s.autoBackupDir != null || passwordSet) {
+                if (s.autoBackupDir != null || passwordSet || s.backupPhotos) {
                     Text(
                         listOfNotNull(
                             if (s.autoBackupDir == null) null else "Saves a backup to your chosen folder every week and keeps the last 4." +
                                 if (s.autoBackupLast > 0) " Last backup: ${java.time.Instant.ofEpochMilli(s.autoBackupLast).atZone(java.time.ZoneId.systemDefault()).toLocalDate().friendlyLabel()}." else "",
+                            if (s.backupPhotos) "Receipt and Money owed photos are included (up to 40 MB of photos; past that they're left out)." else null,
                             if (passwordSet) "New backups are encrypted. Restoring one needs the password, and it can't be recovered if forgotten." else null,
                         ).joinToString(" "),
                         style = MaterialTheme.typography.bodySmall,
