@@ -29,7 +29,7 @@ class PlanningRepository(private val database: AppDatabase) {
     suspend fun saveDebt(debt: Debt) = debtDao.upsert(debt)
     suspend fun deleteDebt(debt: Debt) {
         debtDao.delete(debt)
-        com.leftovers.app.util.ReceiptStore.delete(debt.receiptPath)
+        debt.photos.forEach { com.leftovers.app.util.ReceiptStore.delete(it) }
     }
     suspend fun settle(person: String) = debtDao.settle(person)
 

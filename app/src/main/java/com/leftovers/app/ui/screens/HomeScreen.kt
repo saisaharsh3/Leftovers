@@ -300,12 +300,15 @@ fun HomeScreen(
                                     )
                                 }
                             }
-                            Text(
-                                if (state.accountCount == 1) "1 account" else "${state.accountCount} accounts",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = c.textSecondary,
-                            )
-                            Spacer(Modifier.width(6.dp))
+                            // On narrow phones the balance needs the room; the arrow still opens Accounts.
+                            if (androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp >= 400) {
+                                Text(
+                                    if (state.accountCount == 1) "1 account" else "${state.accountCount} accounts",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = c.textSecondary,
+                                )
+                                Spacer(Modifier.width(6.dp))
+                            }
                             Icon(Lucide.ChevronRight, contentDescription = null, tint = c.textTertiary, modifier = Modifier.size(18.dp))
                         }
                     }
@@ -349,7 +352,7 @@ fun HomeScreen(
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     StatTile(
-                        label = "Spent this month",
+                        label = if (androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp >= 400) "Spent this month" else "Spent",
                         value = money.formatWhole(state.monthSpent),
                         icon = Lucide.ArrowUpRight,
                         iconTint = c.negative,

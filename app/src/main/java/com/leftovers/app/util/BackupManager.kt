@@ -9,6 +9,7 @@ import com.leftovers.app.data.BackupDao
 import com.leftovers.app.data.BudgetPlan
 import com.leftovers.app.data.Category
 import com.leftovers.app.data.Debt
+import com.leftovers.app.data.photosToPath
 import com.leftovers.app.data.Goal
 import com.leftovers.app.data.GoalDeposit
 import com.leftovers.app.data.Recurring
@@ -46,7 +47,7 @@ class BackupManager(
             val debtList = dao.debts()
             // With "Include photos" on, each photo goes in once, by file name; entries point to it. Past
             // MAX_PHOTO_BYTES in total the photos are left out, so a large collection can't run the phone out of memory.
-            val photoFiles = (transactions.mapNotNull { it.receiptPath } + debtList.mapNotNull { it.receiptPath })
+            val photoFiles = (transactions.mapNotNull { it.receiptPath } + debtList.flatMap { it.photos })
                 .distinct().map { java.io.File(it) }.filter { it.exists() }
             val withPhotos = s.backupPhotos && photoFiles.sumOf { it.length() } <= MAX_PHOTO_BYTES
             val photos = JSONObject()
@@ -108,7 +109,7 @@ class BackupManager(
                 put("debts", JSONArray(debtList.map { d ->
                     JSONObject().put("id", d.id).put("person", d.person).put("amount", d.amountMinor).put("note", d.note)
                         .put("day", d.epochDay).put("settled", d.settled).put("createdAt", d.createdAt)
-                        .put("receipt", photoRef(d.receiptPath))
+                        .put("receipts", JSONArray(d.photos.map { photoRef(it) }.filter { it != JSONObject.NULL }))
                 }))
                 if (photos.length() > 0) put("photos", photos)
             }
@@ -139,8 +140,8 @@ class BackupManager(
             // Photos saved in the backup, written back to private storage on demand.
             val savedPhotos = json.optJSONObject("photos")
             val restoredPhotos = mutableMapOf<String, String>()
-            fun photoPath(o: JSONObject): String? {
-                val name = o.optString("receipt").takeIf { it.isNotEmpty() && it != "null" } ?: return null
+            fun restorePhoto(name: String): String? {
+                if (name.isEmpty() || name == "null") return null
                 restoredPhotos[name]?.let { return it }
                 val data = savedPhotos?.optString(name)?.takeIf { it.isNotEmpty() } ?: return null
                 return ReceiptStore.restore(context, java.util.Base64.getDecoder().decode(data)).also { restoredPhotos[name] = it }
@@ -161,7 +162,7 @@ class BackupManager(
             val transactions = json.getJSONArray("transactions").objects().map {
                 Transaction(
                     it.getLong("id"), it.getLong("amount"), TxType.valueOf(it.getString("type")), it.getLong("categoryId"),
-                    it.getLong("day"), it.getString("note"), it.getLong("createdAt"), it.longOrNull("accountId"), photoPath(it),
+                    it.getLong("day"), it.getString("note"), it.getLong("createdAt"), it.longOrNull("accountId"), restorePhoto(it.optString("receipt")),
                 )
             }
             val transfers = json.optJSONArray("transfers")?.objects().orEmpty().map {
@@ -182,7 +183,12 @@ class BackupManager(
                 GoalDeposit(it.getLong("id"), it.getLong("goalId"), it.getLong("amount"), it.getLong("day"), it.getLong("createdAt"))
             }
             val debts = json.optJSONArray("debts")?.objects().orEmpty().map {
-                Debt(it.getLong("id"), it.getString("person"), it.getLong("amount"), it.optString("note"), it.getLong("day"), it.optBoolean("settled"), it.getLong("createdAt"), photoPath(it))
+                // "receipts" holds several photos; older backups had one "receipt".
+                val names = it.optJSONArray("receipts")?.let { a -> (0 until a.length()).map(a::getString) } ?: listOf(it.optString("receipt"))
+                Debt(
+                    it.getLong("id"), it.getString("person"), it.getLong("amount"), it.optString("note"), it.getLong("day"),
+                    it.optBoolean("settled"), it.getLong("createdAt"), photosToPath(names.mapNotNull(::restorePhoto)),
+                )
             }
 
             database.withTransaction {
@@ -206,7 +212,7 @@ class BackupManager(
                 dao.insertDebts(debts)
             }
             // Photos that belonged to the replaced data are no longer used.
-            ReceiptStore.deleteAllExcept(context, (transactions.mapNotNull { it.receiptPath } + debts.mapNotNull { it.receiptPath }).toSet())
+            ReceiptStore.deleteAllExcept(context, (transactions.mapNotNull { it.receiptPath } + debts.flatMap { it.photos }).toSet())
 
             json.optJSONObject("settings")?.let { s ->
                 settings.setCurrency(s.getString("currency"))

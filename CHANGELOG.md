@@ -7,7 +7,8 @@ All notable changes to Leftovers. Download any version from
 
 - New entries start on the account Home is showing (or the default account when Home shows all) (#6)
 - #tag suggestions while typing a note: type #g and pick #goa (#6)
-- Money owed entries can have a photo or screenshot (#6)
+- Money owed entries can have up to six photos or screenshots, picked several at a time (#6)
+- Narrow phones: the tab bar, balance card, Spent card and photo buttons no longer get cut off
 - *Include photos in backups* (Settings → Data): receipt and Money owed photos go in the backup (up to 40 MB) (#6)
 - SMS and email detection understand other currencies: $, €, £, AED, RM, Rp, kr and more, before or after the number (#6)
 - Subscriptions list the next charge first, show five, and keep the rest behind *Show all*
