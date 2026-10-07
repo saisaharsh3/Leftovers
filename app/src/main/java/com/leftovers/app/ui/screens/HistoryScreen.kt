@@ -197,7 +197,7 @@ class HistoryViewModel(
                     .map { FilterOption(it.categoryId, it.categoryName, it.categoryEmoji, it.categoryColor) },
                 tags = all.allTags(),
                 fromSubscription = all.filter { t ->
-                    recurring.any { r -> r.type == t.type && r.categoryId == t.categoryId && r.name.equals(t.note.trim(), ignoreCase = true) }
+                    recurring.any { r -> r.logged(t.type, t.categoryId, t.note, t.categoryName) }
                 }.map { it.id }.toSet(),
             )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), HistoryUiState())

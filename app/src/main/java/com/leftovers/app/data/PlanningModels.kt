@@ -84,6 +84,13 @@ data class RecurringItem(
     val categoryColor: Long,
 ) {
     fun toRecurring() = Recurring(id, name, amountMinor, type, categoryId, dayOfMonth, startMonth, lastPostedMonth, active, everyMonths, accountId)
+
+    /**
+     * True when an entry looks like one this subscription logged: same type and category, and the same name.
+     * An entry with no note counts as named after its category (that's how a nameless repeat is saved).
+     */
+    fun logged(type: TxType, categoryId: Long, note: String, categoryName: String): Boolean =
+        this.type == type && this.categoryId == categoryId && name.equals(note.trim().ifBlank { categoryName }, ignoreCase = true)
 }
 
 @Entity(tableName = "goals")

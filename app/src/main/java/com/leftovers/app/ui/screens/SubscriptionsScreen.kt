@@ -146,6 +146,12 @@ private val templates = listOf(
     Template("Internet", "wifi", "Bills & Utilities"),
     Template("Gym", "dumbbell", "Health"),
     Template("Salary", "briefcase", "Salary", TxType.INCOME),
+    Template("Freelance", "laptop", "Freelance", TxType.INCOME),
+    Template("Rent received", "house", "Other", TxType.INCOME),
+    Template("Interest", "landmark", "Investments", TxType.INCOME),
+    Template("Dividends", "trending-up", "Investments", TxType.INCOME),
+    Template("Pocket money", "gift", "Gifts", TxType.INCOME),
+    Template("Pension", "piggy-bank", "Other", TxType.INCOME),
 )
 
 @Composable
@@ -515,7 +521,8 @@ private fun RecurringEditor(
 
             if (isNew) {
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    templates.forEach { t ->
+                    // Payments get bills and streaming; income gets salary, rent received and the like.
+                    templates.filter { it.type == type }.forEach { t ->
                         Chip(t.name, icon = CategoryIcons[t.icon], iconTint = c.textSecondary, onClick = {
                             name = t.name
                             type = t.type

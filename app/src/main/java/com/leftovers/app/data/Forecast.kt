@@ -15,7 +15,7 @@ fun forecastMonthEnd(balanceMinor: Long, items: List<TransactionItem>, recurring
     val subs = recurring.filter { it.active }
     // Bills a subscription logged are counted on their own schedule, not as a daily habit.
     fun isBill(t: TransactionItem) = subs.any {
-        it.type == t.type && it.categoryId == t.categoryId && it.amountMinor == t.amountMinor && it.name.equals(t.note.trim(), ignoreCase = true)
+        it.amountMinor == t.amountMinor && it.logged(t.type, t.categoryId, t.note, t.categoryName)
     }
     val spent = items
         .filter { it.type == TxType.EXPENSE && YearMonth.from(it.date) == month && it.date <= today && !isBill(it) }

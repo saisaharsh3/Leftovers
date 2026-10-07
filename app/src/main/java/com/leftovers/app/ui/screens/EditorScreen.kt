@@ -342,9 +342,8 @@ class EditorViewModel(
     /** The subscription or recurring income that logged this entry, if any. */
     suspend fun linkedSubscription(): RecurringItem? {
         val tx = repository.getTransaction(id) ?: return null
-        return planning.recurring.first().firstOrNull {
-            it.type == tx.type && it.categoryId == tx.categoryId && it.name.equals(tx.note.trim(), ignoreCase = true)
-        }
+        val categoryName = repository.categories.first().firstOrNull { it.id == tx.categoryId }?.name.orEmpty()
+        return planning.recurring.first().firstOrNull { it.logged(tx.type, tx.categoryId, tx.note, categoryName) }
     }
 
     /** Deletes the entry; with [stopRepeating], also removes the subscription that logged it (past entries stay). */
