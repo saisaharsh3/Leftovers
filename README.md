@@ -14,13 +14,15 @@ today, plan for the things you want, and ask an AI about your money if you'd lik
 ![Kotlin](https://img.shields.io/badge/Kotlin-Jetpack%20Compose-7F52FF?logo=kotlin&logoColor=white)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-<img src="docs/screenshots/home.jpg" width="200" alt="Home" />&nbsp;
-<img src="docs/screenshots/add.jpg" width="200" alt="Add an expense" />&nbsp;
-<img src="docs/screenshots/insights.jpg" width="200" alt="Insights" />
+<img src="docs/screenshots/home.jpg" width="180" alt="Home" />&nbsp;
+<img src="docs/screenshots/add.jpg" width="180" alt="Add an expense" />&nbsp;
+<img src="docs/screenshots/insights.jpg" width="180" alt="Insights" />&nbsp;
+<img src="docs/screenshots/plan.jpg" width="180" alt="Plan" />
 
-<img src="docs/screenshots/plan.jpg" width="200" alt="Plan" />&nbsp;
-<img src="docs/screenshots/calendar.jpg" width="200" alt="Activity calendar" />&nbsp;
-<img src="docs/screenshots/assistant.jpg" width="200" alt="AI assistant proposing a change" />
+<img src="docs/screenshots/calendar.jpg" width="180" alt="Activity calendar" />&nbsp;
+<img src="docs/screenshots/filters.jpg" width="180" alt="Filter by account, category or tag" />&nbsp;
+<img src="docs/screenshots/money-owed.jpg" width="180" alt="Money owed" />&nbsp;
+<img src="docs/screenshots/assistant.jpg" width="180" alt="AI assistant" />
 
 </div>
 
@@ -159,7 +161,7 @@ cd Leftovers
 ./gradlew testDebugUnitTest    # unit tests: budget maths, forecasts, backups, database upgrades, privacy, every AI provider's format
 ```
 
-Debug builds install as a separate app, **Leftovers Dev**, so they never touch the real app's data.
+Debug builds install as a separate app, **Leftovers Dev** (amber icon), so they never touch the real app's data.
 On Windows use `gradlew.bat`. If Gradle can't find the SDK, create `local.properties` with
 `sdk.dir=/path/to/Android/Sdk` (Android Studio does this for you).
 

@@ -1,0 +1,4 @@
+<resources>
+    <!-- Test builds get an amber icon so they're never mistaken for the real app. -->
+    <color name="ic_launcher_background">#FFF5B841</color>
+</resources>

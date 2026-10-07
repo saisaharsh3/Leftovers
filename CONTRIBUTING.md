@@ -39,7 +39,7 @@ On Windows use `gradlew.bat`. Keep your branch up to date with `git pull --rebas
 
 ## Testing changes from `dev`
 
-Debug builds install as a separate app called **Leftovers Dev**, next to the real Leftovers, with their own
+Debug builds install as a separate app called **Leftovers Dev** (amber icon), next to the real Leftovers, with their own
 empty data. Restore a backup into it (Settings → Restore) to test with realistic data.
 
 - **Without a computer:** every push to `dev` and every pull request is built by GitHub Actions. Open the
