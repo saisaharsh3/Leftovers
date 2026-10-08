@@ -216,7 +216,9 @@ the tests, builds a signed APK and attaches it to a GitHub release. It needs the
 | `SIGNING_KEY_ALIAS` | `leftovers` |
 | `SIGNING_KEY_PASSWORD` | key password |
 
-Bump `versionCode` and `versionName` in `app/build.gradle.kts`, then:
+Bump `versionCode` and `versionName` in `app/build.gradle.kts`, rename `## Unreleased` in `CHANGELOG.md` to the
+version (e.g. `## 1.2.0`; the release page shows that section), and add a short
+`fastlane/metadata/android/en-US/changelogs/<versionCode>.txt` for F-Droid. Then:
 
 ```bash
 git tag v1.2.0

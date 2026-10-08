@@ -13,6 +13,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          # Full history and tags, so the notes can link to the changes since the previous release.
+          fetch-depth: 0
 
       - uses: actions/setup-java@v6
         with:
@@ -44,7 +47,30 @@ jobs:
           ./gradlew assembleRelease --stacktrace
           mv app/build/outputs/apk/release/app-release.apk "leftovers-${GITHUB_REF_NAME}.apk"
 
+      # The release page shows this version's section of CHANGELOG.md, plus how to install.
+      - name: Write release notes
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          awk -v head="## $version" '$0 == head { found = 1; next } /^## / { found = 0 } found' CHANGELOG.md > section.md
+          if ! grep -q '[^[:space:]]' section.md; then
+            echo "::error::CHANGELOG.md has no '## $version' section."
+            exit 1
+          fi
+          previous=$(git describe --tags --abbrev=0 --match 'v[0-9]*' "${GITHUB_REF_NAME}^" 2>/dev/null || true)
+          {
+            echo "## What's new"
+            cat section.md
+            echo
+            echo "## Install"
+            echo
+            echo "Download \`leftovers-${GITHUB_REF_NAME}.apk\` below and open it on your phone. It installs over the previous version and keeps your data. Requires Android 8.0 or newer."
+            if [ -n "$previous" ]; then
+              echo
+              echo "**Full Changelog**: https://github.com/${GITHUB_REPOSITORY}/compare/${previous}...${GITHUB_REF_NAME}"
+            fi
+          } > notes.md
+
       - uses: softprops/action-gh-release@v3
         with:
           files: leftovers-${{ github.ref_name }}.apk
-          generate_release_notes: true
+          body_path: notes.md
