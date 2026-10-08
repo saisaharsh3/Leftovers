@@ -25,10 +25,17 @@ class Money(currencyCode: String) {
 
     val symbol: String = currency.getSymbol(locale)
 
+    /** "₹ INR", or just "AED" when the currency has no symbol of its own. */
+    val label: String = if (symbol.equals(currency.currencyCode, ignoreCase = true)) currency.currencyCode else "$symbol ${currency.currencyCode}"
+
+    // A symbol made of letters ("AED", "CHF") needs a space before the number: "AED 250", not "AED250".
+    private val wordSymbol = symbol.isNotEmpty() && symbol.last().isLetter()
+
     fun format(minor: Long): String = synchronized(formatter) {
         formatter.minimumFractionDigits = if (minor % 100 == 0L) 0 else 2
         formatter.maximumFractionDigits = 2
-        formatter.format(BigDecimal.valueOf(minor, 2))
+        val text = formatter.format(BigDecimal.valueOf(minor, 2))
+        if (wordSymbol) text.replace(Regex("^(-?)" + Regex.escape(symbol) + "(?=\\d)"), "$1$symbol ") else text
     }
 
     /** Rounded to whole units, for headline numbers like a daily allowance. */

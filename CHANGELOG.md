@@ -13,6 +13,19 @@ All notable changes to Leftovers. Download any version from
 - SMS and email detection understand other currencies: $, €, £, AED, RM, Rp, kr and more, before or after the number (#6)
 - Subscriptions list the next charge first, show five, and keep the rest behind *Show all*
 - Tapping a later day in the calendar explains that later days are for repeating entries
+- Swiping between tabs follows your finger, and tapping a far tab slides in just one page
+- Fixed SMS and email detection missing payments: bank footers mentioning OTPs or "requested" no longer
+  hide a message, SBI amounts without Rs ("debited by 500.0") and card alerts ("Thank you for using…") are
+  recognised, merchant names stop before "Refno" or "(UPI Ref…)", and email always looks back two days
+- Recent detections (Settings → Detection keywords) shows what happened to each bank SMS or email, and
+  warns when SMS permission is off
+- Accounts can have the last digits of their account or card; detected payments naming them go to that account (#6)
+- *Delete all entries* also deletes Money owed (#6)
+- *Reset app* erases everything and starts fresh, after typing RESET (#6)
+- Automatic backup: choose daily, weekly or monthly, how many files to keep (1–5), and see when the last
+  backup ran (#6)
+- Confirmation dialogs use the frosted glass style (#6)
+- Currency names no longer repeat ("Continue with AED", not "AED AED"), and letter symbols get a space ("AED 250") (#6)
 
 ## 1.3.0
 

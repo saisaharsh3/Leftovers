@@ -402,7 +402,7 @@ fun GoalDetailScreen(
         )
     }
     if (confirmDelete) {
-        AlertDialog(
+        GlassAlertDialog(
             onDismissRequest = { confirmDelete = false },
             containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
             shape = RoundedCornerShape(30.dp),

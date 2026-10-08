@@ -204,7 +204,10 @@ class EditorViewModel(
                 // The account Home is showing, if one is picked there; otherwise the default account.
                 val s = settings.settings.first()
                 val known = accountRepository.accounts.first().map { it.id }
-                accountId = s.homeAccountId?.takeIf { it in known } ?: s.defaultAccountId
+                // A payment from a bank SMS goes to the account whose last digits it names.
+                val fromSms = if (smsId > 0) sms.digitsFor(smsId) else null
+                val matched = fromSms?.let { d -> accountRepository.accounts.first().firstOrNull { it.matchesDigits(d) }?.id }
+                accountId = matched ?: s.homeAccountId?.takeIf { it in known } ?: s.defaultAccountId
             }
         }
     }
@@ -655,7 +658,7 @@ fun EditorScreen(
         var draft by rememberSaveable { mutableStateOf(viewModel.note) }
         val focus = remember { FocusRequester() }
         LaunchedEffect(Unit) { focus.requestFocus() }
-        AlertDialog(
+        GlassAlertDialog(
             onDismissRequest = { showNote = false },
             containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
             shape = RoundedCornerShape(30.dp),
@@ -692,7 +695,7 @@ fun EditorScreen(
     if (confirmDelete) {
         val linked by produceState<RecurringItem?>(null) { value = viewModel.linkedSubscription() }
         var stopRepeating by remember { mutableStateOf(true) }
-        AlertDialog(
+        GlassAlertDialog(
             onDismissRequest = { confirmDelete = false },
             containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
             shape = RoundedCornerShape(30.dp),

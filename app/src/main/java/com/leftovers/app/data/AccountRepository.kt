@@ -54,5 +54,8 @@ class SmsRepository(private val dao: SmsDao, private val transactionDao: Transac
 
     suspend fun dismiss(id: Long) = dao.delete(id)
 
+    /** The account digits a detected payment's message named, if any. */
+    suspend fun digitsFor(id: Long): String? = dao.digitsFor(id)
+
     suspend fun scrubRawBodies() = dao.scrubRawBodies()
 }

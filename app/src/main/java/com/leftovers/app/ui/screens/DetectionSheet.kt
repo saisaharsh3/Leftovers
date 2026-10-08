@@ -1,5 +1,10 @@
 package com.leftovers.app.ui.screens
 
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.core.content.ContextCompat
+import androidx.compose.ui.platform.LocalContext
+import com.leftovers.app.util.DetectionLog
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -80,6 +85,7 @@ fun DetectionSheet(keywords: Set<String>, onChange: (Set<String>) -> Unit, onDis
             GlassTextField(sample, { sample = it.take(1_000) }, placeholder = "Rs.250 debited from A/c XX1234 to VPA swiggy@icici", singleLine = false)
             if (sample.isNotBlank()) {
                 val check = SmsParser.check(sample, keywords)
+                val digits = SmsParser.accountDigits(sample)
                 Glass(Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         val p = check.parsed
@@ -90,6 +96,9 @@ fun DetectionSheet(keywords: Set<String>, onChange: (Set<String>) -> Unit, onDis
                                 color = c.positive,
                             )
                             Text("${check.reason}: this would show up on Home to confirm.", style = MaterialTheme.typography.bodySmall, color = c.textSecondary)
+                            if (digits != null) {
+                                Text("Names account or card ending $digits", style = MaterialTheme.typography.bodySmall, color = c.textSecondary)
+                            }
                         } else {
                             Text("Not suggested", style = MaterialTheme.typography.titleMedium, color = c.textPrimary)
                             Text(check.reason, style = MaterialTheme.typography.bodySmall, color = c.textSecondary)
@@ -97,6 +106,45 @@ fun DetectionSheet(keywords: Set<String>, onChange: (Set<String>) -> Unit, onDis
                     }
                 }
             }
+
+            // What happened to real messages, so a missed payment can be explained.
+            RowDivider(inset = 0.dp)
+            Text("Recent detections", style = MaterialTheme.typography.titleSmall, color = c.textPrimary)
+            val context = LocalContext.current
+            val smsAllowed = ContextCompat.checkSelfPermission(context, Manifest.permission.RECEIVE_SMS) == PackageManager.PERMISSION_GRANTED
+            if (!smsAllowed) {
+                Text(
+                    "SMS permission is off, so bank SMS can't be read. Allow it in Android Settings → Apps → Leftovers → Permissions → SMS.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = c.warning,
+                )
+            }
+            val log = remember { DetectionLog.read(context) }
+            if (log.isEmpty()) {
+                Text(
+                    "Nothing yet. Bank SMS and email alerts with an amount appear here with what happened to them.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = c.textSecondary,
+                )
+            } else {
+                Glass(Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(vertical = 6.dp)) {
+                        log.forEachIndexed { i, e ->
+                            if (i > 0) RowDivider(inset = 16.dp)
+                            Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                                Text(e.result, style = MaterialTheme.typography.bodyMedium, color = c.textPrimary)
+                                Text(
+                                    "${e.source} · ${e.from} · ${logTime.format(java.time.Instant.ofEpochMilli(e.at).atZone(java.time.ZoneId.systemDefault()))}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = c.textTertiary,
+                                )
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }
+
+private val logTime = java.time.format.DateTimeFormatter.ofPattern("d MMM, h:mm a")

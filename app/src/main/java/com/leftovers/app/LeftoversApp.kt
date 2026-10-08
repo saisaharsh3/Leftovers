@@ -5,6 +5,7 @@ import android.content.Context
 import androidx.glance.appwidget.updateAll
 import com.leftovers.app.data.AccountRepository
 import com.leftovers.app.data.AppDatabase
+import com.leftovers.app.data.SeedCategories
 import com.leftovers.app.data.PlanningRepository
 import com.leftovers.app.data.SettingsRepository
 import com.leftovers.app.data.SmsRepository
@@ -28,6 +29,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.time.LocalDate
 
 class LeftoversApp : Application() {
@@ -59,6 +61,23 @@ class AppContainer(private val context: Context) {
     val assistant = AssistantSettings(context)
     val emailAccount = com.leftovers.app.util.EmailAccount(context)
 
+    /**
+     * Wipes everything back to a fresh install: all data and photos, settings, the connected AI and email,
+     * and the backup password. The app then shows the welcome screen.
+     */
+    suspend fun resetEverything() = withContext(Dispatchers.IO) {
+        AutoBackup.schedule(context, false)
+        com.leftovers.app.util.EmailSync.schedule(context, false)
+        database.clearAllTables()
+        SeedCategories.onCreate(database.openHelper.writableDatabase)
+        java.io.File(context.filesDir, "receipts").deleteRecursively()
+        emailAccount.clear()
+        assistant.disconnect()
+        backup.password.set(null)
+        com.leftovers.app.util.DetectionLog.clear(context)
+        settings.clearAll()
+    }
+
     fun start() {
         scope.launch { sms.scrubRawBodies() }
         // Keep the home-screen widget in step with the data.
@@ -82,9 +101,9 @@ class AppContainer(private val context: Context) {
                 .collect { com.leftovers.app.util.EmailSync.schedule(context, it) }
         }
         scope.launch {
-            settings.settings.map { it.autoBackupDir != null }
+            settings.settings.map { (it.autoBackupDir != null) to it.autoBackupDays }
                 .distinctUntilChanged()
-                .collect { AutoBackup.schedule(context, it) }
+                .collect { (on, days) -> AutoBackup.schedule(context, on, days) }
         }
         scope.launch {
             settings.settings.map { it.billReminders }

@@ -49,7 +49,10 @@ object AppViewModelProvider {
         initializer { DeletedViewModel(container().repository, container().settings) }
         initializer { GoalDetailViewModel(createSavedStateHandle(), container().planning) }
         initializer { CategoriesViewModel(container().repository) }
-        initializer { SettingsViewModel(container().repository, container().settings, container().backup, container().assistant) }
+        initializer {
+            val c = container()
+            SettingsViewModel(c.repository, c.settings, c.backup, c.assistant, c.planning) { c.resetEverything() }
+        }
         initializer { AssistantViewModel(container(), container().assistant) }
         initializer { AssistantSetupViewModel(container().assistant) }
         initializer { EmailSetupViewModel(app()) }

@@ -58,7 +58,7 @@ fun WelcomeScreen(defaultCurrency: String, onDone: (String) -> Unit) {
             CurrencyList(selected = selected, onSelect = { selected = it.code }, modifier = Modifier.padding(12.dp))
         }
         PrimaryButton(
-            "Continue with ${Money(selected).symbol} $selected",
+            "Continue with ${Money(selected).label}",
             { onDone(selected) },
             Modifier
                 .fillMaxWidth()

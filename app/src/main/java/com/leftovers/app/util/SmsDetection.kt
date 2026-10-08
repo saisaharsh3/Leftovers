@@ -19,11 +19,36 @@ import java.time.LocalDate
  * "Rs.250.00 debited from A/c XX1234 to VPA swiggy@icici on 05-10-26".
  */
 object SmsParser {
-    private val debitWords = Regex("""\b(debited|spent|paid|sent|withdrawn|purchase|txn of|debit)\b""", RegexOption.IGNORE_CASE)
+    private val debitWords = Regex(
+        """\b(debited|spent|paid|sent|withdrawn|purchase|txn of|debit|thank you for using|used at|used for)\b""",
+        RegexOption.IGNORE_CASE,
+    )
     private val creditOnly = Regex("""\b(credited|received|refund|cashback)\b""", RegexOption.IGNORE_CASE)
-    private val ignore = Regex("""\b(otp|one time password|due|will be debited|requested|declined|failed)\b""", RegexOption.IGNORE_CASE)
+    /**
+     * Messages that aren't a completed payment. Banks add "never share your OTP" and "if you have not requested
+     * this" to real alerts, so only an actual OTP, a collect request or a reminder counts here.
+     */
+    private val ignore = Regex(
+        """(\bis your (otp|one time password)\b|\b(otp|one time password) (is|for)\b|\bverification code\b|""" +
+            """\bhas requested\b|\brequested money\b|\bcollect request\b|\bwill be debited\b|\b(payment|amount|minimum) due\b|""" +
+            """\bdue (date|on)\b|\b(declined|failed|unsuccessful)\b)""",
+        RegexOption.IGNORE_CASE,
+    )
+    /** "debited by 500.0" (SBI and others write the amount with no currency). */
+    private val bareAmount = Regex(
+        """\b(?:debited|spent|paid|sent|withdrawn)\s+(?:by|with|for|of)?\s*(?:rs\.?|inr|₹)?\s*([0-9][0-9,]*(?:\.[0-9]{1,2})?)\b""",
+        RegexOption.IGNORE_CASE,
+    )
+    /** The account or card digits a message names, e.g. "A/C *1234", "Acct XX234", "Card ending 1234". */
+    private val accountRef = Regex(
+        """\b(?:a/c|ac|acct|account|card)(?:\s*no\.?)?(?:\s+ending(?:\s+in|\s+with)?)?[\s:.-]*[xX*]*\s*(\d{3,6})\b""",
+        RegexOption.IGNORE_CASE,
+    )
+
+    /** The last digits of the account or card in [body], if it names one. */
+    fun accountDigits(body: String): String? = accountRef.find(body)?.groupValues?.get(1)?.takeLast(4)
     private val merchant = Regex(
-        """\b(?:at|to|towards|vpa|info:?)\s+([A-Za-z0-9@._&' -]{2,40}?)(?=\s+(?:on|via|ref|upi|txn|avl|avail|from|using)\b|[.,;]|$)""",
+        """\b(?:at|to|towards|vpa|info:?)\s+([A-Za-z0-9@._&' -]{2,40}?)(?=\s+(?:on|via|ref\w*|upi|txn|avl|avail|from|using)\b|\s*[(\[]|[.,;]|$)""",
         RegexOption.IGNORE_CASE,
     )
 
@@ -47,6 +72,7 @@ object SmsParser {
         }
         // Any currency, symbol or code, before or after the number (see MoneyText).
         val minor = MoneyText.find(body)
+            ?: bareAmount.find(body)?.groupValues?.get(1)?.let(MoneyText::toMinor)
             ?: return Check(null, "No amount found. It needs a currency next to the number, like Rs 250, $12.50 or 45 AED.")
         val who = merchant.find(body)?.groupValues?.get(1)?.trim()
             ?.substringBefore('@')
@@ -74,10 +100,12 @@ class SmsReceiver : BroadcastReceiver() {
         CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
             try {
                 val s = container.settings.settings.first()
+                if (!s.smsDetection) return@launch
                 // The user's own keywords count too, for banks the built-in words miss.
-                val parsed = if (s.smsDetection) SmsParser.parse(body, s.detectionKeywords) else null
+                val check = SmsParser.check(body, s.detectionKeywords)
+                val parsed = check.parsed
                 if (parsed != null) {
-                    container.sms.add(
+                    val added = container.sms.add(
                         SmsSuggestion(
                             amountMinor = parsed.amountMinor,
                             merchant = parsed.merchant,
@@ -86,8 +114,15 @@ class SmsReceiver : BroadcastReceiver() {
                             // Keep only a fingerprint for de-duplication, never the message itself
                             // (bank SMS carry account digits and balances).
                             body = fingerprint(body),
+                            // Just the last digits, to pick the matching account.
+                            accountDigits = SmsParser.accountDigits(body),
                         ),
                     )
+                    val amount = Money(s.currencyCode).format(parsed.amountMinor)
+                    DetectionLog.add(context, "SMS", sender, if (added) "Suggested $amount" else "$amount was already logged or suggested")
+                } else if (MoneyText.find(body) != null) {
+                    // Only messages with an amount are worth noting; personal texts leave no trace.
+                    DetectionLog.add(context, "SMS", sender, check.reason)
                 }
             } finally {
                 pending.finish()

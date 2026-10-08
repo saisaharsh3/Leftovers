@@ -14,7 +14,10 @@ object EmailParser {
     )
     private val creditOnly = Regex("""\b(credited|received|refund(?:ed)?|cashback)\b""", RegexOption.IGNORE_CASE)
     private val skip = Regex(
-        """\b(otp|one time password|verification code|will be debited|due date|minimum due|payment due|requested|declined|failed|unsuccessful|statement is ready|pre-?approved|eligible for|apply now|limit (?:increase|enhancement)|reward points|loan offer|emi offer)\b""",
+        // Only a real OTP or collect request; bank alerts often say "never share your OTP" or "if you have not requested this".
+        """(\bis your (otp|one time password)\b|\b(otp|one time password) (is|for)\b|\bverification code\b|\bhas requested\b|\bcollect request\b|""" +
+            """\b(will be debited|due date|minimum due|payment due|declined|failed|unsuccessful|statement is ready|pre-?approved|eligible for|""" +
+            """apply now|limit (?:increase|enhancement)|reward points|loan offer|emi offer)\b)""",
         RegexOption.IGNORE_CASE,
     )
     /** Promotions talk about prices too; skip them unless they also confirm a payment. */

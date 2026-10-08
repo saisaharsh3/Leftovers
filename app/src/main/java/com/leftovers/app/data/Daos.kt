@@ -192,6 +192,9 @@ interface SmsDao {
     @Query("DELETE FROM sms_suggestions WHERE id = :id")
     suspend fun delete(id: Long)
 
+    @Query("SELECT accountDigits FROM sms_suggestions WHERE id = :id")
+    suspend fun digitsFor(id: Long): String?
+
     @Query("SELECT COUNT(*) FROM sms_suggestions WHERE body = :body")
     suspend fun countWithBody(body: String): Int
 
@@ -212,6 +215,12 @@ interface DebtDao {
 
     @Delete
     suspend fun delete(debt: Debt)
+
+    @Query("SELECT * FROM debts")
+    suspend fun getAll(): List<Debt>
+
+    @Query("DELETE FROM debts")
+    suspend fun deleteAll()
 
     @Query("UPDATE debts SET settled = 1 WHERE settled = 0 AND LOWER(TRIM(person)) = LOWER(TRIM(:person))")
     suspend fun settle(person: String)

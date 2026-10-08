@@ -25,7 +25,9 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -52,17 +54,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NamedNavArgument
 import androidx.navigation.NavBackStackEntry
-import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavGraphBuilder
-import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -98,6 +97,8 @@ import com.leftovers.app.ui.screens.StatsScreen
 import com.leftovers.app.ui.screens.SubscriptionsScreen
 import com.leftovers.app.ui.theme.LocalAppColors
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlin.math.abs
 
 private object Routes {
     const val HOME = "home"
@@ -126,9 +127,11 @@ private object Routes {
     fun goal(id: Long) = "goals/$id"
     fun recap(month: String) = "recap/$month"
 
-    /** In dock order, left to right; a sideways swipe moves to the neighbour. */
+    /** The four tabs live side by side in one pager on this screen, so a swipe follows the finger. */
+    const val TABS = "tabs"
+
+    /** In dock order, left to right. */
     val tabOrder = listOf(HOME, ACTIVITY, INSIGHTS, PLAN)
-    val tabs = tabOrder.toSet()
 }
 
 private data class Tab(val route: String, val icon: ImageVector, val label: String)
@@ -147,13 +150,8 @@ private val tabs = listOf(
 private val navTween = tween<IntOffset>(340, easing = FastOutSlowInEasing)
 
 private fun NavBackStackEntry.route() = destination.route.orEmpty()
-private fun NavBackStackEntry.isTab() = route() in Routes.tabs
 private fun NavBackStackEntry.isAdd() = route().startsWith("add") || route().startsWith("edit")
 private fun NavBackStackEntry.isSheet() = route().startsWith("recap")
-
-/** Which way to slide between two tabs: forward when moving right along the dock. */
-private fun tabDirection(from: NavBackStackEntry, to: NavBackStackEntry) =
-    if (Routes.tabOrder.indexOf(to.route()) > Routes.tabOrder.indexOf(from.route())) SlideDirection.Start else SlideDirection.End
 
 /** Registers a screen and hands its animation scope to shared-element modifiers. */
 private fun NavGraphBuilder.screen(
@@ -177,7 +175,17 @@ fun LeftoversNavHost(openAdd: Boolean = false, onOpenAddHandled: () -> Unit = {}
     var activityRequest by remember { mutableStateOf<ActivityRequest?>(null) }
     val appScope = rememberCoroutineScope()
     val undo = remember { UndoState(appScope) }
-    val onTab = currentRoute in Routes.tabs
+    val onTab = currentRoute == Routes.TABS
+    // Kept here so the chosen tab survives opening and closing other screens.
+    val pager = rememberPagerState { Routes.tabOrder.size }
+    // A far tab slides in from its neighbour, so a tap never streams through the tabs in between.
+    val showTab: (Int) -> Unit = { target ->
+        appScope.launch {
+            val from = pager.currentPage
+            if (abs(target - from) > 1) pager.scrollToPage(if (target > from) target - 1 else target + 1)
+            pager.animateScrollToPage(target, animationSpec = tween(380, easing = FastOutSlowInEasing))
+        }
+    }
 
     LaunchedEffect(toast) {
         if (toast != null) {
@@ -198,41 +206,18 @@ fun LeftoversNavHost(openAdd: Boolean = false, onOpenAddHandled: () -> Unit = {}
         }
     }
 
-    val swipeThreshold = with(LocalDensity.current) { 72.dp.toPx() }
-
     SharedTransitionLayout(Modifier.fillMaxSize()) {
         CompositionLocalProvider(LocalSharedTransitionScope provides this, LocalUndo provides undo) {
             Box(Modifier.fillMaxSize()) {
                 NavHost(
                     navController = nav,
-                    startDestination = Routes.HOME,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        // Swipe sideways on a tab to move to the next one. Anything inside that handles its own
-                        // sideways drag (swipeable rows, scrolling card rows, the chart) gets it first.
-                        .pointerInput(currentRoute) {
-                            val index = Routes.tabOrder.indexOf(currentRoute)
-                            if (index < 0) return@pointerInput
-                            var dx = 0f
-                            detectHorizontalDragGestures(
-                                onDragStart = { dx = 0f },
-                                onDragEnd = {
-                                    val next = when {
-                                        dx < -swipeThreshold -> index + 1
-                                        dx > swipeThreshold -> index - 1
-                                        else -> index
-                                    }
-                                    if (next != index && next in Routes.tabOrder.indices) nav.switchTab(Routes.tabOrder[next])
-                                },
-                            ) { _, amount -> dx += amount }
-                        },
+                    startDestination = Routes.TABS,
+                    modifier = Modifier.fillMaxSize(),
                     enterTransition = {
                         when {
                             // Add and edit slide up like a sheet: moving a finished layout is cheap and never stretches text.
                             targetState.isAdd() -> slideInVertically(tween(320, easing = FastOutSlowInEasing)) { it / 5 } + fadeIn(tween(220))
                             targetState.isSheet() -> slideInVertically(tween(420, easing = FastOutSlowInEasing)) { it } + fadeIn(tween(200))
-                            targetState.isTab() && initialState.isTab() ->
-                                slideIntoContainer(tabDirection(initialState, targetState), tween(300, easing = FastOutSlowInEasing)) { it / 6 } + fadeIn(tween(240))
                             else -> slideIntoContainer(SlideDirection.Start, navTween) + fadeIn(tween(220))
                         }
                     },
@@ -241,8 +226,6 @@ fun LeftoversNavHost(openAdd: Boolean = false, onOpenAddHandled: () -> Unit = {}
                             // Scaling the screen behind would re-render its frosted blur every frame.
                             targetState.isAdd() -> fadeOut(tween(220))
                             targetState.isSheet() -> fadeOut(tween(300))
-                            targetState.isTab() && initialState.isTab() ->
-                                slideOutOfContainer(tabDirection(initialState, targetState), tween(300, easing = FastOutSlowInEasing)) { it / 6 } + fadeOut(tween(180))
                             else -> slideOutOfContainer(SlideDirection.Start, navTween) { it / 4 } + fadeOut(tween(220))
                         }
                     },
@@ -261,56 +244,82 @@ fun LeftoversNavHost(openAdd: Boolean = false, onOpenAddHandled: () -> Unit = {}
                         }
                     },
                 ) {
-                    screen(Routes.HOME) {
-                        HomeScreen(
-                            onOpenBudget = { nav.navigate(Routes.BUDGET) },
-                            onOpenActivity = { type, accountId ->
-                                val filter = when (type) {
-                                    TxType.EXPENSE -> TypeFilter.EXPENSE
-                                    TxType.INCOME -> TypeFilter.INCOME
-                                    null -> TypeFilter.ALL
+                    screen(Routes.TABS) {
+                        // Back on another tab returns to Home first, as it did before.
+                        BackHandler(enabled = pager.currentPage != 0) { showTab(0) }
+                        // Sideways drags inside a tab (swipeable rows, card rows, the chart) are handled there
+                        // first; anywhere else the pages move with the finger.
+                        HorizontalPager(
+                            state = pager,
+                            beyondViewportPageCount = 1,
+                            key = { Routes.tabOrder[it] },
+                            modifier = Modifier.fillMaxSize(),
+                        ) { page ->
+                            // A page moving off eases back and fades a little, so the swipe has depth.
+                            Box(
+                                Modifier.fillMaxSize().graphicsLayer {
+                                    val offset = abs(pager.currentPage - page + pager.currentPageOffsetFraction).coerceIn(0f, 1f)
+                                    val scale = 1f - 0.06f * offset
+                                    scaleX = scale
+                                    scaleY = scale
+                                    alpha = 1f - 0.45f * offset
+                                },
+                            ) {
+                            when (Routes.tabOrder[page]) {
+                                Routes.HOME -> {
+                                    HomeScreen(
+                                        onOpenBudget = { nav.navigate(Routes.BUDGET) },
+                                        onOpenActivity = { type, accountId ->
+                                            val filter = when (type) {
+                                                TxType.EXPENSE -> TypeFilter.EXPENSE
+                                                TxType.INCOME -> TypeFilter.INCOME
+                                                null -> TypeFilter.ALL
+                                            }
+                                            activityRequest = ActivityRequest(filter, accountId)
+                                            showTab(Routes.tabOrder.indexOf(Routes.ACTIVITY))
+                                        },
+                                        onOpenSubscriptions = { income -> nav.navigate(Routes.subscriptions(income)) },
+                                        onOpenGoal = { nav.navigate(Routes.goal(it)) },
+                                        onOpenGoals = { nav.navigate(Routes.GOALS) },
+                                        onOpenSettings = { nav.navigate(Routes.SETTINGS) },
+                                        onOpenTransaction = { nav.navigate(Routes.edit(it)) },
+                                        onReviewSms = { s -> nav.navigate(Routes.add(s.epochDay, s.amountMinor, s.merchant, s.id)) },
+                                        onOpenRecap = { nav.navigate(Routes.recap(it.toString())) },
+                                        onOpenAccounts = { nav.navigate(Routes.ACCOUNTS) },
+                                        onOpenAssistant = { nav.navigate(Routes.ASSISTANT) },
+                                    )
                                 }
-                                activityRequest = ActivityRequest(filter, accountId)
-                                nav.switchTab(Routes.ACTIVITY)
-                            },
-                            onOpenSubscriptions = { income -> nav.navigate(Routes.subscriptions(income)) },
-                            onOpenGoal = { nav.navigate(Routes.goal(it)) },
-                            onOpenGoals = { nav.navigate(Routes.GOALS) },
-                            onOpenSettings = { nav.navigate(Routes.SETTINGS) },
-                            onOpenTransaction = { nav.navigate(Routes.edit(it)) },
-                            onReviewSms = { s -> nav.navigate(Routes.add(s.epochDay, s.amountMinor, s.merchant, s.id)) },
-                            onOpenRecap = { nav.navigate(Routes.recap(it.toString())) },
-                            onOpenAccounts = { nav.navigate(Routes.ACCOUNTS) },
-                            onOpenAssistant = { nav.navigate(Routes.ASSISTANT) },
-                        )
+                                Routes.ACTIVITY -> {
+                                    HistoryScreen(
+                                        onOpenTransaction = { nav.navigate(Routes.edit(it)) },
+                                        onAddForDay = { nav.navigate(Routes.add(day = it.toEpochDay())) },
+                                        onOpenSubscriptions = { income -> nav.navigate(Routes.subscriptions(income)) },
+                                        requestedFilter = activityRequest,
+                                        onRequestHandled = { activityRequest = null },
+                                    )
+                                }
+                                Routes.INSIGHTS -> {
+                                    StatsScreen(
+                                        onOpenRecap = { nav.navigate(Routes.recap(it.toString())) },
+                                        onOpenTransaction = { nav.navigate(Routes.edit(it)) },
+                                    )
+                                }
+                                Routes.PLAN -> {
+                                    PlanScreen(
+                                        onOpenBudget = { nav.navigate(Routes.BUDGET) },
+                                        onEditPlan = { nav.navigate(Routes.BUDGET_PLAN) },
+                                        onOpenSubscriptions = { nav.navigate(Routes.subscriptions()) },
+                                        onOpenGoals = { nav.navigate(Routes.GOALS) },
+                                        onOpenGoal = { nav.navigate(Routes.goal(it)) },
+                                        onOpenCategories = { nav.navigate(Routes.CATEGORIES) },
+                                        onOpenDebts = { nav.navigate(Routes.DEBTS) },
+                                    )
+                                }
+                            }
+                            }
+                        }
                     }
                     screen(Routes.ASSISTANT) { AssistantScreen(onBack = back) }
-                    screen(Routes.ACTIVITY) {
-                        HistoryScreen(
-                            onOpenTransaction = { nav.navigate(Routes.edit(it)) },
-                            onAddForDay = { nav.navigate(Routes.add(day = it.toEpochDay())) },
-                            onOpenSubscriptions = { income -> nav.navigate(Routes.subscriptions(income)) },
-                            requestedFilter = activityRequest,
-                            onRequestHandled = { activityRequest = null },
-                        )
-                    }
-                    screen(Routes.INSIGHTS) {
-                        StatsScreen(
-                            onOpenRecap = { nav.navigate(Routes.recap(it.toString())) },
-                            onOpenTransaction = { nav.navigate(Routes.edit(it)) },
-                        )
-                    }
-                    screen(Routes.PLAN) {
-                        PlanScreen(
-                            onOpenBudget = { nav.navigate(Routes.BUDGET) },
-                            onEditPlan = { nav.navigate(Routes.BUDGET_PLAN) },
-                            onOpenSubscriptions = { nav.navigate(Routes.subscriptions()) },
-                            onOpenGoals = { nav.navigate(Routes.GOALS) },
-                            onOpenGoal = { nav.navigate(Routes.goal(it)) },
-                            onOpenCategories = { nav.navigate(Routes.CATEGORIES) },
-                            onOpenDebts = { nav.navigate(Routes.DEBTS) },
-                        )
-                    }
                     screen(Routes.DEBTS) { DebtsScreen(onBack = back) }
                     screen(Routes.DELETED) { DeletedScreen(onBack = back) }
                     screen(
@@ -369,15 +378,16 @@ fun LeftoversNavHost(openAdd: Boolean = false, onOpenAddHandled: () -> Unit = {}
                 }
 
                 AnimatedVisibility(
-                    visible = currentRoute in Routes.tabs,
+                    visible = onTab,
                     enter = slideInVertically(spring(dampingRatio = 0.8f, stiffness = Spring.StiffnessMediumLow)) { it * 2 } + fadeIn(),
                     exit = slideOutVertically(tween(220)) { it * 2 } + fadeOut(tween(160)),
                     modifier = Modifier.align(Alignment.BottomCenter),
                 ) {
                     CompositionLocalProvider(LocalNavAnimatedScope provides this) {
                         FloatingDock(
-                            current = currentRoute,
-                            onTab = { nav.switchTab(it) },
+                            // Follows the swipe, switching once a page is more than half way across.
+                            current = Routes.tabOrder[pager.currentPage],
+                            onTab = { showTab(Routes.tabOrder.indexOf(it)) },
                             onAdd = { nav.navigate(Routes.add()) },
                         )
                     }
@@ -414,14 +424,6 @@ fun LeftoversNavHost(openAdd: Boolean = false, onOpenAddHandled: () -> Unit = {}
                 }
             }
         }
-    }
-}
-
-private fun NavHostController.switchTab(route: String) {
-    navigate(route) {
-        popUpTo(graph.findStartDestination().id) { saveState = true }
-        launchSingleTop = true
-        restoreState = true
     }
 }
 

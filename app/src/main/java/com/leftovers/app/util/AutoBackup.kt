@@ -16,26 +16,25 @@ import kotlinx.coroutines.withContext
 import java.time.LocalDate
 import java.util.concurrent.TimeUnit
 
-/** Weekly backup into a folder the user picked once; keeps the newest [KEEP] files. */
+/** Daily, weekly or monthly backup into a folder the user picked once; keeps the newest few files. */
 object AutoBackup {
     private const val WORK_NAME = "auto_backup"
     private const val PREFIX = "leftovers-auto-"
-    private const val KEEP = 4
-
-    fun schedule(context: Context, enabled: Boolean) {
+    /** [days] between backups (1, 7 or 30); a change of interval replaces the schedule. */
+    fun schedule(context: Context, enabled: Boolean, days: Int = 7) {
         val wm = WorkManager.getInstance(context)
         if (!enabled) {
             wm.cancelUniqueWork(WORK_NAME)
             return
         }
-        val request = PeriodicWorkRequestBuilder<AutoBackupWorker>(7, TimeUnit.DAYS)
+        val request = PeriodicWorkRequestBuilder<AutoBackupWorker>(days.coerceIn(1, 30).toLong(), TimeUnit.DAYS)
             .setConstraints(Constraints.Builder().setRequiresBatteryNotLow(true).build())
             .build()
-        wm.enqueueUniquePeriodicWork(WORK_NAME, ExistingPeriodicWorkPolicy.KEEP, request)
+        wm.enqueueUniquePeriodicWork(WORK_NAME, ExistingPeriodicWorkPolicy.UPDATE, request)
     }
 
     /** Writes a dated backup into [tree] and removes older automatic ones. */
-    suspend fun runNow(context: Context, tree: Uri): Result<Int> = withContext(Dispatchers.IO) {
+    suspend fun runNow(context: Context, tree: Uri, keep: Int = 4): Result<Int> = withContext(Dispatchers.IO) {
         runCatching {
             val resolver = context.contentResolver
             val folder = DocumentsContract.buildDocumentUriUsingTree(tree, DocumentsContract.getTreeDocumentId(tree))
@@ -46,7 +45,7 @@ object AutoBackup {
             val count = (context.applicationContext as LeftoversApp).container.backup.export(file).getOrThrow()
             existing(context, tree)
                 .sortedByDescending { it.second }
-                .drop(KEEP)
+                .drop(keep.coerceIn(1, 5))
                 .forEach { runCatching { DocumentsContract.deleteDocument(resolver, it.first) } }
             count
         }
@@ -74,8 +73,10 @@ class AutoBackupWorker(context: Context, params: WorkerParameters) : CoroutineWo
         val dir = s.autoBackupDir ?: return Result.success()
         // Turning backups on makes one straight away, and the weekly job's first run starts at the
         // same moment; skip it so the two don't write duplicate files.
-        if (System.currentTimeMillis() - s.autoBackupLast < TimeUnit.DAYS.toMillis(6)) return Result.success()
-        return AutoBackup.runNow(applicationContext, Uri.parse(dir)).fold(
+        // A little under the interval, so a run that starts slightly early still counts.
+        val gap = TimeUnit.DAYS.toMillis(s.autoBackupDays.toLong()) - TimeUnit.HOURS.toMillis(4)
+        if (System.currentTimeMillis() - s.autoBackupLast < gap) return Result.success()
+        return AutoBackup.runNow(applicationContext, Uri.parse(dir), s.autoBackupKeep).fold(
             {
                 settings.setAutoBackupDone(System.currentTimeMillis())
                 Result.success()

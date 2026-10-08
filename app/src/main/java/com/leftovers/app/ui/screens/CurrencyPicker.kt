@@ -50,7 +50,10 @@ fun CurrencyList(selected: String, onSelect: (CurrencyOption) -> Unit, modifier:
                     Text(option.symbol, style = MaterialTheme.typography.titleMedium, color = c.textPrimary, modifier = Modifier.width(52.dp), maxLines = 1)
                     Column(Modifier.weight(1f)) {
                         Text(option.name, style = MaterialTheme.typography.bodyLarge, color = c.textPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        Text(option.code, style = MaterialTheme.typography.bodySmall, color = c.textSecondary)
+                        // The code is already on the left when a currency has no symbol of its own.
+                        if (!option.symbol.equals(option.code, ignoreCase = true)) {
+                            Text(option.code, style = MaterialTheme.typography.bodySmall, color = c.textSecondary)
+                        }
                     }
                     if (option.code == selected) {
                         Spacer(Modifier.width(8.dp))

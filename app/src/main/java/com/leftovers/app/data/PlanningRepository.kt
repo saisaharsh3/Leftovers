@@ -33,6 +33,13 @@ class PlanningRepository(private val database: AppDatabase) {
     }
     suspend fun settle(person: String) = debtDao.settle(person)
 
+    /** Removes every lent or borrowed entry, with its photos. */
+    suspend fun deleteAllDebts() {
+        val all = debtDao.getAll()
+        debtDao.deleteAll()
+        all.flatMap { it.photos }.forEach { com.leftovers.app.util.ReceiptStore.delete(it) }
+    }
+
     /**
      * Logs every recurring charge whose date has arrived but hasn't been recorded yet,
      * catching up on months the app wasn't opened. Returns the transactions it created.

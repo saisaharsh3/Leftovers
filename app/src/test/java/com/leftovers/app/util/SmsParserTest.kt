@@ -14,12 +14,12 @@ class SmsParserTest {
     }
 
     @Test fun ownKeywordCatchesAnUnusualBank() {
-        val msg = "INR 1,499.00 used for txn at CROMA on 07-10-26. Avl bal INR 12,000"
+        val msg = "INR 1,499.00 txn done at CROMA on 07-10-26. Avl bal INR 12,000"
         assertNull(SmsParser.parse(msg))
-        val p = SmsParser.parse(msg, listOf("used for"))
+        val p = SmsParser.parse(msg, listOf("txn done"))
         assertNotNull(p)
         assertEquals(149_900L, p!!.amountMinor)
-        assertTrue(SmsParser.check(msg, listOf("used for")).reason.contains("used for"))
+        assertTrue(SmsParser.check(msg, listOf("txn done")).reason.contains("txn done"))
     }
 
     @Test fun keywordsDontOverrideSafetyChecks() {

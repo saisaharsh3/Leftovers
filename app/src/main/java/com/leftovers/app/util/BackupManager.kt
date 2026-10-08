@@ -80,7 +80,7 @@ class BackupManager(
                 }))
                 put("accounts", JSONArray(dao.accounts().map { a ->
                     JSONObject().put("id", a.id).put("name", a.name).put("icon", a.icon).put("color", a.color)
-                        .put("opening", a.openingMinor).put("createdAt", a.createdAt)
+                        .put("opening", a.openingMinor).put("createdAt", a.createdAt).put("smsDigits", a.smsDigits ?: JSONObject.NULL)
                 }))
                 put("transactions", JSONArray(transactions.map { t ->
                     JSONObject().put("id", t.id).put("amount", t.amountMinor).put("type", t.type.name)
@@ -157,7 +157,7 @@ class BackupManager(
                 Category(it.getLong("id"), name, it.getString("icon"), it.getLong("color"), type, it.longOrNull("budget"), adds)
             }
             val accounts = json.optJSONArray("accounts")?.objects().orEmpty().map {
-                Account(it.getLong("id"), it.getString("name"), it.getString("icon"), it.getLong("color"), it.getLong("opening"), it.getLong("createdAt"))
+                Account(it.getLong("id"), it.getString("name"), it.getString("icon"), it.getLong("color"), it.getLong("opening"), it.getLong("createdAt"), it.stringOrNull("smsDigits"))
             }
             val transactions = json.getJSONArray("transactions").objects().map {
                 Transaction(
