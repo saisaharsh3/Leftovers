@@ -203,7 +203,7 @@ fun GlassHeader(
             Modifier
                 .fillMaxWidth()
                 .height(1.dp)
-                .background(c.borderBottom),
+                .background(c.glassStrong), // a faint lit edge, like the cards
         )
     }
 }

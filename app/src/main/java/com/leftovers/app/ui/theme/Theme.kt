@@ -70,7 +70,7 @@ private val DarkTokens = AppColors(
     auroraA = Color(0xFF5048E5),
     auroraB = Color(0xFF0E9F9A),
     auroraC = Color(0xFF8BB82B),
-    barTint = Color(0xFF0E0E13).copy(alpha = 0.62f),
+    barTint = Color(0xFF0E0E13).copy(alpha = 0.46f),
 )
 
 private val LightTokens = AppColors(

@@ -42,9 +42,19 @@ import dev.chrisbanes.haze.blur.hazeBlur
 /** Shared blur state: the aurora and scrolling content are sources, bars and the dock blur them. */
 val LocalHazeState = staticCompositionLocalOf { HazeState() }
 
+/**
+ * True while the tab pages slide. Blurring moving pages re-records them every frame, which drops frames and
+ * can leave a ghost of the old page, so bars use a plain tint until the slide settles.
+ */
+val LocalBlurPaused = staticCompositionLocalOf<() -> Boolean> { { false } }
+
 /** Frosted-glass effect for anything floating above content (headers, tab bar). */
 @Composable
-fun Modifier.frosted(colors: AppColors = LocalAppColors.current): Modifier = hazeBlur(
+fun Modifier.frosted(colors: AppColors = LocalAppColors.current): Modifier =
+    if (LocalBlurPaused.current()) background(colors.barTint.copy(alpha = (colors.barTint.alpha + 0.3f).coerceAtMost(0.9f))) else frostedBlur(colors)
+
+@Composable
+private fun Modifier.frostedBlur(colors: AppColors): Modifier = hazeBlur(
     input = HazeInput.Sources(LocalHazeState.current),
     style = HazeBlurStyle {
         blurRadius(28.dp)

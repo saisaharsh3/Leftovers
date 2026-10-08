@@ -13,7 +13,8 @@ All notable changes to Leftovers. Download any version from
 - SMS and email detection understand other currencies: $, €, £, AED, RM, Rp, kr and more, before or after the number (#6)
 - Subscriptions list the next charge first, show five, and keep the rest behind *Show all*
 - Tapping a later day in the calendar explains that later days are for repeating entries
-- Swiping between tabs follows your finger, and tapping a far tab slides in just one page
+- Swiping between tabs follows your finger, and tapping a far tab slides in just one page; the frosted bars pause
+  their blur while pages slide, so the swipe stays smooth. The tab bar and headers look lighter and more like glass
 - Fixed SMS and email detection missing payments: bank footers mentioning OTPs or "requested" no longer
   hide a message, SBI amounts without Rs ("debited by 500.0") and card alerts ("Thank you for using…") are
   recognised, merchant names stop before "Refno" or "(UPI Ref…)", and email always looks back two days

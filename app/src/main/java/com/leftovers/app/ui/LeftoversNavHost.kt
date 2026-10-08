@@ -54,7 +54,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.IntOffset
@@ -69,6 +69,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.leftovers.app.ui.components.Glass
+import com.leftovers.app.ui.components.LocalBlurPaused
 import com.leftovers.app.ui.components.LocalNavAnimatedScope
 import com.leftovers.app.ui.components.LocalSharedTransitionScope
 import com.leftovers.app.ui.components.frosted
@@ -179,6 +180,7 @@ fun LeftoversNavHost(openAdd: Boolean = false, onOpenAddHandled: () -> Unit = {}
     // Kept here so the chosen tab survives opening and closing other screens.
     val pager = rememberPagerState { Routes.tabOrder.size }
     // A far tab slides in from its neighbour, so a tap never streams through the tabs in between.
+    val blurPaused = remember(pager) { { pager.isScrollInProgress } }
     val showTab: (Int) -> Unit = { target ->
         appScope.launch {
             val from = pager.currentPage
@@ -207,7 +209,7 @@ fun LeftoversNavHost(openAdd: Boolean = false, onOpenAddHandled: () -> Unit = {}
     }
 
     SharedTransitionLayout(Modifier.fillMaxSize()) {
-        CompositionLocalProvider(LocalSharedTransitionScope provides this, LocalUndo provides undo) {
+        CompositionLocalProvider(LocalSharedTransitionScope provides this, LocalUndo provides undo, LocalBlurPaused provides blurPaused) {
             Box(Modifier.fillMaxSize()) {
                 NavHost(
                     navController = nav,
@@ -255,16 +257,9 @@ fun LeftoversNavHost(openAdd: Boolean = false, onOpenAddHandled: () -> Unit = {}
                             key = { Routes.tabOrder[it] },
                             modifier = Modifier.fillMaxSize(),
                         ) { page ->
-                            // A page moving off eases back and fades a little, so the swipe has depth.
-                            Box(
-                                Modifier.fillMaxSize().graphicsLayer {
-                                    val offset = abs(pager.currentPage - page + pager.currentPageOffsetFraction).coerceIn(0f, 1f)
-                                    val scale = 1f - 0.06f * offset
-                                    scaleX = scale
-                                    scaleY = scale
-                                    alpha = 1f - 0.45f * offset
-                                },
-                            ) {
+                            // Pages only slide. Fading or scaling them would redraw their frosted bars off-screen
+                            // on every frame, which stutters.
+                            Box(Modifier.fillMaxSize()) {
                             when (Routes.tabOrder[page]) {
                                 Routes.HOME -> {
                                     HomeScreen(
@@ -439,6 +434,8 @@ private fun FloatingDock(current: String?, onTab: (String) -> Unit, onAdd: () ->
             .padding(bottom = 14.dp)
             .clip(CircleShape)
             .frosted()
+            // A soft top-lit sheen, so the bar reads as glass even over a plain dark background.
+            .background(Brush.verticalGradient(listOf(c.glassStrong, c.glass.copy(alpha = c.glass.alpha * 0.4f))))
             .border(1.dp, glassBorder(c), CircleShape)
             .padding(6.dp),
         verticalAlignment = Alignment.CenterVertically,
