@@ -200,7 +200,7 @@ fun GlassHeader(
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), content = actions)
         }
         // Room for the frost to fade out, so the bar has no hard bottom edge.
-        Spacer(Modifier.height(14.dp))
+        Spacer(Modifier.height(16.dp))
     }
 }
 

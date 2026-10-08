@@ -53,7 +53,7 @@ fun Modifier.frosted(colors: AppColors = LocalAppColors.current, fadeBottom: Boo
         blurRadius(28.dp)
         noiseFactor(0.04f)
         colorEffects(listOf(HazeColorEffect.tint(colors.barTint)))
-        if (fadeBottom) mask(Brush.verticalGradient(0f to Color.Black, 0.62f to Color.Black, 1f to Color.Transparent))
+        if (fadeBottom) mask(Brush.verticalGradient(0f to Color.Black, 0.74f to Color.Black, 1f to Color.Transparent))
     },
 )
 
