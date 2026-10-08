@@ -54,6 +54,8 @@ class RealBankMessagesTest {
         assertEquals("1234", SmsParser.accountDigits("Dear UPI user A/C X1234 debited by 500.0"))
         assertEquals("234", SmsParser.accountDigits("ICICI Bank Acct XX234 debited for Rs 500.00"))
         assertEquals("1234", SmsParser.accountDigits("HDFC Bank Credit Card ending 1234 for Rs 500.00"))
+        // Some banks print the whole number (from #7): the last four still pick the account.
+        assertEquals("7890", SmsParser.accountDigits("Rs 300.00 debited from a/c 1234567890 towards Paytm"))
         assertNull(SmsParser.accountDigits("Rs 500 spent at Swiggy"))
     }
 

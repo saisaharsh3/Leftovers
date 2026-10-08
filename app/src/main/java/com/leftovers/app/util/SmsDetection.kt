@@ -41,7 +41,7 @@ object SmsParser {
     )
     /** The account or card digits a message names, e.g. "A/C *1234", "Acct XX234", "Card ending 1234". */
     private val accountRef = Regex(
-        """\b(?:a/c|ac|acct|account|card)(?:\s*(?:no\.?|number))?(?:\s+ending(?:\s+in|\s+with)?)?[\s:.-]*[xX*]*\s*(\d{3,6})\b""",
+        """\b(?:a/c|ac|acct|account|card)(?:\s*(?:no\.?|number))?(?:\s+ending(?:\s+in|\s+with)?)?[\s:.-]*[xX*]*\s*(\d{3,18})\b""",
         RegexOption.IGNORE_CASE,
     )
 
