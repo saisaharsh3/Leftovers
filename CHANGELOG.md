@@ -3,6 +3,11 @@
 All notable changes to Leftovers. Download any version from
 [Releases](https://github.com/saisaharsh3/Leftovers/releases).
 
+## Unreleased
+
+- Dialogs are real frosted glass: the screen behind blurs and the panel is see-through (Android 12+);
+  on phones without window blur they stay solid so text is easy to read (#6)
+
 ## 1.4.0
 
 - New entries start on the account Home is showing (or the default account when Home shows all) (#6)
