@@ -178,7 +178,7 @@ fun GlassHeader(
     Column(
         Modifier
             .fillMaxWidth()
-            .frosted()
+            .frosted(fadeBottom = true)
             .statusBarsPadding(),
     ) {
         Row(
@@ -199,12 +199,8 @@ fun GlassHeader(
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), content = actions)
         }
-        Box(
-            Modifier
-                .fillMaxWidth()
-                .height(1.dp)
-                .background(c.glassStrong), // a faint lit edge, like the cards
-        )
+        // Room for the frost to fade out, so the bar has no hard bottom edge.
+        Spacer(Modifier.height(14.dp))
     }
 }
 
