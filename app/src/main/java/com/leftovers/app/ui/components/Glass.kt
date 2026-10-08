@@ -42,14 +42,18 @@ import dev.chrisbanes.haze.blur.hazeBlur
 /** Shared blur state: the aurora and scrolling content are sources, bars and the dock blur them. */
 val LocalHazeState = staticCompositionLocalOf { HazeState() }
 
-/** Frosted-glass effect for anything floating above content (headers, tab bar). */
+/**
+ * Frosted-glass effect for anything floating above content (headers, tab bar). With [fadeBottom] the frost
+ * fades out over its lower part instead of ending in a hard edge, for bars that sit over the top of a screen.
+ */
 @Composable
-fun Modifier.frosted(colors: AppColors = LocalAppColors.current): Modifier = hazeBlur(
+fun Modifier.frosted(colors: AppColors = LocalAppColors.current, fadeBottom: Boolean = false): Modifier = hazeBlur(
     input = HazeInput.Sources(LocalHazeState.current),
     style = HazeBlurStyle {
         blurRadius(28.dp)
         noiseFactor(0.04f)
         colorEffects(listOf(HazeColorEffect.tint(colors.barTint)))
+        if (fadeBottom) mask(Brush.verticalGradient(0f to Color.Black, 0.74f to Color.Black, 1f to Color.Transparent))
     },
 )
 
