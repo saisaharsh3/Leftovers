@@ -3,7 +3,7 @@
 All notable changes to Leftovers. Download any version from
 [Releases](https://github.com/saisaharsh3/Leftovers/releases).
 
-## Unreleased
+## 1.4.0
 
 - New entries start on the account Home is showing (or the default account when Home shows all) (#6)
 - #tag suggestions while typing a note: type #g and pick #goa (#6)
