@@ -25,6 +25,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.DatePickerDefaults
+import androidx.compose.material3.DatePickerDialog
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -205,11 +208,7 @@ fun GlassAlertDialog(
 ) {
     val c = LocalAppColors.current
     val glassShape = RoundedCornerShape(30.dp)
-    val context = LocalContext.current
-    val blurs = remember {
-        Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
-            context.getSystemService(WindowManager::class.java)?.isCrossWindowBlurEnabled == true
-    }
+    val blurs = rememberWindowBlur()
     AlertDialog(
         onDismissRequest = onDismissRequest,
         confirmButton = {
@@ -228,7 +227,47 @@ fun GlassAlertDialog(
     )
 }
 
-/** Blurs and lightly dims the screen behind the dialog window this is placed in (Android 12+). */
+/** Whether this phone blurs what's behind a dialog or sheet window: Android 12+ with window blur turned on. */
+@Composable
+private fun rememberWindowBlur(): Boolean {
+    val context = LocalContext.current
+    return remember {
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+            context.getSystemService(WindowManager::class.java)?.isCrossWindowBlurEnabled == true
+    }
+}
+
+/** A calendar dialog in the same glass style as [GlassAlertDialog]. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun GlassDatePickerDialog(
+    onDismissRequest: () -> Unit,
+    confirmButton: @Composable () -> Unit,
+    dismissButton: (@Composable () -> Unit)? = null,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    val c = LocalAppColors.current
+    val glassShape = RoundedCornerShape(30.dp)
+    val blurs = rememberWindowBlur()
+    val container = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = if (blurs) 0.7f else 0.98f)
+    DatePickerDialog(
+        onDismissRequest = onDismissRequest,
+        confirmButton = {
+            BlurBehindDialog(blurs)
+            confirmButton()
+        },
+        dismissButton = dismissButton,
+        shape = glassShape,
+        tonalElevation = 0.dp,
+        colors = DatePickerDefaults.colors(containerColor = container),
+        modifier = Modifier
+            .border(1.dp, com.leftovers.app.ui.components.glassBorder(c), glassShape)
+            .background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(c.glassStrong, androidx.compose.ui.graphics.Color.Transparent)), glassShape),
+        content = content,
+    )
+}
+
+/** Blurs and lightly dims the screen behind the dialog or sheet window this is placed in (Android 12+). */
 @Composable
 private fun BlurBehindDialog(enabled: Boolean) {
     val window = (LocalView.current.parent as? DialogWindowProvider)?.window ?: return
@@ -250,12 +289,14 @@ private fun BlurBehindDialog(enabled: Boolean) {
 @Composable
 fun GlassSheet(onDismiss: () -> Unit, content: @Composable () -> Unit) {
     val c = LocalAppColors.current
+    // Sheets hold forms, so they stay more solid than dialogs even with the screen blurred behind.
+    val blurs = rememberWindowBlur()
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        containerColor = MaterialTheme.colorScheme.surfaceContainer,
+        containerColor = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = if (blurs) 0.84f else 1f),
         shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp),
-        scrimColor = c.background.copy(alpha = 0.6f),
+        scrimColor = c.background.copy(alpha = if (blurs) 0.3f else 0.6f),
         // Only the top edge gets the glass highlight. A full border follows the sheet's measured size,
         // which can end above its content (e.g. after the keyboard closes) and left a line across the form.
         modifier = Modifier.drawWithContent {
@@ -271,6 +312,7 @@ fun GlassSheet(onDismiss: () -> Unit, content: @Composable () -> Unit) {
             drawPath(edge, c.borderTop, style = Stroke(w))
         },
     ) {
+        BlurBehindDialog(blurs)
         Box(Modifier.navigationBarsPadding()) { content() }
     }
 }

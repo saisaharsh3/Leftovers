@@ -55,7 +55,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDefaults
-import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -622,9 +621,8 @@ fun EditorScreen(
                 override fun isSelectableDate(utcTimeMillis: Long) = true
             },
         )
-        DatePickerDialog(
+        GlassDatePickerDialog(
             onDismissRequest = { showCalendar = false },
-            colors = DatePickerDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
             confirmButton = {
                 val laterDay = (pickerState.selectedDateMillis ?: 0L) > todayUtc && !viewModel.repeatMonthly
                 TextButton(enabled = !laterDay, onClick = {
@@ -649,7 +647,7 @@ fun EditorScreen(
                         Text(if (viewModel.repeatMonthly) "Which day does it repeat from?" else "Which day was it?", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(start = 24.dp, top = 20.dp))
                     }
                 },
-                colors = DatePickerDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
+                colors = DatePickerDefaults.colors(containerColor = Color.Transparent),
             )
         }
     }

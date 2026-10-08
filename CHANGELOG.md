@@ -7,6 +7,7 @@ All notable changes to Leftovers. Download any version from
 
 - Dialogs are real frosted glass: the screen behind blurs and the panel is see-through (Android 12+);
   on phones without window blur they stay solid so text is easy to read (#6)
+- The calendar and bottom sheets (keywords, accounts and others) get the same frosted glass
 
 ## 1.4.0
 

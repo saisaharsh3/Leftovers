@@ -18,7 +18,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.DateRangePicker
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
@@ -212,7 +211,7 @@ fun DeletedScreen(onBack: () -> Unit, viewModel: DeletedViewModel = viewModel(fa
 
     if (pickDates) {
         val picker = rememberDateRangePickerState()
-        DatePickerDialog(
+        GlassDatePickerDialog(
             onDismissRequest = { pickDates = false },
             confirmButton = {
                 TextButton(
