@@ -24,7 +24,24 @@ today, plan for the things you want, and ask an AI about your money if you'd lik
 <img src="docs/screenshots/money-owed.jpg" width="180" alt="Money owed" />&nbsp;
 <img src="docs/screenshots/assistant.jpg" width="180" alt="AI assistant" />
 
+<a href="https://github.com/saisaharsh3/Leftovers/releases/latest"><img src="https://img.shields.io/badge/Download%20APK-CDF46F?style=for-the-badge&logo=android&logoColor=black" height="44" alt="Download the APK" /></a>&nbsp;
+<a href="https://apps.obtainium.imranr.dev/redirect?r=obtainium://add/https://github.com/saisaharsh3/Leftovers"><img src="https://raw.githubusercontent.com/ImranR98/Obtainium/main/assets/graphics/badge_obtainium.png" height="44" alt="Get it on Obtainium" /></a>
+
+If Leftovers is useful to you, a ⭐ helps other people find it.
+
 </div>
+
+## Why Leftovers?
+
+Most budget apps want an account, show ads, or send your spending to a server. Leftovers doesn't.
+
+- **It answers the question you actually have:** *how much can I spend today?* What's left this month,
+  minus bills still due, spread over the days remaining.
+- **Private by design:** no sign-up, no ads, no analytics. Your data never leaves the phone unless you
+  choose to connect an AI or an email account.
+- **Fast to use:** the keypad opens first, so a spend is logged in two taps. Bank SMS and email alerts can
+  suggest entries for you, in any currency.
+- **Free and open source** (MIT), with signed releases built in the open by GitHub Actions.
 
 ## Features
 
@@ -73,11 +90,12 @@ today, plan for the things you want, and ask an AI about your money if you'd lik
 **Extras**
 - Home-screen widgets: *Safe to spend today* (with one-tap add) and *Left this month*
 - Evening reminder, app lock (fingerprint, face or PIN)
-- Backup and restore to a file or Google Drive, weekly automatic backups to a folder you choose, CSV export
+- Backup and restore to a file or Google Drive (photos included if you like), daily, weekly or monthly automatic
+  backups to a folder you choose, CSV export
 - Optional backup password: backups are encrypted (AES-256) and need it to restore
 - Optional payment detection from bank SMS and from bank email alerts, suggesting entries for you to confirm.
   Add your own keywords for banks it misses, and test any message to see what it would suggest. One payment never shows up twice, even when it arrives by both SMS and email
-- Swipe sideways to move between Home, Activity, Insights and Plan
+- Swipe sideways to move between Home, Activity, Insights and Plan; the page follows your finger
 - Dark glass design with spring animations and high-refresh-rate support; light theme available
 
 ## Privacy
@@ -150,6 +168,9 @@ OpenRouter passes requests on to the model's own provider).
 1. Open the [latest release](https://github.com/saisaharsh3/Leftovers/releases/latest) on your phone and download `leftovers-<version>.apk`.
 2. Open the file. If Android asks, allow your browser or file manager to **install unknown apps**.
 3. Tap **Install**. Updates install over the top and keep your data.
+
+**Automatic updates:** add the repo to [Obtainium](https://github.com/ImranR98/Obtainium) with the badge at the
+top, and new releases install straight from GitHub.
 
 Requires Android 8.0 (API 26) or newer. What's new in each version is in [CHANGELOG.md](CHANGELOG.md).
 
@@ -225,13 +246,25 @@ app/src/main/java/com/leftovers/app/
 - **Bank SMS detection** uses the `RECEIVE_SMS` permission, which Google Play restricts to default SMS
   apps and a few exceptions. It works for direct APK installs; remove it before publishing to Play.
 - The `INTERNET` permission is used only by the AI assistant and email detection, after you connect them.
-- Receipt photos aren't included in backups.
 
-## Contributing
+## Get involved
 
-Contributions are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md), pick an
-[issue](https://github.com/saisaharsh3/Leftovers/issues), and open your pull request against the **`dev`** branch.
-Changes are tested from `dev` before they reach `main` and a release.
+- **Try the newest changes:** every push to `dev` is published as a
+  [Dev build](https://github.com/saisaharsh3/Leftovers/releases) that installs next to the real app.
+- **Report a bug or suggest an idea** with the [issue forms](https://github.com/saisaharsh3/Leftovers/issues/new/choose),
+  or ask a question in [Discussions](https://github.com/saisaharsh3/Leftovers/discussions).
+- **Your bank's messages not detected?** Paste one (with personal details removed) in an issue; adding it to
+  the tests is a great first contribution.
+- **Write code:** start with a
+  [good first issue](https://github.com/saisaharsh3/Leftovers/issues?q=is%3Aopen+label%3A%22good+first+issue%22) or one marked
+  [help wanted](https://github.com/saisaharsh3/Leftovers/issues?q=is%3Aopen+label%3A%22help+wanted%22). Read
+  [CONTRIBUTING.md](CONTRIBUTING.md) and open your pull request against the **`dev`** branch.
+
+### Contributors
+
+<a href="https://github.com/saisaharsh3/Leftovers/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=saisaharsh3/Leftovers" alt="Contributors" />
+</a>
 
 ## License
 

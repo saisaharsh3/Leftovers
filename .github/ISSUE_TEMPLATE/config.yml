@@ -3,3 +3,6 @@ contact_links:
   - name: How to contribute
     url: https://github.com/saisaharsh3/Leftovers/blob/main/CONTRIBUTING.md
     about: Setting up, the dev branch, and what makes a good pull request.
+  - name: Ask a question or share an idea
+    url: https://github.com/saisaharsh3/Leftovers/discussions
+    about: Questions, tips and early ideas go in Discussions.
