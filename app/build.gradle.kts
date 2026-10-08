@@ -50,6 +50,8 @@ android {
         }
         release {
             signingConfigs.findByName("release")?.let { signingConfig = it }
+            // No git commit stamp in the APK, so builds of the same code always match byte for byte.
+            vcsInfo.include = false
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
@@ -63,6 +65,13 @@ android {
 
     buildFeatures {
         compose = true
+    }
+
+    // Leave out the encrypted dependency list Google Play reads. F-Droid rejects it, and it keeps
+    // the APK identical whoever builds it (so F-Droid can ship our signed release).
+    dependenciesInfo {
+        includeInApk = false
+        includeInBundle = false
     }
 
     packaging {
