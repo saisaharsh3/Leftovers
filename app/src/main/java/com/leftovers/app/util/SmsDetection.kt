@@ -41,7 +41,7 @@ object SmsParser {
     )
     /** The account or card digits a message names, e.g. "A/C *1234", "Acct XX234", "Card ending 1234". */
     private val accountRef = Regex(
-        """\b(?:a/c|ac|acct|account|card)(?:\s*no\.?)?(?:\s+ending(?:\s+in|\s+with)?)?[\s:.-]*[xX*]*\s*(\d{3,6})\b""",
+        """\b(?:a/c|ac|acct|account|card)(?:\s*(?:no\.?|number))?(?:\s+ending(?:\s+in|\s+with)?)?[\s:.-]*[xX*]*\s*(\d{3,6})\b""",
         RegexOption.IGNORE_CASE,
     )
 
@@ -51,6 +51,36 @@ object SmsParser {
         """\b(?:at|to|towards|vpa|info:?)\s+([A-Za-z0-9@._&' -]{2,40}?)(?=\s+(?:on|via|ref\w*|upi|txn|avl|avail|from|using)\b|\s*[(\[]|[.,;]|$)""",
         RegexOption.IGNORE_CASE,
     )
+    /** The payee in a UPI narration: "UPI/P2A/971133155005/DHULIPALA S N V S K" or "UPI/DR/123456/SWIGGY/YESB". */
+    private val upiNarration = Regex("""\bUPI/(?:[A-Z0-9]{1,6}/)*\d{6,}/([A-Za-z][A-Za-z0-9 .&'-]{1,40}?)\s*(?=/|\n|$|\s{2})""", RegexOption.IGNORE_CASE)
+    /** "to block UPI", "to report", "at your branch": footer phrases, not a payee. */
+    private val notPayee = Regex(
+        """^(block|report|avoid|know|view|check|call|contact|dial|sms|visit|reach|login|log|unsubscribe|update|change|help|keep|protect|ensure|receive|stop|your|you|us|our|the|this|be|any|all|bank|branch)\b|^\+?\d{6,}""",
+        RegexOption.IGNORE_CASE,
+    )
+
+    /**
+     * Who was paid, from bank message or email [text]: the UPI narration first, then "to X" / "at X",
+     * skipping footer phrases. Empty when nobody is named.
+     */
+    fun payee(text: String, words: Regex = merchant): String {
+        val candidates = sequenceOf(upiNarration.find(text)) + words.findAll(text)
+        return candidates.filterNotNull().map { m ->
+            m.groupValues[1].trim()
+                .substringBefore('@')
+                .replace(Regex("""^(vpa|upi|merchant)\s+""", RegexOption.IGNORE_CASE), "")
+                .replace(Regex("""\s+"""), " ")
+        }.firstOrNull {
+            it.length >= 2 && !it.contains("a/c", true) && !it.matches(Regex("""[xX*\d ]+""")) && !notPayee.containsMatchIn(it)
+        }?.let(::tidyName).orEmpty()
+    }
+
+    /** "ZOMATO" → "Zomato", "DHULIPALA S N V S K" → "Dhulipala S N V S K"; mixed case stays as written. */
+    private fun tidyName(name: String): String {
+        val shouted = name.any { it.isLetter() } && name == name.uppercase()
+        val words = if (shouted) name.lowercase().split(' ').joinToString(" ") { w -> w.replaceFirstChar { it.uppercase() } } else name
+        return words.replaceFirstChar { it.uppercase() }
+    }
 
     data class Parsed(val amountMinor: Long, val merchant: String)
 
@@ -74,13 +104,7 @@ object SmsParser {
         val minor = MoneyText.find(body)
             ?: bareAmount.find(body)?.groupValues?.get(1)?.let(MoneyText::toMinor)
             ?: return Check(null, "No amount found. It needs a currency next to the number, like Rs 250, $12.50 or 45 AED.")
-        val who = merchant.find(body)?.groupValues?.get(1)?.trim()
-            ?.substringBefore('@')
-            ?.replace(Regex("""^(vpa|upi|merchant)\s+""", RegexOption.IGNORE_CASE), "")
-            ?.replace(Regex("""\s+"""), " ")
-            ?.takeIf { it.length >= 2 && !it.contains("a/c", true) && !it.matches(Regex("""[xX*\d ]+""")) }
-            ?.replaceFirstChar { it.uppercase() }
-            .orEmpty()
+        val who = payee(body)
         val via = if (custom != null && !debitWords.containsMatchIn(body)) " (found by your keyword \"${custom.trim()}\")" else ""
         return Check(Parsed(minor, who), "Payment$via")
     }

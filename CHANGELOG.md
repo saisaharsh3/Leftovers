@@ -17,6 +17,8 @@ All notable changes to Leftovers. Download any version from
 - Fixed SMS and email detection missing payments: bank footers mentioning OTPs or "requested" no longer
   hide a message, SBI amounts without Rs ("debited by 500.0") and card alerts ("Thank you for using…") are
   recognised, merchant names stop before "Refno" or "(UPI Ref…)", and email always looks back two days
+- Detected payments name the real payee from UPI details ("UPI/P2A/…/NAME") instead of footer text like
+  "To block UPI", and email senders without a name show the bank ("Axis Bank", not "alerts")
 - Recent detections (Settings → Detection keywords) shows what happened to each bank SMS or email, and
   warns when SMS permission is off
 - Accounts can have the last digits of their account or card; detected payments naming them go to that account (#6)

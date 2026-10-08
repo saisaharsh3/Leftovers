@@ -59,11 +59,53 @@ class RealBankMessagesTest {
 
     private fun merchant(sms: String) = SmsParser.parse(sms)?.merchant
 
-    @Test fun merchantStopsAtRefno() = assertEquals("ZOMATO", merchant(
+    @Test fun merchantStopsAtRefno() = assertEquals("Zomato", merchant(
         "Dear UPI user A/C X4321 debited by 500.0 on date 08Oct26 trf to ZOMATO Refno 123456789. If not u? call 1800111109. -SBI",
     ))
 
     @Test fun merchantStopsAtBracket() = assertEquals("Swiggy", merchant(
         "Rs.250.00 debited from a/c **1234 on 08-10-26 to VPA swiggy@icici (UPI Ref No 4321). Not you? Call 18002586161",
     ))
+
+    // Axis Bank's UPI email, as text: the payee is in the narration, and the footer says "To block UPI".
+    private val axisEmail = """
+        08-10-2026
+        Dear Customer,
+        Here's the summary of your transaction:
+        Amount Debited:
+        INR 2.00
+        Account Number:
+        XX9119
+        Date & Time:
+        08-10-26, 20:49:14 IST
+        Transaction Info:
+        UPI/P2A/971133155005/DHULIPALA S N V S K
+        If this transaction was not initiated by you:
+        To block UPI:
+        SMS BLOCKUPI <Customer ID> to +919951860002 from your registered mobile number.
+        Call us at:
+        18001035577 (Toll Free)
+    """.trimIndent()
+
+    @Test fun axisEmailPayeeFromUpiNarration() {
+        val p = EmailParser.parse("Debit transaction alert for Axis Bank A/c", "alerts", axisEmail)
+        assertEquals(200L, p?.amountMinor)
+        assertEquals("Dhulipala S N V S K", p?.merchant)
+        assertEquals("9119", SmsParser.accountDigits(axisEmail))
+    }
+
+    @Test fun footerPhraseIsNotAPayee() = assertEquals("", merchant(
+        "INR 90.00 debited from A/c no. XX9119 on 08-10-26. Not you? To block UPI, SMS BLOCKUPI to 919951860002 - Axis Bank",
+    ))
+
+    @Test fun upiNarrationInSms() = assertEquals("Swiggy", merchant(
+        "Rs 450.00 debited from A/c XX1234 on 08-10-26 Info: UPI/DR/412345678901/SWIGGY/YESB/swiggy@ybl",
+    ))
+
+    @Test fun senderNameFromDomain() {
+        assertEquals("Axis Bank", EmailParser.nameFromAddress("alerts@axisbank.com"))
+        assertEquals("HDFC Bank", EmailParser.nameFromAddress("alerts@hdfcbank.net"))
+        assertEquals("SBI", EmailParser.nameFromAddress("donotreply@sbi.co.in"))
+        assertEquals("Paytm", EmailParser.nameFromAddress("no-reply@paytm.com"))
+    }
 }

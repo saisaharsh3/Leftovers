@@ -163,7 +163,7 @@ object EmailChecker {
 
     private fun paymentIn(m: Message, keywords: Collection<String>): EmailPayment? {
         val from = m.from?.firstOrNull() as? InternetAddress
-        val senderName = from?.personal?.takeIf { it.isNotBlank() } ?: from?.address?.substringBefore('@').orEmpty()
+        val senderName = from?.personal?.takeIf { it.isNotBlank() } ?: EmailParser.nameFromAddress(from?.address.orEmpty())
         val subject = m.subject.orEmpty()
         val body = textOf(m, 0).take(20_000)
         val parsed = EmailParser.parse(subject, senderName, body, keywords) ?: return null

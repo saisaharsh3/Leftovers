@@ -30,7 +30,7 @@ object EmailParser {
         RegexOption.IGNORE_CASE,
     )
     private val merchantWords = Regex(
-        """\b(?:at|to|towards|vpa|merchant:?)\s+([A-Za-z0-9@._&' -]{2,40}?)(?=\s+(?:on|via|ref|upi|txn|avl|avail|from|using|for)\b|[.,;]|$)""",
+        """\b(?:at|to|towards|vpa|merchant:?)\s+([A-Za-z0-9@._&' -]{2,40}?)(?=\s+(?:on|via|ref\w*|upi|txn|avl|avail|from|using|for)\b|\s*[(\[]|[.,;]|$)""",
         RegexOption.IGNORE_CASE,
     )
 
@@ -47,13 +47,24 @@ object EmailParser {
         // Any currency (see MoneyText); a total-like label wins over the first amount mentioned.
         val minor = MoneyText.after(totalLabel, text) ?: MoneyText.find(text) ?: return null
 
-        val named = merchantWords.find(text)?.groupValues?.get(1)?.trim()
-            ?.substringBefore('@')
-            ?.replace(Regex("""^(vpa|upi|merchant)\s+""", RegexOption.IGNORE_CASE), "")
-            ?.replace(Regex("""\s+"""), " ")
-            ?.takeIf { it.length >= 2 && !it.contains("a/c", true) && !it.matches(Regex("""[xX*\d ]+""")) }
-        val who = (named ?: cleanSender(senderName)).replaceFirstChar { it.uppercase() }
+        val who = SmsParser.payee(text, merchantWords).ifEmpty { cleanSender(senderName).replaceFirstChar { it.uppercase() } }
         return Parsed(minor, who)
+    }
+
+    /**
+     * A readable name for a sender with no display name, from its domain: "alerts@axisbank.com" → "Axis Bank",
+     * "noreply@paytm.com" → "Paytm". The part before @ ("alerts") says nothing about who sent it.
+     */
+    fun nameFromAddress(address: String): String {
+        val labels = address.substringAfter('@').lowercase().split('.').filter { it.isNotBlank() }
+        // The name is the label before the suffix: axisbank in axisbank.com, hdfcbank in alerts.hdfcbank.net, sbi in sbi.co.in.
+        val suffixes = setOf("com", "net", "org", "in", "co", "bank", "uk", "us", "au", "ae", "sg", "io", "money", "club", "app")
+        val name = labels.lastOrNull { it !in suffixes } ?: return address.substringBefore('@')
+        val words = name.replace(Regex("""bank$"""), " bank").replace('-', ' ').trim()
+        return words.split(' ').filter { it.isNotBlank() }.joinToString(" ") { w ->
+            // Short names and ones without vowels are initials: SBI, HDFC.
+            if (w.length <= 3 || w.none { it in "aeiou" }) w.uppercase() else w.replaceFirstChar { it.uppercase() }
+        }
     }
 
     /** "Swiggy Orders" → "Swiggy"; bank alert senders stay as they are. */
