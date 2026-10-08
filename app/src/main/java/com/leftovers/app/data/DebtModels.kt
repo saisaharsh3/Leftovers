@@ -15,7 +15,17 @@ data class Debt(
     val epochDay: Long = LocalDate.now().toEpochDay(),
     val settled: Boolean = false,
     val createdAt: Long = System.currentTimeMillis(),
-)
+    /** Photos of bills, chats or receipts in the app's private files, one path per line. */
+    val receiptPath: String? = null,
+) {
+    val photos: List<String> get() = receiptPath?.split('\n')?.filter { it.isNotBlank() }.orEmpty()
+}
+
+/** Joins photo paths for [Debt.receiptPath]; null when there are none. */
+fun photosToPath(photos: List<String>): String? = photos.filter { it.isNotBlank() }.joinToString("\n").ifEmpty { null }
+
+/** At most this many photos on one entry. */
+const val MAX_DEBT_PHOTOS = 6
 
 /** Everything still open with one person; [netMinor] is positive when they owe you. */
 data class PersonBalance(val person: String, val netMinor: Long, val entries: List<Debt>)

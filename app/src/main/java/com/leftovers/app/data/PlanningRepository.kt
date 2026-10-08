@@ -27,8 +27,18 @@ class PlanningRepository(private val database: AppDatabase) {
     suspend fun deleteDeposit(deposit: GoalDeposit) = goalDao.deleteDeposit(deposit)
 
     suspend fun saveDebt(debt: Debt) = debtDao.upsert(debt)
-    suspend fun deleteDebt(debt: Debt) = debtDao.delete(debt)
+    suspend fun deleteDebt(debt: Debt) {
+        debtDao.delete(debt)
+        debt.photos.forEach { com.leftovers.app.util.ReceiptStore.delete(it) }
+    }
     suspend fun settle(person: String) = debtDao.settle(person)
+
+    /** Removes every lent or borrowed entry, with its photos. */
+    suspend fun deleteAllDebts() {
+        val all = debtDao.getAll()
+        debtDao.deleteAll()
+        all.flatMap { it.photos }.forEach { com.leftovers.app.util.ReceiptStore.delete(it) }
+    }
 
     /**
      * Logs every recurring charge whose date has arrived but hasn't been recorded yet,

@@ -178,7 +178,7 @@ fun CategoriesScreen(
     }
 
     confirmDelete?.let { category ->
-        AlertDialog(
+        GlassAlertDialog(
             onDismissRequest = { confirmDelete = null },
             containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
             shape = RoundedCornerShape(30.dp),

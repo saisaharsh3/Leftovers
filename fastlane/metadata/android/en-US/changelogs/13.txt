@@ -1,0 +1,5 @@
+- Home: pick one account on the balance card, like switching wallets
+- Detection keywords: add your own words for bank messages, and test any message
+- Repeating entries can start on a later date
+- Deleting a subscription's entry can stop the subscription too
+- Plan counts recurring income; income templates for salary, freelance and more

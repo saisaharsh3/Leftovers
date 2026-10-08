@@ -4,6 +4,7 @@ import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -159,7 +160,7 @@ fun AmountDialog(
     val focus = remember { FocusRequester() }
     LaunchedEffect(Unit) { focus.requestFocus() }
     val minor = AmountInput.toMinor(text) ?: 0L
-    AlertDialog(
+    GlassAlertDialog(
         onDismissRequest = onDismiss,
         containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
         shape = RoundedCornerShape(30.dp),
@@ -174,6 +175,39 @@ fun AmountDialog(
                 TextButton(onClick = onDismiss) { Text("Cancel", color = c.textSecondary) }
             }
         },
+    )
+}
+
+/**
+ * A confirmation dialog in the app's glass style: a frosted, slightly see-through panel with the same light
+ * edge as cards and sheets. Same parameters as Material's AlertDialog; [containerColor] and [shape] are
+ * accepted for compatibility and ignored.
+ */
+@Composable
+fun GlassAlertDialog(
+    onDismissRequest: () -> Unit,
+    confirmButton: @Composable () -> Unit,
+    modifier: Modifier = Modifier,
+    dismissButton: (@Composable () -> Unit)? = null,
+    title: (@Composable () -> Unit)? = null,
+    text: (@Composable () -> Unit)? = null,
+    @Suppress("UNUSED_PARAMETER") containerColor: androidx.compose.ui.graphics.Color = androidx.compose.ui.graphics.Color.Unspecified,
+    @Suppress("UNUSED_PARAMETER") shape: androidx.compose.ui.graphics.Shape = RoundedCornerShape(30.dp),
+) {
+    val c = LocalAppColors.current
+    val glassShape = RoundedCornerShape(30.dp)
+    AlertDialog(
+        onDismissRequest = onDismissRequest,
+        confirmButton = confirmButton,
+        dismissButton = dismissButton,
+        title = title,
+        text = text,
+        shape = glassShape,
+        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.98f),
+        tonalElevation = 0.dp,
+        modifier = modifier
+            .border(1.dp, com.leftovers.app.ui.components.glassBorder(c), glassShape)
+            .background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(c.glassStrong, androidx.compose.ui.graphics.Color.Transparent)), glassShape),
     )
 }
 

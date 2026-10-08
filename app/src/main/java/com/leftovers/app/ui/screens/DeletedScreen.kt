@@ -291,7 +291,7 @@ private fun DeletedRow(item: DeletedItem, onRestore: () -> Unit, onDelete: () ->
 @Composable
 private fun DeleteForeverDialog(title: String, onConfirm: () -> Unit, onDismiss: () -> Unit) {
     val c = LocalAppColors.current
-    AlertDialog(
+    GlassAlertDialog(
         onDismissRequest = onDismiss,
         containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
         shape = RoundedCornerShape(30.dp),

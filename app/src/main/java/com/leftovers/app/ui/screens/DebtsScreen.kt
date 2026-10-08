@@ -1,5 +1,14 @@
 package com.leftovers.app.ui.screens
 
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.material3.Icon
+import androidx.compose.foundation.layout.size
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.platform.LocalContext
+import com.leftovers.app.util.ReceiptStore
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -34,6 +43,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.leftovers.app.data.Debt
+import com.leftovers.app.data.MAX_DEBT_PHOTOS
+import com.leftovers.app.data.photosToPath
 import com.leftovers.app.data.PersonBalance
 import com.leftovers.app.data.PlanningRepository
 import com.leftovers.app.data.openBalances
@@ -157,6 +168,9 @@ fun DebtsScreen(onBack: () -> Unit, viewModel: DebtsViewModel = viewModel(factor
                                     color = c.textSecondary,
                                     modifier = Modifier.weight(1f),
                                 )
+                                if (d.photos.isNotEmpty()) {
+                                    Icon(Lucide.Camera, contentDescription = if (d.photos.size == 1) "Has a photo" else "Has ${d.photos.size} photos", tint = c.textTertiary, modifier = Modifier.padding(end = 8.dp).size(14.dp))
+                                }
                                 Text(
                                     (if (d.amountMinor > 0) "Lent " else "Borrowed ") + money.format(abs(d.amountMinor)),
                                     style = MaterialTheme.typography.labelLarge,
@@ -199,9 +213,39 @@ private fun DebtEditor(initial: Debt, people: List<String>, onDismiss: () -> Uni
     var person by rememberSaveable { mutableStateOf(initial.person) }
     var amountText by rememberSaveable { mutableStateOf(if (initial.amountMinor != 0L) AmountInput.fromMinor(abs(initial.amountMinor)) else "") }
     var note by rememberSaveable { mutableStateOf(initial.note) }
+    // Paths, one per line, so the list survives rotation like the other fields.
+    var photoText by rememberSaveable { mutableStateOf(initial.receiptPath.orEmpty()) }
+    val photos = photoText.split('\n').filter { it.isNotBlank() }
+    val original = initial.photos
+    var viewing by remember { mutableStateOf<String?>(null) }
+    var cameraFile by remember { mutableStateOf<java.io.File?>(null) }
     val amount = AmountInput.toMinor(amountText) ?: 0L
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
 
-    GlassSheet(onDismiss) {
+    fun attach(uris: List<Uri>, cleanup: () -> Unit = {}) {
+        scope.launch {
+            val added = uris.mapNotNull { ReceiptStore.import(context, it) }
+            cleanup()
+            val all = photoText.split('\n').filter { it.isNotBlank() } + added
+            all.drop(MAX_DEBT_PHOTOS).forEach { if (it !in original) ReceiptStore.delete(it) }
+            photoText = all.take(MAX_DEBT_PHOTOS).joinToString("\n")
+        }
+    }
+    val pickImages = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(MAX_DEBT_PHOTOS)) { uris ->
+        if (uris.isNotEmpty()) attach(uris)
+    }
+    val takePhoto = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok ->
+        val file = cameraFile
+        if (ok && file != null) attach(listOf(Uri.fromFile(file))) { file.delete() } else file?.delete()
+    }
+    // Photos added but not saved are thrown away.
+    val close = {
+        photos.filter { it !in original }.forEach { ReceiptStore.delete(it) }
+        onDismiss()
+    }
+
+    GlassSheet(close) {
         Column(
             Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 16.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
@@ -217,13 +261,41 @@ private fun DebtEditor(initial: Debt, people: List<String>, onDismiss: () -> Uni
             }
             MoneyField(amountText, { amountText = it }, label = "Amount")
             GlassTextField(note, { note = it.take(60) }, placeholder = "e.g. Dinner at Toit", label = "Note")
+            // Photos of the bill, chat screenshots or payment receipts. Everything wraps on narrow phones.
+            if (photos.isNotEmpty()) {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    photos.forEach { p ->
+                        ReceiptThumb(p, onOpen = { viewing = p }, onRemove = {
+                            if (p !in original) ReceiptStore.delete(p)
+                            photoText = photos.filter { it != p }.joinToString("\n")
+                        })
+                    }
+                }
+            }
+            if (photos.size < MAX_DEBT_PHOTOS) {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Chip("Photo", {
+                        val (uri, file) = ReceiptStore.newCameraUri(context)
+                        cameraFile = file
+                        takePhoto.launch(uri)
+                    }, icon = Lucide.Camera)
+                    Chip(if (photos.isEmpty()) "Screenshots" else "Add more", {
+                        pickImages.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                    }, icon = Lucide.ReceiptText)
+                }
+            }
             Spacer(Modifier.height(2.dp))
             PrimaryButton(
                 "Save",
-                { onSave(initial.copy(person = person.trim(), amountMinor = if (lent) amount else -amount, note = note.trim())) },
+                {
+                    // Photos removed while editing are deleted once the change is saved.
+                    original.filter { it !in photos }.forEach { ReceiptStore.delete(it) }
+                    onSave(initial.copy(person = person.trim(), amountMinor = if (lent) amount else -amount, note = note.trim(), receiptPath = photosToPath(photos)))
+                },
                 Modifier.fillMaxWidth(),
                 enabled = person.isNotBlank() && amount > 0,
             )
+            viewing?.let { ReceiptViewer(it) { viewing = null } }
             if (onDelete != null) {
                 Text(
                     "Delete",

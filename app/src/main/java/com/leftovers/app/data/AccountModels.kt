@@ -17,6 +17,8 @@ data class Account(
     /** Balance before any entries were logged in the app. */
     val openingMinor: Long = 0,
     val createdAt: Long = System.currentTimeMillis(),
+    /** Last digits of the bank account or card, so payments spotted in SMS land in this account. */
+    val smsDigits: String? = null,
 )
 
 data class AccountWithBalance(
@@ -26,9 +28,19 @@ data class AccountWithBalance(
     val color: Long,
     val openingMinor: Long,
     val createdAt: Long,
+    val smsDigits: String?,
     val balanceMinor: Long,
 ) {
-    fun toAccount() = Account(id, name, icon, color, openingMinor, createdAt)
+    fun toAccount() = Account(id, name, icon, color, openingMinor, createdAt, smsDigits)
+
+    /** True when a message naming account or card digits [digits] belongs to this account. */
+    fun matchesDigits(digits: String?): Boolean {
+        val mine = smsDigits?.filter(Char::isDigit)?.takeLast(4)
+        if (digits.isNullOrEmpty() || mine.isNullOrEmpty()) return false
+        // Banks show 3 or 4 digits ("XX234", "*1234"); match on what both have.
+        val n = minOf(digits.length, mine.length)
+        return n >= 3 && digits.takeLast(n) == mine.takeLast(n)
+    }
 }
 
 /** Money moved between two of the user's own accounts; not income or spending. */
@@ -63,6 +75,8 @@ data class SmsSuggestion(
     val receivedAt: Long = System.currentTimeMillis(),
     /** Where it was spotted: [SOURCE_SMS] or [SOURCE_EMAIL]. */
     @ColumnInfo(defaultValue = SOURCE_SMS) val source: String = SOURCE_SMS,
+    /** Last digits of the account or card the message named, if any. */
+    val accountDigits: String? = null,
 ) {
     companion object {
         const val SOURCE_SMS = "sms"

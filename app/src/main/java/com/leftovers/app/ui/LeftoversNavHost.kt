@@ -50,7 +50,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
@@ -428,21 +430,25 @@ private fun NavHostController.switchTab(route: String) {
 @Composable
 private fun FloatingDock(current: String?, onTab: (String) -> Unit, onAdd: () -> Unit) {
     val c = LocalAppColors.current
+    // On narrow phones the selected tab's name is dropped and items sit closer, so every tab fits.
+    val compact = LocalConfiguration.current.screenWidthDp < 400
     Row(
         Modifier
             .navigationBarsPadding()
             .padding(bottom = 14.dp)
             .clip(CircleShape)
             .frosted()
+            // A soft top-lit sheen, so the bar reads as glass even over a plain dark background.
+            .background(Brush.verticalGradient(listOf(c.glassStrong, c.glass.copy(alpha = c.glass.alpha * 0.4f))))
             .border(1.dp, glassBorder(c), CircleShape)
             .padding(6.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(2.dp),
     ) {
-        tabs.take(2).forEach { DockItem(it, current == it.route) { onTab(it.route) } }
+        tabs.take(2).forEach { DockItem(it, current == it.route, compact) { onTab(it.route) } }
         Box(
             Modifier
-                .padding(horizontal = 6.dp)
+                .padding(horizontal = if (compact) 4.dp else 6.dp)
                 .size(54.dp)
                 .pressable(onAdd, pressedScale = 0.88f)
                 .clip(CircleShape)
@@ -451,12 +457,12 @@ private fun FloatingDock(current: String?, onTab: (String) -> Unit, onAdd: () ->
         ) {
             Icon(Lucide.Plus, contentDescription = "Add entry", tint = c.onAccent, modifier = Modifier.size(26.dp))
         }
-        tabs.drop(2).forEach { DockItem(it, current == it.route) { onTab(it.route) } }
+        tabs.drop(2).forEach { DockItem(it, current == it.route, compact) { onTab(it.route) } }
     }
 }
 
 @Composable
-private fun DockItem(tab: Tab, selected: Boolean, onClick: () -> Unit) {
+private fun DockItem(tab: Tab, selected: Boolean, compact: Boolean, onClick: () -> Unit) {
     val c = LocalAppColors.current
     val bg by animateColorAsState(if (selected) (if (c.isDark) Color.White.copy(alpha = 0.12f) else Color.Black.copy(alpha = 0.06f)) else Color.Transparent, label = "dockBg")
     val tint by animateColorAsState(if (selected) c.textPrimary else c.textTertiary, label = "dockTint")
@@ -466,12 +472,12 @@ private fun DockItem(tab: Tab, selected: Boolean, onClick: () -> Unit) {
             .pressable(onClick, pressedScale = 0.92f)
             .clip(CircleShape)
             .background(bg)
-            .padding(horizontal = 15.dp),
+            .padding(horizontal = if (compact) 13.dp else 15.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(tab.icon, contentDescription = tab.label, tint = tint, modifier = Modifier.size(22.dp))
         AnimatedVisibility(
-            visible = selected,
+            visible = selected && !compact,
             enter = expandHorizontally(spring(dampingRatio = 0.8f, stiffness = Spring.StiffnessMediumLow)) + fadeIn(),
             exit = shrinkHorizontally(spring(dampingRatio = 1f, stiffness = Spring.StiffnessMedium)) + fadeOut(),
         ) {

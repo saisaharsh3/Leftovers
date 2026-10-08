@@ -353,6 +353,7 @@ private fun AccountEditor(
     var color by rememberSaveable { mutableStateOf(initial.color) }
     var opening by rememberSaveable { mutableStateOf(if (initial.openingMinor != 0L) AmountInput.fromMinor(initial.openingMinor) else "") }
     var makeDefault by rememberSaveable { mutableStateOf(isDefault) }
+    var digits by rememberSaveable { mutableStateOf(initial.smsDigits.orEmpty()) }
 
     GlassSheet(onDismiss) {
         Column(
@@ -366,6 +367,19 @@ private fun AccountEditor(
             }
             GlassTextField(name, { name = it.take(24) }, placeholder = "e.g. HDFC, GPay, Credit card", label = "Name")
             MoneyField(opening, { opening = it }, label = "Current balance when you start tracking")
+            GlassTextField(
+                digits,
+                { v -> digits = v.filter(Char::isDigit).take(4) },
+                placeholder = "e.g. 1234",
+                label = "Account or card ending (for SMS)",
+                keyboardType = androidx.compose.ui.text.input.KeyboardType.Number,
+            )
+            Text(
+                "Bank SMS that mention these last digits are added to this account.",
+                style = MaterialTheme.typography.bodySmall,
+                color = c.textTertiary,
+                modifier = Modifier.padding(start = 6.dp),
+            )
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 accountIcons.forEach { key ->
                     val selected = key == icon
@@ -393,7 +407,7 @@ private fun AccountEditor(
             )
             PrimaryButton(
                 "Save",
-                { onSave(initial.copy(name = name.trim(), icon = icon, color = color, openingMinor = AmountInput.toMinor(opening) ?: 0L), makeDefault) },
+                { onSave(initial.copy(name = name.trim(), icon = icon, color = color, openingMinor = AmountInput.toMinor(opening) ?: 0L, smsDigits = digits.ifBlank { null }), makeDefault) },
                 Modifier.fillMaxWidth(),
                 enabled = name.isNotBlank(),
             )

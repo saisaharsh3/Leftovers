@@ -47,6 +47,12 @@ data class AppSettings(
     val homeAccountId: Long? = null,
     /** Extra words that mark a bank message as a payment, for banks the built-in rules miss. */
     val detectionKeywords: Set<String> = emptySet(),
+    /** Days between automatic backups: 1, 7 or 30. */
+    val autoBackupDays: Int = 7,
+    /** How many automatic backup files to keep; older ones are removed. */
+    val autoBackupKeep: Int = 4,
+    /** Put receipt and Money owed photos inside backups (bigger files). */
+    val backupPhotos: Boolean = false,
 )
 
 class SettingsRepository(context: Context) {
@@ -82,8 +88,14 @@ class SettingsRepository(context: Context) {
             deletedKeepDays = p[DELETED_KEEP_DAYS] ?: 90,
             homeAccountId = p[HOME_ACCOUNT],
             detectionKeywords = p[DETECTION_KEYWORDS].orEmpty(),
+            backupPhotos = p[BACKUP_PHOTOS] ?: false,
+            autoBackupDays = p[AUTO_BACKUP_DAYS] ?: 7,
+            autoBackupKeep = p[AUTO_BACKUP_KEEP] ?: 4,
         )
     }
+
+    /** Forgets every setting, as on a fresh install. */
+    suspend fun clearAll() = store.edit { it.clear() }
 
     suspend fun completeOnboarding(currencyCode: String) = store.edit {
         it[CURRENCY] = currencyCode
@@ -130,6 +142,9 @@ class SettingsRepository(context: Context) {
     suspend fun setAutoBackupDone(at: Long) = store.edit { it[AUTO_BACKUP_LAST] = at }
     suspend fun setBillReminders(enabled: Boolean) = store.edit { it[BILL_REMINDERS] = enabled }
     suspend fun setHomeAccount(id: Long?) = store.edit { if (id == null) it.remove(HOME_ACCOUNT) else it[HOME_ACCOUNT] = id }
+    suspend fun setAutoBackupDays(days: Int) = store.edit { it[AUTO_BACKUP_DAYS] = days }
+    suspend fun setAutoBackupKeep(count: Int) = store.edit { it[AUTO_BACKUP_KEEP] = count }
+    suspend fun setBackupPhotos(enabled: Boolean) = store.edit { it[BACKUP_PHOTOS] = enabled }
     suspend fun setDetectionKeywords(words: Set<String>) = store.edit { it[DETECTION_KEYWORDS] = words }
     suspend fun setDeletedKeepDays(days: Int) = store.edit { it[DELETED_KEEP_DAYS] = days }
     suspend fun dismissSuggestion(key: String) = store.edit { it[DISMISSED_SUGGESTIONS] = it[DISMISSED_SUGGESTIONS].orEmpty() + key }
@@ -172,6 +187,9 @@ class SettingsRepository(context: Context) {
         val DELETED_KEEP_DAYS = intPreferencesKey("deleted_keep_days")
         val HOME_ACCOUNT = longPreferencesKey("home_account")
         val DETECTION_KEYWORDS = stringSetPreferencesKey("detection_keywords")
+        val BACKUP_PHOTOS = booleanPreferencesKey("backup_photos")
+        val AUTO_BACKUP_DAYS = intPreferencesKey("auto_backup_days")
+        val AUTO_BACKUP_KEEP = intPreferencesKey("auto_backup_keep")
         val DEFAULT_ACCOUNT = longPreferencesKey("default_account")
         val REMINDER = booleanPreferencesKey("reminder")
         val REMINDER_TIME = intPreferencesKey("reminder_time")

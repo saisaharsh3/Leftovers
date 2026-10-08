@@ -1,0 +1,42 @@
+name: Bank message not detected
+description: A bank SMS or email alert that Leftovers missed or read wrongly
+labels: [detection, good first issue]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks! Each message format you share gets added to the tests, so it works for everyone at that bank.
+        **Before pasting, replace personal details**: names, full account or card numbers, UPI IDs, phone
+        numbers and reference numbers (e.g. `XX1234` → `XX0000`). Keep the wording and layout as they are.
+  - type: input
+    id: bank
+    attributes:
+      label: Bank or app
+      placeholder: e.g. SBI, HDFC, Revolut, Paytm
+    validations:
+      required: true
+  - type: dropdown
+    id: source
+    attributes:
+      label: Where did it arrive?
+      options: [SMS, Email]
+    validations:
+      required: true
+  - type: textarea
+    id: message
+    attributes:
+      label: The message, with personal details replaced
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: result
+    attributes:
+      label: What Leftovers did
+      description: Paste it into Settings → Detection keywords → Test a message, and copy what it says. "Recent detections" on the same screen may also show it.
+      placeholder: e.g. "Not a payment: no word like debited…", or the wrong amount
+  - type: input
+    id: version
+    attributes:
+      label: App version
+      description: Shown at the bottom of Settings

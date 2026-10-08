@@ -9,6 +9,7 @@ import com.leftovers.app.data.BackupDao
 import com.leftovers.app.data.BudgetPlan
 import com.leftovers.app.data.Category
 import com.leftovers.app.data.Debt
+import com.leftovers.app.data.photosToPath
 import com.leftovers.app.data.Goal
 import com.leftovers.app.data.GoalDeposit
 import com.leftovers.app.data.Recurring
@@ -24,7 +25,7 @@ import org.json.JSONObject
 
 /**
  * Saves everything to a single JSON file the user picks (local storage, Google Drive, …)
- * and restores from it. Receipt photos are not included. With a backup password set, the file is
+ * and restores from it. Photos are included only when "Include photos" is on (Settings). With a backup password set, the file is
  * encrypted (see [BackupCrypto]).
  */
 class BackupManager(
@@ -35,10 +36,28 @@ class BackupManager(
 ) {
     private val dao: BackupDao = database.backupDao()
 
+    private companion object {
+        const val MAX_PHOTO_BYTES = 40L * 1024 * 1024
+    }
+
     suspend fun export(target: Uri): Result<Int> = withContext(Dispatchers.IO) {
         runCatching {
             val transactions = dao.transactions()
             val s = settings.settings.first()
+            val debtList = dao.debts()
+            // With "Include photos" on, each photo goes in once, by file name; entries point to it. Past
+            // MAX_PHOTO_BYTES in total the photos are left out, so a large collection can't run the phone out of memory.
+            val photoFiles = (transactions.mapNotNull { it.receiptPath } + debtList.flatMap { it.photos })
+                .distinct().map { java.io.File(it) }.filter { it.exists() }
+            val withPhotos = s.backupPhotos && photoFiles.sumOf { it.length() } <= MAX_PHOTO_BYTES
+            val photos = JSONObject()
+            fun photoRef(path: String?): Any {
+                if (!withPhotos || path == null) return JSONObject.NULL
+                val file = java.io.File(path)
+                if (!file.exists()) return JSONObject.NULL
+                if (!photos.has(file.name)) photos.put(file.name, java.util.Base64.getEncoder().encodeToString(file.readBytes()))
+                return file.name
+            }
             val json = JSONObject().apply {
                 put("app", "leftovers")
                 put("version", 1)
@@ -61,12 +80,13 @@ class BackupManager(
                 }))
                 put("accounts", JSONArray(dao.accounts().map { a ->
                     JSONObject().put("id", a.id).put("name", a.name).put("icon", a.icon).put("color", a.color)
-                        .put("opening", a.openingMinor).put("createdAt", a.createdAt)
+                        .put("opening", a.openingMinor).put("createdAt", a.createdAt).put("smsDigits", a.smsDigits ?: JSONObject.NULL)
                 }))
                 put("transactions", JSONArray(transactions.map { t ->
                     JSONObject().put("id", t.id).put("amount", t.amountMinor).put("type", t.type.name)
                         .put("categoryId", t.categoryId).put("day", t.epochDay).put("note", t.note)
                         .put("createdAt", t.createdAt).put("accountId", t.accountId ?: JSONObject.NULL)
+                        .put("receipt", photoRef(t.receiptPath))
                 }))
                 put("transfers", JSONArray(dao.transfers().map { t ->
                     JSONObject().put("id", t.id).put("from", t.fromAccountId).put("to", t.toAccountId).put("amount", t.amountMinor)
@@ -86,10 +106,12 @@ class BackupManager(
                     JSONObject().put("id", d.id).put("goalId", d.goalId).put("amount", d.amountMinor)
                         .put("day", d.epochDay).put("createdAt", d.createdAt)
                 }))
-                put("debts", JSONArray(dao.debts().map { d ->
+                put("debts", JSONArray(debtList.map { d ->
                     JSONObject().put("id", d.id).put("person", d.person).put("amount", d.amountMinor).put("note", d.note)
                         .put("day", d.epochDay).put("settled", d.settled).put("createdAt", d.createdAt)
+                        .put("receipts", JSONArray(d.photos.map { photoRef(it) }.filter { it != JSONObject.NULL }))
                 }))
+                if (photos.length() > 0) put("photos", photos)
             }
             val text = password.get()?.let { BackupCrypto.encrypt(json.toString(), it).toString(2) } ?: json.toString(2)
             context.contentResolver.openOutputStream(target, "wt")?.use { it.write(text.toByteArray()) }
@@ -115,6 +137,15 @@ class BackupManager(
             require(json.optString("app") in setOf("leftovers", "cash-tracker")) { "This isn't a Leftovers backup" }
 
             fun JSONObject.longOrNull(key: String) = if (isNull(key)) null else getLong(key)
+            // Photos saved in the backup, written back to private storage on demand.
+            val savedPhotos = json.optJSONObject("photos")
+            val restoredPhotos = mutableMapOf<String, String>()
+            fun restorePhoto(name: String): String? {
+                if (name.isEmpty() || name == "null") return null
+                restoredPhotos[name]?.let { return it }
+                val data = savedPhotos?.optString(name)?.takeIf { it.isNotEmpty() } ?: return null
+                return ReceiptStore.restore(context, java.util.Base64.getDecoder().decode(data)).also { restoredPhotos[name] = it }
+            }
             fun JSONObject.stringOrNull(key: String) = if (isNull(key)) null else getString(key)
             fun JSONArray.objects() = (0 until length()).map { getJSONObject(it) }
 
@@ -126,12 +157,12 @@ class BackupManager(
                 Category(it.getLong("id"), name, it.getString("icon"), it.getLong("color"), type, it.longOrNull("budget"), adds)
             }
             val accounts = json.optJSONArray("accounts")?.objects().orEmpty().map {
-                Account(it.getLong("id"), it.getString("name"), it.getString("icon"), it.getLong("color"), it.getLong("opening"), it.getLong("createdAt"))
+                Account(it.getLong("id"), it.getString("name"), it.getString("icon"), it.getLong("color"), it.getLong("opening"), it.getLong("createdAt"), it.stringOrNull("smsDigits"))
             }
             val transactions = json.getJSONArray("transactions").objects().map {
                 Transaction(
                     it.getLong("id"), it.getLong("amount"), TxType.valueOf(it.getString("type")), it.getLong("categoryId"),
-                    it.getLong("day"), it.getString("note"), it.getLong("createdAt"), it.longOrNull("accountId"), null,
+                    it.getLong("day"), it.getString("note"), it.getLong("createdAt"), it.longOrNull("accountId"), restorePhoto(it.optString("receipt")),
                 )
             }
             val transfers = json.optJSONArray("transfers")?.objects().orEmpty().map {
@@ -152,7 +183,12 @@ class BackupManager(
                 GoalDeposit(it.getLong("id"), it.getLong("goalId"), it.getLong("amount"), it.getLong("day"), it.getLong("createdAt"))
             }
             val debts = json.optJSONArray("debts")?.objects().orEmpty().map {
-                Debt(it.getLong("id"), it.getString("person"), it.getLong("amount"), it.optString("note"), it.getLong("day"), it.optBoolean("settled"), it.getLong("createdAt"))
+                // "receipts" holds several photos; older backups had one "receipt".
+                val names = it.optJSONArray("receipts")?.let { a -> (0 until a.length()).map(a::getString) } ?: listOf(it.optString("receipt"))
+                Debt(
+                    it.getLong("id"), it.getString("person"), it.getLong("amount"), it.optString("note"), it.getLong("day"),
+                    it.optBoolean("settled"), it.getLong("createdAt"), photosToPath(names.mapNotNull(::restorePhoto)),
+                )
             }
 
             database.withTransaction {
@@ -175,6 +211,8 @@ class BackupManager(
                 dao.insertDeposits(deposits)
                 dao.insertDebts(debts)
             }
+            // Photos that belonged to the replaced data are no longer used.
+            ReceiptStore.deleteAllExcept(context, (transactions.mapNotNull { it.receiptPath } + debts.flatMap { it.photos }).toSet())
 
             json.optJSONObject("settings")?.let { s ->
                 settings.setCurrency(s.getString("currency"))

@@ -1,0 +1,34 @@
+<p><b>Leftovers</b> is a fast, private expense tracker. Log a spend in two taps, see what's safe to spend today, and plan for the things you want. Everything stays on your phone: no account, no ads, no analytics.</p>
+
+<p><b>Everyday tracking</b></p>
+<ul>
+<li>Keypad-first entry, categories, notes, accounts and receipt photos</li>
+<li>Split one bill across categories, and group entries with #tags</li>
+<li>Search and filter by account, category, tag or amount; swipe to delete with undo</li>
+</ul>
+
+<p><b>Budgets that make sense day to day</b></p>
+<ul>
+<li>Monthly or yearly budget, with <i>Safe to spend today</i>: what's left minus bills still due, spread over the remaining days</li>
+<li>Per-category limits with alerts at 80% and 100%</li>
+</ul>
+
+<p><b>Planning</b></p>
+<ul>
+<li>Subscriptions and recurring income, logged automatically, with a reminder before each bill</li>
+<li>Savings goals, multiple accounts with transfers, and money lent or borrowed</li>
+</ul>
+
+<p><b>Insights</b></p>
+<ul>
+<li>Daily chart, category breakdown, spending calendar, trends and a shareable monthly recap</li>
+</ul>
+
+<p><b>Optional extras</b></p>
+<ul>
+<li>Payment detection from bank SMS and bank email alerts in any currency; nothing is added without your tap</li>
+<li>AI assistant with your own API key (Claude, ChatGPT, Gemini and more); every change waits for your confirmation</li>
+<li>Widgets, app lock, encrypted backups to a file or Google Drive, CSV export</li>
+</ul>
+
+<p>Free and open source under the MIT License.</p>

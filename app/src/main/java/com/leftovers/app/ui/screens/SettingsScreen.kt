@@ -76,6 +76,7 @@ import com.leftovers.app.util.Money
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 class SettingsViewModel(
@@ -83,7 +84,14 @@ class SettingsViewModel(
     private val settingsRepository: SettingsRepository,
     private val backup: BackupManager,
     val assistant: com.leftovers.app.ai.AssistantSettings,
+    private val planning: com.leftovers.app.data.PlanningRepository,
+    private val resetEverything: suspend () -> Unit,
 ) : ViewModel() {
+
+    /** Back to a fresh install: every entry, setting, connection and photo is removed. */
+    fun resetApp() {
+        viewModelScope.launch { resetEverything() }
+    }
     val settings: StateFlow<AppSettings?> =
         settingsRepository.settings.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
     val backupPasswordSet: StateFlow<Boolean> = backup.password.isSet
@@ -116,6 +124,18 @@ class SettingsViewModel(
         viewModelScope.launch { settingsRepository.setAppLock(enabled) }
     }
 
+    fun setAutoBackupDays(days: Int) {
+        viewModelScope.launch { settingsRepository.setAutoBackupDays(days) }
+    }
+
+    fun setAutoBackupKeep(count: Int) {
+        viewModelScope.launch { settingsRepository.setAutoBackupKeep(count) }
+    }
+
+    fun setBackupPhotos(enabled: Boolean) {
+        viewModelScope.launch { settingsRepository.setBackupPhotos(enabled) }
+    }
+
     fun setDetectionKeywords(words: Set<String>) {
         viewModelScope.launch { settingsRepository.setDetectionKeywords(words) }
     }
@@ -128,10 +148,10 @@ class SettingsViewModel(
     fun enableAutoBackup(context: Context, tree: Uri, onResult: (String) -> Unit) {
         viewModelScope.launch {
             settingsRepository.setAutoBackupDir(tree.toString())
-            AutoBackup.runNow(context, tree).fold(
+            AutoBackup.runNow(context, tree, settingsRepository.settings.first().autoBackupKeep).fold(
                 {
                     settingsRepository.setAutoBackupDone(System.currentTimeMillis())
-                    onResult("Backed up $it entries. Next backup in a week")
+                    onResult("Backed up $it entries")
                 },
                 { onResult("Couldn't back up to that folder: ${it.message}") },
             )
@@ -185,6 +205,7 @@ class SettingsViewModel(
     fun deleteAll(onDone: () -> Unit) {
         viewModelScope.launch {
             repository.deleteAllData()
+            planning.deleteAllDebts()
             settingsRepository.clearBudgetData()
             onDone()
         }
@@ -207,6 +228,7 @@ fun SettingsScreen(
     val scope = rememberCoroutineScope()
     var showCurrency by rememberSaveable { mutableStateOf(false) }
     var confirmWipe by rememberSaveable { mutableStateOf(false) }
+    var confirmReset by rememberSaveable { mutableStateOf(false) }
     var showTime by rememberSaveable { mutableStateOf(false) }
     var showAssistant by rememberSaveable { mutableStateOf(false) }
     var showEmail by rememberSaveable { mutableStateOf(false) }
@@ -344,9 +366,18 @@ fun SettingsScreen(
                         RowDivider()
                         NavRow(Lucide.History, "Deleted entries", if (deletedCount == 0) "None" else "$deletedCount", onOpenDeleted)
                         RowDivider()
-                        ToggleRow(Lucide.CalendarClock, "Weekly automatic backup", s.autoBackupDir != null, { on ->
+                        ToggleRow(Lucide.CalendarClock, "Automatic backup", s.autoBackupDir != null, { on ->
                             if (on) pickBackupFolder.launch(null) else viewModel.disableAutoBackup(context, s.autoBackupDir)
                         })
+                        if (s.autoBackupDir != null) {
+                            Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                SegmentedToggle(listOf(1, 7, 30), s.autoBackupDays, { if (it == 1) "Daily" else if (it == 7) "Weekly" else "Monthly" }, { viewModel.setAutoBackupDays(it) }, Modifier.fillMaxWidth())
+                                Text("Backup files to keep", style = MaterialTheme.typography.labelMedium, color = c.textSecondary, modifier = Modifier.padding(start = 6.dp))
+                                SegmentedToggle(listOf(1, 2, 3, 4, 5), s.autoBackupKeep, { it.toString() }, { viewModel.setAutoBackupKeep(it) }, Modifier.fillMaxWidth())
+                            }
+                        }
+                        RowDivider()
+                        ToggleRow(Lucide.Camera, "Include photos in backups", s.backupPhotos, { viewModel.setBackupPhotos(it) })
                         RowDivider()
                         ToggleRow(Lucide.Lock, "Password-protect backups", passwordSet, { on ->
                             if (on) setPassword = true else viewModel.setBackupPassword(null)
@@ -361,13 +392,27 @@ fun SettingsScreen(
                             leading = { IconTile(Lucide.Trash2, c.negative, size = 38.dp) },
                             onClick = { confirmWipe = true },
                         )
+                        RowDivider()
+                        ListRow(
+                            "Reset app",
+                            subtitle = "Erase everything and start fresh",
+                            leading = { IconTile(Lucide.RotateCcw, c.negative, size = 38.dp) },
+                            onClick = { confirmReset = true },
+                        )
                     }
                 }
-                if (s.autoBackupDir != null || passwordSet) {
+                if (s.autoBackupDir != null || passwordSet || s.backupPhotos) {
                     Text(
                         listOfNotNull(
-                            if (s.autoBackupDir == null) null else "Saves a backup to your chosen folder every week and keeps the last 4." +
-                                if (s.autoBackupLast > 0) " Last backup: ${java.time.Instant.ofEpochMilli(s.autoBackupLast).atZone(java.time.ZoneId.systemDefault()).toLocalDate().friendlyLabel()}." else "",
+                            if (s.autoBackupDir == null) null else {
+                                val every = when (s.autoBackupDays) { 1 -> "every day"; 30 -> "every month"; else -> "every week" }
+                                val kept = if (s.autoBackupKeep == 1) "only the latest" else "the last ${s.autoBackupKeep}"
+                                "Saves a backup to your chosen folder $every and keeps $kept." + if (s.autoBackupLast > 0) {
+                                    val at = java.time.Instant.ofEpochMilli(s.autoBackupLast).atZone(java.time.ZoneId.systemDefault())
+                                    " Last backup: ${at.toLocalDate().friendlyLabel()}, ${at.format(java.time.format.DateTimeFormatter.ofPattern("h:mm a"))}."
+                                } else ""
+                            },
+                            if (s.backupPhotos) "Receipt and Money owed photos are included (up to 40 MB of photos; past that they're left out)." else null,
                             if (passwordSet) "New backups are encrypted. Restoring one needs the password, and it can't be recovered if forgotten." else null,
                         ).joinToString(" "),
                         style = MaterialTheme.typography.bodySmall,
@@ -433,7 +478,7 @@ fun SettingsScreen(
         }
 
         pendingRestore?.let { uri ->
-            AlertDialog(
+            GlassAlertDialog(
                 onDismissRequest = { pendingRestore = null },
                 containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
                 shape = RoundedCornerShape(30.dp),
@@ -451,7 +496,7 @@ fun SettingsScreen(
 
         lockedRestore?.let { (uri, wrong) ->
             var typed by remember(uri, wrong) { mutableStateOf("") }
-            AlertDialog(
+            GlassAlertDialog(
                 onDismissRequest = { lockedRestore = null },
                 containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
                 shape = RoundedCornerShape(30.dp),
@@ -476,7 +521,7 @@ fun SettingsScreen(
             var first by remember { mutableStateOf("") }
             var second by remember { mutableStateOf("") }
             val ok = first.length >= 6 && first == second
-            AlertDialog(
+            GlassAlertDialog(
                 onDismissRequest = { setPassword = false },
                 containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
                 shape = RoundedCornerShape(30.dp),
@@ -506,7 +551,7 @@ fun SettingsScreen(
 
         if (showTime) {
             val state = rememberTimePickerState(s.reminderMinutes / 60, s.reminderMinutes % 60)
-            AlertDialog(
+            GlassAlertDialog(
                 onDismissRequest = { showTime = false },
                 containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
                 shape = RoundedCornerShape(30.dp),
@@ -522,13 +567,41 @@ fun SettingsScreen(
             )
         }
 
+        if (confirmReset) {
+            var typed by remember { mutableStateOf("") }
+            GlassAlertDialog(
+                onDismissRequest = { confirmReset = false },
+                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                shape = RoundedCornerShape(30.dp),
+                title = { Text("Reset the app?") },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Text(
+                            "Everything is erased: entries, accounts, categories, subscriptions, goals, money owed, photos and " +
+                                "settings, and the AI and email are disconnected. Back up first if you might want it back.",
+                            color = c.textSecondary,
+                        )
+                        GlassTextField(typed, { typed = it.take(10) }, placeholder = "Type RESET to confirm")
+                    }
+                },
+                confirmButton = {
+                    val ok = typed.trim().equals("RESET", ignoreCase = true)
+                    TextButton(enabled = ok, onClick = {
+                        confirmReset = false
+                        viewModel.resetApp()
+                    }) { Text("Reset", color = if (ok) c.negative else c.textTertiary) }
+                },
+                dismissButton = { TextButton(onClick = { confirmReset = false }) { Text("Cancel", color = c.textSecondary) } },
+            )
+        }
+
         if (confirmWipe) {
-            AlertDialog(
+            GlassAlertDialog(
                 onDismissRequest = { confirmWipe = false },
                 containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
                 shape = RoundedCornerShape(30.dp),
                 title = { Text("Delete everything?") },
-                text = { Text("All entries and budgets will be permanently deleted. Categories, subscriptions and goals are kept.", color = c.textSecondary) },
+                text = { Text("All entries, money owed and budgets will be permanently deleted. Categories, accounts, subscriptions, goals and settings are kept.", color = c.textSecondary) },
                 confirmButton = {
                     TextButton(onClick = {
                         confirmWipe = false

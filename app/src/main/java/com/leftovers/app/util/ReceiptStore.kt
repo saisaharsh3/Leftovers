@@ -68,6 +68,20 @@ object ReceiptStore {
         }.getOrNull()
     }
 
+    /** Saves photo bytes from a backup under a new name; returns its path. */
+    fun restore(context: Context, bytes: ByteArray): String {
+        val out = File(dir(context), "receipt-${UUID.randomUUID()}.jpg")
+        out.writeBytes(bytes)
+        return out.absolutePath
+    }
+
+    /** Removes photos nothing points to any more (e.g. after a restore replaced every entry). */
+    fun deleteAllExcept(context: Context, keep: Set<String>) {
+        dir(context).listFiles()?.forEach { f ->
+            if (f.name.startsWith("receipt-") && f.absolutePath !in keep) runCatching { f.delete() }
+        }
+    }
+
     fun delete(path: String?) {
         if (path != null) runCatching { File(path).delete() }
     }

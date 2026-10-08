@@ -40,7 +40,14 @@ import java.util.Properties
 import java.util.concurrent.TimeUnit
 
 /** A payment found in an email, before it becomes a suggestion. */
-data class EmailPayment(val amountMinor: Long, val merchant: String, val sender: String, val sentAt: Long, val messageKey: String)
+data class EmailPayment(
+    val amountMinor: Long,
+    val merchant: String,
+    val sender: String,
+    val sentAt: Long,
+    val messageKey: String,
+    val accountDigits: String? = null,
+)
 
 /**
  * Reads payment emails over IMAP. Security and privacy rules:
@@ -86,12 +93,15 @@ object EmailChecker {
         val connection = account.connection.value ?: return@withContext Result.success(0)
         val password = account.password() ?: return@withContext Result.failure(IllegalStateException("Not connected"))
         val now = System.currentTimeMillis()
-        val since = if (connection.lastCheckedAt == 0L) now - FIRST_LOOK_BACK_MS else connection.lastCheckedAt - OVERLAP_MS
+        // Always at least two days back: an alert that arrived before the last check isn't missed, and
+        // emails already seen are recognised and skipped.
+        val since = minOf(now - FIRST_LOOK_BACK_MS, if (connection.lastCheckedAt == 0L) now else connection.lastCheckedAt - OVERLAP_MS)
         val keywords = container.settings.settings.first().detectionKeywords
+        var stats = 0 to 0
         runCatching {
             val found = Session.getInstance(properties(connection.host)).getStore("imaps").use { store ->
                 store.connect(connection.host, connection.address, password)
-                findPayments(store, since, keywords)
+                findPayments(store, since, keywords) { searched, fromBanks -> stats = searched to fromBanks }
             }
             var added = 0
             found.forEach { p ->
@@ -105,17 +115,30 @@ object EmailChecker {
                         // The email's own time, so it lines up with an SMS for the same payment.
                         receivedAt = p.sentAt,
                         source = SmsSuggestion.SOURCE_EMAIL,
+                        accountDigits = p.accountDigits,
                     ),
                 )
                 if (isNew) added++
             }
             account.markChecked(now)
+            val (searched, fromBanks) = stats
+            DetectionLog.add(
+                context, "Email", connection.address,
+                "Checked: $searched payment-like ${if (searched == 1) "email" else "emails"}, $fromBanks from banks, " +
+                    "${found.size} ${if (found.size == 1) "payment" else "payments"}, $added new",
+            )
             added
-        }.recoverCatching { throw friendlyError(it) }
+        }.onFailure { DetectionLog.add(context, "Email", connection.address, "Couldn't check: ${friendlyError(it).message}") }
+            .recoverCatching { throw friendlyError(it) }
     }
 
     /** Payment emails received since [since] in an already signed-in [store]. */
-    fun findPayments(store: Store, since: Long, keywords: Collection<String> = emptyList()): List<EmailPayment> {
+    fun findPayments(
+        store: Store,
+        since: Long,
+        keywords: Collection<String> = emptyList(),
+        onStats: (searched: Int, fromBanks: Int) -> Unit = { _, _ -> },
+    ): List<EmailPayment> {
         val inbox = store.getFolder("INBOX")
         inbox.open(Folder.READ_ONLY)
         try {
@@ -131,6 +154,7 @@ object EmailChecker {
                 .filter { m -> (m.from?.firstOrNull() as? InternetAddress)?.let { BankSenders.isBank(it.address.orEmpty(), it.personal.orEmpty()) } ?: false }
                 .sortedByDescending { (it.receivedDate ?: it.sentDate).time }
                 .take(MAX_MESSAGES)
+            onStats(found.size, bankMail.size)
             return bankMail.mapNotNull { m -> runCatching { paymentIn(m, keywords) }.getOrNull() }
         } finally {
             inbox.close(false)
@@ -139,13 +163,13 @@ object EmailChecker {
 
     private fun paymentIn(m: Message, keywords: Collection<String>): EmailPayment? {
         val from = m.from?.firstOrNull() as? InternetAddress
-        val senderName = from?.personal?.takeIf { it.isNotBlank() } ?: from?.address?.substringBefore('@').orEmpty()
+        val senderName = from?.personal?.takeIf { it.isNotBlank() } ?: EmailParser.nameFromAddress(from?.address.orEmpty())
         val subject = m.subject.orEmpty()
         val body = textOf(m, 0).take(20_000)
         val parsed = EmailParser.parse(subject, senderName, body, keywords) ?: return null
         val sentAt = (m.sentDate ?: m.receivedDate)?.time ?: return null
         val key = (m as? MimeMessage)?.messageID ?: "${from?.address}|$sentAt|$subject"
-        return EmailPayment(parsed.amountMinor, parsed.merchant, senderName.take(40), sentAt, key)
+        return EmailPayment(parsed.amountMinor, parsed.merchant, senderName.take(40), sentAt, key, SmsParser.accountDigits(subject + " " + body))
     }
 
     /** Readable text of a message, preferring plain text over HTML. Attachments are skipped. */

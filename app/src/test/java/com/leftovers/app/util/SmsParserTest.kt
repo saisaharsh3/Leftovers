@@ -14,18 +14,24 @@ class SmsParserTest {
     }
 
     @Test fun ownKeywordCatchesAnUnusualBank() {
-        val msg = "INR 1,499.00 used for txn at CROMA on 07-10-26. Avl bal INR 12,000"
+        val msg = "INR 1,499.00 txn done at CROMA on 07-10-26. Avl bal INR 12,000"
         assertNull(SmsParser.parse(msg))
-        val p = SmsParser.parse(msg, listOf("used for"))
+        val p = SmsParser.parse(msg, listOf("txn done"))
         assertNotNull(p)
         assertEquals(149_900L, p!!.amountMinor)
-        assertTrue(SmsParser.check(msg, listOf("used for")).reason.contains("used for"))
+        assertTrue(SmsParser.check(msg, listOf("txn done")).reason.contains("txn done"))
     }
 
     @Test fun keywordsDontOverrideSafetyChecks() {
         // An OTP or money coming in is never suggested, whatever the keywords.
         assertNull(SmsParser.parse("OTP for txn of Rs 500 is 123456", listOf("txn")))
         assertNull(SmsParser.parse("Rs 2,000 credited to your account", listOf("account")))
+    }
+
+    @Test fun otherCurrencies() {
+        assertEquals(1_250L, SmsParser.parse("USD 12.50 spent on your card at AMAZON")!!.amountMinor)
+        assertEquals(4_500L, SmsParser.parse("AED 45.00 debited from your account at CARREFOUR")!!.amountMinor)
+        assertEquals(1_999L, SmsParser.parse("You paid €19.99 to Netflix")!!.amountMinor)
     }
 
     @Test fun explainsWhyNot() {
