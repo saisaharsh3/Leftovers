@@ -1,0 +1,6 @@
+- Bank SMS and email detection: fixed missed payments, real payee names from UPI details, any currency
+- Link an account to its card or account ending, and detected payments go to it
+- Automatic backup: daily, weekly or monthly, files to keep, last backup time
+- Reset app, and Delete all entries also clears Money owed
+- #tag suggestions, several photos in Money owed, photos in backups
+- Lighter glass tab bar, headers and dialogs; fits narrow phones
