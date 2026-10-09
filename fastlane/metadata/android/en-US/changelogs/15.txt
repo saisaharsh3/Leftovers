@@ -1,0 +1,5 @@
+- Money coming in (credited, received) is detected and suggested as income
+- Email detection checks on its own and when you open the app, and never repeats a payment
+- Glass effects switch in Settings, and real glass in light mode too
+- Frosted glass dialogs, calendars and sheets; softer headers
+- No accidental swipes in Activity: tap an entry to edit or delete it

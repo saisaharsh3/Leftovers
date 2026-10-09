@@ -3,7 +3,7 @@
 All notable changes to Leftovers. Download any version from
 [Releases](https://github.com/saisaharsh3/Leftovers/releases).
 
-## Unreleased
+## 1.5.0
 
 - *Glass effects* switch (Settings → Appearance), in dark and light: off gives solid cards without the
   see-through look and lit edges; bars, dialogs and sheets keep their frosted blur
@@ -16,7 +16,7 @@ All notable changes to Leftovers. Download any version from
 - Activity has no swipe actions any more, so entries can't be edited or deleted by accident; tap an entry
   to edit or delete it (#6)
 - Dialogs are real frosted glass: the screen behind blurs and the panel is see-through (Android 12+);
-  on phones without window blur they stay solid so text is easy to read (#6)
+  on phones without window blur they stay solid so text is easy to read. The blur fades in with the dialog (#6)
 - The calendar and bottom sheets (keywords, accounts and others) get the same frosted glass
 - Screen headers (Activity, Insights, Plan and others) no longer end in a dark band: the frost fades out
   softly, so content blurs gradually as it scrolls under the title (#6)
