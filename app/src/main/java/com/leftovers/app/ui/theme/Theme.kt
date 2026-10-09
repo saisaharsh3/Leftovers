@@ -76,8 +76,8 @@ private val DarkTokens = AppColors(
 private val LightTokens = AppColors(
     isDark = false,
     background = Color(0xFFF3F3F6),
-    glass = Color.White.copy(alpha = 0.62f),
-    glassStrong = Color.White.copy(alpha = 0.82f),
+    glass = Color.White.copy(alpha = 0.32f),
+    glassStrong = Color.White.copy(alpha = 0.55f),
     borderTop = Color.White,
     borderBottom = Color.Black.copy(alpha = 0.05f),
     textPrimary = Color(0xFF0E0E12),
@@ -95,6 +95,26 @@ private val LightTokens = AppColors(
 )
 
 val LocalAppColors = staticCompositionLocalOf { DarkTokens }
+
+/**
+ * Glass effects off: cards become near-solid with a quiet edge instead of see-through glass with a lit rim.
+ * Bars, dialogs and sheets keep their frosted blur.
+ */
+private fun AppColors.solid(): AppColors = if (isDark) {
+    copy(
+        glass = Color(0xFF17171E),
+        glassStrong = Color(0xFF1E1E27),
+        borderTop = Color.White.copy(alpha = 0.06f),
+        borderBottom = Color.White.copy(alpha = 0.03f),
+    )
+} else {
+    copy(
+        glass = Color.White.copy(alpha = 0.94f),
+        glassStrong = Color.White,
+        borderTop = Color.Black.copy(alpha = 0.05f),
+        borderBottom = Color.Black.copy(alpha = 0.05f),
+    )
+}
 
 private val DarkScheme = darkColorScheme(
     primary = DarkTokens.accent,
@@ -196,9 +216,10 @@ private val AppShapes = Shapes(
 fun LeftoversTheme(
     darkTheme: Boolean,
     dynamicColor: Boolean,
+    glassEffects: Boolean = true,
     content: @Composable () -> Unit,
 ) {
-    val tokens = if (darkTheme) DarkTokens else LightTokens
+    val tokens = (if (darkTheme) DarkTokens else LightTokens).let { if (glassEffects) it else it.solid() }
     val scheme = when {
         dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
             val context = LocalContext.current

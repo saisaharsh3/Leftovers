@@ -219,7 +219,7 @@ fun GlassAlertDialog(
         title = title,
         text = text,
         shape = glassShape,
-        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = if (blurs) 0.62f else 0.98f),
+        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = if (blurs) 0.62f else 1f),
         tonalElevation = 0.dp,
         modifier = modifier
             .border(1.dp, com.leftovers.app.ui.components.glassBorder(c), glassShape)
@@ -249,7 +249,7 @@ fun GlassDatePickerDialog(
     val c = LocalAppColors.current
     val glassShape = RoundedCornerShape(30.dp)
     val blurs = rememberWindowBlur()
-    val container = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = if (blurs) 0.7f else 0.98f)
+    val container = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = if (blurs) 0.7f else 1f)
     DatePickerDialog(
         onDismissRequest = onDismissRequest,
         confirmButton = {

@@ -112,6 +112,10 @@ class SettingsViewModel(
         viewModelScope.launch { settingsRepository.setDynamicColor(enabled) }
     }
 
+    fun setGlassEffects(enabled: Boolean) {
+        viewModelScope.launch { settingsRepository.setGlassEffects(enabled) }
+    }
+
     fun setBudgetAlerts(enabled: Boolean) {
         viewModelScope.launch { settingsRepository.setBudgetAlerts(enabled) }
     }
@@ -282,6 +286,8 @@ fun SettingsScreen(
                             Spacer(Modifier.height(8.dp))
                             ToggleRow(Lucide.Palette, "Accent from wallpaper", s.dynamicColor, viewModel::setDynamicColor, inset = false)
                         }
+                        // Off: solid bars, cards, dialogs and sheets, with no blur (also a little easier on the battery).
+                        ToggleRow(Lucide.Droplet, "Glass effects", s.glassEffects, viewModel::setGlassEffects, inset = false)
                     }
                 }
             }

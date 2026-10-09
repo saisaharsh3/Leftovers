@@ -5,6 +5,9 @@ All notable changes to Leftovers. Download any version from
 
 ## Unreleased
 
+- *Glass effects* switch (Settings → Appearance), in dark and light: off gives solid cards without the
+  see-through look and lit edges; bars, dialogs and sheets keep their frosted blur
+- Light mode cards are now see-through glass too, like dark mode
 - Money coming in is detected too: bank SMS and emails that say "credited" or "received" show on Home as
   income (in green, with who it's from) and open as an Income entry (#6)
 - Email detection no longer brings back payments you already added or dismissed, checks every 15 minutes
