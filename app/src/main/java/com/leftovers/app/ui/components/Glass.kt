@@ -96,8 +96,8 @@ fun glassBorder(c: AppColors) = Brush.verticalGradient(listOf(c.borderTop, c.bor
 private fun glassFill(fill: Color, light: Boolean): Brush = when {
     fill.alpha >= 0.9f -> androidx.compose.ui.graphics.SolidColor(fill)
     light -> Brush.verticalGradient(
-        0f to fill.copy(alpha = (fill.alpha * 5f).coerceAtMost(0.75f)),
-        0.35f to fill.copy(alpha = (fill.alpha * 1.6f).coerceAtMost(1f)),
+        0f to fill.copy(alpha = (fill.alpha * 4f).coerceAtMost(0.45f)),
+        0.22f to fill.copy(alpha = (fill.alpha * 1.5f).coerceAtMost(1f)),
         1f to fill,
     )
     else -> Brush.verticalGradient(listOf(fill.copy(alpha = (fill.alpha * 1.7f).coerceAtMost(1f)), fill))
@@ -119,8 +119,7 @@ fun Glass(
             .then(if (onClick != null) Modifier.pressable(onClick) else Modifier)
             .clip(shape)
             .background(glassFill(tint ?: if (strong) c.glassStrong else c.glass, light = !c.isDark))
-            // Light glass gets a slightly thicker rim: on a pale screen the bright edge is what reads as glass.
-            .border(if (c.isDark) 1.dp else 1.5.dp, glassBorder(c), shape),
+            .border(1.dp, glassBorder(c), shape),
         content = content,
     )
 }
