@@ -89,19 +89,10 @@ fun AuroraBackground(modifier: Modifier = Modifier) {
 
 fun glassBorder(c: AppColors) = Brush.verticalGradient(listOf(c.borderTop, c.borderBottom))
 
-/**
- * A see-through fill catches light at the top, like a pane of glass; solid fills stay flat. Light glass gets a
- * stronger shine, since a pale card needs more highlight to read as glass.
- */
-private fun glassFill(fill: Color, light: Boolean): Brush = when {
-    fill.alpha >= 0.9f -> androidx.compose.ui.graphics.SolidColor(fill)
-    light -> Brush.verticalGradient(
-        0f to fill.copy(alpha = (fill.alpha * 4f).coerceAtMost(0.45f)),
-        0.22f to fill.copy(alpha = (fill.alpha * 1.5f).coerceAtMost(1f)),
-        1f to fill,
-    )
-    else -> Brush.verticalGradient(listOf(fill.copy(alpha = (fill.alpha * 1.7f).coerceAtMost(1f)), fill))
-}
+/** A see-through fill catches light at the top, like a pane of glass, in both themes; solid fills stay flat. */
+private fun glassFill(fill: Color): Brush =
+    if (fill.alpha >= 0.9f) androidx.compose.ui.graphics.SolidColor(fill)
+    else Brush.verticalGradient(listOf(fill.copy(alpha = (fill.alpha * 1.7f).coerceAtMost(1f)), fill))
 
 /** Translucent card with a hairline top-lit border. Clickable cards gently shrink when pressed. */
 @Composable
@@ -118,7 +109,7 @@ fun Glass(
         modifier
             .then(if (onClick != null) Modifier.pressable(onClick) else Modifier)
             .clip(shape)
-            .background(glassFill(tint ?: if (strong) c.glassStrong else c.glass, light = !c.isDark))
+            .background(glassFill(tint ?: if (strong) c.glassStrong else c.glass))
             .border(1.dp, glassBorder(c), shape),
         content = content,
     )
