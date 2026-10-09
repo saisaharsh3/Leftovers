@@ -36,6 +36,11 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.AnimationVector1D
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -209,10 +214,11 @@ fun GlassAlertDialog(
     val c = LocalAppColors.current
     val glassShape = RoundedCornerShape(30.dp)
     val blurs = rememberWindowBlur()
+    val appear = remember { Animatable(if (blurs) 0f else 1f) }
     AlertDialog(
         onDismissRequest = onDismissRequest,
         confirmButton = {
-            BlurBehindDialog(blurs)
+            BlurBehindDialog(blurs, appear)
             confirmButton()
         },
         dismissButton = dismissButton,
@@ -222,6 +228,7 @@ fun GlassAlertDialog(
         containerColor = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = if (blurs) 0.62f else 1f),
         tonalElevation = 0.dp,
         modifier = modifier
+            .appearWith(appear)
             .border(1.dp, com.leftovers.app.ui.components.glassBorder(c), glassShape)
             .background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(c.glassStrong, androidx.compose.ui.graphics.Color.Transparent)), glassShape),
     )
@@ -250,10 +257,11 @@ fun GlassDatePickerDialog(
     val glassShape = RoundedCornerShape(30.dp)
     val blurs = rememberWindowBlur()
     val container = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = if (blurs) 0.7f else 1f)
+    val appear = remember { Animatable(if (blurs) 0f else 1f) }
     DatePickerDialog(
         onDismissRequest = onDismissRequest,
         confirmButton = {
-            BlurBehindDialog(blurs)
+            BlurBehindDialog(blurs, appear)
             confirmButton()
         },
         dismissButton = dismissButton,
@@ -261,24 +269,43 @@ fun GlassDatePickerDialog(
         tonalElevation = 0.dp,
         colors = DatePickerDefaults.colors(containerColor = container),
         modifier = Modifier
+            .appearWith(appear)
             .border(1.dp, com.leftovers.app.ui.components.glassBorder(c), glassShape)
             .background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(c.glassStrong, androidx.compose.ui.graphics.Color.Transparent)), glassShape),
         content = content,
     )
 }
 
-/** Blurs and lightly dims the screen behind the dialog or sheet window this is placed in (Android 12+). */
+/** Fades and slightly grows a dialog panel in, driven by the same animation as the blur behind it. */
+private fun Modifier.appearWith(appear: Animatable<Float, AnimationVector1D>): Modifier = graphicsLayer {
+    alpha = appear.value
+    val scale = 0.94f + 0.06f * appear.value
+    scaleX = scale
+    scaleY = scale
+}
+
+/**
+ * Blurs and lightly dims the screen behind the dialog or sheet window this is placed in (Android 12+).
+ * Runs once per window, not on every redraw (each change makes the window lay out again). With [appear], the
+ * system's own fade is switched off and the panel and blur come in together, so the blur never arrives late.
+ */
 @Composable
-private fun BlurBehindDialog(enabled: Boolean) {
+private fun BlurBehindDialog(enabled: Boolean, appear: Animatable<Float, AnimationVector1D>? = null) {
     val window = (LocalView.current.parent as? DialogWindowProvider)?.window ?: return
     val radius = with(LocalDensity.current) { 24.dp.roundToPx() }
-    SideEffect {
-        if (enabled && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            window.addFlags(WindowManager.LayoutParams.FLAG_BLUR_BEHIND)
+    LaunchedEffect(window, enabled) {
+        if (!enabled || Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
+            appear?.snapTo(1f)
+            return@LaunchedEffect
+        }
+        if (appear != null) window.setWindowAnimations(0)
+        window.addFlags(WindowManager.LayoutParams.FLAG_BLUR_BEHIND)
+        val startDim = window.attributes.dimAmount
+        (appear ?: Animatable(0f)).animateTo(1f, tween(200, easing = FastOutSlowInEasing)) {
             window.attributes = window.attributes.apply {
-                blurBehindRadius = radius
-                // The blur already separates the dialog, so a lighter dim keeps the frosted colour.
-                dimAmount = 0.35f
+                blurBehindRadius = (radius * value).toInt()
+                // The blur already separates the dialog, so the dim eases to a lighter one to keep the frosted colour.
+                dimAmount = startDim + (0.35f - startDim) * value
             }
         }
     }

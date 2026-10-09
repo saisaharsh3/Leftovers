@@ -80,8 +80,8 @@ private val LightTokens = AppColors(
     // with the rim fading down the sides. Stronger values, so it reads on a light background.
     glass = Color.White.copy(alpha = 0.18f),
     glassStrong = Color.White.copy(alpha = 0.3f),
-    borderTop = Color.White.copy(alpha = 0.95f),
-    borderBottom = Color.White.copy(alpha = 0.2f),
+    borderTop = Color.White.copy(alpha = 0.7f),
+    borderBottom = Color.White.copy(alpha = 0.12f),
     textPrimary = Color(0xFF0E0E12),
     textSecondary = Color(0xFF5B5B66),
     textTertiary = Color(0xFF6E6E79),
