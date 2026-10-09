@@ -78,5 +78,15 @@ jobs:
           cp app/build/outputs/apk/debug/app-debug.apk leftovers-dev.apk
           notes="Test build of the dev branch ($(git rev-parse --short HEAD)): $(git log -1 --format=%s).
           Installs as **Leftovers Dev** (amber icon) next to the real app, with its own data. Not for everyday use."
-          gh release delete dev-build --yes --cleanup-tag || true
-          gh release create dev-build leftovers-dev.apk --prerelease --target "$GITHUB_SHA"             --title "Dev build $(date -u +'%d %b %H:%M') UTC" --notes "$notes"
+          title="Dev build $(date -u +'%d %b %H:%M') UTC"
+          if gh release view dev-build >/dev/null 2>&1; then
+            # Update the one Dev build in place instead of deleting and recreating it, so the release and its
+            # download link stay the same. Apps that track releases (Komi Store, Obtainium) kept a link to the
+            # deleted one and failed with 404.
+            git tag -f dev-build "$GITHUB_SHA"
+            git push -f origin refs/tags/dev-build
+            gh release upload dev-build leftovers-dev.apk --clobber
+            gh release edit dev-build --prerelease --title "$title" --notes "$notes"
+          else
+            gh release create dev-build leftovers-dev.apk --prerelease --target "$GITHUB_SHA" --title "$title" --notes "$notes"
+          fi
