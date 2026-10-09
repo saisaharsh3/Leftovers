@@ -54,6 +54,10 @@ interface TransactionDao {
     @Query("SELECT amountMinor, createdAt AS at FROM transactions WHERE type = 'EXPENSE' AND createdAt BETWEEN :from AND :to")
     suspend fun expenseAmountsBetween(from: Long, to: Long): List<AmountAt>
 
+    /** Income logged (by creation time) between [from] and [to], for duplicate checks. */
+    @Query("SELECT amountMinor, createdAt AS at FROM transactions WHERE type = 'INCOME' AND createdAt BETWEEN :from AND :to")
+    suspend fun incomeAmountsBetween(from: Long, to: Long): List<AmountAt>
+
     @Query("SELECT id FROM transactions WHERE accountId = :accountId")
     suspend fun idsForAccount(accountId: Long): List<Long>
 
@@ -195,11 +199,23 @@ interface SmsDao {
     @Query("SELECT accountDigits FROM sms_suggestions WHERE id = :id")
     suspend fun digitsFor(id: Long): String?
 
+    @Query("SELECT isIncome FROM sms_suggestions WHERE id = :id")
+    suspend fun isIncome(id: Long): Boolean?
+
     @Query("SELECT COUNT(*) FROM sms_suggestions WHERE body = :body")
     suspend fun countWithBody(body: String): Int
 
-    @Query("SELECT amountMinor, receivedAt AS at FROM sms_suggestions WHERE receivedAt BETWEEN :from AND :to")
-    suspend fun amountsBetween(from: Long, to: Long): List<AmountAt>
+    @Query("SELECT amountMinor, receivedAt AS at FROM sms_suggestions WHERE isIncome = :income AND receivedAt BETWEEN :from AND :to")
+    suspend fun amountsBetween(from: Long, to: Long, income: Boolean): List<AmountAt>
+
+    @Query("SELECT COUNT(*) FROM seen_messages WHERE hash = :hash")
+    suspend fun seenCount(hash: String): Int
+
+    @androidx.room.Insert(onConflict = androidx.room.OnConflictStrategy.IGNORE)
+    suspend fun markSeen(message: SeenMessage)
+
+    @Query("DELETE FROM seen_messages WHERE seenAt < :before")
+    suspend fun forgetSeenBefore(before: Long)
 
     /** Older versions stored whole messages; anything that isn't a 64-char hash gets cleared. */
     @Query("UPDATE sms_suggestions SET body = '' WHERE length(body) != 64")

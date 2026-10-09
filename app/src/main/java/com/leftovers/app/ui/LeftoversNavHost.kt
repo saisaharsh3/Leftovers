@@ -437,8 +437,9 @@ private fun FloatingDock(current: String?, onTab: (String) -> Unit, onAdd: () ->
             .navigationBarsPadding()
             .padding(bottom = 14.dp)
             .clip(CircleShape)
-            .frosted()
-            // A soft top-lit sheen, so the bar reads as glass even over a plain dark background.
+            // Light mode: a lighter tint than the headers, so the bar is glass like the cards, not milky white.
+            .frosted(if (c.isDark) c else c.copy(barTint = Color.White.copy(alpha = 0.18f)))
+            // A soft top-lit sheen, so the bar reads as glass in both themes.
             .background(Brush.verticalGradient(listOf(c.glassStrong, c.glass.copy(alpha = c.glass.alpha * 0.4f))))
             .border(1.dp, glassBorder(c), CircleShape)
             .padding(6.dp),

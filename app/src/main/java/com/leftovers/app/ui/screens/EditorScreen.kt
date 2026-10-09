@@ -205,6 +205,8 @@ class EditorViewModel(
                 val known = accountRepository.accounts.first().map { it.id }
                 // A payment from a bank SMS goes to the account whose last digits it names.
                 val fromSms = if (smsId > 0) sms.digitsFor(smsId) else null
+                // Money coming in ("credited", "received") opens as income.
+                if (smsId > 0 && sms.isIncome(smsId)) onTypeChange(TxType.INCOME)
                 val matched = fromSms?.let { d -> accountRepository.accounts.first().firstOrNull { it.matchesDigits(d) }?.id }
                 accountId = matched ?: s.homeAccountId?.takeIf { it in known } ?: s.defaultAccountId
             }

@@ -11,8 +11,9 @@ import androidx.sqlite.db.SupportSQLiteDatabase
     entities = [
         Category::class, Transaction::class, Recurring::class, Goal::class, GoalDeposit::class,
         Account::class, Transfer::class, SmsSuggestion::class, Debt::class, DeletedTransaction::class,
+        SeenMessage::class,
     ],
-    version = 12,
+    version = 13,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -33,6 +34,19 @@ abstract class AppDatabase : RoomDatabase() {
                 .addCallback(SeedCategories)
                 .addMigrations(*ALL_MIGRATIONS)
                 .build()
+    }
+}
+
+/**
+ * v13 remembers messages that already became suggestions (so dismissed ones don't come back) and marks
+ * suggestions that are money coming in.
+ */
+private val MIGRATION_12_13 = object : Migration(12, 13) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("CREATE TABLE IF NOT EXISTS `seen_messages` (`hash` TEXT NOT NULL, `seenAt` INTEGER NOT NULL, PRIMARY KEY(`hash`))")
+        db.execSQL("ALTER TABLE `sms_suggestions` ADD COLUMN `isIncome` INTEGER NOT NULL DEFAULT 0")
+        // Suggestions still waiting count as seen, so they can't be added twice either.
+        db.execSQL("INSERT OR IGNORE INTO `seen_messages` (`hash`, `seenAt`) SELECT `body`, `receivedAt` FROM `sms_suggestions` WHERE length(`body`) = 64")
     }
 }
 
@@ -257,4 +271,4 @@ val DefaultCategories = listOf(
 
 /** Every upgrade step, oldest first; also used by the migration tests. */
 internal val ALL_MIGRATIONS: Array<Migration>
-    get() = arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12)
+    get() = arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13)

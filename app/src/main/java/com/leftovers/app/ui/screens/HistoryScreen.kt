@@ -13,7 +13,6 @@ import com.leftovers.app.ui.components.glassBorder
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.ui.layout.onSizeChanged
-import com.leftovers.app.ui.components.LocalUndo
 import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.ui.platform.LocalDensity
@@ -140,8 +139,6 @@ data class HistoryUiState(
     val accounts: List<FilterOption> = emptyList(),
     val categories: List<FilterOption> = emptyList(),
     val tags: List<String> = emptyList(),
-    /** Entries logged by a subscription or recurring income; tapping one opens Subscriptions. */
-    val fromSubscription: Set<Long> = emptySet(),
 )
 
 class HistoryViewModel(
@@ -158,7 +155,7 @@ class HistoryViewModel(
         combine(
             combine(repository.allTransactions, accountRepository.accounts, planning.recurring, ::Triple),
             month, filter, query, filters,
-        ) { (all, accountList, recurring), m, f, q, fl ->
+        ) { (all, accountList, _), m, f, q, fl ->
             val monthItems = all.filter { YearMonth.from(it.date) == m }
             val scoped = if (q.isNotBlank()) {
                 val needle = q.trim()
@@ -196,9 +193,6 @@ class HistoryViewModel(
                 categories = all.distinctBy { it.categoryId }.sortedBy { it.categoryName }
                     .map { FilterOption(it.categoryId, it.categoryName, it.categoryEmoji, it.categoryColor) },
                 tags = all.allTags(),
-                fromSubscription = all.filter { t ->
-                    recurring.any { r -> r.logged(t.type, t.categoryId, t.note, t.categoryName) }
-                }.map { it.id }.toSet(),
             )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), HistoryUiState())
 
@@ -230,7 +224,6 @@ fun HistoryScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val c = LocalAppColors.current
     val money = LocalMoney.current
-    val undo = LocalUndo.current
     var searchOpen by rememberSaveable { mutableStateOf(false) }
     var mode by rememberSaveable { mutableStateOf(ActivityView.LIST) }
     var selectedDay by rememberSaveable { mutableStateOf(LocalDate.now().toEpochDay()) }
@@ -245,11 +238,6 @@ fun HistoryScreen(
             viewModel.setFilter(it.filter)
             onRequestHandled()
         }
-    }
-
-    fun deleteWithUndo(item: TransactionItem) {
-        viewModel.delete(item)
-        undo.show("Deleted ${item.note.ifBlank { item.categoryName }} · ${money.format(item.amountMinor)}") { viewModel.restore(item) }
     }
 
     GlassScreen(
@@ -356,17 +344,6 @@ fun HistoryScreen(
                 }
                 Spacer(Modifier.height(12.dp))
                 SegmentedToggle(TypeFilter.entries, state.filter, { it.label }, viewModel::setFilter, Modifier.fillMaxWidth())
-                if (state.groups.isNotEmpty()) {
-                    Text(
-                        "Tap or swipe right to edit · swipe left to delete",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = c.textTertiary,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 12.dp),
-                    )
-                }
                 }
             }
 
@@ -406,17 +383,8 @@ fun HistoryScreen(
                                 .appear(groupIndex + 1),
                         ) {
                             if (i > 0) RowDivider()
-                            SwipeableRow(
-                                item,
-                                onDelete = { deleteWithUndo(item) },
-                                onEdit = { onOpenTransaction(item.id) },
-                                // Salary, rent, Netflix…: a tap opens the subscription; swiping right still edits this one entry.
-                                onTap = if (item.id in state.fromSubscription) {
-                                    { onOpenSubscriptions(item.type == TxType.INCOME) }
-                                } else {
-                                    { onOpenTransaction(item.id) }
-                                },
-                            )
+                            // No swipe actions: they fired by accident. A tap opens the entry, where it can be edited or deleted.
+                            TransactionRow(item, onClick = { onOpenTransaction(item.id) })
                         }
                     }
                 }
@@ -489,101 +457,6 @@ private fun FilterSheet(state: HistoryUiState, onChange: (ActivityFilters) -> Un
                 PrimaryButton("Done", onDismiss, Modifier.weight(1f))
             }
         }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun SwipeableRow(item: TransactionItem, onDelete: () -> Unit, onEdit: () -> Unit, onTap: () -> Unit = onEdit) {
-    val c = LocalAppColors.current
-    // Plain remember, not saved: a row brought back by Undo must start in place. A saved "swiped away"
-    // state came back with it and deleted the entry again straight away.
-    val threshold = SwipeToDismissBoxDefaults.positionalThreshold
-    val state = remember { SwipeToDismissBoxState(SwipeToDismissBoxValue.Settled, threshold) }
-    val scope = rememberCoroutineScope()
-    SwipeToDismissBox(
-        state = state,
-        onDismiss = { value ->
-            when (value) {
-                SwipeToDismissBoxValue.EndToStart -> onDelete()
-                SwipeToDismissBoxValue.StartToEnd -> {
-                    onEdit()
-                    // Snap back while the editor covers the list, instead of animating under it.
-                    scope.launch {
-                        delay(400)
-                        state.snapTo(SwipeToDismissBoxValue.Settled)
-                    }
-                }
-                SwipeToDismissBoxValue.Settled -> Unit
-            }
-        },
-        backgroundContent = {
-            // Keep the last direction while the row springs back, so the icon doesn't swap mid-way.
-            val direction = state.dismissDirection
-            var lastDirection by remember { mutableStateOf(SwipeToDismissBoxValue.StartToEnd) }
-            if (direction != SwipeToDismissBoxValue.Settled) lastDirection = direction
-            val editing = lastDirection == SwipeToDismissBoxValue.StartToEnd
-            val reveal = with(LocalDensity.current) { 96.dp.toPx() }
-            val travel = with(LocalDensity.current) { 56.dp.toPx() }
-            // Everything follows the row's position, so it slides in and out with the finger
-            // instead of popping in or vanishing. At rest it is fully transparent (rows are glass).
-            fun shown(): Float = (abs(runCatching { state.requireOffset() }.getOrDefault(0f)) / reveal).coerceIn(0f, 1f)
-            // Letting go past about half the width deletes; warn from that point on.
-            var rowWidth by remember { mutableFloatStateOf(0f) }
-            // Past about half the width, letting go acts; say what will happen from that point on.
-            val pastPoint by remember {
-                derivedStateOf { rowWidth > 0f && kotlin.math.abs(runCatching { state.requireOffset() }.getOrDefault(0f)) >= rowWidth * 0.5f }
-            }
-            Box(
-                Modifier
-                    .fillMaxSize()
-                    .onSizeChanged { rowWidth = it.width.toFloat() }
-                    .graphicsLayer { alpha = shown() }
-                    .background((if (editing) c.textSecondary else c.negative).copy(alpha = 0.18f))
-                    .padding(horizontal = 24.dp),
-                contentAlignment = if (editing) Alignment.CenterStart else Alignment.CenterEnd,
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.graphicsLayer {
-                        val t = shown()
-                        // Slides out from the edge it's revealed at, growing as it comes.
-                        translationX = (1f - t) * travel * (if (editing) -1f else 1f)
-                        scaleX = 0.7f + 0.3f * t
-                        scaleY = 0.7f + 0.3f * t
-                    },
-                ) {
-                    // "Delete" sits before the bin on the right; "Edit" after the pencil on the left.
-                    if (!editing) SwipeLabel("Delete", pastPoint, c.negative, Alignment.End)
-                    Icon(
-                        if (editing) Lucide.Pencil else Lucide.Trash2,
-                        contentDescription = if (editing) "Edit" else "Delete",
-                        tint = if (editing) c.textPrimary else c.negative,
-                        modifier = Modifier.size(20.dp),
-                    )
-                    if (editing) SwipeLabel("Edit", pastPoint, c.textPrimary, Alignment.Start)
-                }
-            }
-        },
-    ) {
-        TransactionRow(item, onClick = onTap)
-    }
-}
-
-/** What letting go will do, shown once the swipe has gone far enough. Grows out from the icon. */
-@Composable
-private fun SwipeLabel(text: String, visible: Boolean, color: androidx.compose.ui.graphics.Color, side: Alignment.Horizontal) {
-    AnimatedVisibility(
-        visible = visible,
-        enter = fadeIn(tween(120)) + expandHorizontally(expandFrom = side),
-        exit = fadeOut(tween(120)) + shrinkHorizontally(shrinkTowards = side),
-    ) {
-        Text(
-            text,
-            style = MaterialTheme.typography.labelLarge,
-            color = color,
-            modifier = Modifier.padding(start = if (side == Alignment.Start) 10.dp else 0.dp, end = if (side == Alignment.End) 10.dp else 0.dp),
-        )
     }
 }
 

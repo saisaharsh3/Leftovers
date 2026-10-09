@@ -36,7 +36,7 @@ object SmsParser {
     )
     /** "debited by 500.0" (SBI and others write the amount with no currency). */
     private val bareAmount = Regex(
-        """\b(?:debited|spent|paid|sent|withdrawn)\s+(?:by|with|for|of)?\s*(?:rs\.?|inr|₹)?\s*([0-9][0-9,]*(?:\.[0-9]{1,2})?)\b""",
+        """\b(?:debited|spent|paid|sent|withdrawn|credited|received)\s+(?:by|with|for|of)?\s*(?:rs\.?|inr|₹)?\s*([0-9][0-9,]*(?:\.[0-9]{1,2})?)\b""",
         RegexOption.IGNORE_CASE,
     )
     /** The account or card digits a message names, e.g. "A/C *1234", "Acct XX234", "Card ending 1234". */
@@ -82,7 +82,17 @@ object SmsParser {
         return words.replaceFirstChar { it.uppercase() }
     }
 
-    data class Parsed(val amountMinor: Long, val merchant: String)
+    /** [merchant] is who was paid, or for [isIncome] who the money came from. */
+    data class Parsed(val amountMinor: Long, val merchant: String, val isIncome: Boolean = false)
+
+    /** Who money came from: "received from AL RAJHI B MCB in your A/C", "credited from VPA x@y on". */
+    private val creditFrom = Regex(
+        """\b(?:from|sender:?)\s+([A-Za-z0-9@._&' -]{2,40}?)(?=\s+(?:on|in|into|via|ref\w*|upi|txn|to|at|for|a/c|ac|acct)\b|\s*[(\[]|[.,;]|$)""",
+        RegexOption.IGNORE_CASE,
+    )
+
+    /** Who money coming in was from, in a bank message or email; empty when it doesn't say. */
+    fun payer(text: String): String = payee(text, creditFrom)
 
     /** What the parser made of a message, with a plain reason; used by the "Test a message" box. */
     data class Check(val parsed: Parsed?, val reason: String)
@@ -92,18 +102,17 @@ object SmsParser {
 
     fun check(body: String, extraWords: Collection<String> = emptyList()): Check {
         ignore.find(body)?.let { return Check(null, "Skipped: it says \"${it.value}\", like an OTP, a reminder or a failed payment.") }
+        // "credited" or "received" without "debited" is money coming in, suggested as income.
+        val income = creditOnly.containsMatchIn(body) && !Regex("debited", RegexOption.IGNORE_CASE).containsMatchIn(body)
         val custom = extraWords.firstOrNull { it.isNotBlank() && body.contains(it.trim(), ignoreCase = true) }
-        if (!debitWords.containsMatchIn(body) && custom == null) {
-            return Check(null, "Not a payment: no word like \"debited\", \"spent\" or \"paid\". If your bank uses another word, add it as a keyword.")
-        }
-        // "credited" alone means money came in; ignore unless the message also says debited.
-        if (creditOnly.containsMatchIn(body) && !Regex("debited", RegexOption.IGNORE_CASE).containsMatchIn(body)) {
-            return Check(null, "Skipped: it's money coming in (credited, received or refund).")
+        if (!income && !debitWords.containsMatchIn(body) && custom == null) {
+            return Check(null, "Not a payment: no word like \"debited\", \"spent\", \"paid\" or \"credited\". If your bank uses another word, add it as a keyword.")
         }
         // Any currency, symbol or code, before or after the number (see MoneyText).
         val minor = MoneyText.find(body)
             ?: bareAmount.find(body)?.groupValues?.get(1)?.let(MoneyText::toMinor)
             ?: return Check(null, "No amount found. It needs a currency next to the number, like Rs 250, $12.50 or 45 AED.")
+        if (income) return Check(Parsed(minor, payer(body), isIncome = true), "Money in")
         val who = payee(body)
         val via = if (custom != null && !debitWords.containsMatchIn(body)) " (found by your keyword \"${custom.trim()}\")" else ""
         return Check(Parsed(minor, who), "Payment$via")
@@ -140,9 +149,10 @@ class SmsReceiver : BroadcastReceiver() {
                             body = fingerprint(body),
                             // Just the last digits, to pick the matching account.
                             accountDigits = SmsParser.accountDigits(body),
+                            isIncome = parsed.isIncome,
                         ),
                     )
-                    val amount = Money(s.currencyCode).format(parsed.amountMinor)
+                    val amount = (if (parsed.isIncome) "income " else "") + Money(s.currencyCode).format(parsed.amountMinor)
                     DetectionLog.add(context, "SMS", sender, if (added) "Suggested $amount" else "$amount was already logged or suggested")
                 } else if (MoneyText.find(body) != null) {
                     // Only messages with an amount are worth noting; personal texts leave no trace.

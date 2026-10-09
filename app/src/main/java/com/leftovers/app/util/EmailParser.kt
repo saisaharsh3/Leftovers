@@ -34,19 +34,22 @@ object EmailParser {
         RegexOption.IGNORE_CASE,
     )
 
-    data class Parsed(val amountMinor: Long, val merchant: String)
+    /** [merchant] is who was paid, or for [isIncome] who the money came from. */
+    data class Parsed(val amountMinor: Long, val merchant: String, val isIncome: Boolean = false)
 
     /** [senderName] is the display name of the From address, e.g. "Swiggy" or "HDFC Bank Alerts". */
     fun parse(subject: String, senderName: String, body: String, extraWords: Collection<String> = emptyList()): Parsed? {
         val text = (subject + "\n" + body).take(20_000)
         if (skip.containsMatchIn(text)) return null
-        if (!paidWords.containsMatchIn(text) && extraWords.none { it.isNotBlank() && text.contains(it.trim(), ignoreCase = true) }) return null
-        if (creditOnly.containsMatchIn(text) && !Regex("""\bdebited\b""", RegexOption.IGNORE_CASE).containsMatchIn(text)) return null
-        if (promo.containsMatchIn(text) && !confirmed.containsMatchIn(text)) return null
+        // "credited" or "received" without "debited" is money coming in, suggested as income.
+        val income = creditOnly.containsMatchIn(text) && !Regex("""\bdebited\b""", RegexOption.IGNORE_CASE).containsMatchIn(text)
+        if (!income && !paidWords.containsMatchIn(text) && extraWords.none { it.isNotBlank() && text.contains(it.trim(), ignoreCase = true) }) return null
+        if (promo.containsMatchIn(text) && !income && !confirmed.containsMatchIn(text)) return null
 
         // Any currency (see MoneyText); a total-like label wins over the first amount mentioned.
         val minor = MoneyText.after(totalLabel, text) ?: MoneyText.find(text) ?: return null
 
+        if (income) return Parsed(minor, SmsParser.payer(text), isIncome = true)
         val who = SmsParser.payee(text, merchantWords).ifEmpty { cleanSender(senderName).replaceFirstChar { it.uppercase() } }
         return Parsed(minor, who)
     }

@@ -99,7 +99,7 @@ class MainActivity : FragmentActivity() {
                 val money = remember(s.currencyCode) { Money(s.currencyCode) }
                 val hazeState = rememberHazeState()
                 val showLock = s.appLock && locked
-                LeftoversTheme(darkTheme = dark, dynamicColor = s.dynamicColor) {
+                LeftoversTheme(darkTheme = dark, dynamicColor = s.dynamicColor, glassEffects = s.glassEffects) {
                     CompositionLocalProvider(
                         LocalMoney provides money,
                         LocalHazeState provides hazeState,
@@ -137,6 +137,8 @@ class MainActivity : FragmentActivity() {
         super.onStart()
         val container = (application as LeftoversApp).container
         lifecycleScope.launch { container.syncRecurring() }
+        // Background email checks can be held back for hours to save battery; opening the app catches up.
+        container.emailAccount.connection.value?.let { com.leftovers.app.util.EmailSync.checkSoon(this, it.lastCheckedAt) }
         if (backgroundedAt > 0 && SystemClock.elapsedRealtime() - backgroundedAt > RELOCK_AFTER_MS) {
             lifecycleScope.launch { if (container.settings.settings.first().appLock) locked = true }
         }

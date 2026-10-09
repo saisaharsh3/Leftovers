@@ -23,6 +23,8 @@ data class AppSettings(
     val currencyCode: String,
     val themeMode: ThemeMode,
     val dynamicColor: Boolean,
+    /** Frosted, see-through bars, cards and dialogs; off gives solid surfaces. */
+    val glassEffects: Boolean,
     val plan: BudgetPlan,
     val budgetAlerts: Boolean,
     val defaultAccountId: Long,
@@ -64,6 +66,7 @@ class SettingsRepository(context: Context) {
             currencyCode = p[CURRENCY] ?: defaultCurrencyCode(),
             themeMode = ThemeMode.entries.firstOrNull { it.name == p[THEME] } ?: ThemeMode.DARK,
             dynamicColor = p[DYNAMIC_COLOR] ?: false,
+            glassEffects = p[GLASS_EFFECTS] ?: true,
             plan = BudgetPlan(
                 mode = BudgetMode.entries.firstOrNull { it.name == p[BUDGET_MODE] } ?: BudgetMode.MONTHLY,
                 monthlyMinor = p[MONTHLY_BUDGET] ?: 0L,
@@ -105,6 +108,7 @@ class SettingsRepository(context: Context) {
     suspend fun setCurrency(code: String) = store.edit { it[CURRENCY] = code }
     suspend fun setThemeMode(mode: ThemeMode) = store.edit { it[THEME] = mode.name }
     suspend fun setDynamicColor(enabled: Boolean) = store.edit { it[DYNAMIC_COLOR] = enabled }
+    suspend fun setGlassEffects(enabled: Boolean) = store.edit { it[GLASS_EFFECTS] = enabled }
     suspend fun setMonthlyBudget(minor: Long) = store.edit { it[MONTHLY_BUDGET] = minor }
 
     suspend fun savePlan(plan: BudgetPlan) = store.edit {
@@ -173,6 +177,7 @@ class SettingsRepository(context: Context) {
         val CURRENCY = stringPreferencesKey("currency")
         val THEME = stringPreferencesKey("theme")
         val DYNAMIC_COLOR = booleanPreferencesKey("dynamic_color")
+        val GLASS_EFFECTS = booleanPreferencesKey("glass_effects")
         val MONTHLY_BUDGET = longPreferencesKey("monthly_budget")
         val YEARLY_BUDGET = longPreferencesKey("yearly_budget")
         val BUDGET_MODE = stringPreferencesKey("budget_mode")
