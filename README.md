@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="docs/icon.svg" width="96" alt="Leftovers app icon" />
+![Leftovers app icon](https://raw.githubusercontent.com/saisaharsh3/Leftovers/main/docs/icon-96.png)
 
 # Leftovers
 
@@ -12,26 +12,14 @@ today, plan for the things you want, and ask an AI about your money if you'd lik
 [![Download](https://img.shields.io/badge/Download-latest%20APK-CDF46F?logo=android&logoColor=black)](https://github.com/saisaharsh3/Leftovers/releases/latest)
 ![Android 8.0+](https://img.shields.io/badge/Android-8.0%2B-3DDC84?logo=android&logoColor=white)
 ![Kotlin](https://img.shields.io/badge/Kotlin-Jetpack%20Compose-7F52FF?logo=kotlin&logoColor=white)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/saisaharsh3/Leftovers/blob/main/LICENSE)
 
-<img src="docs/screenshots/home.jpg" width="180" alt="Home" />&nbsp;
-<img src="docs/screenshots/add.jpg" width="180" alt="Add an expense" />&nbsp;
-<img src="docs/screenshots/insights.jpg" width="180" alt="Insights" />&nbsp;
-<img src="docs/screenshots/plan.jpg" width="180" alt="Plan" />
+![Home, adding an expense, Insights and Plan](https://raw.githubusercontent.com/saisaharsh3/Leftovers/main/docs/screenshots/row1.png)
 
-<img src="docs/screenshots/calendar.jpg" width="180" alt="Activity calendar" />&nbsp;
-<img src="docs/screenshots/filters.jpg" width="180" alt="Filter by account, category or tag" />&nbsp;
-<img src="docs/screenshots/money-owed.jpg" width="180" alt="Money owed" />&nbsp;
-<img src="docs/screenshots/assistant.jpg" width="180" alt="AI assistant" />
+![Activity calendar, filters, Money owed and the AI assistant](https://raw.githubusercontent.com/saisaharsh3/Leftovers/main/docs/screenshots/row2.png)
 
-<sub>Light mode</sub><br/>
-<img src="docs/screenshots/light-home.jpg" width="180" alt="Home in light mode" />&nbsp;
-<img src="docs/screenshots/light-insights.jpg" width="180" alt="Insights in light mode" />&nbsp;
-<img src="docs/screenshots/light-plan.jpg" width="180" alt="Plan in light mode" />&nbsp;
-<img src="docs/screenshots/light-calendar.jpg" width="180" alt="Activity calendar in light mode" />
-
-<a href="https://github.com/saisaharsh3/Leftovers/releases/latest"><img src="https://img.shields.io/badge/Download%20APK-CDF46F?style=for-the-badge&logo=android&logoColor=black" height="44" alt="Download the APK" /></a>&nbsp;
-<a href="https://apps.obtainium.imranr.dev/redirect?r=obtainium://add/https://github.com/saisaharsh3/Leftovers"><img src="https://raw.githubusercontent.com/ImranR98/Obtainium/main/assets/graphics/badge_obtainium.png" height="44" alt="Get it on Obtainium" /></a>
+[![Download the APK](https://img.shields.io/badge/Download%20APK-CDF46F?style=for-the-badge&logo=android&logoColor=black)](https://github.com/saisaharsh3/Leftovers/releases/latest)
+[![Get it on Obtainium](https://img.shields.io/badge/Get%20it%20on-Obtainium-7D5FFF?style=for-the-badge)](https://apps.obtainium.imranr.dev/redirect?r=obtainium://add/https://github.com/saisaharsh3/Leftovers)
 
 If Leftovers is useful to you, a ⭐ helps other people find it.
 
@@ -180,7 +168,7 @@ OpenRouter passes requests on to the model's own provider).
 **Automatic updates:** add the repo to [Obtainium](https://github.com/ImranR98/Obtainium) with the badge at the
 top, and new releases install straight from GitHub.
 
-Requires Android 8.0 (API 26) or newer. What's new in each version is in [CHANGELOG.md](CHANGELOG.md).
+Requires Android 8.0 (API 26) or newer. What's new in each version is in [CHANGELOG.md](https://github.com/saisaharsh3/Leftovers/blob/main/CHANGELOG.md).
 
 ## Development
 
@@ -213,7 +201,7 @@ On Windows use `gradlew.bat`. If Gradle can't find the SDK, create `local.proper
 
 ### Publishing a GitHub release
 
-Pushing a tag such as `v1.2.0` runs the [release workflow](.github/workflows/release.yml), which runs
+Pushing a tag such as `v1.2.0` runs the [release workflow](https://github.com/saisaharsh3/Leftovers/blob/main/.github/workflows/release.yml), which runs
 the tests, builds a signed APK and attaches it to a GitHub release. It needs these repository secrets
 (**Settings → Secrets and variables → Actions**):
 
@@ -268,16 +256,14 @@ app/src/main/java/com/leftovers/app/
 - **Write code:** start with a
   [good first issue](https://github.com/saisaharsh3/Leftovers/issues?q=is%3Aopen+label%3A%22good+first+issue%22) or one marked
   [help wanted](https://github.com/saisaharsh3/Leftovers/issues?q=is%3Aopen+label%3A%22help+wanted%22). Read
-  [CONTRIBUTING.md](CONTRIBUTING.md) and open your pull request against the **`dev`** branch.
+  [CONTRIBUTING.md](https://github.com/saisaharsh3/Leftovers/blob/main/CONTRIBUTING.md) and open your pull request against the **`dev`** branch.
 
 ### Contributors
 
-<a href="https://github.com/saisaharsh3/Leftovers/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=saisaharsh3/Leftovers" alt="Contributors" />
-</a>
+[![Contributors](https://contrib.rocks/image?repo=saisaharsh3/Leftovers)](https://github.com/saisaharsh3/Leftovers/graphs/contributors)
 
 ## License
 
-[MIT](LICENSE). Third-party assets are listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+[MIT](https://github.com/saisaharsh3/Leftovers/blob/main/LICENSE). Third-party assets are listed in [THIRD_PARTY_NOTICES.md](https://github.com/saisaharsh3/Leftovers/blob/main/THIRD_PARTY_NOTICES.md).
 
 Made by C. Sai Saharsh · [github.com/saisaharsh3](https://github.com/saisaharsh3)
