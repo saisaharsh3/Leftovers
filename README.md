@@ -8,18 +8,18 @@
 A fast, private expense tracker for Android. Log a spend in two taps, see what's safe to spend
 today, plan for the things you want, and ask an AI about your money if you'd like to.
 
-[![Build](https://github.com/saisaharsh3/Leftovers/actions/workflows/build.yml/badge.svg)](https://github.com/saisaharsh3/Leftovers/actions/workflows/build.yml)
-[![Download](https://img.shields.io/badge/Download-latest%20APK-CDF46F?logo=android&logoColor=black)](https://github.com/saisaharsh3/Leftovers/releases/latest)
-![Android 8.0+](https://img.shields.io/badge/Android-8.0%2B-3DDC84?logo=android&logoColor=white)
-![Kotlin](https://img.shields.io/badge/Kotlin-Jetpack%20Compose-7F52FF?logo=kotlin&logoColor=white)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/saisaharsh3/Leftovers/blob/main/LICENSE)
+[![Build](https://raster.shields.io/github/actions/workflow/status/saisaharsh3/Leftovers/build.yml?branch=main&label=build)](https://github.com/saisaharsh3/Leftovers/actions/workflows/build.yml)
+[![Download](https://raster.shields.io/badge/Download-latest%20APK-CDF46F?logo=android&logoColor=black)](https://github.com/saisaharsh3/Leftovers/releases/latest)
+![Android 8.0+](https://raster.shields.io/badge/Android-8.0%2B-3DDC84?logo=android&logoColor=white)
+![Kotlin](https://raster.shields.io/badge/Kotlin-Jetpack%20Compose-7F52FF?logo=kotlin&logoColor=white)
+[![License: MIT](https://raster.shields.io/badge/License-MIT-blue)](https://github.com/saisaharsh3/Leftovers/blob/main/LICENSE)
 
 ![Home, adding an expense, Insights and Plan](https://raw.githubusercontent.com/saisaharsh3/Leftovers/main/docs/screenshots/row1.png)
 
 ![Activity calendar, filters, Money owed and the AI assistant](https://raw.githubusercontent.com/saisaharsh3/Leftovers/main/docs/screenshots/row2.png)
 
-[![Download the APK](https://img.shields.io/badge/Download%20APK-CDF46F?style=for-the-badge&logo=android&logoColor=black)](https://github.com/saisaharsh3/Leftovers/releases/latest)
-[![Get it on Obtainium](https://img.shields.io/badge/Get%20it%20on-Obtainium-7D5FFF?style=for-the-badge)](https://apps.obtainium.imranr.dev/redirect?r=obtainium://add/https://github.com/saisaharsh3/Leftovers)
+[![Download the APK](https://raster.shields.io/badge/Download%20APK-CDF46F?style=for-the-badge&logo=android&logoColor=black)](https://github.com/saisaharsh3/Leftovers/releases/latest)
+[![Get it on Obtainium](https://raster.shields.io/badge/Get%20it%20on-Obtainium-7D5FFF?style=for-the-badge)](https://apps.obtainium.imranr.dev/redirect?r=obtainium://add/https://github.com/saisaharsh3/Leftovers)
 
 If Leftovers is useful to you, a ⭐ helps other people find it.
 
