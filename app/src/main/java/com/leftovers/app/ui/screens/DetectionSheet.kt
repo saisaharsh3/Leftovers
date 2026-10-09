@@ -59,7 +59,7 @@ fun DetectionSheet(keywords: Set<String>, onChange: (Set<String>) -> Unit, onDis
         ) {
             Text("Detection keywords", style = MaterialTheme.typography.headlineSmall, color = c.textPrimary)
             Text(
-                "Bank SMS and email alerts are recognised by words like \"debited\", \"spent\" and \"paid\". If your bank uses " +
+                "Bank SMS and email alerts are recognised by words like \"debited\", \"paid\" and, for money in, \"credited\". If your bank uses " +
                     "other words, add them here.",
                 style = MaterialTheme.typography.bodySmall,
                 color = c.textSecondary,
@@ -91,11 +91,16 @@ fun DetectionSheet(keywords: Set<String>, onChange: (Set<String>) -> Unit, onDis
                         val p = check.parsed
                         if (p != null) {
                             Text(
-                                "${money.format(p.amountMinor)}" + if (p.merchant.isNotBlank()) " to ${p.merchant}" else "",
+                                (if (p.isIncome) "+" else "") + money.format(p.amountMinor) +
+                                    if (p.merchant.isNotBlank()) (if (p.isIncome) " from " else " to ") + p.merchant else "",
                                 style = MaterialTheme.typography.titleMedium,
                                 color = c.positive,
                             )
-                            Text("${check.reason}: this would show up on Home to confirm.", style = MaterialTheme.typography.bodySmall, color = c.textSecondary)
+                            Text(
+                                "${check.reason}: this would show up on Home to confirm" + if (p.isIncome) ", as income." else ".",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = c.textSecondary,
+                            )
                             if (digits != null) {
                                 Text("Names account or card ending $digits", style = MaterialTheme.typography.bodySmall, color = c.textSecondary)
                             }

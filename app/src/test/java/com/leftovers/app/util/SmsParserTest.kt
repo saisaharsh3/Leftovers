@@ -23,9 +23,9 @@ class SmsParserTest {
     }
 
     @Test fun keywordsDontOverrideSafetyChecks() {
-        // An OTP or money coming in is never suggested, whatever the keywords.
+        // An OTP is never suggested, whatever the keywords; money coming in stays income.
         assertNull(SmsParser.parse("OTP for txn of Rs 500 is 123456", listOf("txn")))
-        assertNull(SmsParser.parse("Rs 2,000 credited to your account", listOf("account")))
+        assertEquals(true, SmsParser.parse("Rs 2,000 credited to your account", listOf("account"))?.isIncome)
     }
 
     @Test fun otherCurrencies() {

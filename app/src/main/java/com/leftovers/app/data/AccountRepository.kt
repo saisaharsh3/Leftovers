@@ -36,6 +36,11 @@ class AccountRepository(
 }
 
 class SmsRepository(private val dao: SmsDao, private val transactionDao: TransactionDao) {
+    companion object {
+        /** How long a seen message is remembered; far longer than any email check looks back. */
+        const val SEEN_DAYS = 30L
+    }
+
     val suggestions: Flow<List<SmsSuggestion>> = dao.observeAll()
 
     /**
@@ -43,19 +48,29 @@ class SmsRepository(private val dao: SmsDao, private val transactionDao: Transac
      * suggested or logged around the same time (see [DuplicatePayments]). Returns whether it was added.
      */
     suspend fun add(suggestion: SmsSuggestion): Boolean {
-        if (dao.countWithBody(suggestion.body) > 0) return false
+        val hash = suggestion.body
+        // Seen before, even if that suggestion was since added or dismissed: email checks look back two days.
+        if (hash.isNotEmpty() && (dao.countWithBody(hash) > 0 || dao.seenCount(hash) > 0)) return false
         val from = suggestion.receivedAt - DuplicatePayments.WINDOW_MS
         val to = suggestion.receivedAt + DuplicatePayments.WINDOW_MS
-        val seen = dao.amountsBetween(from, to) + transactionDao.expenseAmountsBetween(from, to)
+        val logged = if (suggestion.isIncome) transactionDao.incomeAmountsBetween(from, to) else transactionDao.expenseAmountsBetween(from, to)
+        val seen = dao.amountsBetween(from, to, suggestion.isIncome) + logged
+        if (hash.isNotEmpty()) dao.markSeen(SeenMessage(hash, System.currentTimeMillis()))
         if (DuplicatePayments.isDuplicate(suggestion.amountMinor, suggestion.receivedAt, seen)) return false
         dao.insert(suggestion)
         return true
     }
 
+    /** Forgets seen messages older than any email check looks back. */
+    suspend fun forgetOldSeen() = dao.forgetSeenBefore(System.currentTimeMillis() - java.util.concurrent.TimeUnit.DAYS.toMillis(SEEN_DAYS))
+
     suspend fun dismiss(id: Long) = dao.delete(id)
 
     /** The account digits a detected payment's message named, if any. */
     suspend fun digitsFor(id: Long): String? = dao.digitsFor(id)
+
+    /** Whether a detected payment is money coming in. */
+    suspend fun isIncome(id: Long): Boolean = dao.isIncome(id) == true
 
     suspend fun scrubRawBodies() = dao.scrubRawBodies()
 }

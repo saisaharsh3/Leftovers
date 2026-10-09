@@ -5,6 +5,12 @@ All notable changes to Leftovers. Download any version from
 
 ## Unreleased
 
+- Money coming in is detected too: bank SMS and emails that say "credited" or "received" show on Home as
+  income (in green, with who it's from) and open as an Income entry (#6)
+- Email detection no longer brings back payments you already added or dismissed, checks every 15 minutes
+  and also whenever you open the app, so you don't need to tap *Check now*
+- Activity has no swipe actions any more, so entries can't be edited or deleted by accident; tap an entry
+  to edit or delete it (#6)
 - Dialogs are real frosted glass: the screen behind blurs and the panel is see-through (Android 12+);
   on phones without window blur they stay solid so text is easy to read (#6)
 - The calendar and bottom sheets (keywords, accounts and others) get the same frosted glass

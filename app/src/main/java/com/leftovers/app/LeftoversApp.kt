@@ -79,7 +79,10 @@ class AppContainer(private val context: Context) {
     }
 
     fun start() {
-        scope.launch { sms.scrubRawBodies() }
+        scope.launch {
+            sms.scrubRawBodies()
+            sms.forgetOldSeen()
+        }
         // Keep the home-screen widget in step with the data.
         scope.launch {
             combine(repository.allTransactions, settings.settings, planning.recurring) { _, _, _ -> Unit }

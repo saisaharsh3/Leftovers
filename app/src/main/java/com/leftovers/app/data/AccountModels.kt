@@ -77,9 +77,21 @@ data class SmsSuggestion(
     @ColumnInfo(defaultValue = SOURCE_SMS) val source: String = SOURCE_SMS,
     /** Last digits of the account or card the message named, if any. */
     val accountDigits: String? = null,
+    /** Money coming in ("credited", "received"), suggested as income rather than an expense. */
+    @ColumnInfo(defaultValue = "0") val isIncome: Boolean = false,
 ) {
     companion object {
         const val SOURCE_SMS = "sms"
         const val SOURCE_EMAIL = "email"
     }
 }
+
+/**
+ * A message that has already become a suggestion, kept after the suggestion is added or dismissed, so a later
+ * email check never brings it back. Only the message's hash is kept, and only for [SmsRepository.SEEN_DAYS] days.
+ */
+@Entity(tableName = "seen_messages")
+data class SeenMessage(
+    @PrimaryKey val hash: String,
+    val seenAt: Long,
+)

@@ -104,6 +104,24 @@ class RealBankMessagesTest {
         "Rs 450.00 debited from A/c XX1234 on 08-10-26 Info: UPI/DR/412345678901/SWIGGY/YESB/swiggy@ybl",
     ))
 
+    // From #6: money coming in is suggested as income, with who it came from.
+    @Test fun receivedIsIncome() {
+        val p = SmsParser.parse("PKR 442543.15 received from AL RAJHI B MCB in your HBL A/C on 19/09/2026 07:54:42 via Raast TXN ID 1501400752260919.")
+        assertEquals(44_254_315L, p?.amountMinor)
+        assertEquals(true, p?.isIncome)
+        assertEquals("Al Rajhi B Mcb", p?.merchant)
+    }
+
+    @Test fun profitCreditedIsIncome() {
+        val p = SmsParser.parse("Woah, Your money just made a profit. The profit for your Flexi-Week Saver has been credited to your account: PKR 11,381.70.")
+        assertEquals(1_138_170L, p?.amountMinor)
+        assertEquals(true, p?.isIncome)
+        assertEquals("", p?.merchant)
+    }
+
+    @Test fun debitMentioningCreditStaysExpense() =
+        assertEquals(false, SmsParser.parse("Rs 500 debited from A/c XX1234 and credited to VPA swiggy@icici")?.isIncome)
+
     @Test fun senderNameFromDomain() {
         assertEquals("Axis Bank", EmailParser.nameFromAddress("alerts@axisbank.com"))
         assertEquals("HDFC Bank", EmailParser.nameFromAddress("alerts@hdfcbank.net"))

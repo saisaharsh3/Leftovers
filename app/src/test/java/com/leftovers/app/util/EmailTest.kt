@@ -41,11 +41,19 @@ class EmailParserTest {
         assertEquals(850L, EmailParser.parse("Your receipt", "Uber", "Total €8.50 charged to your card")!!.amountMinor)
     }
 
-    @Test fun skipsPromotionsCodesRefundsAndBills() {
+    @Test fun skipsPromotionsCodesAndBills() {
         assertNull(EmailParser.parse("50% off today!", "Shop", "Get 50% off on orders above ₹499. Order now."))
         assertNull(EmailParser.parse("OTP", "Bank", "Your OTP for the transaction of Rs 500 is 123456"))
-        assertNull(EmailParser.parse("Refund processed", "Shop", "Rs 300 has been credited as a refund"))
         assertNull(EmailParser.parse("Card bill", "Bank", "Minimum due Rs 1,000. Payment due date 20 Oct"))
+    }
+
+    @Test fun moneyInIsIncome() {
+        val refund = EmailParser.parse("Refund processed", "Shop", "Rs 300 has been credited as a refund")
+        assertEquals(30_000L, refund?.amountMinor)
+        assertEquals(true, refund?.isIncome)
+        val salary = EmailParser.parse("Credit alert", "HDFC Bank", "INR 75,000.00 credited to your A/c XX1234 from ACME CORP on 01-10-26")
+        assertEquals(7_500_000L, salary?.amountMinor)
+        assertEquals("Acme Corp", salary?.merchant)
     }
 
     @Test fun htmlBecomesText() {
