@@ -1,6 +1,6 @@
 <div align="center">
 
-![Leftovers app icon](https://raw.githubusercontent.com/saisaharsh3/Leftovers/main/docs/icon-96.png)
+<img src="https://raw.githubusercontent.com/saisaharsh3/Leftovers/main/docs/icon-96.png" width="96" alt="Leftovers app icon">
 
 # Leftovers
 
