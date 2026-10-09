@@ -24,6 +24,12 @@ today, plan for the things you want, and ask an AI about your money if you'd lik
 <img src="docs/screenshots/money-owed.jpg" width="180" alt="Money owed" />&nbsp;
 <img src="docs/screenshots/assistant.jpg" width="180" alt="AI assistant" />
 
+<sub>Light mode</sub><br/>
+<img src="docs/screenshots/light-home.jpg" width="180" alt="Home in light mode" />&nbsp;
+<img src="docs/screenshots/light-insights.jpg" width="180" alt="Insights in light mode" />&nbsp;
+<img src="docs/screenshots/light-plan.jpg" width="180" alt="Plan in light mode" />&nbsp;
+<img src="docs/screenshots/light-calendar.jpg" width="180" alt="Activity calendar in light mode" />
+
 <a href="https://github.com/saisaharsh3/Leftovers/releases/latest"><img src="https://img.shields.io/badge/Download%20APK-CDF46F?style=for-the-badge&logo=android&logoColor=black" height="44" alt="Download the APK" /></a>&nbsp;
 <a href="https://apps.obtainium.imranr.dev/redirect?r=obtainium://add/https://github.com/saisaharsh3/Leftovers"><img src="https://raw.githubusercontent.com/ImranR98/Obtainium/main/assets/graphics/badge_obtainium.png" height="44" alt="Get it on Obtainium" /></a>
 
@@ -52,7 +58,7 @@ Most budget apps want an account, show ads, or send your spending to a server. L
 - Split one bill across several categories
 - Search every entry by note, category or amount; filter by account, category or #tag
 - Add #tags to notes (*"Dinner #goa"*) to group entries across categories and months, with a total
-- Edit with a tap; swipe left to delete, with undo. Deleted entries can be restored later from Settings
+- Tap an entry to edit or delete it. Deleted entries can be restored later from Settings
 
 **Budgets that make sense day to day**
 - Monthly budget, or a yearly one split evenly, by smart rollover, or custom per month
@@ -93,10 +99,12 @@ Most budget apps want an account, show ads, or send your spending to a server. L
 - Backup and restore to a file or Google Drive (photos included if you like), daily, weekly or monthly automatic
   backups to a folder you choose, CSV export
 - Optional backup password: backups are encrypted (AES-256) and need it to restore
-- Optional payment detection from bank SMS and from bank email alerts, suggesting entries for you to confirm.
+- Optional payment detection from bank SMS and from bank email alerts, suggesting entries for you to confirm,
+  including money coming in as income.
   Add your own keywords for banks it misses, and test any message to see what it would suggest. One payment never shows up twice, even when it arrives by both SMS and email
-- Swipe sideways to move between Home, Activity, Insights and Plan; the page follows your finger
-- Dark glass design with spring animations and high-refresh-rate support; light theme available
+- Swipe sideways to move between Home, Activity, Insights and Plan
+- Frosted glass design in dark and light mode (or solid surfaces with *Glass effects* off), spring animations
+  and high-refresh-rate support
 
 ## Privacy
 
