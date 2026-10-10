@@ -114,6 +114,14 @@ fun DetectionSheet(keywords: Set<String>, onChange: (Set<String>) -> Unit, onDis
                                     style = MaterialTheme.typography.bodySmall,
                                     color = c.textSecondary,
                                 )
+                                // No match yet: say what the message calls the account, so the user knows what to name theirs.
+                                else -> com.leftovers.app.data.namedAccountIn(sample)?.let { named ->
+                                    Text(
+                                        "Mentions your \"$named\" account. Name one of your accounts \"$named\" (Accounts) to send these there.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = c.textSecondary,
+                                    )
+                                }
                             }
                         } else {
                             Text("Not suggested", style = MaterialTheme.typography.titleMedium, color = c.textPrimary)

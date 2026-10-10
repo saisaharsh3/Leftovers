@@ -46,18 +46,35 @@ data class AccountWithBalance(
      * True when a bank message uses this account's name as an account: "in your HBL A/C", "HDFC Bank card",
      * "credited to your Revolut account". A name on its own isn't enough ("Cash withdrawal" isn't the Cash account).
      */
-    fun namedIn(text: String): Boolean {
-        val name = name.trim()
-        if (name.length < 2 || name.none(Char::isLetter)) return false
-        val n = Regex.escape(name)
-        val asAccount = Regex(
+    fun namedIn(text: String): Boolean = nameForms().any { form ->
+        val n = Regex.escape(form)
+        Regex(
             """\b$n(?:\s+bank)?\s*(?:a/c|ac|acct|account|card|credit card|debit card|wallet)\b|""" +
                 """\b(?:to|in|into|from|on)\s+your\s+$n\b""",
             RegexOption.IGNORE_CASE,
-        )
-        return asAccount.containsMatchIn(text)
+        ).containsMatchIn(text)
+    }
+
+    /** The account's name, and the same without words like "Bank" or "Savings" ("HBL Bank" also answers to "HBL"). */
+    private fun nameForms(): List<String> {
+        val full = name.trim()
+        val core = full.replace(ACCOUNT_WORDS, "").trim()
+        return listOf(full, core).distinct().filter { it.length >= 2 && it.any(Char::isLetter) }
+    }
+
+    private companion object {
+        val ACCOUNT_WORDS = Regex("""(?:\s+(?:bank|account|a/c|savings|saving|current|salary|card|wallet))+$""", RegexOption.IGNORE_CASE)
     }
 }
+
+/**
+ * The account a bank message names by its own words, as in "in your HBL A/C" → "HBL", for a hint when none of
+ * the user's accounts matches. Null when it names none.
+ */
+fun namedAccountIn(text: String): String? = Regex(
+    """\byour\s+([A-Za-z][A-Za-z&.\- ]{0,24}?)\s+(?:bank\s+)?(?:a/c|ac|acct|account|card|credit card|debit card)\b""",
+    RegexOption.IGNORE_CASE,
+).find(text)?.groupValues?.get(1)?.trim()?.takeIf { it.lowercase() !in setOf("bank", "savings", "current", "the") }
 
 /**
  * The account a bank message belongs to: the one whose last digits it names, otherwise the only one it names

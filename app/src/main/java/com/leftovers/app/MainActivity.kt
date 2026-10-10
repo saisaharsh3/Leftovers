@@ -128,6 +128,18 @@ class MainActivity : FragmentActivity() {
         }
     }
 
+    /**
+     * Esc on a keyboard (tablets, Chromebooks) counts as exactly one Back. Left to the system it went back twice,
+     * removing Home as well and leaving an empty screen.
+     */
+    override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean {
+        if (event.keyCode == android.view.KeyEvent.KEYCODE_ESCAPE) {
+            if (event.action == android.view.KeyEvent.ACTION_UP) onBackPressedDispatcher.onBackPressed()
+            return true
+        }
+        return super.dispatchKeyEvent(event)
+    }
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         if (intent.getBooleanExtra(EXTRA_OPEN_ADD, false)) openAddRequest = true

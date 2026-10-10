@@ -6,7 +6,9 @@ All notable changes to Leftovers. Download any version from
 ## Unreleased
 
 - Detected payments go to the account the message names, by its last digits or by name: "in your HBL A/C",
-  "HDFC Bank card". Test a message shows which account it would go to (#6)
+  "HDFC Bank card". An account named "HBL Bank" also matches "HBL". Test a message shows which account it
+  would go to, or what to name one so it matches (#6)
+- Fixed an empty Home screen after tapping a back arrow twice quickly, or pressing Esc on a keyboard
 - Smoother tab switching: the old tab fades out before the new one fades in, so two screens never show at once (#6)
 - Faster start: housekeeping waits until the first screen is up
 - The Dev build is now optimized like a release, so testers see the real app's speed (it was a debug build,

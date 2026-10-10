@@ -171,7 +171,9 @@ fun LeftoversNavHost(openAdd: Boolean = false, onOpenAddHandled: () -> Unit = {}
     val nav = rememberNavController()
     val backStack by nav.currentBackStackEntryAsState()
     val currentRoute = backStack?.destination?.route
-    val back: () -> Unit = { nav.popBackStack() }
+    // Only while there is a screen to go back to: a quick second tap on a back arrow used to remove Home itself,
+    // leaving an empty screen with just the tab bar.
+    val back: () -> Unit = { if (nav.previousBackStackEntry != null) nav.popBackStack() }
     val idArg = listOf(navArgument("id") { type = NavType.LongType })
     var toast by remember { mutableStateOf<String?>(null) }
     // A filter Home asked Activity to open with.
