@@ -41,6 +41,32 @@ data class AccountWithBalance(
         val n = minOf(digits.length, mine.length)
         return n >= 3 && digits.takeLast(n) == mine.takeLast(n)
     }
+
+    /**
+     * True when a bank message uses this account's name as an account: "in your HBL A/C", "HDFC Bank card",
+     * "credited to your Revolut account". A name on its own isn't enough ("Cash withdrawal" isn't the Cash account).
+     */
+    fun namedIn(text: String): Boolean {
+        val name = name.trim()
+        if (name.length < 2 || name.none(Char::isLetter)) return false
+        val n = Regex.escape(name)
+        val asAccount = Regex(
+            """\b$n(?:\s+bank)?\s*(?:a/c|ac|acct|account|card|credit card|debit card|wallet)\b|""" +
+                """\b(?:to|in|into|from|on)\s+your\s+$n\b""",
+            RegexOption.IGNORE_CASE,
+        )
+        return asAccount.containsMatchIn(text)
+    }
+}
+
+/**
+ * The account a bank message belongs to: the one whose last digits it names, otherwise the only one it names
+ * as an account by name. Null when it's unclear, so the usual default is used.
+ */
+fun List<AccountWithBalance>.matchFor(text: String): AccountWithBalance? {
+    val digits = com.leftovers.app.util.SmsParser.accountDigits(text)
+    firstOrNull { it.matchesDigits(digits) }?.let { return it }
+    return filter { it.namedIn(text) }.singleOrNull()
 }
 
 /** Money moved between two of the user's own accounts; not income or spending. */
@@ -79,6 +105,8 @@ data class SmsSuggestion(
     val accountDigits: String? = null,
     /** Money coming in ("credited", "received"), suggested as income rather than an expense. */
     @ColumnInfo(defaultValue = "0") val isIncome: Boolean = false,
+    /** The account the message matched, by its last digits or its name (see [matchFor]). */
+    val accountId: Long? = null,
 ) {
     companion object {
         const val SOURCE_SMS = "sms"

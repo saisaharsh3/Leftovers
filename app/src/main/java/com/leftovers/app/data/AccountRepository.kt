@@ -69,6 +69,9 @@ class SmsRepository(private val dao: SmsDao, private val transactionDao: Transac
     /** The account digits a detected payment's message named, if any. */
     suspend fun digitsFor(id: Long): String? = dao.digitsFor(id)
 
+    /** The account a detected payment matched, if any. */
+    suspend fun accountIdFor(id: Long): Long? = dao.accountIdFor(id)
+
     /** Whether a detected payment is money coming in. */
     suspend fun isIncome(id: Long): Boolean = dao.isIncome(id) == true
 

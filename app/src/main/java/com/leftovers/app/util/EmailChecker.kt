@@ -12,6 +12,7 @@ import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import com.leftovers.app.LeftoversApp
 import com.leftovers.app.data.SmsSuggestion
+import com.leftovers.app.data.matchFor
 import jakarta.mail.AuthenticationFailedException
 import jakarta.mail.FetchProfile
 import jakarta.mail.Folder
@@ -52,6 +53,8 @@ data class EmailPayment(
     val messageKey: String,
     val accountDigits: String? = null,
     val isIncome: Boolean = false,
+    /** The account it matched, by last digits or name; filled in when it's stored. */
+    val accountText: String = "",
 )
 
 /**
@@ -115,6 +118,7 @@ object EmailChecker {
                 findPayments(store, since, keywords) { searched, fromBanks -> stats = searched to fromBanks }
             }
             var added = 0
+            val accounts = container.accounts.accounts.first()
             found.forEach { p ->
                 val isNew = container.sms.add(
                     SmsSuggestion(
@@ -128,6 +132,7 @@ object EmailChecker {
                         source = SmsSuggestion.SOURCE_EMAIL,
                         accountDigits = p.accountDigits,
                         isIncome = p.isIncome,
+                        accountId = accounts.matchFor(p.accountText)?.id,
                     ),
                 )
                 if (isNew) added++
@@ -185,7 +190,12 @@ object EmailChecker {
         val parsed = EmailParser.parse(subject, senderName, body, keywords) ?: return null
         val sentAt = (m.sentDate ?: m.receivedDate)?.time ?: return null
         val key = (m as? MimeMessage)?.messageID ?: "${from?.address}|$sentAt|$subject"
-        return EmailPayment(parsed.amountMinor, parsed.merchant, senderName.take(40), sentAt, key, SmsParser.accountDigits(subject + " " + body), parsed.isIncome)
+        return EmailPayment(
+            parsed.amountMinor, parsed.merchant, senderName.take(40), sentAt, key, SmsParser.accountDigits(subject + " " + body),
+            parsed.isIncome,
+            // Just the start of the email, where banks name the account; matched against accounts when stored.
+            accountText = (subject + "\n" + body).take(2_000),
+        )
     }
 
     /** Readable text of a message, preferring plain text over HTML. Attachments are skipped. */

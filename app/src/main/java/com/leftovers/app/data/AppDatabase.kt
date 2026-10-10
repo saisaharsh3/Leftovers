@@ -13,7 +13,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         Account::class, Transfer::class, SmsSuggestion::class, Debt::class, DeletedTransaction::class,
         SeenMessage::class,
     ],
-    version = 13,
+    version = 14,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -34,6 +34,13 @@ abstract class AppDatabase : RoomDatabase() {
                 .addCallback(SeedCategories)
                 .addMigrations(*ALL_MIGRATIONS)
                 .build()
+    }
+}
+
+/** v14 remembers which account a detected payment matched (by last digits or by the account's name). */
+private val MIGRATION_13_14 = object : Migration(13, 14) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE `sms_suggestions` ADD COLUMN `accountId` INTEGER")
     }
 }
 
@@ -271,4 +278,4 @@ val DefaultCategories = listOf(
 
 /** Every upgrade step, oldest first; also used by the migration tests. */
 internal val ALL_MIGRATIONS: Array<Migration>
-    get() = arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13)
+    get() = arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14)

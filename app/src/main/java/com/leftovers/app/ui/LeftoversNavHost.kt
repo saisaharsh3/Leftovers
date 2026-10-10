@@ -232,8 +232,11 @@ fun LeftoversNavHost(openAdd: Boolean = false, onOpenAddHandled: () -> Unit = {}
                             // Add and edit slide up like a sheet: moving a finished layout is cheap and never stretches text.
                             targetState.isAdd() -> slideInVertically(tween(320, easing = FastOutSlowInEasing)) { it / 5 } + fadeIn(tween(220))
                             targetState.isSheet() -> slideInVertically(tween(420, easing = FastOutSlowInEasing)) { it } + fadeIn(tween(200))
+                            // Fade through: the new tab fades in only once the old one has faded out. Both are
+                            // see-through over the shared background, so overlapping fades showed two screens at once.
                             targetState.isTab() && initialState.isTab() ->
-                                slideIntoContainer(tabDirection(initialState, targetState), tween(300, easing = FastOutSlowInEasing)) { it / 6 } + fadeIn(tween(240))
+                                slideIntoContainer(tabDirection(initialState, targetState), tween(260, delayMillis = 30, easing = FastOutSlowInEasing)) { it / 12 } +
+                                    fadeIn(tween(200, delayMillis = 30))
                             else -> slideIntoContainer(SlideDirection.Start, navTween) + fadeIn(tween(220))
                         }
                     },
@@ -243,7 +246,8 @@ fun LeftoversNavHost(openAdd: Boolean = false, onOpenAddHandled: () -> Unit = {}
                             targetState.isAdd() -> fadeOut(tween(220))
                             targetState.isSheet() -> fadeOut(tween(300))
                             targetState.isTab() && initialState.isTab() ->
-                                slideOutOfContainer(tabDirection(initialState, targetState), tween(300, easing = FastOutSlowInEasing)) { it / 6 } + fadeOut(tween(180))
+                                slideOutOfContainer(tabDirection(initialState, targetState), tween(200, easing = FastOutSlowInEasing)) { it / 12 } +
+                                    fadeOut(tween(60))
                             else -> slideOutOfContainer(SlideDirection.Start, navTween) { it / 4 } + fadeOut(tween(220))
                         }
                     },

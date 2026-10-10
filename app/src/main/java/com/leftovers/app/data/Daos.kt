@@ -202,6 +202,9 @@ interface SmsDao {
     @Query("SELECT isIncome FROM sms_suggestions WHERE id = :id")
     suspend fun isIncome(id: Long): Boolean?
 
+    @Query("SELECT accountId FROM sms_suggestions WHERE id = :id")
+    suspend fun accountIdFor(id: Long): Long?
+
     @Query("SELECT COUNT(*) FROM sms_suggestions WHERE body = :body")
     suspend fun countWithBody(body: String): Int
 

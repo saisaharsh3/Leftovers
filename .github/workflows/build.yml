@@ -57,7 +57,7 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v6
 
-      - name: Build Leftovers Dev, signed with the release key
+      - name: Build Leftovers Dev (optimized like a release), signed with the release key
         env:
           SIGNING_KEYSTORE_BASE64: ${{ secrets.SIGNING_KEYSTORE_BASE64 }}
           SIGNING_STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD }}
@@ -68,14 +68,14 @@ jobs:
             echo "$SIGNING_KEYSTORE_BASE64" | base64 --decode > release.jks
             export SIGNING_STORE_FILE=release.jks
           fi
-          ./gradlew assembleDebug --stacktrace
+          ./gradlew assembleDev --stacktrace
           rm -f release.jks
 
       - name: Publish the Dev build pre-release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          cp app/build/outputs/apk/debug/app-debug.apk leftovers-dev.apk
+          cp app/build/outputs/apk/dev/app-dev.apk leftovers-dev.apk
           notes="Test build of the dev branch ($(git rev-parse --short HEAD)): $(git log -1 --format=%s).
           Installs as **Leftovers Dev** (amber icon) next to the real app, with its own data. Not for everyday use."
           title="Dev build $(date -u +'%d %b %H:%M') UTC"

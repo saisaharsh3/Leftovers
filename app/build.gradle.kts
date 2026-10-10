@@ -56,6 +56,14 @@ android {
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
+        // The Dev build testers install from GitHub: optimized like a release, so its speed is the real app's
+        // (a debug build starts about three times slower and stutters), but it installs as Leftovers Dev.
+        create("dev") {
+            initWith(getByName("release"))
+            applicationIdSuffix = ".dev"
+            versionNameSuffix = "-dev"
+            matchingFallbacks += listOf("release")
+        }
     }
 
     compileOptions {
@@ -88,6 +96,8 @@ android {
         unitTests.isIncludeAndroidResources = true
     }
     sourceSets {
+        // The Dev build shares the debug build's name and amber icon.
+        getByName("dev").res.srcDir("src/debug/res")
         getByName("debug").assets.srcDir("$projectDir/schemas")
     }
 }

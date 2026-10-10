@@ -3,6 +3,15 @@
 All notable changes to Leftovers. Download any version from
 [Releases](https://github.com/saisaharsh3/Leftovers/releases).
 
+## Unreleased
+
+- Detected payments go to the account the message names, by its last digits or by name: "in your HBL A/C",
+  "HDFC Bank card". Test a message shows which account it would go to (#6)
+- Smoother tab switching: the old tab fades out before the new one fades in, so two screens never show at once (#6)
+- Faster start: housekeeping waits until the first screen is up
+- The Dev build is now optimized like a release, so testers see the real app's speed (it was a debug build,
+  about three times slower to start)
+
 ## 1.5.0
 
 - *Glass effects* switch (Settings → Appearance), in dark and light: off gives solid cards without the

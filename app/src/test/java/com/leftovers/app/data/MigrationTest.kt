@@ -36,7 +36,7 @@ class MigrationTest {
             close()
         }
 
-        val db = helper.runMigrationsAndValidate(name, 13, true, *ALL_MIGRATIONS)
+        val db = helper.runMigrationsAndValidate(name, 14, true, *ALL_MIGRATIONS)
 
         db.query("SELECT amountMinor, note, accountId FROM transactions WHERE id = 1").use {
             it.moveToFirst()
@@ -71,5 +71,6 @@ class MigrationTest {
         helper.runMigrationsAndValidate(name, 11, true, *ALL_MIGRATIONS).close()
         helper.runMigrationsAndValidate(name, 12, true, *ALL_MIGRATIONS).close()
         helper.runMigrationsAndValidate(name, 13, true, *ALL_MIGRATIONS).close()
+        helper.runMigrationsAndValidate(name, 14, true, *ALL_MIGRATIONS).close()
     }
 }

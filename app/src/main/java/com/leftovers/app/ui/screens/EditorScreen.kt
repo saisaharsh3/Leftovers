@@ -207,7 +207,9 @@ class EditorViewModel(
                 val fromSms = if (smsId > 0) sms.digitsFor(smsId) else null
                 // Money coming in ("credited", "received") opens as income.
                 if (smsId > 0 && sms.isIncome(smsId)) onTypeChange(TxType.INCOME)
-                val matched = fromSms?.let { d -> accountRepository.accounts.first().firstOrNull { it.matchesDigits(d) }?.id }
+                // The account the message matched when it arrived (digits or name); older ones by digits only.
+                val matched = (if (smsId > 0) sms.accountIdFor(smsId)?.takeIf { it in known } else null)
+                    ?: fromSms?.let { d -> accountRepository.accounts.first().firstOrNull { it.matchesDigits(d) }?.id }
                 accountId = matched ?: s.homeAccountId?.takeIf { it in known } ?: s.defaultAccountId
             }
         }

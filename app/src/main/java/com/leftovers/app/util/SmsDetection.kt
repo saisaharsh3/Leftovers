@@ -6,6 +6,7 @@ import android.content.Intent
 import android.provider.Telephony
 import com.leftovers.app.LeftoversApp
 import com.leftovers.app.data.SmsSuggestion
+import com.leftovers.app.data.matchFor
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -150,6 +151,8 @@ class SmsReceiver : BroadcastReceiver() {
                             // Just the last digits, to pick the matching account.
                             accountDigits = SmsParser.accountDigits(body),
                             isIncome = parsed.isIncome,
+                            // By its last digits or its name ("your HBL A/C"); only the id is kept.
+                            accountId = container.accounts.accounts.first().matchFor(body)?.id,
                         ),
                     )
                     val amount = (if (parsed.isIncome) "income " else "") + Money(s.currencyCode).format(parsed.amountMinor)
