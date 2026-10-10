@@ -11,10 +11,10 @@ class PlanningRepository(private val database: AppDatabase) {
     private val transactionDao = database.transactionDao()
     private val debtDao = database.debtDao()
 
-    val recurring: Flow<List<RecurringItem>> = recurringDao.observeAll()
-    val goals: Flow<List<GoalWithSaved>> = goalDao.observeAll()
+    val recurring: Flow<List<RecurringItem>> = recurringDao.observeAll().sharedLive()
+    val goals: Flow<List<GoalWithSaved>> = goalDao.observeAll().sharedLive()
 
-    val debts: Flow<List<Debt>> = debtDao.observeAll()
+    val debts: Flow<List<Debt>> = debtDao.observeAll().sharedLive()
 
     fun deposits(goalId: Long): Flow<List<GoalDeposit>> = goalDao.observeDeposits(goalId)
 

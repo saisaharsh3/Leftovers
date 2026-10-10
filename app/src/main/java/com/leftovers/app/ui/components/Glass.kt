@@ -135,12 +135,13 @@ fun Modifier.appear(index: Int = 0): Modifier = composed {
     var shown by rememberSaveable { mutableStateOf(false) }
     val progress by animateFloatAsState(
         targetValue = if (shown) 1f else 0f,
-        animationSpec = tween(520, delayMillis = 45 * index.coerceIn(0, 8), easing = FastOutSlowInEasing),
+        animationSpec = tween(380, delayMillis = 30 * index.coerceIn(0, 8), easing = FastOutSlowInEasing),
         label = "appear",
     )
     LaunchedEffect(Unit) { shown = true }
+    // Starts half visible, not invisible: a tab opened for the first time never looks empty while it settles.
     graphicsLayer {
-        alpha = progress
-        translationY = (1f - progress) * 28.dp.toPx()
+        alpha = 0.5f + 0.5f * progress
+        translationY = (1f - progress) * 18.dp.toPx()
     }
 }

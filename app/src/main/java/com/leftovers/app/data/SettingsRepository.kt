@@ -95,7 +95,7 @@ class SettingsRepository(context: Context) {
             autoBackupDays = p[AUTO_BACKUP_DAYS] ?: 7,
             autoBackupKeep = p[AUTO_BACKUP_KEEP] ?: 4,
         )
-    }
+    }.sharedLive()
 
     /** Forgets every setting, as on a fresh install. */
     suspend fun clearAll() = store.edit { it.clear() }

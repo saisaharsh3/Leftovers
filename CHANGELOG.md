@@ -3,6 +3,11 @@
 All notable changes to Leftovers. Download any version from
 [Releases](https://github.com/saisaharsh3/Leftovers/releases).
 
+## Unreleased
+
+- Tab switching is back to the slide and fade from before, without the blank moment: a tab opened for the
+  first time now shows its content straight away instead of an empty screen while it loads
+
 ## 1.6.0
 
 - Detected payments go to the account the message names, by its last digits or by name: "in your HBL A/C",

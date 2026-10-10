@@ -13,7 +13,7 @@ class TransactionRepository(
     private val deletedDao: DeletedDao,
 ) {
     val categories: Flow<List<Category>> = categoryDao.observeAll()
-    val allTransactions: Flow<List<TransactionItem>> = transactionDao.observeAll()
+    val allTransactions: Flow<List<TransactionItem>> = transactionDao.observeAll().sharedLive()
 
     fun transactionsIn(month: YearMonth): Flow<List<TransactionItem>> =
         transactionDao.observeRange(month.atDay(1).toEpochDay(), month.atEndOfMonth().toEpochDay())
