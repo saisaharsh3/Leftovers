@@ -44,6 +44,8 @@ Most budget apps want an account, show ads, or send your spending to a server. L
 - Expenses and income with categories, notes, accounts and receipt photos
 - Add forgotten spending for any past day from a date strip or calendar
 - Split one bill across several categories
+- Split a bill with friends: your share is your expense, and what each person owes goes to Money owed
+- Spending abroad? Log it in the local currency at your own rate; the original amount stays visible
 - Search every entry by note, category or amount; filter by account, category or #tag
 - Add #tags to notes (*"Dinner #goa"*) to group entries across categories and months, with a total
 - Tap an entry to edit or delete it. Deleted entries can be restored later from Settings
@@ -72,7 +74,7 @@ Most budget apps want an account, show ads, or send your spending to a server. L
 - Category breakdown that opens each category's entries
 - Spending calendar that opens any day's entries
 - Trends: category changes vs last month, weekend spending, where the month is heading
-- Month-over-month comparison and a story-style monthly recap you can share as an image
+- Month-over-month comparison, a story-style monthly recap you can share as an image, and a year in review
 
 **AI assistant** (optional)
 - Connect Claude, ChatGPT, Gemini, Mistral, Groq, DeepSeek, Grok, OpenRouter or your own server, with your own API key
@@ -82,8 +84,9 @@ Most budget apps want an account, show ads, or send your spending to a server. L
 - Every change it proposes waits for you to tap **Apply**. See [AI assistant](#ai-assistant) below.
 
 **Extras**
-- Home-screen widgets: *Safe to spend today* (with one-tap add) and *Left this month*
+- Home-screen widgets: *Safe to spend today* (with one-tap add) and *Left this month*, plus an *Add expense* Quick Settings tile
 - Evening reminder, app lock (fingerprint, face or PIN)
+- Import from a bank statement or another app (CSV), skipping anything already logged
 - Backup and restore to a file or Google Drive (photos included if you like), daily, weekly or monthly automatic
   backups to a folder you choose, CSV export
 - Optional backup password: backups are encrypted (AES-256) and need it to restore

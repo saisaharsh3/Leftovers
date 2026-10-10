@@ -136,6 +136,7 @@ class StatsViewModel(repository: TransactionRepository, settings: SettingsReposi
 @Composable
 fun StatsScreen(
     onOpenRecap: (YearMonth) -> Unit,
+    onOpenYear: (Int) -> Unit = {},
     onOpenTransaction: (Long) -> Unit,
     viewModel: StatsViewModel = viewModel(factory = AppViewModelProvider.Factory)) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -353,6 +354,18 @@ fun StatsScreen(
                             }
                         }
                     }
+                }
+            }
+            // The whole year so far, as a story like the monthly recap.
+            item {
+                val year = state.month.year
+                Glass(Modifier.fillMaxWidth().appear(4), onClick = { onOpenYear(year) }) {
+                    com.leftovers.app.ui.components.ListRow(
+                        if (year == java.time.LocalDate.now().year) "Your $year so far" else "$year in review",
+                        subtitle = "The year as a story, like the monthly recap",
+                        leading = { com.leftovers.app.ui.components.IconTile(Lucide.Sparkles, c.accent, size = 38.dp) },
+                        trailing = { Icon(Lucide.ChevronRight, contentDescription = null, tint = c.textTertiary) },
+                    )
                 }
             }
         }

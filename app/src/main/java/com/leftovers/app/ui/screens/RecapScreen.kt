@@ -90,6 +90,11 @@ import kotlin.math.roundToInt
 
 data class RecapData(
     val month: YearMonth,
+    /** Set for a year in review: the whole year instead of [month]. */
+    val year: Int? = null,
+    /** Year in review only: the month with the most spending, and how much. */
+    val topMonth: YearMonth? = null,
+    val topMonthAmount: Long = 0,
     val spent: Long,
     val income: Long,
     val previousSpent: Long,
@@ -112,11 +117,16 @@ class RecapViewModel(
     planning: PlanningRepository,
     private val settings: SettingsRepository,
 ) : ViewModel() {
-    private val month: YearMonth = savedState.get<String>("month")?.let { runCatching { YearMonth.parse(it) }.getOrNull() }
-        ?: YearMonth.now().minusMonths(1)
+    private val period: String? = savedState.get<String>("month")
+    /** "2026" opens a year in review; "2026-09" a month. */
+    private val year: Int? = period?.takeIf { it.length == 4 }?.toIntOrNull()
+    private val month: YearMonth = period?.let { runCatching { YearMonth.parse(it) }.getOrNull() }
+        ?: if (year != null) YearMonth.of(year, 12) else YearMonth.now().minusMonths(1)
 
     val data: StateFlow<RecapData?> = combine(repository.allTransactions, planning.goals) { all, goals ->
-        val items = all.filter { YearMonth.from(it.date) == month }
+        fun inPeriod(date: LocalDate) = if (year != null) date.year == year else YearMonth.from(date) == month
+        fun inPrevious(date: LocalDate) = if (year != null) date.year == year - 1 else YearMonth.from(date) == month.minusMonths(1)
+        val items = all.filter { inPeriod(it.date) }
         val expenses = items.filter { it.type == TxType.EXPENSE }
         val top = items.categoryTotals(TxType.EXPENSE).firstOrNull()
         val byDay = expenses.groupBy { it.date }.mapValues { (_, l) -> l.sumOf { it.amountMinor } }
@@ -126,7 +136,10 @@ class RecapViewModel(
             month = month,
             spent = items.totalOf(TxType.EXPENSE),
             income = items.totalOf(TxType.INCOME),
-            previousSpent = all.filter { YearMonth.from(it.date) == month.minusMonths(1) }.totalOf(TxType.EXPENSE),
+            previousSpent = all.filter { inPrevious(it.date) }.totalOf(TxType.EXPENSE),
+            year = year,
+            topMonth = expenses.groupBy { YearMonth.from(it.date) }.maxByOrNull { (_, l) -> l.sumOf { it.amountMinor } }?.key?.takeIf { year != null },
+            topMonthAmount = if (year == null) 0 else expenses.groupBy { YearMonth.from(it.date) }.values.maxOfOrNull { l -> l.sumOf { it.amountMinor } } ?: 0,
             count = items.size,
             topCategoryName = top?.name.orEmpty(),
             topCategoryIcon = top?.emoji ?: "sparkles",
@@ -142,7 +155,7 @@ class RecapViewModel(
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     init {
-        viewModelScope.launch { settings.setRecapSeen(month.toString()) }
+        if (year == null) viewModelScope.launch { settings.setRecapSeen(month.toString()) }
     }
 }
 
@@ -209,7 +222,7 @@ fun RecapScreen(onClose: () -> Unit, viewModel: RecapViewModel = viewModel(facto
             }
             Row(Modifier.fillMaxWidth().padding(top = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    "${d.month.month.getDisplayName(TextStyle.FULL, Locale.getDefault())} recap",
+                    d.year?.let { "$it in review" } ?: "${d.month.month.getDisplayName(TextStyle.FULL, Locale.getDefault())} recap",
                     style = MaterialTheme.typography.labelLarge,
                     color = c.textSecondary,
                     modifier = Modifier.weight(1f),
@@ -269,11 +282,19 @@ private val dayFormat = DateTimeFormatter.ofPattern("EEEE, d MMMM")
 private fun recapPages(d: RecapData): List<@Composable () -> Unit> {
     val money = LocalMoney.current
     val c = LocalAppColors.current
-    val monthName = d.month.month.getDisplayName(TextStyle.FULL, Locale.getDefault())
+    val monthName = d.year?.toString() ?: d.month.month.getDisplayName(TextStyle.FULL, Locale.getDefault())
+    // Days the period has run so far, for the daily average.
+    val days = when {
+        d.year != null && d.year == LocalDate.now().year -> LocalDate.now().dayOfYear
+        d.year != null -> java.time.Year.of(d.year).length()
+        d.month == YearMonth.now() -> LocalDate.now().dayOfMonth
+        else -> d.month.lengthOfMonth()
+    }
+    val previousName = if (d.year != null) "${d.year - 1}" else "the month before"
     val pages = mutableListOf<@Composable () -> Unit>()
 
     pages += {
-        Story(Lucide.Sparkles, c.accent, "In $monthName you spent", money.formatWhole(d.spent), "across ${d.count} entries · about ${money.formatWhole(d.spent / (if (d.month == YearMonth.now()) LocalDate.now().dayOfMonth else d.month.lengthOfMonth()))} a day")
+        Story(Lucide.Sparkles, c.accent, "In $monthName you spent", money.formatWhole(d.spent), "across ${d.count} entries · about ${money.formatWhole(d.spent / days.coerceAtLeast(1))} a day")
     }
     if (d.previousSpent > 0) {
         val change = (d.spent - d.previousSpent).toFloat() / d.previousSpent * 100
@@ -282,9 +303,9 @@ private fun recapPages(d: RecapData): List<@Composable () -> Unit> {
             Story(
                 if (less) Lucide.TrendingDown else Lucide.TrendingUp,
                 if (less) c.positive else c.negative,
-                if (less) "That's less than the month before" else "That's more than the month before",
+                if (less) "That's less than $previousName" else "That's more than $previousName",
                 "${abs(change).roundToInt()}%",
-                if (less) "Nice. ${money.formatWhole(d.previousSpent - d.spent)} stayed in your pocket." else "${money.formatWhole(d.spent - d.previousSpent)} more than last month.",
+                if (less) "Nice. ${money.formatWhole(d.previousSpent - d.spent)} stayed in your pocket." else "${money.formatWhole(d.spent - d.previousSpent)} more than ${if (d.year != null) "last year" else "last month"}.",
             )
         }
     }
@@ -307,6 +328,17 @@ private fun recapPages(d: RecapData): List<@Composable () -> Unit> {
             }
         }
     }
+    if (d.topMonth != null && d.topMonthAmount > 0) {
+        pages += {
+            Story(
+                Lucide.ChartPie,
+                c.warning,
+                "Your biggest month was ${d.topMonth.month.getDisplayName(TextStyle.FULL, Locale.getDefault())}",
+                money.formatWhole(d.topMonthAmount),
+                "That's ${(d.topMonthAmount * 100 / d.spent.coerceAtLeast(1))}% of the year's spending.",
+            )
+        }
+    }
     if (d.biggestDay != null) {
         pages += {
             Story(
@@ -319,7 +351,7 @@ private fun recapPages(d: RecapData): List<@Composable () -> Unit> {
         }
     }
     if (d.favouriteNote != null) {
-        pages += { Story(Lucide.Coffee, c.accent, "Your regular", d.favouriteNote, "${d.favouriteCount} times this month") }
+        pages += { Story(Lucide.Coffee, c.accent, "Your regular", d.favouriteNote, "${d.favouriteCount} times this ${if (d.year != null) "year" else "month"}") }
     }
     val saved = d.income - d.spent
     pages += {

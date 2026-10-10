@@ -25,6 +25,8 @@ data class AppSettings(
     val dynamicColor: Boolean,
     /** Frosted, see-through bars, cards and dialogs; off gives solid surfaces. */
     val glassEffects: Boolean,
+    /** Last exchange rate used per currency in travel mode, e.g. "AED" to "22.7" (home currency per unit). */
+    val foreignRates: Map<String, String> = emptyMap(),
     val plan: BudgetPlan,
     val budgetAlerts: Boolean,
     val defaultAccountId: Long,
@@ -67,6 +69,9 @@ class SettingsRepository(context: Context) {
             themeMode = ThemeMode.entries.firstOrNull { it.name == p[THEME] } ?: ThemeMode.DARK,
             dynamicColor = p[DYNAMIC_COLOR] ?: false,
             glassEffects = p[GLASS_EFFECTS] ?: true,
+            foreignRates = p[FOREIGN_RATES].orEmpty().split(';').mapNotNull { pair ->
+                pair.split('=').takeIf { it.size == 2 && it[0].isNotBlank() }?.let { it[0] to it[1] }
+            }.toMap(),
             plan = BudgetPlan(
                 mode = BudgetMode.entries.firstOrNull { it.name == p[BUDGET_MODE] } ?: BudgetMode.MONTHLY,
                 monthlyMinor = p[MONTHLY_BUDGET] ?: 0L,
@@ -109,6 +114,12 @@ class SettingsRepository(context: Context) {
     suspend fun setThemeMode(mode: ThemeMode) = store.edit { it[THEME] = mode.name }
     suspend fun setDynamicColor(enabled: Boolean) = store.edit { it[DYNAMIC_COLOR] = enabled }
     suspend fun setGlassEffects(enabled: Boolean) = store.edit { it[GLASS_EFFECTS] = enabled }
+
+    /** Remembers the rate last used for [code], so the next entry in that currency starts with it. */
+    suspend fun setForeignRate(code: String, rate: String) = store.edit { p ->
+        val rates = p[FOREIGN_RATES].orEmpty().split(';').filter { it.isNotBlank() && !it.startsWith("$code=") } + "$code=$rate"
+        p[FOREIGN_RATES] = rates.takeLast(20).joinToString(";")
+    }
     suspend fun setMonthlyBudget(minor: Long) = store.edit { it[MONTHLY_BUDGET] = minor }
 
     suspend fun savePlan(plan: BudgetPlan) = store.edit {
@@ -178,6 +189,7 @@ class SettingsRepository(context: Context) {
         val THEME = stringPreferencesKey("theme")
         val DYNAMIC_COLOR = booleanPreferencesKey("dynamic_color")
         val GLASS_EFFECTS = booleanPreferencesKey("glass_effects")
+        val FOREIGN_RATES = stringPreferencesKey("foreign_rates")
         val MONTHLY_BUDGET = longPreferencesKey("monthly_budget")
         val YEARLY_BUDGET = longPreferencesKey("yearly_budget")
         val BUDGET_MODE = stringPreferencesKey("budget_mode")

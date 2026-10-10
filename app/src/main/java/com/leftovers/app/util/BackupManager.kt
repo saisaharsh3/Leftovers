@@ -87,6 +87,7 @@ class BackupManager(
                         .put("categoryId", t.categoryId).put("day", t.epochDay).put("note", t.note)
                         .put("createdAt", t.createdAt).put("accountId", t.accountId ?: JSONObject.NULL)
                         .put("receipt", photoRef(t.receiptPath))
+                        .put("foreignAmount", t.foreignMinor ?: JSONObject.NULL).put("foreignCurrency", t.foreignCurrency ?: JSONObject.NULL)
                 }))
                 put("transfers", JSONArray(dao.transfers().map { t ->
                     JSONObject().put("id", t.id).put("from", t.fromAccountId).put("to", t.toAccountId).put("amount", t.amountMinor)
@@ -163,6 +164,7 @@ class BackupManager(
                 Transaction(
                     it.getLong("id"), it.getLong("amount"), TxType.valueOf(it.getString("type")), it.getLong("categoryId"),
                     it.getLong("day"), it.getString("note"), it.getLong("createdAt"), it.longOrNull("accountId"), restorePhoto(it.optString("receipt")),
+                    it.longOrNull("foreignAmount"), it.stringOrNull("foreignCurrency"),
                 )
             }
             val transfers = json.optJSONArray("transfers")?.objects().orEmpty().map {

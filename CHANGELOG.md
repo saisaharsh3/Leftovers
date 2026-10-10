@@ -5,6 +5,14 @@ All notable changes to Leftovers. Download any version from
 
 ## Unreleased
 
+- Split with people: when adding an expense, tap the people button, pick who's sharing it, and it's split
+  equally. Your share is your expense; each person's share goes to Money owed
+- Import from CSV (Settings → Data): a bank statement or another app's export. Columns are found by name,
+  categories are matched by name (others go to Other), and entries already in Leftovers are skipped
+- Quick Settings tile: add "Add expense" to your notification panel to open the keypad in one tap
+- Year in review: the year as a story, like the monthly recap (Insights → Your 2026 so far)
+- Travel mode: tap the currency symbol when adding to spend in another currency at your own rate. It's saved
+  in your currency, and the original amount (e.g. AED 45) shows next to it. Rates are remembered, nothing goes online
 - Home shows today's date next to the greeting ("Good evening · Sat, 10 Oct")
 - Tab switching is back to the slide and fade from before, without the blank moment: a tab opened for the
   first time now shows its content straight away instead of an empty screen while it loads

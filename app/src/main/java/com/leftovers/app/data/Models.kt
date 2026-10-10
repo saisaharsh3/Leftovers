@@ -48,6 +48,9 @@ data class Transaction(
     val accountId: Long? = null,
     /** Photo of the receipt, stored in the app's private files. */
     val receiptPath: String? = null,
+    /** Spent in another currency (travel): what was paid there, e.g. 4500 with [foreignCurrency] "AED". */
+    val foreignMinor: Long? = null,
+    val foreignCurrency: String? = null,
 )
 
 /** A transaction joined with its category, ready to display. */
@@ -65,10 +68,12 @@ data class TransactionItem(
     val accountId: Long?,
     val receiptPath: String?,
     val addsToBudget: Boolean = false,
+    val foreignMinor: Long? = null,
+    val foreignCurrency: String? = null,
 ) {
     val date: LocalDate get() = LocalDate.ofEpochDay(epochDay)
 
-    fun toTransaction() = Transaction(id, amountMinor, type, categoryId, epochDay, note, createdAt, accountId, receiptPath)
+    fun toTransaction() = Transaction(id, amountMinor, type, categoryId, epochDay, note, createdAt, accountId, receiptPath, foreignMinor, foreignCurrency)
 }
 
 data class CategoryTotal(

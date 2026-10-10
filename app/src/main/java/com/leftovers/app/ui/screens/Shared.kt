@@ -82,11 +82,19 @@ fun TransactionRow(item: TransactionItem, onClick: () -> Unit, subtitle: String 
         subtitle = if (hasNote) "${item.categoryName} · $subtitle" else subtitle,
         leading = { CategoryIcon(item.categoryEmoji, item.categoryColor, size = 42.dp) },
         trailing = {
-            Text(
-                money.signed(item.amountMinor, item.type),
-                style = MaterialTheme.typography.titleSmall,
-                color = if (item.type == TxType.INCOME) c.positive else c.textPrimary,
-            )
+            Column(horizontalAlignment = Alignment.End) {
+                Text(
+                    money.signed(item.amountMinor, item.type),
+                    style = MaterialTheme.typography.titleSmall,
+                    color = if (item.type == TxType.INCOME) c.positive else c.textPrimary,
+                )
+                // Spent abroad: what was paid there, in that currency.
+                val foreign = item.foreignMinor
+                val code = item.foreignCurrency
+                if (foreign != null && code != null) {
+                    Text(com.leftovers.app.util.Money(code).format(foreign), style = MaterialTheme.typography.labelSmall, color = c.textTertiary)
+                }
+            }
         },
         onClick = onClick,
     )

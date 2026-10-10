@@ -1,5 +1,11 @@
 package com.leftovers.app.ui.screens
 
+import com.leftovers.app.data.Debt
+import kotlinx.coroutines.flow.map
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.ui.text.input.KeyboardType
+
 import com.leftovers.app.data.allTags
 import com.leftovers.app.data.RecurringItem
 import androidx.compose.material3.Switch
@@ -168,6 +174,34 @@ class EditorViewModel(
     /** Other categories that take part of the amount; saved as separate entries. */
     val splits = mutableStateListOf<SplitPart>()
     val splitTotal: Long get() = splits.sumOf { it.amountMinor }
+    /** People sharing this expense equally; each one's share is saved to Money owed. */
+    val people = mutableStateListOf<String>()
+    /** What each other person owes. You keep any odd paisa, so the shares always add up to the total. */
+    val personShare: Long get() = if (people.isEmpty()) 0 else totalMinor / (people.size + 1)
+
+    /** Travel mode: the amount is typed in this currency and saved converted at [rateText]; null is the app's currency. */
+    var foreignCurrency by mutableStateOf<String?>(null)
+        private set
+    /** How much one unit of [foreignCurrency] is in the app's currency, as typed ("22.7"). */
+    var rateText by mutableStateOf("")
+        private set
+    private val rate: java.math.BigDecimal? get() = rateText.toBigDecimalOrNull()?.takeIf { it.signum() > 0 }
+
+    /** The amount in the app's currency: what's saved and counted. */
+    val totalMinor: Long get() {
+        val code = foreignCurrency ?: return amountMinor
+        val r = rate ?: return 0
+        return java.math.BigDecimal.valueOf(amountMinor).multiply(r).setScale(0, java.math.RoundingMode.HALF_UP).toLong()
+    }
+
+    fun useForeign(code: String?, rate: String) {
+        foreignCurrency = code
+        rateText = if (code == null) "" else rate
+    }
+
+    /** The rate last used for [code], to start the rate box with. */
+    suspend fun lastRate(code: String): String = settings.settings.first().foreignRates[code].orEmpty()
+    val othersOwe: Long get() = personShare * people.size
     var needCategory by mutableStateOf(false)
         private set
     var loaded by mutableStateOf(!isEditing)
@@ -182,12 +216,24 @@ class EditorViewModel(
         accountRepository.accounts.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
     val history: StateFlow<List<TransactionItem>> =
         repository.allTransactions.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+    /** Names from Money owed, most recent first, to pick from when splitting. */
+    val knownPeople: StateFlow<List<String>> = planning.debts
+        .map { debts -> debts.sortedByDescending { it.createdAt }.map { it.person.trim() }.filter { it.isNotEmpty() }.distinctBy { it.lowercase() } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     init {
         viewModelScope.launch {
             if (isEditing) {
                 repository.getTransaction(id)?.let { tx ->
                     amountText = AmountInput.fromMinor(tx.amountMinor)
+                    val foreign = tx.foreignMinor
+                    if (tx.foreignCurrency != null && foreign != null && foreign > 0) {
+                        foreignCurrency = tx.foreignCurrency
+                        amountText = AmountInput.fromMinor(foreign)
+                        rateText = java.math.BigDecimal.valueOf(tx.amountMinor)
+                            .divide(java.math.BigDecimal.valueOf(foreign), 4, java.math.RoundingMode.HALF_UP)
+                            .stripTrailingZeros().toPlainString()
+                    }
                     type = tx.type
                     categoryId = tx.categoryId
                     date = LocalDate.ofEpochDay(tx.epochDay)
@@ -277,17 +323,25 @@ class EditorViewModel(
      * when the entry isn't complete yet.
      */
     fun save(onDone: (String) -> Unit, describe: (Long) -> String): Boolean {
-        if (amountMinor <= 0) return false
+        if (amountMinor <= 0 || totalMinor <= 0) return false
         val category = categoryId
         if (category == null) {
             needCategory = true
             return false
         }
         val parts = if (isEditing || repeatMonthly) emptyList() else splits.toList()
+        // Others' shares go to Money owed; only your own share is your expense.
+        val sharers = if (isEditing || repeatMonthly || type != TxType.EXPENSE) emptyList() else people.toList()
+        val share = if (sharers.isEmpty()) 0L else personShare
+        val yours = totalMinor - share * sharers.size
+        // The original amount abroad is kept only when this entry is the whole bill.
+        val abroad = foreignCurrency?.takeIf { parts.isEmpty() && sharers.isEmpty() }
+        val abroadMinor = amountMinor
+        val abroadRate = rateText
         // The main category keeps whatever the split parts don't take.
-        if (amountMinor - parts.sumOf { it.amountMinor } <= 0) return false
+        if (yours - parts.sumOf { it.amountMinor } <= 0) return false
         val savedType = type
-        val savedAmount = amountMinor - parts.sumOf { it.amountMinor }
+        val savedAmount = yours - parts.sumOf { it.amountMinor }
         val savedDate = date
         viewModelScope.launch {
             parts.forEach { part ->
@@ -315,9 +369,16 @@ class EditorViewModel(
                     createdAt = createdAt,
                     accountId = accountId,
                     receiptPath = receiptPath,
+                    foreignMinor = if (abroad != null) abroadMinor else null,
+                    foreignCurrency = abroad,
                 ),
             )
+            foreignCurrency?.let { settings.setForeignRate(it, abroadRate) }
             if (originalReceipt != null && originalReceipt != receiptPath) ReceiptStore.delete(originalReceipt)
+            val owedNote = note.trim().ifBlank { categories.value.find { it.id == category }?.name.orEmpty() }
+            sharers.forEach { person ->
+                planning.saveDebt(Debt(person = person, amountMinor = share, note = owedNote, epochDay = savedDate.toEpochDay()))
+            }
             if (smsId > 0) sms.dismiss(smsId)
             val repeats = repeatMonthly && !isEditing
             if (repeats) {
@@ -342,6 +403,8 @@ class EditorViewModel(
             onDone(
                 when {
                     isEditing -> "Changes saved"
+                    sharers.isNotEmpty() -> "${describe(savedAmount + parts.sumOf { it.amountMinor })} added · " +
+                        "${sharers.joinToString(" and ")} ${if (sharers.size == 1) "owes" else "owe"} you ${describe(share)}${if (sharers.size > 1) " each" else ""}"
                     parts.isNotEmpty() -> "${describe(savedAmount + parts.sumOf { it.amountMinor })} split across ${parts.size + 1} categories"
                     repeats -> "${describe(savedAmount)} added · repeats every ${ordinal(savedDate.dayOfMonth)}"
                     else -> "${describe(savedAmount)} added to $name$whenText"
@@ -392,6 +455,9 @@ fun EditorScreen(
     var showCalendar by rememberSaveable { mutableStateOf(false) }
     var showNote by rememberSaveable { mutableStateOf(false) }
     var showSplit by rememberSaveable { mutableStateOf(false) }
+    var showPeople by rememberSaveable { mutableStateOf(false) }
+    var showForeign by rememberSaveable { mutableStateOf(false) }
+    val knownPeople by viewModel.knownPeople.collectAsStateWithLifecycle()
     var confirmDelete by rememberSaveable { mutableStateOf(false) }
     var receiptMenu by rememberSaveable { mutableStateOf(false) }
     var viewReceipt by rememberSaveable { mutableStateOf(false) }
@@ -452,13 +518,18 @@ fun EditorScreen(
             // Ease between sizes as digits are added instead of jumping.
             val size by animateFloatAsState(targetSize, spring(dampingRatio = 0.9f, stiffness = 500f), label = "amountSize")
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    money.symbol,
-                    style = MaterialTheme.typography.headlineMedium,
-                    color = c.textTertiary,
-                    // Tapping the symbol puts the caret before the first digit.
-                    modifier = Modifier.pressable({ if (viewModel.amountText.isNotEmpty()) viewModel.placeCursor(0) }, pressedScale = 0.9f),
-                )
+                // Tapping the symbol switches currency, for spending abroad.
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.pressable({ showForeign = true }, pressedScale = 0.9f),
+                ) {
+                    Text(
+                        viewModel.foreignCurrency?.let { com.leftovers.app.util.Money(it).symbol } ?: money.symbol,
+                        style = MaterialTheme.typography.headlineMedium,
+                        color = if (viewModel.foreignCurrency != null) c.accent else c.textTertiary,
+                    )
+                    Icon(Lucide.ChevronDown, contentDescription = "Change currency", tint = c.textTertiary, modifier = Modifier.size(16.dp))
+                }
                 Spacer(Modifier.width(6.dp))
                 val raw = viewModel.amountText
                 val placed = viewModel.cursor
@@ -494,7 +565,10 @@ fun EditorScreen(
                         if (repeating) "Don't repeat" else "Repeat every month",
                         {
                             viewModel.repeatMonthly = !repeating
-                            if (!repeating) viewModel.splits.clear()
+                            if (!repeating) {
+                                viewModel.splits.clear()
+                                viewModel.people.clear()
+                            }
                             if (repeating && viewModel.date > LocalDate.now()) viewModel.date = LocalDate.now()
                         },
                         size = 40.dp,
@@ -510,6 +584,16 @@ fun EditorScreen(
                             tint = if (viewModel.splits.isEmpty()) c.textSecondary else c.onAccent,
                             container = if (viewModel.splits.isEmpty()) null else c.accent,
                         )
+                        if (viewModel.type == TxType.EXPENSE) {
+                            RoundButton(
+                                Lucide.Users,
+                                "Split with people",
+                                { showPeople = true },
+                                size = 40.dp,
+                                tint = if (viewModel.people.isEmpty()) c.textSecondary else c.onAccent,
+                                container = if (viewModel.people.isEmpty()) null else c.accent,
+                            )
+                        }
                     }
                 }
                 val path = viewModel.receiptPath
@@ -518,6 +602,28 @@ fun EditorScreen(
                 } else {
                     ReceiptThumb(path, onOpen = { viewReceipt = true }, onRemove = viewModel::removeReceipt)
                 }
+            }
+            viewModel.foreignCurrency?.let { code ->
+                Text(
+                    if (viewModel.totalMinor > 0) "≈ ${money.format(viewModel.totalMinor)} · 1 $code = ${money.symbol}${viewModel.rateText}"
+                    else "Set the rate for $code",
+                    textAlign = TextAlign.Center,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = c.textSecondary,
+                    modifier = Modifier.padding(bottom = 6.dp).pressable({ showForeign = true }, pressedScale = 0.96f),
+                )
+            }
+            val splitting = viewModel.people.isNotEmpty() && viewModel.type == TxType.EXPENSE && !viewModel.repeatMonthly
+            AnimatedVisibility(splitting, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
+                val share = viewModel.personShare
+                Text(
+                    "Your share ${money.format(viewModel.totalMinor - viewModel.othersOwe)} · " +
+                        viewModel.people.joinToString(", ") + if (viewModel.people.size == 1) " owes ${money.format(share)}" else " owe ${money.format(share)} each",
+                    textAlign = TextAlign.Center,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = c.accent,
+                    modifier = Modifier.padding(top = 10.dp, start = 24.dp, end = 24.dp),
+                )
             }
             AnimatedVisibility(viewModel.repeatMonthly, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
                 Text(
@@ -586,11 +692,34 @@ fun EditorScreen(
 
     if (showSplit) {
         SplitSheet(
-            total = viewModel.amountMinor,
+            total = viewModel.totalMinor,
             mainCategory = categories.find { it.id == viewModel.categoryId },
             categories = categories.filter { it.type == viewModel.type },
             parts = viewModel.splits,
             onDismiss = { showSplit = false },
+        )
+    }
+
+    if (showForeign) {
+        ForeignSheet(
+            homeCode = money.currency.currencyCode,
+            current = viewModel.foreignCurrency,
+            currentRate = viewModel.rateText,
+            lastRate = viewModel::lastRate,
+            onDone = { code, rate ->
+                viewModel.useForeign(code, rate)
+                showForeign = false
+            },
+            onDismiss = { showForeign = false },
+        )
+    }
+
+    if (showPeople) {
+        PeopleSheet(
+            total = viewModel.totalMinor,
+            known = knownPeople,
+            people = viewModel.people,
+            onDismiss = { showPeople = false },
         )
     }
 
@@ -999,6 +1128,151 @@ private fun SplitSheet(
                 Text("The parts add up to the whole amount. Leave something for ${mainCategory?.name ?: "the main category"}.", style = MaterialTheme.typography.bodySmall, color = c.negative)
             }
             SecondaryButton("Done", onDismiss, Modifier.fillMaxWidth())
+        }
+    }
+}
+
+/** Who shares this expense. It's split equally; your share stays your expense and theirs goes to Money owed. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun PeopleSheet(total: Long, known: List<String>, people: MutableList<String>, onDismiss: () -> Unit) {
+    val c = LocalAppColors.current
+    val money = LocalMoney.current
+    var newName by rememberSaveable { mutableStateOf("") }
+    fun toggle(name: String) {
+        val at = people.indexOfFirst { it.equals(name, ignoreCase = true) }
+        if (at >= 0) people.removeAt(at) else people += name
+    }
+    fun addTyped() {
+        val name = newName.trim().take(30)
+        if (name.isNotEmpty() && people.none { it.equals(name, ignoreCase = true) }) people += name
+        newName = ""
+    }
+
+    GlassSheet(onDismiss) {
+        Column(
+            Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            Text(if (total > 0) "Split ${money.format(total)} with" else "Split with", style = MaterialTheme.typography.headlineSmall, color = c.textPrimary)
+            Text(
+                "It's split equally between you and them. Your share counts as your expense, and what each person owes goes to Money owed.",
+                style = MaterialTheme.typography.bodySmall,
+                color = c.textSecondary,
+            )
+            val choices = (known + people).distinctBy { it.lowercase() }
+            if (choices.isNotEmpty()) {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    choices.forEach { name ->
+                        val picked = people.any { it.equals(name, ignoreCase = true) }
+                        Chip(name, onClick = { toggle(name) }, icon = if (picked) Lucide.Check else null, selected = picked)
+                    }
+                }
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                GlassTextField(newName, { newName = it.take(30) }, placeholder = "Add a name", modifier = Modifier.weight(1f))
+                Spacer(Modifier.width(8.dp))
+                Chip("Add", ::addTyped, icon = Lucide.Plus, selected = newName.isNotBlank())
+            }
+            if (people.isNotEmpty() && total > 0) {
+                val share = total / (people.size + 1)
+                Glass(Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(vertical = 6.dp)) {
+                        com.leftovers.app.ui.components.ListRow(
+                            "You",
+                            subtitle = "Your expense",
+                            trailing = { Text(money.format(total - share * people.size), style = MaterialTheme.typography.titleSmall, color = c.textPrimary) },
+                        )
+                        people.forEach { name ->
+                            com.leftovers.app.ui.components.RowDivider()
+                            com.leftovers.app.ui.components.ListRow(
+                                name,
+                                subtitle = "Owes you",
+                                trailing = { Text(money.format(share), style = MaterialTheme.typography.titleSmall, color = c.positive) },
+                            )
+                        }
+                    }
+                }
+            } else if (total <= 0) {
+                Text("Type the full amount first, then choose who's sharing it.", style = MaterialTheme.typography.bodySmall, color = c.textSecondary)
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                if (people.isNotEmpty()) {
+                    SecondaryButton("Don't split", {
+                        people.clear()
+                        onDismiss()
+                    }, Modifier.weight(1f))
+                }
+                PrimaryButton("Done", onDismiss, Modifier.weight(1f))
+            }
+        }
+    }
+}
+
+/**
+ * Travel mode: type the amount in another currency, at a rate you set ("1 AED = ₹22.70"). It's saved in your
+ * own currency, with the original amount kept alongside. Nothing is looked up online.
+ */
+@Composable
+private fun ForeignSheet(
+    homeCode: String,
+    current: String?,
+    currentRate: String,
+    lastRate: suspend (String) -> String,
+    onDone: (code: String?, rate: String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val c = LocalAppColors.current
+    val home = LocalMoney.current
+    var code by rememberSaveable { mutableStateOf(current) }
+    var rate by rememberSaveable { mutableStateOf(currentRate) }
+    var picking by rememberSaveable { mutableStateOf(current == null) }
+    val scope = rememberCoroutineScope()
+    val valid = rate.toBigDecimalOrNull()?.let { it.signum() > 0 } == true
+
+    GlassSheet(onDismiss) {
+        Column(Modifier.padding(horizontal = 20.dp).padding(bottom = 16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            Text("Spent in another currency?", style = MaterialTheme.typography.headlineSmall, color = c.textPrimary)
+            val chosen = code
+            if (picking || chosen == null) {
+                Text(
+                    "Pick the currency you paid in. You'll type the amount in it, and it's saved in $homeCode at your rate.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = c.textSecondary,
+                )
+                CurrencyList(chosen ?: "", { option ->
+                    if (option.code == homeCode) {
+                        onDone(null, "")
+                    } else {
+                        code = option.code
+                        picking = false
+                        scope.launch { rate = lastRate(option.code) }
+                    }
+                }, Modifier.heightIn(max = 420.dp))
+            } else {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("1 $chosen =", style = MaterialTheme.typography.titleMedium, color = c.textPrimary)
+                    Spacer(Modifier.width(10.dp))
+                    GlassTextField(
+                        rate,
+                        { raw -> if (raw.length <= 12 && raw.all { it.isDigit() || it == '.' } && raw.count { it == '.' } <= 1) rate = raw },
+                        placeholder = "0",
+                        prefix = home.symbol,
+                        keyboardType = KeyboardType.Decimal,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+                Text(
+                    "Use the rate your card or exchange gave you. It's remembered for next time.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = c.textSecondary,
+                )
+                PrimaryButton("Use $chosen", { onDone(chosen, rate.trim()) }, Modifier.fillMaxWidth(), enabled = valid)
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    SecondaryButton("Other currency", { picking = true }, Modifier.weight(1f))
+                    SecondaryButton("Back to $homeCode", { onDone(null, "") }, Modifier.weight(1f))
+                }
+            }
         }
     }
 }

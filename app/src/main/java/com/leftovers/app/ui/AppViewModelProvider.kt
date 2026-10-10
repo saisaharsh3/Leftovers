@@ -51,7 +51,7 @@ object AppViewModelProvider {
         initializer { CategoriesViewModel(container().repository) }
         initializer {
             val c = container()
-            SettingsViewModel(c.repository, c.settings, c.backup, c.assistant, c.planning) { c.resetEverything() }
+            SettingsViewModel(c.repository, c.settings, c.backup, c.assistant, c.planning, c.accounts) { c.resetEverything() }
         }
         initializer { AssistantViewModel(container(), container().assistant) }
         initializer { AssistantSetupViewModel(container().assistant) }

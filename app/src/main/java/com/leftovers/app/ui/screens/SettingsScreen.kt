@@ -85,8 +85,77 @@ class SettingsViewModel(
     private val backup: BackupManager,
     val assistant: com.leftovers.app.ai.AssistantSettings,
     private val planning: com.leftovers.app.data.PlanningRepository,
+    private val accounts: com.leftovers.app.data.AccountRepository,
     private val resetEverything: suspend () -> Unit,
 ) : ViewModel() {
+
+    /** A CSV file read and waiting for the user to confirm: what would be added, and what's skipped. */
+    data class CsvPreview(val toAdd: List<com.leftovers.app.data.Transaction>, val duplicates: Int, val unreadable: Int, val unmatched: Int, val noCategory: Int)
+
+    var csvPreview by mutableStateOf<CsvPreview?>(null)
+        private set
+
+    /** Reads [uri] and prepares the entries; nothing is saved until [confirmCsvImport]. */
+    fun readCsv(context: android.content.Context, uri: android.net.Uri, onError: (String) -> Unit) {
+        viewModelScope.launch {
+            val text = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                runCatching { context.contentResolver.openInputStream(uri)?.use { it.readBytes().decodeToString() } }.getOrNull()
+            }
+            if (text == null) {
+                onError("Couldn't open that file")
+                return@launch
+            }
+            val parsed = com.leftovers.app.util.CsvImporter.parse(text)
+            parsed.error?.let {
+                onError(it)
+                return@launch
+            }
+            val cats = repository.categories.first()
+            val accountList = accounts.accounts.first()
+            val defaultAccount = settingsRepository.settings.first().defaultAccountId
+            // A category is matched by name; anything else goes to the type's "Other" category.
+            fun fallback(type: com.leftovers.app.data.TxType) = cats.filter { it.type == type }.let { list ->
+                list.firstOrNull { it.name.lowercase() in setOf("other", "others", "miscellaneous", "misc", "general") } ?: list.firstOrNull()
+            }
+            val existing = repository.getAllTransactions().map { Triple(it.epochDay, it.amountMinor, it.type to it.note.trim().lowercase()) }.toMutableSet()
+            var duplicates = 0
+            var unmatched = 0
+            var noCategory = 0
+            val toAdd = parsed.rows.mapNotNull { row ->
+                val key = Triple(row.date.toEpochDay(), row.amountMinor, row.type to row.note.trim().lowercase())
+                if (!existing.add(key)) {
+                    duplicates++
+                    return@mapNotNull null
+                }
+                val category = row.category?.let { name -> cats.firstOrNull { it.type == row.type && it.name.equals(name, ignoreCase = true) } }
+                    ?: fallback(row.type).also { if (row.category == null) noCategory++ else unmatched++ }
+                    ?: return@mapNotNull null
+                val account = row.account?.let { name -> accountList.firstOrNull { it.name.equals(name, ignoreCase = true) }?.id } ?: defaultAccount
+                com.leftovers.app.data.Transaction(
+                    amountMinor = row.amountMinor,
+                    type = row.type,
+                    categoryId = category.id,
+                    epochDay = row.date.toEpochDay(),
+                    note = row.note,
+                    accountId = account,
+                )
+            }
+            csvPreview = CsvPreview(toAdd, duplicates, parsed.unreadable, unmatched, noCategory)
+        }
+    }
+
+    fun cancelCsvImport() {
+        csvPreview = null
+    }
+
+    fun confirmCsvImport(onDone: (Int) -> Unit) {
+        val preview = csvPreview ?: return
+        csvPreview = null
+        viewModelScope.launch {
+            preview.toAdd.forEach { repository.saveTransaction(it) }
+            onDone(preview.toAdd.size)
+        }
+    }
 
     /** Back to a fresh install: every entry, setting, connection and photo is removed. */
     fun resetApp() {
@@ -250,6 +319,9 @@ fun SettingsScreen(
         if (uri != null) viewModel.backupTo(uri) { toast(it) }
     }
     val openBackup = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> pendingRestore = uri }
+    val openCsv = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) viewModel.readCsv(context, uri) { message -> scope.launch { snackbar.showSnackbar(message) } }
+    }
     val pickBackupFolder = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { tree ->
         if (tree != null) {
             runCatching {
@@ -391,6 +463,10 @@ fun SettingsScreen(
                         RowDivider()
                         NavRow(Lucide.ReceiptText, "Export to CSV", "Excel, Sheets") {
                             viewModel.export(context) { scope.launch { snackbar.showSnackbar("Nothing to export yet") } }
+                        }
+                        RowDivider()
+                        NavRow(Lucide.Download, "Import from CSV", "Bank statement or another app") {
+                            openCsv.launch(arrayOf("text/*", "application/csv", "application/vnd.ms-excel", "application/octet-stream"))
                         }
                         RowDivider()
                         ListRow(
@@ -598,6 +674,42 @@ fun SettingsScreen(
                     }) { Text("Reset", color = if (ok) c.negative else c.textTertiary) }
                 },
                 dismissButton = { TextButton(onClick = { confirmReset = false }) { Text("Cancel", color = c.textSecondary) } },
+            )
+        }
+
+        viewModel.csvPreview?.let { preview ->
+            val adding = preview.toAdd.size
+            GlassAlertDialog(
+                onDismissRequest = viewModel::cancelCsvImport,
+                title = { Text(if (adding > 0) "Import $adding ${if (adding == 1) "entry" else "entries"}?" else "Nothing new to import") },
+                text = {
+                    Text(
+                        listOfNotNull(
+                            if (adding > 0) {
+                                val days = preview.toAdd.map { it.epochDay }
+                                val from = java.time.LocalDate.ofEpochDay(days.min()).friendlyLabel()
+                                val to = java.time.LocalDate.ofEpochDay(days.max()).friendlyLabel()
+                                if (from == to) "From $from." else "From $from to $to."
+                            } else null,
+                            if (preview.duplicates > 0) "${preview.duplicates} already in Leftovers ${if (preview.duplicates == 1) "is" else "are"} skipped." else null,
+                            if (preview.noCategory > 0) "${if (preview.noCategory == adding) "They have" else "${preview.noCategory} have"} no category, so ${if (preview.noCategory == 1) "it goes" else "they go"} to Other; change any later." else null,
+                            if (preview.unmatched > 0) "${preview.unmatched} with a category you don't have go to Other." else null,
+                            if (preview.unreadable > 0) "${preview.unreadable} ${if (preview.unreadable == 1) "row" else "rows"} without a readable date or amount ${if (preview.unreadable == 1) "is" else "are"} left out." else null,
+                        ).joinToString(" "),
+                    )
+                },
+                confirmButton = {
+                    if (adding > 0) {
+                        TextButton(onClick = {
+                            viewModel.confirmCsvImport { n -> scope.launch { snackbar.showSnackbar("Imported $n ${if (n == 1) "entry" else "entries"}") } }
+                        }) { Text("Import", color = c.textPrimary) }
+                    } else {
+                        TextButton(onClick = viewModel::cancelCsvImport) { Text("OK", color = c.textPrimary) }
+                    }
+                },
+                dismissButton = if (adding > 0) {
+                    { TextButton(onClick = viewModel::cancelCsvImport) { Text("Cancel", color = c.textSecondary) } }
+                } else null,
             )
         }
 

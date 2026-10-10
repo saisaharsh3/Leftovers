@@ -65,6 +65,18 @@
             </intent-filter>
         </receiver>
 
+        <!-- "Add expense" tile in the notification panel's Quick Settings. -->
+        <service
+            android:name=".QuickAddTile"
+            android:exported="true"
+            android:icon="@drawable/ic_stat_wallet"
+            android:label="@string/tile_add_expense"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"

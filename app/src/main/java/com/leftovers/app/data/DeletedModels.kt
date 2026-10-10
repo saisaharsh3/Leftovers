@@ -20,12 +20,14 @@ data class DeletedTransaction(
     val accountId: Long?,
     val receiptPath: String?,
     val deletedAt: Long,
+    val foreignMinor: Long? = null,
+    val foreignCurrency: String? = null,
 ) {
-    fun toTransaction() = Transaction(id, amountMinor, type, categoryId, epochDay, note, createdAt, accountId, receiptPath)
+    fun toTransaction() = Transaction(id, amountMinor, type, categoryId, epochDay, note, createdAt, accountId, receiptPath, foreignMinor, foreignCurrency)
 
     companion object {
         fun from(t: Transaction, deletedAt: Long = System.currentTimeMillis()) =
-            DeletedTransaction(t.id, t.amountMinor, t.type, t.categoryId, t.epochDay, t.note, t.createdAt, t.accountId, t.receiptPath, deletedAt)
+            DeletedTransaction(t.id, t.amountMinor, t.type, t.categoryId, t.epochDay, t.note, t.createdAt, t.accountId, t.receiptPath, deletedAt, t.foreignMinor, t.foreignCurrency)
     }
 }
 

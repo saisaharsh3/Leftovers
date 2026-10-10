@@ -302,6 +302,7 @@ fun LeftoversNavHost(openAdd: Boolean = false, onOpenAddHandled: () -> Unit = {}
                     screen(Routes.INSIGHTS) {
                         StatsScreen(
                             onOpenRecap = { nav.navigate(Routes.recap(it.toString())) },
+                            onOpenYear = { nav.navigate(Routes.recap(it.toString())) },
                             onOpenTransaction = { nav.navigate(Routes.edit(it)) },
                         )
                     }
