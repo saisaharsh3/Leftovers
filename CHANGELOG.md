@@ -3,7 +3,7 @@
 All notable changes to Leftovers. Download any version from
 [Releases](https://github.com/saisaharsh3/Leftovers/releases).
 
-## Unreleased
+## 1.6.0
 
 - Detected payments go to the account the message names, by its last digits or by name: "in your HBL A/C",
   "HDFC Bank card". An account named "HBL Bank" also matches "HBL". Test a message shows which account it

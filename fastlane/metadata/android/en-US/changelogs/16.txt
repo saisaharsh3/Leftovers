@@ -1,0 +1,3 @@
+- Detected payments go to the account the message names, by last digits or by name ("your HBL A/C")
+- Smoother tab switching and a faster start
+- Fixed an empty Home screen after tapping back twice quickly
