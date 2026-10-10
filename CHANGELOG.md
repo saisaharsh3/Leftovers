@@ -5,8 +5,9 @@ All notable changes to Leftovers. Download any version from
 
 ## Unreleased
 
-- Split with people: when adding an expense, tap the people button, pick who's sharing it, and it's split
-  equally. Your share is your expense; each person's share goes to Money owed
+- Split with people: when adding an expense, tap Split, pick who's sharing it, and split it equally or type
+  each person's amount. Your share is your expense; each person's share goes to Money owed. Splitting across
+  categories is in the same sheet, so it's one button
 - Import from CSV (Settings → Data): a bank statement or another app's export. Columns are found by name,
   categories are matched by name (others go to Other), and entries already in Leftovers are skipped
 - Quick Settings tile: add "Add expense" to your notification panel to open the keypad in one tap

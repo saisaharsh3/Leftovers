@@ -44,7 +44,7 @@ Most budget apps want an account, show ads, or send your spending to a server. L
 - Expenses and income with categories, notes, accounts and receipt photos
 - Add forgotten spending for any past day from a date strip or calendar
 - Split one bill across several categories
-- Split a bill with friends: your share is your expense, and what each person owes goes to Money owed
+- Split a bill with friends, equally or by amount: your share is your expense, and what each person owes goes to Money owed
 - Spending abroad? Log it in the local currency at your own rate; the original amount stays visible
 - Search every entry by note, category or amount; filter by account, category or #tag
 - Add #tags to notes (*"Dinner #goa"*) to group entries across categories and months, with a total

@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.verticalScroll
@@ -174,10 +175,22 @@ class EditorViewModel(
     /** Other categories that take part of the amount; saved as separate entries. */
     val splits = mutableStateListOf<SplitPart>()
     val splitTotal: Long get() = splits.sumOf { it.amountMinor }
-    /** People sharing this expense equally; each one's share is saved to Money owed. */
+    /** People sharing this expense; each one's share is saved to Money owed. */
     val people = mutableStateListOf<String>()
-    /** What each other person owes. You keep any odd paisa, so the shares always add up to the total. */
+    /** What each other person owes when it's split equally. You keep any odd paisa, so the shares always add up to the total. */
     val personShare: Long get() = if (people.isEmpty()) 0 else totalMinor / (people.size + 1)
+    /** Off when each person's amount is typed in [customShares] instead of split equally. */
+    var equalSplit by mutableStateOf(true)
+    /** Typed amounts by person, as text, for an unequal split. */
+    val customShares = mutableStateMapOf<String, String>()
+
+    fun shareOf(person: String): Long = if (equalSplit) personShare else AmountInput.toMinor(customShares[person].orEmpty()) ?: 0L
+
+    fun clearPeople() {
+        people.clear()
+        customShares.clear()
+        equalSplit = true
+    }
 
     /** Travel mode: the amount is typed in this currency and saved converted at [rateText]; null is the app's currency. */
     var foreignCurrency by mutableStateOf<String?>(null)
@@ -201,7 +214,7 @@ class EditorViewModel(
 
     /** The rate last used for [code], to start the rate box with. */
     suspend fun lastRate(code: String): String = settings.settings.first().foreignRates[code].orEmpty()
-    val othersOwe: Long get() = personShare * people.size
+    val othersOwe: Long get() = people.sumOf { shareOf(it) }
     var needCategory by mutableStateOf(false)
         private set
     var loaded by mutableStateOf(!isEditing)
@@ -331,9 +344,9 @@ class EditorViewModel(
         }
         val parts = if (isEditing || repeatMonthly) emptyList() else splits.toList()
         // Others' shares go to Money owed; only your own share is your expense.
-        val sharers = if (isEditing || repeatMonthly || type != TxType.EXPENSE) emptyList() else people.toList()
-        val share = if (sharers.isEmpty()) 0L else personShare
-        val yours = totalMinor - share * sharers.size
+        val sharers = if (isEditing || repeatMonthly || type != TxType.EXPENSE) emptyList()
+        else people.map { it to shareOf(it) }.filter { it.second > 0 }
+        val yours = totalMinor - sharers.sumOf { it.second }
         // The original amount abroad is kept only when this entry is the whole bill.
         val abroad = foreignCurrency?.takeIf { parts.isEmpty() && sharers.isEmpty() }
         val abroadMinor = amountMinor
@@ -376,7 +389,7 @@ class EditorViewModel(
             foreignCurrency?.let { settings.setForeignRate(it, abroadRate) }
             if (originalReceipt != null && originalReceipt != receiptPath) ReceiptStore.delete(originalReceipt)
             val owedNote = note.trim().ifBlank { categories.value.find { it.id == category }?.name.orEmpty() }
-            sharers.forEach { person ->
+            sharers.forEach { (person, share) ->
                 planning.saveDebt(Debt(person = person, amountMinor = share, note = owedNote, epochDay = savedDate.toEpochDay()))
             }
             if (smsId > 0) sms.dismiss(smsId)
@@ -403,8 +416,10 @@ class EditorViewModel(
             onDone(
                 when {
                     isEditing -> "Changes saved"
+                    sharers.isNotEmpty() && sharers.map { it.second }.distinct().size == 1 -> "${describe(savedAmount + parts.sumOf { it.amountMinor })} added · " +
+                        "${sharers.joinToString(" and ") { it.first }} ${if (sharers.size == 1) "owes" else "owe"} you ${describe(sharers[0].second)}${if (sharers.size > 1) " each" else ""}"
                     sharers.isNotEmpty() -> "${describe(savedAmount + parts.sumOf { it.amountMinor })} added · " +
-                        "${sharers.joinToString(" and ")} ${if (sharers.size == 1) "owes" else "owe"} you ${describe(share)}${if (sharers.size > 1) " each" else ""}"
+                        "owed to you: " + sharers.joinToString(", ") { "${it.first} ${describe(it.second)}" }
                     parts.isNotEmpty() -> "${describe(savedAmount + parts.sumOf { it.amountMinor })} split across ${parts.size + 1} categories"
                     repeats -> "${describe(savedAmount)} added · repeats every ${ordinal(savedDate.dayOfMonth)}"
                     else -> "${describe(savedAmount)} added to $name$whenText"
@@ -566,7 +581,7 @@ fun EditorScreen(
                             viewModel.repeatMonthly = !repeating
                             if (!repeating) {
                                 viewModel.splits.clear()
-                                viewModel.people.clear()
+                                viewModel.clearPeople()
                             }
                             if (repeating && viewModel.date > LocalDate.now()) viewModel.date = LocalDate.now()
                         },
@@ -609,7 +624,11 @@ fun EditorScreen(
                 val share = viewModel.personShare
                 Text(
                     "Your share ${money.format(viewModel.totalMinor - viewModel.othersOwe)} · " +
-                        viewModel.people.joinToString(", ") + if (viewModel.people.size == 1) " owes ${money.format(share)}" else " owe ${money.format(share)} each",
+                        if (viewModel.equalSplit) {
+                            viewModel.people.joinToString(", ") + if (viewModel.people.size == 1) " owes ${money.format(share)}" else " owe ${money.format(share)} each"
+                        } else {
+                            viewModel.people.joinToString(", ") { "$it ${money.format(viewModel.shareOf(it))}" }
+                        },
                     textAlign = TextAlign.Center,
                     style = MaterialTheme.typography.labelMedium,
                     color = c.accent,
@@ -701,7 +720,7 @@ fun EditorScreen(
                 PeopleBody(
                     total = viewModel.totalMinor,
                     known = knownPeople,
-                    people = viewModel.people,
+                    viewModel = viewModel,
                     onDismiss = { showSplit = false },
                     header = header,
                 )
@@ -1146,9 +1165,10 @@ private fun SplitBody(
 /** Who shares this expense. It's split equally; your share stays your expense and theirs goes to Money owed. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun PeopleBody(total: Long, known: List<String>, people: MutableList<String>, onDismiss: () -> Unit, header: @Composable () -> Unit) {
+private fun PeopleBody(total: Long, known: List<String>, viewModel: EditorViewModel, onDismiss: () -> Unit, header: @Composable () -> Unit) {
     val c = LocalAppColors.current
     val money = LocalMoney.current
+    val people = viewModel.people
     var newName by rememberSaveable { mutableStateOf("") }
     fun toggle(name: String) {
         val at = people.indexOfFirst { it.equals(name, ignoreCase = true) }
@@ -1168,7 +1188,7 @@ private fun PeopleBody(total: Long, known: List<String>, people: MutableList<Str
             header()
             Text(if (total > 0) "Split ${money.format(total)} with" else "Split with", style = MaterialTheme.typography.headlineSmall, color = c.textPrimary)
             Text(
-                "It's split equally between you and them. Your share counts as your expense, and what each person owes goes to Money owed.",
+                "Your share counts as your expense, and what each person owes goes to Money owed.",
                 style = MaterialTheme.typography.bodySmall,
                 color = c.textSecondary,
             )
@@ -1187,23 +1207,43 @@ private fun PeopleBody(total: Long, known: List<String>, people: MutableList<Str
                 Chip("Add", ::addTyped, icon = Lucide.Plus, selected = newName.isNotBlank())
             }
             if (people.isNotEmpty() && total > 0) {
-                val share = total / (people.size + 1)
+                SegmentedToggle(
+                    options = listOf(true, false),
+                    selected = viewModel.equalSplit,
+                    label = { if (it) "Equally" else "By amount" },
+                    onSelect = { equal ->
+                        // Typing amounts starts from the equal shares.
+                        if (!equal && viewModel.equalSplit) people.forEach { viewModel.customShares[it] = AmountInput.fromMinor(viewModel.personShare) }
+                        viewModel.equalSplit = equal
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                val yours = total - viewModel.othersOwe
                 Glass(Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(vertical = 6.dp)) {
                         com.leftovers.app.ui.components.ListRow(
                             "You",
-                            subtitle = "Your expense",
-                            trailing = { Text(money.format(total - share * people.size), style = MaterialTheme.typography.titleSmall, color = c.textPrimary) },
+                            subtitle = if (viewModel.equalSplit) "Your expense" else "Keeps the rest",
+                            trailing = { Text(money.format(yours), style = MaterialTheme.typography.titleSmall, color = if (yours > 0) c.textPrimary else c.negative) },
                         )
                         people.forEach { name ->
                             com.leftovers.app.ui.components.RowDivider()
                             com.leftovers.app.ui.components.ListRow(
                                 name,
                                 subtitle = "Owes you",
-                                trailing = { Text(money.format(share), style = MaterialTheme.typography.titleSmall, color = c.positive) },
+                                trailing = {
+                                    if (viewModel.equalSplit) {
+                                        Text(money.format(viewModel.personShare), style = MaterialTheme.typography.titleSmall, color = c.positive)
+                                    } else {
+                                        MoneyField(viewModel.customShares[name].orEmpty(), { viewModel.customShares[name] = it }, Modifier.width(132.dp))
+                                    }
+                                },
                             )
                         }
                     }
+                }
+                if (yours <= 0) {
+                    Text("That's the whole amount or more. Leave something for your own share.", style = MaterialTheme.typography.bodySmall, color = c.negative)
                 }
             } else if (total <= 0) {
                 Text("Type the full amount first, then choose who's sharing it.", style = MaterialTheme.typography.bodySmall, color = c.textSecondary)
@@ -1211,7 +1251,7 @@ private fun PeopleBody(total: Long, known: List<String>, people: MutableList<Str
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 if (people.isNotEmpty()) {
                     SecondaryButton("Don't split", {
-                        people.clear()
+                        viewModel.clearPeople()
                         onDismiss()
                     }, Modifier.weight(1f))
                 }
