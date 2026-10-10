@@ -455,7 +455,6 @@ fun EditorScreen(
     var showCalendar by rememberSaveable { mutableStateOf(false) }
     var showNote by rememberSaveable { mutableStateOf(false) }
     var showSplit by rememberSaveable { mutableStateOf(false) }
-    var showPeople by rememberSaveable { mutableStateOf(false) }
     var showForeign by rememberSaveable { mutableStateOf(false) }
     val knownPeople by viewModel.knownPeople.collectAsStateWithLifecycle()
     var confirmDelete by rememberSaveable { mutableStateOf(false) }
@@ -576,24 +575,16 @@ fun EditorScreen(
                         container = if (repeating) c.accent else null,
                     )
                     if (!repeating) {
+                        // One button for both kinds of split: with people, or across your own categories.
+                        val split = viewModel.splits.isNotEmpty() || (viewModel.people.isNotEmpty() && viewModel.type == TxType.EXPENSE)
                         RoundButton(
-                            Lucide.ChartPie,
-                            "Split across categories",
+                            Lucide.Split,
+                            "Split this",
                             { showSplit = true },
                             size = 40.dp,
-                            tint = if (viewModel.splits.isEmpty()) c.textSecondary else c.onAccent,
-                            container = if (viewModel.splits.isEmpty()) null else c.accent,
+                            tint = if (split) c.onAccent else c.textSecondary,
+                            container = if (split) c.accent else null,
                         )
-                        if (viewModel.type == TxType.EXPENSE) {
-                            RoundButton(
-                                Lucide.Users,
-                                "Split with people",
-                                { showPeople = true },
-                                size = 40.dp,
-                                tint = if (viewModel.people.isEmpty()) c.textSecondary else c.onAccent,
-                                container = if (viewModel.people.isEmpty()) null else c.accent,
-                            )
-                        }
                     }
                 }
                 val path = viewModel.receiptPath
@@ -691,13 +682,40 @@ fun EditorScreen(
     }
 
     if (showSplit) {
-        SplitSheet(
-            total = viewModel.totalMinor,
-            mainCategory = categories.find { it.id == viewModel.categoryId },
-            categories = categories.filter { it.type == viewModel.type },
-            parts = viewModel.splits,
-            onDismiss = { showSplit = false },
-        )
+        val expense = viewModel.type == TxType.EXPENSE
+        // Opens on whichever split is already set; with neither, on people, the more common one.
+        var withPeople by rememberSaveable { mutableStateOf(expense && (viewModel.people.isNotEmpty() || viewModel.splits.isEmpty())) }
+        val header: @Composable () -> Unit = {
+            if (expense) {
+                SegmentedToggle(
+                    options = listOf(true, false),
+                    selected = withPeople,
+                    label = { if (it) "With people" else "Across categories" },
+                    onSelect = { withPeople = it },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        }
+        GlassSheet(onDismiss = { showSplit = false }) {
+            if (withPeople && expense) {
+                PeopleBody(
+                    total = viewModel.totalMinor,
+                    known = knownPeople,
+                    people = viewModel.people,
+                    onDismiss = { showSplit = false },
+                    header = header,
+                )
+            } else {
+                SplitBody(
+                    total = viewModel.totalMinor,
+                    mainCategory = categories.find { it.id == viewModel.categoryId },
+                    categories = categories.filter { it.type == viewModel.type },
+                    parts = viewModel.splits,
+                    onDismiss = { showSplit = false },
+                    header = header,
+                )
+            }
+        }
     }
 
     if (showForeign) {
@@ -711,15 +729,6 @@ fun EditorScreen(
                 showForeign = false
             },
             onDismiss = { showForeign = false },
-        )
-    }
-
-    if (showPeople) {
-        PeopleSheet(
-            total = viewModel.totalMinor,
-            known = knownPeople,
-            people = viewModel.people,
-            onDismiss = { showPeople = false },
         )
     }
 
@@ -1050,12 +1059,13 @@ private fun DateStrip(selected: LocalDate, onSelect: (LocalDate) -> Unit, onOpen
 /** Moves parts of the amount into other categories; the main category keeps the rest. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun SplitSheet(
+private fun SplitBody(
     total: Long,
     mainCategory: Category?,
     categories: List<Category>,
     parts: MutableList<SplitPart>,
     onDismiss: () -> Unit,
+    header: @Composable () -> Unit,
 ) {
     val c = LocalAppColors.current
     val money = LocalMoney.current
@@ -1064,12 +1074,13 @@ private fun SplitSheet(
     val rest = total - parts.sumOf { it.amountMinor }
     val partMinor = AmountInput.toMinor(amountText) ?: 0L
 
-    GlassSheet(onDismiss) {
+    run {
         Column(
             Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 16.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            Text("Split ${money.format(total)}", style = MaterialTheme.typography.headlineSmall, color = c.textPrimary)
+            header()
+            Text(if (total > 0) "Split ${money.format(total)} across categories" else "Split across categories", style = MaterialTheme.typography.headlineSmall, color = c.textPrimary)
             if (total <= 0) {
                 Text("Type the full amount first, then split it here.", style = MaterialTheme.typography.bodySmall, color = c.textSecondary)
                 return@Column
@@ -1135,7 +1146,7 @@ private fun SplitSheet(
 /** Who shares this expense. It's split equally; your share stays your expense and theirs goes to Money owed. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun PeopleSheet(total: Long, known: List<String>, people: MutableList<String>, onDismiss: () -> Unit) {
+private fun PeopleBody(total: Long, known: List<String>, people: MutableList<String>, onDismiss: () -> Unit, header: @Composable () -> Unit) {
     val c = LocalAppColors.current
     val money = LocalMoney.current
     var newName by rememberSaveable { mutableStateOf("") }
@@ -1149,11 +1160,12 @@ private fun PeopleSheet(total: Long, known: List<String>, people: MutableList<St
         newName = ""
     }
 
-    GlassSheet(onDismiss) {
+    run {
         Column(
             Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 16.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
+            header()
             Text(if (total > 0) "Split ${money.format(total)} with" else "Split with", style = MaterialTheme.typography.headlineSmall, color = c.textPrimary)
             Text(
                 "It's split equally between you and them. Your share counts as your expense, and what each person owes goes to Money owed.",
