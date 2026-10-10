@@ -227,7 +227,7 @@ fun HomeScreen(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Column(Modifier.weight(1f)) {
-                        Text(greeting(), style = MaterialTheme.typography.bodyMedium, color = c.textSecondary)
+                        Text(greeting() + " · " + LocalDate.now().format(greetingDate), style = MaterialTheme.typography.bodyMedium, color = c.textSecondary, maxLines = 1)
                         Text(state.month.label(), style = MaterialTheme.typography.headlineLarge, color = c.textPrimary)
                     }
                     RoundButton(Lucide.MessageCircle, "AI assistant", onOpenAssistant)
@@ -417,6 +417,9 @@ fun HomeScreen(
         )
     }
 }
+
+/** Today next to the greeting: "Sat, 10 Oct". */
+private val greetingDate = java.time.format.DateTimeFormatter.ofPattern("EEE, d MMM")
 
 private fun greeting(): String = when (LocalTime.now().hour) {
     in 5..11 -> "Good morning"
