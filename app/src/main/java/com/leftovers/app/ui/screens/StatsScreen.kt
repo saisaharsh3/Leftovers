@@ -1,6 +1,8 @@
 package com.leftovers.app.ui.screens
 
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -106,7 +108,11 @@ data class StatsUiState(
     val trends: List<Trend> = emptyList(),
 )
 
-class StatsViewModel(repository: TransactionRepository, settings: SettingsRepository) : ViewModel() {
+class StatsViewModel(
+    private val repository: TransactionRepository,
+    private val settings: SettingsRepository,
+    private val planning: com.leftovers.app.data.PlanningRepository,
+) : ViewModel() {
     private val month = MutableStateFlow(YearMonth.now())
     private val type = MutableStateFlow(TxType.EXPENSE)
 
@@ -132,6 +138,20 @@ class StatsViewModel(repository: TransactionRepository, settings: SettingsReposi
         }.flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), StatsUiState())
 
     fun setMonth(value: YearMonth) { month.value = value }
+
+    /** Makes the PDF statement for the month shown, or its whole year, and hands back the file to share. */
+    fun makeStatement(context: android.content.Context, yearly: Boolean, notes: Boolean, entries: Boolean, onReady: (android.net.Uri, String) -> Unit) {
+        viewModelScope.launch {
+            val all = repository.allTransactions.first()
+            val s = settings.settings.first()
+            val m = month.value
+            val statement = kotlinx.coroutines.withContext(Dispatchers.Default) {
+                com.leftovers.app.util.StatementPdf.build(if (yearly) null else m, m.year, all, s.plan, planning.recurring.first())
+            }
+            val uri = com.leftovers.app.util.StatementPdf.write(context, statement, Money(s.currencyCode), notes, entries)
+            onReady(uri, statement.title)
+        }
+    }
     fun setType(value: TxType) { type.value = value }
 }
 
@@ -146,11 +166,31 @@ fun StatsScreen(
     val money = LocalMoney.current
     val isExpense = state.type == TxType.EXPENSE
     val monthName = state.month.month.getDisplayName(TextStyle.FULL, Locale.getDefault())
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var showStatement by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
+    if (showStatement) {
+        StatementSheet(
+            monthName = "$monthName ${state.month.year}",
+            year = state.month.year,
+            onDismiss = { showStatement = false },
+            onMake = { yearly, notes, entries ->
+                viewModel.makeStatement(context, yearly, notes, entries) { uri, title ->
+                    showStatement = false
+                    context.startActivity(com.leftovers.app.util.StatementPdf.shareIntent(uri, title))
+                }
+            },
+        )
+    }
 
     GlassScreen(
         title = "Insights",
         onBack = null,
-        actions = { RoundButton(Lucide.Sparkles, "Monthly recap", { onOpenRecap(state.month) }) },
+        actions = {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                RoundButton(Lucide.Download, "Statement as a PDF", { showStatement = true })
+                RoundButton(Lucide.Sparkles, "Monthly recap", { onOpenRecap(state.month) })
+            }
+        },
     ) { padding ->
         // Sideways swipes switch tabs here like everywhere else; the arrows change month.
         LazyColumn(
@@ -432,4 +472,66 @@ private fun ComparisonChip(state: StatsUiState) {
         Spacer(Modifier.width(6.dp))
         Text("$pct% vs last month", style = MaterialTheme.typography.labelMedium, color = tint)
     }
+}
+
+/** Choices for the PDF statement: the month shown or its whole year, and what goes in it. */
+@Composable
+private fun StatementSheet(monthName: String, year: Int, onDismiss: () -> Unit, onMake: (yearly: Boolean, notes: Boolean, entries: Boolean) -> Unit) {
+    val c = LocalAppColors.current
+    var yearly by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
+    var notes by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
+    var entries by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
+    var making by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    GlassSheet(onDismiss) {
+        Column(Modifier.padding(horizontal = 20.dp).padding(bottom = 16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            Text("Statement as a PDF", style = MaterialTheme.typography.headlineSmall, color = c.textPrimary)
+            com.leftovers.app.ui.components.SegmentedToggle(
+                options = listOf(false, true),
+                selected = yearly,
+                label = { if (it) "$year" else monthName },
+                onSelect = { yearly = it },
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Text(
+                "Income and spending, categories, biggest expenses and subscriptions" +
+                    (if (yearly) ", with each month's totals" else "") + ". Made on your phone; nothing is uploaded.",
+                style = MaterialTheme.typography.bodySmall,
+                color = c.textSecondary,
+            )
+            Glass(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(vertical = 4.dp)) {
+                    StatementSwitch("Include notes", "Left out by default, as they can be personal", notes) { notes = it }
+                    com.leftovers.app.ui.components.RowDivider()
+                    StatementSwitch("List every entry", "Adds pages after the summary", entries) { entries = it }
+                }
+            }
+            com.leftovers.app.ui.components.PrimaryButton(
+                if (making) "Making it…" else "Share PDF",
+                {
+                    making = true
+                    onMake(yearly, notes, entries)
+                },
+                Modifier.fillMaxWidth(),
+                enabled = !making,
+                icon = Lucide.Share2,
+            )
+        }
+    }
+}
+
+@Composable
+private fun StatementSwitch(title: String, subtitle: String, checked: Boolean, onChange: (Boolean) -> Unit) {
+    val c = LocalAppColors.current
+    com.leftovers.app.ui.components.ListRow(
+        title,
+        subtitle = subtitle,
+        trailing = {
+            androidx.compose.material3.Switch(
+                checked = checked,
+                onCheckedChange = onChange,
+                colors = androidx.compose.material3.SwitchDefaults.colors(checkedTrackColor = c.accent, checkedThumbColor = c.onAccent),
+            )
+        },
+        modifier = Modifier.pressable({ onChange(!checked) }, pressedScale = 0.99f),
+    )
 }

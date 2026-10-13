@@ -5,6 +5,9 @@ All notable changes to Leftovers. Download any version from
 
 ## Unreleased
 
+- Statement as a PDF (Insights → download button): one page for the month shown or the whole year, with income,
+  spending, budget, categories, biggest expenses and subscriptions; a year adds each month's totals. Notes are
+  left out unless you turn them on, and every entry can be listed on extra pages. Made on the phone, then shared
 - Lent or borrowed, right from the add screen: tap the hand button next to Split, pick I lent or I borrowed and
   who it's with: one person or several, each the whole amount, split evenly, or each their own amount. It goes
   to Money owed and stays out of your budget. Back returns to expense or income

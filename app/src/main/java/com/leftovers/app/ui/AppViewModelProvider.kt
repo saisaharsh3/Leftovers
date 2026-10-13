@@ -36,7 +36,7 @@ object AppViewModelProvider {
         initializer { AccountsViewModel(container().accounts, container().settings, container().repository) }
         initializer { RecapViewModel(createSavedStateHandle(), container().repository, container().planning, container().settings) }
         initializer { HistoryViewModel(container().repository, container().accounts, container().planning) }
-        initializer { StatsViewModel(container().repository, container().settings) }
+        initializer { StatsViewModel(container().repository, container().settings, container().planning) }
         initializer { PlanViewModel(container().repository, container().settings, container().planning) }
         initializer { BudgetsViewModel(container().repository, container().settings, container().planning) }
         initializer { BudgetPlanViewModel(container().settings, container().repository) }
