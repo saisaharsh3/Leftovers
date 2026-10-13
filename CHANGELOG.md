@@ -5,6 +5,13 @@ All notable changes to Leftovers. Download any version from
 
 ## Unreleased
 
+- Lent or borrowed, right from the add screen: the switch at the top is now Expense, Income and Owed. Pick
+  I lent or I borrowed and who it's with; it goes to Money owed and stays out of your budget
+- Swipe across the amount to move between Expense, Income and Owed
+- Subscriptions: swipe the calendar to see what's charged in the coming months
+- Email detection reads FamPay (FamApp) payments
+- The add screen works in landscape: the keypad sits on the right and the rest scrolls
+- Rounded amounts round the same way whether spent or a balance, so 12.50 shows 13 in both
 - Split with people: when adding an expense, tap Split, pick who's sharing it, and split it equally or type
   each person's amount. Your share is your expense; each person's share goes to Money owed. Splitting across
   categories is in the same sheet, so it's one button

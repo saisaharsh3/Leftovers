@@ -1,5 +1,11 @@
 package com.leftovers.app.ui.screens
 
+import kotlin.math.abs
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.animation.core.Animatable
 import com.leftovers.app.data.Debt
 import kotlinx.coroutines.flow.map
 import androidx.compose.runtime.rememberCoroutineScope
@@ -298,6 +304,59 @@ class EditorViewModel(
         cursor = null
     }
 
+    /** Money lent to or borrowed from someone instead of spending or income: saved to Money owed, kept out of the budget. */
+    var owed by mutableStateOf(false)
+        private set
+    /** For [owed]: true when you lent it, false when you borrowed it. */
+    var lent by mutableStateOf(true)
+    var owedPerson by mutableStateOf("")
+        private set
+    var needPerson by mutableStateOf(false)
+        private set
+
+    val kind: EntryKind get() = when {
+        owed -> EntryKind.OWED
+        type == TxType.INCOME -> EntryKind.INCOME
+        else -> EntryKind.EXPENSE
+    }
+
+    fun selectKind(next: EntryKind) {
+        owed = next == EntryKind.OWED
+        if (owed) {
+            // Lending isn't spending, so nothing repeats or splits.
+            repeatMonthly = false
+            splits.clear()
+            clearPeople()
+        } else {
+            onTypeChange(if (next == EntryKind.INCOME) TxType.INCOME else TxType.EXPENSE)
+        }
+    }
+
+    fun pickPerson(name: String) {
+        owedPerson = name.take(30)
+        needPerson = false
+    }
+
+    private fun saveOwed(onDone: (String) -> Unit, describe: (Long) -> String): Boolean {
+        if (amountMinor <= 0 || totalMinor <= 0) return false
+        val person = owedPerson.trim()
+        if (person.isEmpty()) {
+            needPerson = true
+            return false
+        }
+        val amount = totalMinor
+        val wasLent = lent
+        val day = date.toEpochDay()
+        val text = note.trim()
+        val photo = receiptPath
+        viewModelScope.launch {
+            planning.saveDebt(Debt(person = person, amountMinor = if (wasLent) amount else -amount, note = text, epochDay = day, receiptPath = photo))
+            if (smsId > 0) sms.dismiss(smsId)
+            onDone(if (wasLent) "${describe(amount)} lent to $person · in Money owed" else "${describe(amount)} borrowed from $person · in Money owed")
+        }
+        return true
+    }
+
     fun onTypeChange(newType: TxType) {
         if (newType != type) {
             type = newType
@@ -338,6 +397,7 @@ class EditorViewModel(
      * when the entry isn't complete yet.
      */
     fun save(onDone: (String) -> Unit, describe: (Long) -> String): Boolean {
+        if (owed && !isEditing) return saveOwed(onDone, describe)
         if (amountMinor <= 0 || totalMinor <= 0) return false
         val category = categoryId
         if (category == null) {
@@ -453,6 +513,9 @@ class EditorViewModel(
 
 private val stripDay = DateTimeFormatter.ofPattern("EEE")
 
+/** What the add screen is logging; the switch at the top, and swiping across the amount, move between them. */
+enum class EntryKind(val label: String) { EXPENSE("Expense"), INCOME("Income"), OWED("Owed") }
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun EditorScreen(
@@ -478,6 +541,53 @@ fun EditorScreen(
     var receiptMenu by rememberSaveable { mutableStateOf(false) }
     var viewReceipt by rememberSaveable { mutableStateOf(false) }
     var cameraFile by remember { mutableStateOf<File?>(null) }
+
+    // Swiping across the amount moves between Expense, Income and Owed; the new one slides in from its side.
+    val kinds = if (viewModel.isEditing) listOf(EntryKind.EXPENSE, EntryKind.INCOME) else EntryKind.entries
+    val density = LocalDensity.current
+    val swipeIn = with(density) { 56.dp.toPx() }
+    val swipeAt = with(density) { 44.dp.toPx() }
+    val swipe = remember { Animatable(0f) }
+    val swipeScope = rememberCoroutineScope()
+    var shownKind by remember { mutableStateOf(viewModel.kind) }
+    LaunchedEffect(viewModel.kind) {
+        val now = viewModel.kind
+        if (now != shownKind) {
+            val fromRight = now.ordinal > shownKind.ordinal
+            shownKind = now
+            swipe.snapTo(if (fromRight) swipeIn else -swipeIn)
+            swipe.animateTo(0f, spring(dampingRatio = 0.8f, stiffness = 380f))
+        }
+    }
+    val swipeable = Modifier.pointerInput(kinds) {
+        detectHorizontalDragGestures(
+            onDragEnd = {
+                val at = kinds.indexOf(viewModel.kind)
+                val next = when {
+                    swipe.value < -swipeAt -> kinds.getOrNull(at + 1)
+                    swipe.value > swipeAt -> kinds.getOrNull(at - 1)
+                    else -> null
+                }
+                if (next != null) {
+                    view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                    viewModel.selectKind(next)
+                } else {
+                    swipeScope.launch { swipe.animateTo(0f, spring(dampingRatio = 0.7f, stiffness = 500f)) }
+                }
+            },
+            onDragCancel = { swipeScope.launch { swipe.animateTo(0f) } },
+        ) { change, dx ->
+            change.consume()
+            val at = kinds.indexOf(viewModel.kind)
+            // There's nothing past the first and last, so it only gives a little there.
+            val edge = (dx > 0 && at == 0) || (dx < 0 && at == kinds.lastIndex)
+            swipeScope.launch { swipe.snapTo(swipe.value + dx * (if (edge) 0.15f else 0.6f)) }
+        }
+    }
+    val sliding = Modifier.graphicsLayer {
+        translationX = swipe.value
+        alpha = (1f - abs(swipe.value) / (swipeIn * 4)).coerceIn(0.4f, 1f)
+    }
 
     val pickImage = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
         if (uri != null) viewModel.attachReceipt(uri)
@@ -529,11 +639,11 @@ fun EditorScreen(
             RoundButton(Lucide.X, "Close", onClose)
             Spacer(Modifier.weight(1f))
             SegmentedToggle(
-                options = TxType.entries,
-                selected = viewModel.type,
-                label = { if (it == TxType.EXPENSE) "Expense" else "Income" },
-                onSelect = viewModel::onTypeChange,
-                modifier = Modifier.width(210.dp),
+                options = kinds,
+                selected = viewModel.kind,
+                label = { it.label },
+                onSelect = viewModel::selectKind,
+                modifier = Modifier.width(if (kinds.size == 3) 270.dp else 210.dp),
             )
             Spacer(Modifier.weight(1f))
             if (viewModel.isEditing) {
@@ -548,7 +658,9 @@ fun EditorScreen(
         Column(
             Modifier
                 .then(if (wide) Modifier.padding(vertical = 16.dp) else Modifier.weight(1f))
-                .fillMaxWidth(),
+                .fillMaxWidth()
+                .then(swipeable)
+                .then(sliding),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
         ) {
@@ -582,7 +694,7 @@ fun EditorScreen(
                     style = MaterialTheme.typography.displayLarge.copy(fontSize = size.sp, lineHeight = (size * 1.1).sp),
                     color = when {
                         raw.isEmpty() -> c.textTertiary
-                        viewModel.type == TxType.INCOME -> c.positive
+                        viewModel.type == TxType.INCOME && !viewModel.owed -> c.positive
                         else -> c.textPrimary
                     },
                     caretAfter = if (placed != null && raw.isNotEmpty()) AmountCursor.displayAfter(display, raw, placed) else null,
@@ -599,6 +711,15 @@ fun EditorScreen(
             NotePill(viewModel.note, onClick = { showNote = true }, modifier = Modifier.padding(horizontal = 32.dp).widthIn(max = 320.dp))
             Spacer(Modifier.height(10.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                if (viewModel.owed) {
+                    SegmentedToggle(
+                        options = listOf(true, false),
+                        selected = viewModel.lent,
+                        label = { if (it) "I lent" else "I borrowed" },
+                        onSelect = { viewModel.lent = it },
+                        modifier = Modifier.width(220.dp),
+                    )
+                } else {
                 if (accounts.size > 1) {
                     AccountPicker(accounts, viewModel.accountId) { viewModel.accountId = it }
                 }
@@ -631,6 +752,7 @@ fun EditorScreen(
                             container = if (split) c.accent else null,
                         )
                     }
+                }
                 }
                 val path = viewModel.receiptPath
                 if (path == null) {
@@ -665,6 +787,21 @@ fun EditorScreen(
                     modifier = Modifier.padding(top = 10.dp, start = 24.dp, end = 24.dp),
                 )
             }
+            AnimatedVisibility(viewModel.owed, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
+                val person = viewModel.owedPerson.trim()
+                val amount = money.format(viewModel.totalMinor)
+                Text(
+                    when {
+                        person.isEmpty() || viewModel.totalMinor <= 0 -> "Saved to Money owed · kept out of your budget"
+                        viewModel.lent -> "$person owes you $amount · kept out of your budget"
+                        else -> "You owe $person $amount · kept out of your budget"
+                    },
+                    textAlign = TextAlign.Center,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = c.accent,
+                    modifier = Modifier.padding(top = 10.dp, start = 24.dp, end = 24.dp),
+                )
+            }
             AnimatedVisibility(viewModel.repeatMonthly, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
                 Text(
                     if (viewModel.date > LocalDate.now()) {
@@ -687,6 +824,34 @@ fun EditorScreen(
         )
         Spacer(Modifier.height(12.dp))
 
+        if (viewModel.owed) {
+            AnimatedVisibility(viewModel.needPerson, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
+                Text(
+                    if (viewModel.lent) "Add who you lent it to" else "Add who you borrowed it from",
+                    color = c.warning,
+                    style = MaterialTheme.typography.labelLarge,
+                    modifier = Modifier.padding(start = 20.dp, bottom = 8.dp),
+                )
+            }
+            LazyRow(
+                contentPadding = PaddingValues(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = sliding,
+            ) {
+                item {
+                    GlassTextField(
+                        viewModel.owedPerson,
+                        viewModel::pickPerson,
+                        placeholder = if (viewModel.lent) "Lent to" else "Borrowed from",
+                        modifier = Modifier.width(170.dp),
+                    )
+                }
+                items(knownPeople, key = { it }) { name ->
+                    Chip(name, onClick = { viewModel.pickPerson(name) }, selected = viewModel.owedPerson.trim().equals(name, ignoreCase = true))
+                }
+            }
+        } else {
         AnimatedVisibility(viewModel.needCategory, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
             Text(
                 "Choose a category to save",
@@ -699,6 +864,7 @@ fun EditorScreen(
         LazyRow(
             contentPadding = PaddingValues(horizontal = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = sliding,
         ) {
             items(sorted, key = { it.id }) { cat ->
                 Chip(
@@ -710,6 +876,7 @@ fun EditorScreen(
                 )
             }
             item { Chip("Edit", onClick = onManageCategories, icon = Lucide.SlidersHorizontal, iconTint = c.textSecondary) }
+        }
         }
         Spacer(Modifier.height(14.dp))
 
