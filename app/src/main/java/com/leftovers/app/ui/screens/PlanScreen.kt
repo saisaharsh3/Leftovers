@@ -1,5 +1,7 @@
 package com.leftovers.app.ui.screens
 
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.Dispatchers
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -104,7 +106,7 @@ class PlanViewModel(
             owedToYou = open.filter { it.netMinor > 0 }.sumOf { it.netMinor },
             youOwe = open.filter { it.netMinor < 0 }.sumOf { -it.netMinor },
         )
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), PlanUiState())
+    }.flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), PlanUiState())
 }
 
 @Composable

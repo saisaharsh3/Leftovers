@@ -1,5 +1,7 @@
 package com.leftovers.app.ui.screens
 
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.Dispatchers
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
@@ -131,7 +133,7 @@ class BudgetsViewModel(
                 // Categories with a limit first, then the ones you spend most on.
                 .sortedWith(compareByDescending<CategoryBudgetRow> { it.category.budgetMinor != null }.thenByDescending { it.spent }),
         )
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), BudgetsUiState())
+    }.flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), BudgetsUiState())
 
     fun setCategoryBudget(categoryId: Long, minor: Long?) {
         viewModelScope.launch { repository.setCategoryBudget(categoryId, minor) }

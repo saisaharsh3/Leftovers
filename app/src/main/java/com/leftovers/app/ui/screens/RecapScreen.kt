@@ -1,5 +1,6 @@
 package com.leftovers.app.ui.screens
 
+import kotlinx.coroutines.flow.flowOn
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
@@ -152,7 +153,7 @@ class RecapViewModel(
             favouriteCount = favourite?.value ?: 0,
             goals = goals,
         )
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+    }.flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     init {
         if (year == null) viewModelScope.launch { settings.setRecapSeen(month.toString()) }

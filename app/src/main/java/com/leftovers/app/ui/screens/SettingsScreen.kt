@@ -152,7 +152,7 @@ class SettingsViewModel(
         val preview = csvPreview ?: return
         csvPreview = null
         viewModelScope.launch {
-            preview.toAdd.forEach { repository.saveTransaction(it) }
+            repository.addTransactions(preview.toAdd)
             onDone(preview.toAdd.size)
         }
     }

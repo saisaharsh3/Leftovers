@@ -1,5 +1,7 @@
 package com.leftovers.app.ui.screens
 
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.Dispatchers
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -127,7 +129,7 @@ class StatsViewModel(repository: TransactionRepository, settings: SettingsReposi
                 items = ofType,
                 trends = spendingTrends(all, m, t, Money(s.currencyCode)::formatWhole),
             )
-        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), StatsUiState())
+        }.flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), StatsUiState())
 
     fun setMonth(value: YearMonth) { month.value = value }
     fun setType(value: TxType) { type.value = value }

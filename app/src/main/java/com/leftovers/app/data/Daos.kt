@@ -32,6 +32,10 @@ interface TransactionDao {
     @Upsert
     suspend fun upsert(transaction: Transaction)
 
+    /** Many at once in one database transaction, so screens update once instead of once per entry. */
+    @Upsert
+    suspend fun upsertAll(transactions: List<Transaction>)
+
     @Delete
     suspend fun delete(transaction: Transaction)
 

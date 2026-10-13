@@ -25,6 +25,12 @@ class BudgetPlanTest {
         assertEquals(MonthBudget(10_000, 0, 5_000), plan.breakdownFor(oct, items))
     }
 
+    @Test fun noBudgetSetMeansNoBudget() {
+        // Extra income alone doesn't make a budget, or every spend would show as over it.
+        val items = listOf(tx(TxType.INCOME, 499, oct, addsToBudget = true), tx(TxType.EXPENSE, 2_000, oct))
+        assertEquals(0, plan.copy(monthlyMinor = 0).budgetFor(oct, items))
+    }
+
     @Test fun overspendingIsNotCarried() {
         val items = listOf(tx(TxType.EXPENSE, 15_000, sep))
         assertEquals(10_000, plan.copy(carryFrom = sep).budgetFor(oct, items))

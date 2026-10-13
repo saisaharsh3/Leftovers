@@ -47,7 +47,8 @@ data class BudgetPlan(
      * The total spending budget for [month]: the planned amount, plus income from categories that
      * add to the budget, plus anything carried over. [items] must contain all transactions.
      */
-    fun budgetFor(month: YearMonth, items: List<TransactionItem>): Long = breakdownFor(month, items).total
+    /** With no budget set there's nothing to spend against, even if extra income or a carry-over would add to it. */
+    fun budgetFor(month: YearMonth, items: List<TransactionItem>): Long = if (!isSet) 0 else breakdownFor(month, items).total
 
     fun breakdownFor(month: YearMonth, items: List<TransactionItem>): MonthBudget {
         val byMonth = items.groupBy { YearMonth.from(it.date) }

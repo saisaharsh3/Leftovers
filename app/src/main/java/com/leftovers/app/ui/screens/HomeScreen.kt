@@ -1,5 +1,7 @@
 package com.leftovers.app.ui.screens
 
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.Dispatchers
 import com.leftovers.app.data.AccountWithBalance
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -177,7 +179,7 @@ class HomeViewModel(
             accounts = accountList,
             selectedAccount = selected,
         )
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), HomeUiState())
+    }.flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), HomeUiState())
 
     fun answerCarry(carry: Boolean) {
         viewModelScope.launch { settings.setCarryChoice(YearMonth.now().minusMonths(1), carry) }

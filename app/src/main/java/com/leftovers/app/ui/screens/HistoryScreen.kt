@@ -1,5 +1,7 @@
 package com.leftovers.app.ui.screens
 
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.Dispatchers
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.layout.ColumnScope
@@ -194,7 +196,7 @@ class HistoryViewModel(
                     .map { FilterOption(it.categoryId, it.categoryName, it.categoryEmoji, it.categoryColor) },
                 tags = all.allTags(),
             )
-        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), HistoryUiState())
+        }.flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), HistoryUiState())
 
     fun setMonth(value: YearMonth) { month.value = value }
     fun setFilter(value: TypeFilter) { filter.value = value }

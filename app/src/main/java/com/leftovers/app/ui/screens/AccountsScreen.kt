@@ -1,5 +1,7 @@
 package com.leftovers.app.ui.screens
 
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.Dispatchers
 import com.leftovers.app.data.TxType
 import com.leftovers.app.data.TransactionItem
 import com.leftovers.app.data.TransactionRepository
@@ -126,7 +128,7 @@ class AccountsViewModel(
     val transfers: StateFlow<List<Transfer>> =
         repository.transfers.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
     val defaultAccountId: StateFlow<Long> =
-        settings.settings.map { it.defaultAccountId }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 1L)
+        settings.settings.map { it.defaultAccountId }.flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 1L)
 
     fun save(account: Account, makeDefault: Boolean) {
         viewModelScope.launch {

@@ -1,5 +1,7 @@
 package com.leftovers.app.ui.screens
 
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.Dispatchers
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
@@ -76,7 +78,7 @@ import kotlin.math.abs
 class DebtsViewModel(private val planning: PlanningRepository) : ViewModel() {
     /** Null until loaded, so the screen doesn't flash "All square" first. */
     val balances: StateFlow<List<PersonBalance>?> =
-        planning.debts.map { it.openBalances() }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+        planning.debts.map { it.openBalances() }.flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     /** Everyone ever recorded, for quick picking. */
     val people: StateFlow<List<String>> =

@@ -26,6 +26,9 @@ class TransactionRepository(
         if (transaction.id != 0L) deletedDao.delete(listOf(transaction.id))
     }
 
+    /** New entries in bulk, like a CSV import. */
+    suspend fun addTransactions(transactions: List<Transaction>) = transactionDao.upsertAll(transactions)
+
     /** Deletes an entry, keeping a copy in Deleted entries (with its receipt photo) so it can be restored. */
     suspend fun deleteTransaction(transaction: Transaction) {
         deletedDao.upsert(DeletedTransaction.from(transaction))
