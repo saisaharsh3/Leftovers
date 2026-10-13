@@ -1,8 +1,5 @@
 package com.leftovers.app.ui.screens
 
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.layout.heightIn
 import com.leftovers.app.data.AccountWithBalance
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -239,44 +236,22 @@ fun HomeScreen(
             Column(Modifier.padding(horizontal = 20.dp).padding(bottom = 16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                 Text(b.person, style = MaterialTheme.typography.headlineSmall, color = c.textPrimary)
                 Text(
-                    if (b.netMinor > 0) "Owes you ${money.format(b.netMinor)}" else "You owe ${money.format(-b.netMinor)}",
+                    (if (b.netMinor > 0) "Owes you ${money.format(b.netMinor)}" else "You owe ${money.format(-b.netMinor)}") +
+                        if (b.entries.size > 1) " · ${b.entries.size} entries" else "",
                     style = MaterialTheme.typography.bodyLarge,
                     color = if (b.netMinor > 0) c.positive else c.textSecondary,
                 )
-                // Each entry with its amount; the pencil opens it to change.
-                Glass(Modifier.fillMaxWidth(), shape = RoundedCornerShape(22.dp)) {
-                    Column(Modifier.heightIn(max = 320.dp).verticalScroll(rememberScrollState()).padding(vertical = 4.dp)) {
-                        b.entries.forEachIndexed { i, d ->
-                            if (i > 0) RowDivider(inset = 16.dp)
-                            Row(
-                                Modifier
-                                    .fillMaxWidth()
-                                    .pressable({ owedOpen = null; editingDebt = d }, pressedScale = 0.985f)
-                                    .padding(horizontal = 16.dp, vertical = 12.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Text(
-                                    listOfNotNull(d.note.ifBlank { null }, LocalDate.ofEpochDay(d.epochDay).friendlyLabel()).joinToString(" · "),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = c.textSecondary,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                    modifier = Modifier.weight(1f),
-                                )
-                                Text(
-                                    (if (d.amountMinor > 0) "Lent " else "Borrowed ") + money.format(abs(d.amountMinor)),
-                                    style = MaterialTheme.typography.labelLarge,
-                                    color = c.textPrimary,
-                                )
-                                Icon(Lucide.Pencil, contentDescription = "Edit", tint = c.textTertiary, modifier = Modifier.padding(start = 10.dp, end = 8.dp).size(15.dp))
-                            }
-                        }
-                    }
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    SecondaryButton("Edit", {
+                        owedOpen = null
+                        // One entry opens right here; several are easier to see on Money owed.
+                        if (b.entries.size == 1) editingDebt = b.entries[0] else onOpenDebts()
+                    }, Modifier.weight(1f))
+                    PrimaryButton("Settled", {
+                        owedOpen = null
+                        viewModel.settle(b.person)
+                    }, Modifier.weight(1f))
                 }
-                PrimaryButton("Settled", {
-                    owedOpen = null
-                    viewModel.settle(b.person)
-                }, Modifier.fillMaxWidth(), icon = Lucide.Check)
             }
         }
     }
