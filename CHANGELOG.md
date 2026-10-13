@@ -24,7 +24,7 @@ All notable changes to Leftovers. Download any version from
 - Tags need a letter and must start a word, so "Order #4521" no longer makes a tag
 - Tapping an Upcoming card on Home opens that subscription, on its day in the calendar
 - With no budget set, Home shows what you spent today instead of "over budget"
-- CSV import of a thousand entries takes under a second instead of several
+- CSV import saves everything in one go: a thousand entries take a couple of seconds instead of about seven
 - Rounded amounts round the same way whether spent or a balance, so 12.50 shows 13 in both
 - Split with people: when adding an expense, tap Split, pick who's sharing it, and split it equally or type
   each person's amount. Your share is your expense; each person's share goes to Money owed. Splitting across
