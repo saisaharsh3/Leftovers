@@ -82,6 +82,8 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
+import androidx.compose.runtime.rememberCoroutineScope
+import com.leftovers.app.ui.components.RoundButton
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.YearMonth
@@ -262,7 +264,7 @@ fun SubscriptionsScreen(
             }
 
             if (active.isNotEmpty()) {
-                item { SectionHeader("${YearMonth.now().label()} schedule", Modifier.appear(1)) }
+                item { SectionHeader("Schedule", Modifier.appear(1)) }
                 item { DeductionCalendar(active, Modifier.appear(1)) }
             }
 
@@ -335,20 +337,74 @@ fun SubscriptionsScreen(
     }
 }
 
-/** This month's calendar with each billing day marked, so you can see when money leaves. */
+/** A calendar with each billing day marked, so you can see when money leaves. Swipe for the months ahead. */
 @Composable
 private fun DeductionCalendar(items: List<RecurringItem>, modifier: Modifier = Modifier) {
     val c = LocalAppColors.current
     val money = LocalMoney.current
-    val month = YearMonth.now()
+    val thisMonth = YearMonth.now()
+    val pager = androidx.compose.foundation.pager.rememberPagerState { 12 }
+    val scope = rememberCoroutineScope()
+    val shown = thisMonth.plusMonths(pager.currentPage.toLong())
+    val goingOut = items.filter { it.type == TxType.EXPENSE && it.toRecurring().isDueIn(shown) }.sumOf { it.amountMinor }
+
+    Glass(modifier.fillMaxWidth(), shape = RoundedCornerShape(30.dp)) {
+        Column(Modifier.padding(vertical = 14.dp)) {
+            Row(Modifier.padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                RoundButton(
+                    Lucide.ChevronLeft,
+                    "Previous month",
+                    { scope.launch { pager.animateScrollToPage(pager.currentPage - 1) } },
+                    size = 34.dp,
+                    tint = c.textSecondary,
+                    enabled = pager.currentPage > 0,
+                )
+                Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        shown.month.getDisplayName(java.time.format.TextStyle.FULL, java.util.Locale.getDefault()) +
+                            if (shown.year != thisMonth.year) " ${shown.year}" else "",
+                        style = MaterialTheme.typography.titleSmall,
+                        color = c.textPrimary,
+                    )
+                    Text(
+                        if (goingOut > 0) "${money.format(goingOut)} going out" else "Nothing going out",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = c.textSecondary,
+                    )
+                }
+                RoundButton(
+                    Lucide.ChevronRight,
+                    "Next month",
+                    { scope.launch { pager.animateScrollToPage(pager.currentPage + 1) } },
+                    size = 34.dp,
+                    tint = c.textSecondary,
+                    enabled = pager.currentPage < pager.pageCount - 1,
+                )
+            }
+            Spacer(Modifier.height(10.dp))
+            androidx.compose.foundation.pager.HorizontalPager(pager, verticalAlignment = Alignment.Top) { page ->
+                MonthOfCharges(items, thisMonth.plusMonths(page.toLong()), Modifier.padding(horizontal = 14.dp))
+            }
+        }
+    }
+}
+
+/** One month of [DeductionCalendar]: the days, and what's charged on the selected one. */
+@Composable
+private fun MonthOfCharges(items: List<RecurringItem>, month: YearMonth, modifier: Modifier = Modifier) {
+    val c = LocalAppColors.current
+    val money = LocalMoney.current
     val today = LocalDate.now()
+    val current = month == YearMonth.from(today)
     val byDay = items.filter { it.toRecurring().isDueIn(month) }.groupBy { it.toRecurring().chargeDate(month).dayOfMonth }
     val leading = month.atDay(1).dayOfWeek.value - 1
     val cells: List<Int?> = List(leading) { null } + (1..month.lengthOfMonth()).toList()
-    var selected by rememberSaveable { mutableStateOf(byDay.keys.filter { it >= today.dayOfMonth }.minOrNull() ?: byDay.keys.minOrNull() ?: 1) }
+    var selected by rememberSaveable(month.toString()) {
+        mutableStateOf((if (current) byDay.keys.filter { it >= today.dayOfMonth }.minOrNull() else null) ?: byDay.keys.minOrNull() ?: 1)
+    }
 
-    Glass(modifier.fillMaxWidth(), shape = RoundedCornerShape(30.dp)) {
-        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    run {
+        Column(modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Row {
                 listOf("M", "T", "W", "T", "F", "S", "S").forEach {
                     Text(it, style = MaterialTheme.typography.labelSmall, color = c.textTertiary, textAlign = TextAlign.Center, modifier = Modifier.weight(1f))
@@ -362,7 +418,7 @@ private fun DeductionCalendar(items: List<RecurringItem>, modifier: Modifier = M
                             if (day == null) return@Box
                             val charges = byDay[day].orEmpty()
                             val isSelected = day == selected && charges.isNotEmpty()
-                            val past = day < today.dayOfMonth
+                            val past = current && day < today.dayOfMonth
                             val bg by animateColorAsState(
                                 when {
                                     isSelected -> c.accent
@@ -377,7 +433,7 @@ private fun DeductionCalendar(items: List<RecurringItem>, modifier: Modifier = M
                                     .pressable({ if (charges.isNotEmpty()) selected = day }, pressedScale = 0.9f)
                                     .clip(RoundedCornerShape(12.dp))
                                     .background(bg)
-                                    .then(if (day == today.dayOfMonth && !isSelected) Modifier.border(1.dp, c.textSecondary, RoundedCornerShape(12.dp)) else Modifier),
+                                    .then(if (current && day == today.dayOfMonth && !isSelected) Modifier.border(1.dp, c.textSecondary, RoundedCornerShape(12.dp)) else Modifier),
                                 horizontalAlignment = Alignment.CenterHorizontally,
                                 verticalArrangement = Arrangement.Center,
                             ) {
