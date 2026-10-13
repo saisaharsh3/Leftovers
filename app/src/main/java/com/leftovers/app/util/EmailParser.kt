@@ -63,12 +63,16 @@ object EmailParser {
         // The name is the label before the suffix: axisbank in axisbank.com, hdfcbank in alerts.hdfcbank.net, sbi in sbi.co.in.
         val suffixes = setOf("com", "net", "org", "in", "co", "bank", "uk", "us", "au", "ae", "sg", "io", "money", "club", "app")
         val name = labels.lastOrNull { it !in suffixes } ?: return address.substringBefore('@')
+        brandNames[name]?.let { return it }
         val words = name.replace(Regex("""bank$"""), " bank").replace('-', ' ').trim()
         return words.split(' ').filter { it.isNotBlank() }.joinToString(" ") { w ->
             // Short names and ones without vowels are initials: SBI, HDFC.
             if (w.length <= 3 || w.none { it in "aeiou" }) w.uppercase() else w.replaceFirstChar { it.uppercase() }
         }
     }
+
+    /** Names that don't come out right from the domain alone. */
+    private val brandNames = mapOf("fampay" to "FamPay", "famapp" to "FamApp", "phonepe" to "PhonePe", "mobikwik" to "MobiKwik")
 
     /** "Swiggy Orders" → "Swiggy"; bank alert senders stay as they are. */
     private fun cleanSender(name: String): String =

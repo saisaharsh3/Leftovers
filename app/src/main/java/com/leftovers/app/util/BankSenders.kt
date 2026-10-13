@@ -13,6 +13,7 @@ object BankSenders {
         "bandhanbank", "idbibank", "iob.in", "bankofindia", "centralbank", "ucobank", "indianbank", "southindianbank",
         "kvb.co.in", "cityunionbank", "dbs.com", "sc.com", "hsbc", "citi", "americanexpress", "aexp", "onecard",
         "sliceit", "paytm", "phonepe", "mobikwik", "amazonpay", "cred.club", "jupiter.money", "fi.money", "niyo",
+        "fampay", "famapp",
         // Elsewhere
         "chase", "bankofamerica", "bofa", "wellsfargo", "capitalone", "discover", "usbank", "pnc.com", "barclays",
         "lloydsbank", "natwest", "santander", "monzo", "revolut", "starlingbank", "wise.com", "n26", "paypal",

@@ -136,6 +136,10 @@ class BankSendersTest {
         assertTrue(BankSenders.isBank("credit_cards@icicibank.com", ""))
         assertTrue(BankSenders.isBank("no-reply@alerts.chase.com", "Chase"))
         assertTrue(BankSenders.isBank("noreply@paytm.com", "Paytm"))
+        assertTrue(BankSenders.isBank("no-reply@fampay.in", ""))
+        assertTrue(BankSenders.isBank("support@famapp.in", "FamApp"))
+        assertEquals("FamPay", EmailParser.nameFromAddress("no-reply@fampay.in"))
+        assertEquals(EmailParser.Parsed(25000, "Swiggy"), EmailParser.parse("Payment successful", "FamPay", "You paid ₹250 to Swiggy using FamPay. Txn ID 123456."))
         // Unknown bank, but clearly one.
         assertTrue(BankSenders.isBank("alerts@mylocalcoop.org", "Coop Bank Alerts"))
     }

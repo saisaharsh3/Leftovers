@@ -19,4 +19,11 @@ class MoneyFormatTest {
         assertFalse(Money("INR").format(10_000_000).contains("₹ "))
         assertEquals("₹ INR", Money("INR").label)
     }
+
+    @Test fun wholeAmountsRoundTheSameWayEitherSign() {
+        val usd = Money("USD")
+        assertEquals("$13", usd.formatWhole(1_250))
+        assertEquals("-$13", usd.formatWhole(-1_250))
+        assertEquals("$12", usd.formatWhole(1_249))
+    }
 }
