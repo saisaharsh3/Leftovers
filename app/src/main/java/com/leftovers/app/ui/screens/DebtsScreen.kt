@@ -176,6 +176,8 @@ fun DebtsScreen(onBack: () -> Unit, viewModel: DebtsViewModel = viewModel(factor
                                     style = MaterialTheme.typography.labelLarge,
                                     color = c.textPrimary,
                                 )
+                                // The whole row opens the entry; the pencil says so.
+                                Icon(Lucide.Pencil, contentDescription = "Edit", tint = c.textTertiary, modifier = Modifier.padding(start = 10.dp).size(15.dp))
                             }
                         }
                     }
