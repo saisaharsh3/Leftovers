@@ -901,7 +901,7 @@ fun EditorScreen(
                     color = if (viewModel.needAmounts) c.warning else c.accent,
                     modifier = Modifier
                         .padding(top = 10.dp, start = 24.dp, end = 24.dp)
-                        .then(if (many) Modifier.pressable({ showOwedAmounts = true }, pressedScale = 0.96f) else Modifier),
+                        .then(if (many && viewModel.totalMinor > 0) Modifier.pressable({ showOwedAmounts = true }, pressedScale = 0.96f) else Modifier),
                 )
             }
             AnimatedVisibility(viewModel.repeatMonthly, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {

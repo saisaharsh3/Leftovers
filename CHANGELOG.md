@@ -15,6 +15,9 @@ All notable changes to Leftovers. Download any version from
 - Subscriptions: swipe the calendar to see what's charged in the coming months
 - Email detection reads FamPay (FamApp) payments
 - The add screen works in landscape: the keypad sits on the right and the rest scrolls
+- Tapping an Upcoming card on Home opens that subscription, on its day in the calendar
+- With no budget set, Home shows what you spent today instead of "over budget"
+- CSV import of a thousand entries takes under a second instead of several
 - Rounded amounts round the same way whether spent or a balance, so 12.50 shows 13 in both
 - Split with people: when adding an expense, tap Split, pick who's sharing it, and split it equally or type
   each person's amount. Your share is your expense; each person's share goes to Money owed. Splitting across
