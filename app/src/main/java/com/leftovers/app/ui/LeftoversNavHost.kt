@@ -287,6 +287,7 @@ fun LeftoversNavHost(openAdd: Boolean = false, onOpenAddHandled: () -> Unit = {}
                             onOpenRecap = { nav.navigate(Routes.recap(it.toString())) },
                             onOpenAccounts = { nav.navigate(Routes.ACCOUNTS) },
                             onOpenAssistant = { nav.navigate(Routes.ASSISTANT) },
+                            onOpenDebts = { nav.navigate(Routes.DEBTS) },
                         )
                     }
                     screen(Routes.ASSISTANT) { AssistantScreen(onBack = back) }

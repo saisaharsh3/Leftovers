@@ -51,6 +51,7 @@ import com.leftovers.app.data.DailyBudget
 import com.leftovers.app.data.GoalWithSaved
 import com.leftovers.app.data.PlanningRepository
 import com.leftovers.app.data.forecastMonthEnd
+import com.leftovers.app.data.openBalances
 import com.leftovers.app.data.RecurringItem
 import com.leftovers.app.data.SettingsRepository
 import com.leftovers.app.data.SmsRepository
@@ -106,6 +107,8 @@ data class HomeUiState(
     val monthIncome: Long = 0,
     val upcoming: List<RecurringItem> = emptyList(),
     val goals: List<GoalWithSaved> = emptyList(),
+    /** Everyone with money still owed either way, largest first. */
+    val owed: List<com.leftovers.app.data.PersonBalance> = emptyList(),
     val recent: List<TransactionItem> = emptyList(),
     val smsSuggestions: List<SmsSuggestion> = emptyList(),
     /** Last month, when its recap hasn't been seen yet. */
@@ -126,17 +129,17 @@ data class HomeUiState(
 class HomeViewModel(
     repository: TransactionRepository,
     private val settings: SettingsRepository,
-    planning: PlanningRepository,
+    private val planning: PlanningRepository,
     private val sms: SmsRepository,
     accounts: AccountRepository,
 ) : ViewModel() {
     val state: StateFlow<HomeUiState> = combine(
         combine(repository.allTransactions, accounts.accounts, ::Pair),
         settings.settings,
-        planning.recurring,
+        combine(planning.recurring, planning.debts, ::Pair),
         planning.goals,
         sms.suggestions,
-    ) { (all, accountList), s, recurring, goals, suggestions ->
+    ) { (all, accountList), s, (recurring, debts), goals, suggestions ->
         val month = YearMonth.now()
         val todayDate = LocalDate.now()
         val items = all.filter { YearMonth.from(it.date) == month }
@@ -160,6 +163,7 @@ class HomeViewModel(
                 .filter { it.toRecurring().nextChargeDate() <= todayDate.plusDays(30) }
                 .take(6),
             goals = goals.filter { !it.reached }.take(5),
+            owed = debts.openBalances().filter { it.netMinor != 0L },
             recent = shownAll.take(6),
             smsSuggestions = suggestions,
             recapMonth = month.minusMonths(1).takeIf { prev ->
@@ -177,6 +181,18 @@ class HomeViewModel(
 
     fun answerCarry(carry: Boolean) {
         viewModelScope.launch { settings.setCarryChoice(YearMonth.now().minusMonths(1), carry) }
+    }
+
+    fun settle(person: String) {
+        viewModelScope.launch { planning.settle(person) }
+    }
+
+    fun saveDebt(debt: com.leftovers.app.data.Debt) {
+        viewModelScope.launch { planning.saveDebt(debt) }
+    }
+
+    fun deleteDebt(debt: com.leftovers.app.data.Debt) {
+        viewModelScope.launch { planning.deleteDebt(debt) }
     }
 
     fun dismissSms(id: Long) {
@@ -204,12 +220,56 @@ fun HomeScreen(
     onOpenRecap: (YearMonth) -> Unit,
     onOpenAccounts: () -> Unit,
     onOpenAssistant: () -> Unit,
+    onOpenDebts: () -> Unit = {},
     viewModel: HomeViewModel = viewModel(factory = AppViewModelProvider.Factory),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val c = LocalAppColors.current
     val money = LocalMoney.current
     if (!state.loaded) return
+    var owedOpen by remember { mutableStateOf<String?>(null) }
+    var editingDebt by remember { mutableStateOf<com.leftovers.app.data.Debt?>(null) }
+
+    // Tapping someone on the Money owed row: edit what's noted, or mark it all paid back.
+    state.owed.firstOrNull { it.person.equals(owedOpen, ignoreCase = true) }?.let { b ->
+        GlassSheet(onDismiss = { owedOpen = null }) {
+            Column(Modifier.padding(horizontal = 20.dp).padding(bottom = 16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                Text(b.person, style = MaterialTheme.typography.headlineSmall, color = c.textPrimary)
+                Text(
+                    (if (b.netMinor > 0) "Owes you ${money.format(b.netMinor)}" else "You owe ${money.format(-b.netMinor)}") +
+                        if (b.entries.size > 1) " · ${b.entries.size} entries" else "",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = if (b.netMinor > 0) c.positive else c.textSecondary,
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    SecondaryButton("Edit", {
+                        owedOpen = null
+                        // One entry opens right here; several are easier to see on Money owed.
+                        if (b.entries.size == 1) editingDebt = b.entries[0] else onOpenDebts()
+                    }, Modifier.weight(1f))
+                    PrimaryButton("Settled", {
+                        owedOpen = null
+                        viewModel.settle(b.person)
+                    }, Modifier.weight(1f))
+                }
+            }
+        }
+    }
+    editingDebt?.let { debt ->
+        DebtEditor(
+            initial = debt,
+            people = state.owed.map { it.person },
+            onDismiss = { editingDebt = null },
+            onSave = {
+                viewModel.saveDebt(it)
+                editingDebt = null
+            },
+            onDelete = {
+                viewModel.deleteDebt(debt)
+                editingDebt = null
+            },
+        )
+    }
 
     Box(Modifier.fillMaxSize()) {
         LazyColumn(
@@ -383,6 +443,15 @@ fun HomeScreen(
                 }
             }
 
+            if (state.owed.isNotEmpty()) {
+                item { SectionHeader("Money owed", Modifier.appear(3), action = "See all", onAction = onOpenDebts) }
+                item {
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.appear(3)) {
+                        items(state.owed, key = { it.person.lowercase() }) { b -> OwedCard(b) { owedOpen = b.person } }
+                    }
+                }
+            }
+
             if (state.goals.isNotEmpty()) {
                 item { SectionHeader("Saving for", Modifier.appear(4), action = "All goals", onAction = onOpenGoals) }
                 item {
@@ -495,6 +564,23 @@ private fun UpcomingCard(r: RecurringItem, onClick: () -> Unit) {
                 style = MaterialTheme.typography.titleMedium,
                 color = if (r.type == TxType.INCOME) c.positive else c.textPrimary,
             )
+        }
+    }
+}
+
+@Composable
+private fun OwedCard(b: com.leftovers.app.data.PersonBalance, onClick: () -> Unit) {
+    val c = LocalAppColors.current
+    val money = LocalMoney.current
+    val theyOwe = b.netMinor > 0
+    Glass(Modifier.width(156.dp), shape = RoundedCornerShape(24.dp), onClick = onClick) {
+        Column(Modifier.padding(16.dp)) {
+            IconTile(Lucide.HandCoins, if (theyOwe) c.positive else c.warning, size = 36.dp)
+            Spacer(Modifier.height(12.dp))
+            Text(b.person, style = MaterialTheme.typography.titleSmall, color = c.textPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(if (theyOwe) "Owes you" else "You owe", style = MaterialTheme.typography.bodySmall, color = c.textSecondary, maxLines = 1)
+            Spacer(Modifier.height(8.dp))
+            Text(money.format(abs(b.netMinor)), style = MaterialTheme.typography.titleMedium, color = if (theyOwe) c.positive else c.textPrimary)
         }
     }
 }

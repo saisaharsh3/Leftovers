@@ -550,8 +550,8 @@ class EditorViewModel(
 
 private val stripDay = DateTimeFormatter.ofPattern("EEE")
 
-/** What the add screen is logging; the switch at the top, and swiping across the amount, move between them. */
-enum class EntryKind(val label: String) { EXPENSE("Expense"), INCOME("Income"), OWED("Owed") }
+/** What the add screen is logging. Swiping across the amount moves between expense and income; the lent or borrowed button sets owed. */
+enum class EntryKind(val label: String) { EXPENSE("Expense"), INCOME("Income"), OWED("Lent or borrowed") }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -579,8 +579,8 @@ fun EditorScreen(
     var viewReceipt by rememberSaveable { mutableStateOf(false) }
     var cameraFile by remember { mutableStateOf<File?>(null) }
 
-    // Swiping across the amount moves between Expense, Income and Owed; the new one slides in from its side.
-    val kinds = if (viewModel.isEditing) listOf(EntryKind.EXPENSE, EntryKind.INCOME) else EntryKind.entries
+    // Swiping across the amount moves between Expense and Income; the new one slides in from its side.
+    val kinds = listOf(EntryKind.EXPENSE, EntryKind.INCOME)
     val density = LocalDensity.current
     val swipeIn = with(density) { 56.dp.toPx() }
     val swipeAt = with(density) { 44.dp.toPx() }
@@ -599,7 +599,7 @@ fun EditorScreen(
     val swipeable = Modifier.pointerInput(kinds) {
         detectHorizontalDragGestures(
             onDragEnd = {
-                val at = kinds.indexOf(viewModel.kind)
+                val at = kinds.indexOf(viewModel.kind).takeIf { it >= 0 } ?: -9
                 val next = when {
                     swipe.value < -swipeAt -> kinds.getOrNull(at + 1)
                     swipe.value > swipeAt -> kinds.getOrNull(at - 1)
@@ -675,13 +675,17 @@ fun EditorScreen(
         ) {
             RoundButton(Lucide.X, "Close", onClose)
             Spacer(Modifier.weight(1f))
-            SegmentedToggle(
-                options = kinds,
-                selected = viewModel.kind,
-                label = { it.label },
-                onSelect = viewModel::selectKind,
-                modifier = Modifier.width(if (kinds.size == 3) 270.dp else 210.dp),
-            )
+            if (viewModel.owed) {
+                Text("Lent or borrowed", style = MaterialTheme.typography.titleMedium, color = c.textPrimary)
+            } else {
+                SegmentedToggle(
+                    options = kinds,
+                    selected = viewModel.kind,
+                    label = { it.label },
+                    onSelect = viewModel::selectKind,
+                    modifier = Modifier.width(210.dp),
+                )
+            }
             Spacer(Modifier.weight(1f))
             if (viewModel.isEditing) {
                 RoundButton(Lucide.Trash2, "Delete", { confirmDelete = true }, tint = c.negative)
@@ -749,12 +753,20 @@ fun EditorScreen(
             Spacer(Modifier.height(10.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
                 if (viewModel.owed) {
+                    RoundButton(
+                        Lucide.HandCoins,
+                        "Not lent or borrowed",
+                        { viewModel.selectKind(EntryKind.EXPENSE) },
+                        size = 40.dp,
+                        tint = c.onAccent,
+                        container = c.accent,
+                    )
                     SegmentedToggle(
                         options = listOf(true, false),
                         selected = viewModel.lent,
                         label = { if (it) "I lent" else "I borrowed" },
                         onSelect = { viewModel.lent = it },
-                        modifier = Modifier.width(220.dp),
+                        modifier = Modifier.width(200.dp),
                     )
                 } else {
                 if (accounts.size > 1) {
@@ -789,6 +801,7 @@ fun EditorScreen(
                             container = if (split) c.accent else null,
                         )
                     }
+                    RoundButton(Lucide.HandCoins, "Lent or borrowed", { viewModel.selectKind(EntryKind.OWED) }, size = 40.dp, tint = c.textSecondary)
                 }
                 }
                 val path = viewModel.receiptPath

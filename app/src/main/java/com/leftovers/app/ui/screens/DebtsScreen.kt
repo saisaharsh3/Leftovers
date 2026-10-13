@@ -207,7 +207,7 @@ fun DebtsScreen(onBack: () -> Unit, viewModel: DebtsViewModel = viewModel(factor
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun DebtEditor(initial: Debt, people: List<String>, onDismiss: () -> Unit, onSave: (Debt) -> Unit, onDelete: (() -> Unit)?) {
+fun DebtEditor(initial: Debt, people: List<String>, onDismiss: () -> Unit, onSave: (Debt) -> Unit, onDelete: (() -> Unit)?) {
     val c = LocalAppColors.current
     var lent by rememberSaveable { mutableStateOf(initial.amountMinor >= 0) }
     var person by rememberSaveable { mutableStateOf(initial.person) }
