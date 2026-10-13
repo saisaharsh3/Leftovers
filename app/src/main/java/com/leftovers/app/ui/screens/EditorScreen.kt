@@ -42,6 +42,8 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -485,10 +487,38 @@ fun EditorScreen(
         if (ok && file != null) viewModel.attachReceipt(Uri.fromFile(file)) { file.delete() } else file?.delete()
     }
 
-    Column(
+    val keypad: @Composable (Modifier) -> Unit = { keypadModifier ->
+        Glass(keypadModifier, shape = RoundedCornerShape(topStart = 34.dp, topEnd = 34.dp)) {
+            Keypad(
+                onKey = viewModel::onKey,
+                onClear = viewModel::clearAmount,
+                onConfirm = {
+                    val ok = viewModel.save(onDone = onSaved, describe = money::format)
+                    if (!ok) view.performHapticFeedback(HapticFeedbackConstants.REJECT)
+                },
+                confirmEnabled = viewModel.amountMinor > 0,
+                confirmLabel = if (viewModel.isEditing) "Save" else "Add",
+                modifier = Modifier
+                    .navigationBarsPadding()
+                    .padding(16.dp),
+            )
+        }
+    }
+
+    // In landscape there's no room for everything above the keypad, so the keypad goes on the right
+    // and the rest scrolls on the left.
+    BoxWithConstraints(
         modifier
             .fillMaxSize()
             .statusBarsPadding(),
+    ) {
+    val wide = maxWidth > maxHeight
+    Row(Modifier.fillMaxSize()) {
+    Column(
+        Modifier
+            .weight(1f)
+            .fillMaxHeight()
+            .then(if (wide) Modifier.verticalScroll(rememberScrollState()).navigationBarsPadding() else Modifier),
     ) {
         Row(
             Modifier
@@ -517,7 +547,7 @@ fun EditorScreen(
 
         Column(
             Modifier
-                .weight(1f)
+                .then(if (wide) Modifier.padding(vertical = 16.dp) else Modifier.weight(1f))
                 .fillMaxWidth(),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
@@ -683,21 +713,14 @@ fun EditorScreen(
         }
         Spacer(Modifier.height(14.dp))
 
-        Glass(Modifier.fillMaxWidth(), shape = RoundedCornerShape(topStart = 34.dp, topEnd = 34.dp)) {
-            Keypad(
-                onKey = viewModel::onKey,
-                onClear = viewModel::clearAmount,
-                onConfirm = {
-                    val ok = viewModel.save(onDone = onSaved, describe = money::format)
-                    if (!ok) view.performHapticFeedback(HapticFeedbackConstants.REJECT)
-                },
-                confirmEnabled = viewModel.amountMinor > 0,
-                confirmLabel = if (viewModel.isEditing) "Save" else "Add",
-                modifier = Modifier
-                    .navigationBarsPadding()
-                    .padding(16.dp),
-            )
+        if (!wide) keypad(Modifier.fillMaxWidth())
+    }
+    if (wide && viewModel.loaded) {
+        Box(Modifier.weight(0.85f).fillMaxHeight(), contentAlignment = Alignment.BottomCenter) {
+            keypad(Modifier.fillMaxWidth())
         }
+    }
+    }
     }
 
     if (showSplit) {

@@ -38,8 +38,9 @@ class Money(currencyCode: String) {
         if (wordSymbol) text.replace(Regex("^(-?)" + Regex.escape(symbol) + "(?=\\d)"), "$1$symbol ") else text
     }
 
-    /** Rounded to whole units, for headline numbers like a daily allowance. */
-    fun formatWhole(minor: Long): String = format(Math.round(minor / 100.0) * 100)
+    /** Rounded to whole units, for headline numbers like a daily allowance. Halves round away from zero, so -12.50 and 12.50 both show 13. */
+    fun formatWhole(minor: Long): String =
+        format(BigDecimal.valueOf(minor, 2).setScale(0, java.math.RoundingMode.HALF_UP).movePointRight(2).toLong())
 
     fun signed(minor: Long, type: TxType): String =
         (if (type == TxType.INCOME) "+" else "−") + format(abs(minor))
