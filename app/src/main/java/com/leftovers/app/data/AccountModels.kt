@@ -116,7 +116,7 @@ data class SmsSuggestion(
     /** A hash for spotting repeats, never the message itself. */
     val body: String,
     val receivedAt: Long = System.currentTimeMillis(),
-    /** Where it was spotted: [SOURCE_SMS] or [SOURCE_EMAIL]. */
+    /** Where it was spotted: [SOURCE_SMS], [SOURCE_EMAIL] or [SOURCE_APP] (a payment app's notification). */
     @ColumnInfo(defaultValue = SOURCE_SMS) val source: String = SOURCE_SMS,
     /** Last digits of the account or card the message named, if any. */
     val accountDigits: String? = null,
@@ -128,6 +128,7 @@ data class SmsSuggestion(
     companion object {
         const val SOURCE_SMS = "sms"
         const val SOURCE_EMAIL = "email"
+        const val SOURCE_APP = "app"
     }
 }
 

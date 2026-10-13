@@ -45,6 +45,7 @@ Most budget apps want an account, show ads, or send your spending to a server. L
 - Add forgotten spending for any past day from a date strip or calendar
 - Split one bill across several categories
 - Monthly or yearly statement as a PDF, made on the phone
+- Detects payments from FamApp, Google Pay, PhonePe, Paytm, BHIM and CRED notifications (optional)
 - Split a bill with friends, equally or by amount: your share is your expense, and what each person owes goes to Money owed
 - Spending abroad? Log it in the local currency at your own rate; the original amount stays visible
 - Search every entry by note, category or amount; filter by account, category or #tag
@@ -106,6 +107,8 @@ network calls unless you connect the optional AI assistant or an email account.
 - The app is excluded from Android's automatic cloud backup, so backups go only where you save them.
 - With app lock on, screenshots are blocked and the app is hidden in the recent-apps preview.
 - SMS detection is off by default. When on, messages are read on the device and nothing is added without your tap.
+- Payment app detection is off by default too. When on, it reads only notifications from the payment apps listed in
+  Settings, keeps just a fingerprint of each, and needs notification access you give in the phone's settings.
 - Email detection is off by default and signs in with an *app password* (Gmail, Yahoo, iCloud, Zoho or any
   IMAP server with SSL). It connects only to your mail server, over TLS with the certificate checked. The inbox
   is opened read-only, so nothing is changed or marked as read. Only alerts from banks, cards and payment apps

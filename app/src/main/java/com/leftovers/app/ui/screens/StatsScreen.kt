@@ -140,11 +140,11 @@ class StatsViewModel(
     fun setMonth(value: YearMonth) { month.value = value }
 
     /** Makes the PDF statement for the month shown, or its whole year, and hands back the file to share. */
-    fun makeStatement(context: android.content.Context, yearly: Boolean, notes: Boolean, entries: Boolean, onReady: (android.net.Uri, String) -> Unit) {
+    fun makeStatement(context: android.content.Context, chosen: YearMonth, yearly: Boolean, notes: Boolean, entries: Boolean, onReady: (android.net.Uri, String) -> Unit) {
         viewModelScope.launch {
             val all = repository.allTransactions.first()
             val s = settings.settings.first()
-            val m = month.value
+            val m = chosen
             val statement = kotlinx.coroutines.withContext(Dispatchers.Default) {
                 com.leftovers.app.util.StatementPdf.build(if (yearly) null else m, m.year, all, s.plan, planning.recurring.first())
             }
@@ -170,11 +170,10 @@ fun StatsScreen(
     var showStatement by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
     if (showStatement) {
         StatementSheet(
-            monthName = "$monthName ${state.month.year}",
-            year = state.month.year,
+            start = state.month,
             onDismiss = { showStatement = false },
-            onMake = { yearly, notes, entries ->
-                viewModel.makeStatement(context, yearly, notes, entries) { uri, title ->
+            onMake = { chosen, yearly, notes, entries ->
+                viewModel.makeStatement(context, chosen, yearly, notes, entries) { uri, title ->
                     showStatement = false
                     context.startActivity(com.leftovers.app.util.StatementPdf.shareIntent(uri, title))
                 }
@@ -476,9 +475,14 @@ private fun ComparisonChip(state: StatsUiState) {
 
 /** Choices for the PDF statement: the month shown or its whole year, and what goes in it. */
 @Composable
-private fun StatementSheet(monthName: String, year: Int, onDismiss: () -> Unit, onMake: (yearly: Boolean, notes: Boolean, entries: Boolean) -> Unit) {
+private fun StatementSheet(start: YearMonth, onDismiss: () -> Unit, onMake: (month: YearMonth, yearly: Boolean, notes: Boolean, entries: Boolean) -> Unit) {
     val c = LocalAppColors.current
     var yearly by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
+    // Starts on the month Insights is showing; the arrows pick any other month, or year.
+    var chosen by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf(start.toString()) }
+    val month = YearMonth.parse(chosen)
+    val now = YearMonth.now()
+    val canGoForward = if (yearly) month.year < now.year else month < now
     var notes by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
     var entries by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
     var making by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
@@ -488,10 +492,29 @@ private fun StatementSheet(monthName: String, year: Int, onDismiss: () -> Unit, 
             com.leftovers.app.ui.components.SegmentedToggle(
                 options = listOf(false, true),
                 selected = yearly,
-                label = { if (it) "$year" else monthName },
+                label = { if (it) "Yearly" else "Monthly" },
                 onSelect = { yearly = it },
                 modifier = Modifier.fillMaxWidth(),
             )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                RoundButton(Lucide.ChevronLeft, if (yearly) "Previous year" else "Previous month", {
+                    chosen = (if (yearly) month.minusYears(1) else month.minusMonths(1)).toString()
+                })
+                Text(
+                    if (yearly) "${month.year}" else "${month.month.getDisplayName(TextStyle.FULL, Locale.getDefault())} ${month.year}",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = c.textPrimary,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.weight(1f),
+                )
+                RoundButton(
+                    Lucide.ChevronRight,
+                    if (yearly) "Next year" else "Next month",
+                    { chosen = (if (yearly) month.plusYears(1) else month.plusMonths(1)).toString() },
+                    enabled = canGoForward,
+                    tint = if (canGoForward) c.textPrimary else c.textTertiary,
+                )
+            }
             Text(
                 "Income and spending, categories, biggest expenses and subscriptions" +
                     (if (yearly) ", with each month's totals" else "") + ". Made on your phone; nothing is uploaded.",
@@ -509,7 +532,8 @@ private fun StatementSheet(monthName: String, year: Int, onDismiss: () -> Unit, 
                 if (making) "Making it…" else "Share PDF",
                 {
                     making = true
-                    onMake(yearly, notes, entries)
+                    // A future year can't be picked, but its later months could be from going back and switching to yearly.
+                    onMake(if (month > now) now else month, yearly, notes, entries)
                 },
                 Modifier.fillMaxWidth(),
                 enabled = !making,

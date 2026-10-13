@@ -5,6 +5,10 @@ All notable changes to Leftovers. Download any version from
 
 ## Unreleased
 
+- Detect payments from payment apps' notifications: FamApp, Google Pay, PhonePe, Paytm, BHIM and CRED (Settings →
+  Detect payment apps, then allow notification access). Only those apps are read, offers and reminders are skipped,
+  and money sent to you comes in as income. A payment also seen in a bank SMS shows up once
+- Statement as a PDF: pick any month or year with the arrows
 - Statement as a PDF (Insights → download button): one page for the month shown or the whole year, with income,
   spending, budget, categories, biggest expenses and subscriptions; a year adds each month's totals. Notes are
   left out unless you turn them on, and every entry can be listed on extra pages. Made on the phone, then shared

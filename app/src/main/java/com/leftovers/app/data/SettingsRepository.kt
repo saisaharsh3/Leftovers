@@ -39,6 +39,8 @@ data class AppSettings(
     val reminderMinutes: Int,
     val appLock: Boolean,
     val smsDetection: Boolean,
+    /** Read payment apps' notifications (FamApp, Google Pay, PhonePe...) for payments; needs notification access. */
+    val appNotifications: Boolean = false,
     /** Month (yyyy-MM) whose recap the user has already opened or dismissed. */
     val recapSeen: String,
     /** Folder (document tree uri) for weekly automatic backups; null when off. */
@@ -93,6 +95,7 @@ class SettingsRepository(context: Context) {
             reminderMinutes = p[REMINDER_TIME] ?: (21 * 60),
             appLock = p[APP_LOCK] ?: false,
             smsDetection = p[SMS] ?: false,
+            appNotifications = p[APP_NOTIFICATIONS] ?: false,
             recapSeen = p[RECAP_SEEN].orEmpty(),
             autoBackupDir = p[AUTO_BACKUP_DIR],
             autoBackupLast = p[AUTO_BACKUP_LAST] ?: 0L,
@@ -159,6 +162,8 @@ class SettingsRepository(context: Context) {
     }
     suspend fun setAppLock(enabled: Boolean) = store.edit { it[APP_LOCK] = enabled }
     suspend fun setSmsDetection(enabled: Boolean) = store.edit { it[SMS] = enabled }
+
+    suspend fun setAppNotifications(enabled: Boolean) = store.edit { it[APP_NOTIFICATIONS] = enabled }
     suspend fun setRecapSeen(month: String) = store.edit { it[RECAP_SEEN] = month }
     suspend fun setAutoBackupDir(dir: String?) = store.edit { if (dir == null) it.remove(AUTO_BACKUP_DIR) else it[AUTO_BACKUP_DIR] = dir }
     suspend fun setAutoBackupDone(at: Long) = store.edit { it[AUTO_BACKUP_LAST] = at }
@@ -220,6 +225,7 @@ class SettingsRepository(context: Context) {
         val REMINDER_TIME = intPreferencesKey("reminder_time")
         val APP_LOCK = booleanPreferencesKey("app_lock")
         val SMS = booleanPreferencesKey("sms_detection")
+        val APP_NOTIFICATIONS = booleanPreferencesKey("app_notifications")
         val RECAP_SEEN = stringPreferencesKey("recap_seen")
         val AUTO_BACKUP_DIR = stringPreferencesKey("auto_backup_dir")
         val AUTO_BACKUP_LAST = longPreferencesKey("auto_backup_last")

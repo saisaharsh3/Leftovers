@@ -65,6 +65,21 @@
             </intent-filter>
         </receiver>
 
+        <!-- Reads payment apps' notifications (FamApp, Google Pay, PhonePe...) for payments, only once the user turns
+             it on in Settings and gives notification access. Only those apps are looked at; see PaymentApps. -->
+        <service
+            android:name=".util.PaymentNotificationListener"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.service.notification.default_filter_types"
+                android:value="alerting|silent" />
+        </service>
+
         <!-- "Add expense" tile in the notification panel's Quick Settings. -->
         <service
             android:name=".QuickAddTile"

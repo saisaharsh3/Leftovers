@@ -246,6 +246,10 @@ class SettingsViewModel(
         viewModelScope.launch { settingsRepository.setSmsDetection(enabled) }
     }
 
+    fun setAppNotifications(enabled: Boolean) {
+        viewModelScope.launch { settingsRepository.setAppNotifications(enabled) }
+    }
+
     fun backupTo(uri: Uri, onResult: (String) -> Unit) {
         viewModelScope.launch {
             backup.export(uri).fold(
@@ -301,6 +305,12 @@ fun SettingsScreen(
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val c = LocalAppColors.current
     val context = LocalContext.current
+    // Payment apps' notifications need notification access, given in the phone's settings; checked again on return.
+    var notificationAccess by remember { mutableStateOf(com.leftovers.app.util.PaymentApps.accessGranted(context)) }
+    androidx.lifecycle.compose.LifecycleResumeEffect(Unit) {
+        notificationAccess = com.leftovers.app.util.PaymentApps.accessGranted(context)
+        onPauseOrDispose { }
+    }
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     var showCurrency by rememberSaveable { mutableStateOf(false) }
@@ -403,12 +413,38 @@ fun SettingsScreen(
                             if (on) smsPermission.launch(Manifest.permission.RECEIVE_SMS) else viewModel.setSmsDetection(false)
                         })
                         RowDivider()
+                        ToggleRow(Lucide.Bell, "Detect payment apps", s.appNotifications && notificationAccess, { on ->
+                            viewModel.setAppNotifications(on)
+                            if (on && !notificationAccess) {
+                                val intent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                                    android.content.Intent(android.provider.Settings.ACTION_NOTIFICATION_LISTENER_DETAIL_SETTINGS)
+                                        .putExtra(android.provider.Settings.EXTRA_NOTIFICATION_LISTENER_COMPONENT_NAME, com.leftovers.app.util.PaymentApps.component(context).flattenToString())
+                                } else {
+                                    android.content.Intent(android.provider.Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
+                                }
+                                runCatching { context.startActivity(intent) }
+                                    .onFailure { runCatching { context.startActivity(android.content.Intent(android.provider.Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) } }
+                            }
+                        })
+                        RowDivider()
                         NavRow(Lucide.Mail, "Detect payments in email", emailConnection?.address ?: "Off") { showEmail = true }
                         if (s.smsDetection || emailConnection != null) {
                             RowDivider()
                             NavRow(Lucide.Tag, "Detection keywords", if (s.detectionKeywords.isEmpty()) "Test a message" else "${s.detectionKeywords.size} added") { showKeywords = true }
                         }
                     }
+                }
+                if (s.appNotifications) {
+                    Text(
+                        if (notificationAccess) {
+                            "Reads only notifications from ${com.leftovers.app.util.PaymentApps.names.values.joinToString(", ")}, and only a fingerprint of each is kept. Offers and reminders are skipped."
+                        } else {
+                            "Turn on notification access for Leftovers in the screen that opened, then come back."
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = c.textSecondary,
+                        modifier = Modifier.padding(start = 8.dp, end = 8.dp, top = 8.dp),
+                    )
                 }
                 if (s.smsDetection) {
                     Text(
