@@ -1117,7 +1117,10 @@ fun EditorScreen(
     }
 
     if (showNote) {
-        var draft by rememberSaveable { mutableStateOf(viewModel.note) }
+        // The cursor starts at the end of the note, and tags are suggested for the word it's in.
+        var draft by rememberSaveable(stateSaver = androidx.compose.ui.text.input.TextFieldValue.Saver) {
+            mutableStateOf(androidx.compose.ui.text.input.TextFieldValue(viewModel.note, androidx.compose.ui.text.TextRange(viewModel.note.length)))
+        }
         val focus = remember { FocusRequester() }
         LaunchedEffect(Unit) { focus.requestFocus() }
         GlassAlertDialog(
@@ -1127,9 +1130,16 @@ fun EditorScreen(
             title = { Text("Note", style = MaterialTheme.typography.titleLarge) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    GlassTextField(draft, { draft = it.take(120) }, placeholder = "e.g. Lunch with friends #goa", focusRequester = focus)
-                    // While a #tag is being typed, offer tags used before that start the same way.
-                    val typing = Regex("""#([\p{L}\p{N}_-]*)$""").find(draft)
+                    GlassTextField(
+                        draft,
+                        { next -> if (next.text.length <= 120) draft = next },
+                        placeholder = "e.g. Lunch with friends #goa",
+                        focusRequester = focus,
+                    )
+                    // While a #tag is being typed (the word the cursor is in), offer tags used before that start the same way.
+                    val cursor = draft.selection.end.coerceIn(0, draft.text.length)
+                    val typing = Regex("""(?<![\p{L}\p{N}_])#([\p{L}\p{N}_-]*)$""").find(draft.text.substring(0, cursor))
+                        ?.takeIf { cursor == draft.text.length || !draft.text[cursor].let { ch -> ch.isLetterOrDigit() || ch == '_' || ch == '-' } }
                     val usedTags = remember(history) { history.allTags() }
                     val matches = typing?.let { m ->
                         val start = m.groupValues[1].lowercase()
@@ -1138,7 +1148,15 @@ fun EditorScreen(
                     if (matches.isNotEmpty()) {
                         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             matches.forEach { tag ->
-                                Chip("#$tag", { draft = draft.substring(0, typing!!.range.first) + "#$tag " })
+                                Chip("#$tag", {
+                                    // Replace what's typed of the tag, keep the rest of the note, and put the cursor after it.
+                                    val m = typing!!
+                                    val before = draft.text.substring(0, m.range.first)
+                                    val after = draft.text.substring(cursor).trimStart()
+                                    val inserted = "#$tag "
+                                    val text = (before + inserted + after).take(120)
+                                    draft = androidx.compose.ui.text.input.TextFieldValue(text, androidx.compose.ui.text.TextRange((before + inserted).length.coerceAtMost(text.length)))
+                                })
                             }
                         }
                     }
@@ -1146,7 +1164,7 @@ fun EditorScreen(
             },
             confirmButton = {
                 TextButton(onClick = {
-                    viewModel.note = draft.trim()
+                    viewModel.note = draft.text.trim()
                     showNote = false
                 }) { Text("Done", color = c.textPrimary) }
             },

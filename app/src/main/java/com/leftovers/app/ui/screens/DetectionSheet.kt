@@ -43,6 +43,7 @@ import com.leftovers.app.util.SmsParser
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun DetectionSheet(keywords: Set<String>, onChange: (Set<String>) -> Unit, onDismiss: () -> Unit) {
+    val use24 = com.leftovers.app.util.LocalUse24Hour.current
     val c = LocalAppColors.current
     val money = LocalMoney.current
     val context = LocalContext.current
@@ -157,7 +158,7 @@ fun DetectionSheet(keywords: Set<String>, onChange: (Set<String>) -> Unit, onDis
                             Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
                                 Text(e.result, style = MaterialTheme.typography.bodyMedium, color = c.textPrimary)
                                 Text(
-                                    "${e.source} · ${e.from} · ${logTime.format(java.time.Instant.ofEpochMilli(e.at).atZone(java.time.ZoneId.systemDefault()))}",
+                                    "${e.source} · ${e.from} · ${java.time.Instant.ofEpochMilli(e.at).atZone(java.time.ZoneId.systemDefault()).let { at -> at.format(logDay) + ", " + at.format(com.leftovers.app.util.timeFormatter(use24))}}",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = c.textTertiary,
                                 )
@@ -170,4 +171,4 @@ fun DetectionSheet(keywords: Set<String>, onChange: (Set<String>) -> Unit, onDis
     }
 }
 
-private val logTime = java.time.format.DateTimeFormatter.ofPattern("d MMM, h:mm a")
+private val logDay = java.time.format.DateTimeFormatter.ofPattern("d MMM")

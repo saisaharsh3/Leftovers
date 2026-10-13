@@ -59,6 +59,14 @@ class Money(currencyCode: String) {
 
 val LocalMoney = staticCompositionLocalOf { Money("USD") }
 
+/** True when times show as 24-hour ("18:30"), false for 12-hour ("6:30 PM"); set from Settings or the phone. */
+val LocalUse24Hour = staticCompositionLocalOf { true }
+
+private val time24 = DateTimeFormatter.ofPattern("HH:mm")
+private val time12 = DateTimeFormatter.ofPattern("h:mm a")
+
+fun timeFormatter(use24Hour: Boolean): DateTimeFormatter = if (use24Hour) time24 else time12
+
 object AmountInput {
     private val pattern = Regex("""\d{0,9}(\.\d{0,2})?""")
 

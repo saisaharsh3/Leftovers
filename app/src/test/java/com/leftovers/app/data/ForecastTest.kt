@@ -85,6 +85,11 @@ class TagsAndDebtsTest {
         assertEquals(emptyList<String>(), hashtags("No tags here"))
     }
 
+    @Test fun numbersAndMidWordHashesAreNotTags() {
+        assertEquals(emptyList<String>(), hashtags("Order #4521 · Swiggy #12 · email@x#y · C#"))
+        assertEquals(listOf("2026trip", "goa"), hashtags("#2026trip and (#goa-)"))
+    }
+
     @Test fun mostUsedTagsFirst() {
         val items = listOf(tx(LocalDate.of(2026, 10, 1), 1, "#work"), tx(LocalDate.of(2026, 10, 2), 1, "#goa"), tx(LocalDate.of(2026, 10, 3), 1, "#goa lunch"))
         assertEquals(listOf("goa", "work"), items.allTags())

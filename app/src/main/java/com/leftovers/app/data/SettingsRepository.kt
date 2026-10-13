@@ -18,6 +18,9 @@ private val Context.dataStore by preferencesDataStore(name = "settings")
 
 enum class ThemeMode(val label: String) { DARK("Dark"), LIGHT("Light"), SYSTEM("System default") }
 
+/** How times are shown: like the phone, or always 12- or 24-hour. */
+enum class TimeFormat(val label: String) { PHONE("Phone"), H12("12-hour"), H24("24-hour") }
+
 data class AppSettings(
     val onboarded: Boolean,
     val currencyCode: String,
@@ -25,6 +28,7 @@ data class AppSettings(
     val dynamicColor: Boolean,
     /** Frosted, see-through bars, cards and dialogs; off gives solid surfaces. */
     val glassEffects: Boolean,
+    val timeFormat: TimeFormat = TimeFormat.PHONE,
     /** Last exchange rate used per currency in travel mode, e.g. "AED" to "22.7" (home currency per unit). */
     val foreignRates: Map<String, String> = emptyMap(),
     val plan: BudgetPlan,
@@ -69,6 +73,7 @@ class SettingsRepository(context: Context) {
             themeMode = ThemeMode.entries.firstOrNull { it.name == p[THEME] } ?: ThemeMode.DARK,
             dynamicColor = p[DYNAMIC_COLOR] ?: false,
             glassEffects = p[GLASS_EFFECTS] ?: true,
+            timeFormat = TimeFormat.entries.firstOrNull { it.name == p[TIME_FORMAT] } ?: TimeFormat.PHONE,
             foreignRates = p[FOREIGN_RATES].orEmpty().split(';').mapNotNull { pair ->
                 pair.split('=').takeIf { it.size == 2 && it[0].isNotBlank() }?.let { it[0] to it[1] }
             }.toMap(),
@@ -116,6 +121,8 @@ class SettingsRepository(context: Context) {
     suspend fun setGlassEffects(enabled: Boolean) = store.edit { it[GLASS_EFFECTS] = enabled }
 
     /** Remembers the rate last used for [code], so the next entry in that currency starts with it. */
+    suspend fun setTimeFormat(format: TimeFormat) = store.edit { it[TIME_FORMAT] = format.name }
+
     suspend fun setForeignRate(code: String, rate: String) = store.edit { p ->
         val rates = p[FOREIGN_RATES].orEmpty().split(';').filter { it.isNotBlank() && !it.startsWith("$code=") } + "$code=$rate"
         p[FOREIGN_RATES] = rates.takeLast(20).joinToString(";")
@@ -190,6 +197,7 @@ class SettingsRepository(context: Context) {
         val DYNAMIC_COLOR = booleanPreferencesKey("dynamic_color")
         val GLASS_EFFECTS = booleanPreferencesKey("glass_effects")
         val FOREIGN_RATES = stringPreferencesKey("foreign_rates")
+        val TIME_FORMAT = stringPreferencesKey("time_format")
         val MONTHLY_BUDGET = longPreferencesKey("monthly_budget")
         val YEARLY_BUDGET = longPreferencesKey("yearly_budget")
         val BUDGET_MODE = stringPreferencesKey("budget_mode")

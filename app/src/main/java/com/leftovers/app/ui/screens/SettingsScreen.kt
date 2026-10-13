@@ -173,6 +173,10 @@ class SettingsViewModel(
         viewModelScope.launch { settingsRepository.setCurrency(code) }
     }
 
+    fun setTimeFormat(format: com.leftovers.app.data.TimeFormat) {
+        viewModelScope.launch { settingsRepository.setTimeFormat(format) }
+    }
+
     fun setTheme(mode: ThemeMode) {
         viewModelScope.launch { settingsRepository.setThemeMode(mode) }
     }
@@ -360,6 +364,15 @@ fun SettingsScreen(
                         }
                         // Off: solid bars, cards, dialogs and sheets, with no blur (also a little easier on the battery).
                         ToggleRow(Lucide.Droplet, "Glass effects", s.glassEffects, viewModel::setGlassEffects, inset = false)
+                        Spacer(Modifier.height(10.dp))
+                        Text("Time", style = MaterialTheme.typography.labelMedium, color = c.textSecondary, modifier = Modifier.padding(start = 4.dp, bottom = 8.dp))
+                        SegmentedToggle(
+                            com.leftovers.app.data.TimeFormat.entries,
+                            s.timeFormat,
+                            { it.label },
+                            viewModel::setTimeFormat,
+                            Modifier.fillMaxWidth(),
+                        )
                     }
                 }
             }
@@ -383,7 +396,7 @@ fun SettingsScreen(
                         })
                         if (s.reminderEnabled) {
                             RowDivider()
-                            NavRow(Lucide.CalendarClock, "Remind me at", Reminders.label(s.reminderMinutes)) { showTime = true }
+                            NavRow(Lucide.CalendarClock, "Remind me at", Reminders.label(s.reminderMinutes, com.leftovers.app.util.LocalUse24Hour.current)) { showTime = true }
                         }
                         RowDivider()
                         ToggleRow(Lucide.Smartphone, "Detect bank SMS", s.smsDetection, { on ->
@@ -632,7 +645,7 @@ fun SettingsScreen(
         }
 
         if (showTime) {
-            val state = rememberTimePickerState(s.reminderMinutes / 60, s.reminderMinutes % 60)
+            val state = rememberTimePickerState(s.reminderMinutes / 60, s.reminderMinutes % 60, is24Hour = com.leftovers.app.util.LocalUse24Hour.current)
             GlassAlertDialog(
                 onDismissRequest = { showTime = false },
                 containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,

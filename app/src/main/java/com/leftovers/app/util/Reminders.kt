@@ -54,7 +54,8 @@ object Reminders {
         wm.enqueueUniquePeriodicWork(WORK_NAME, ExistingPeriodicWorkPolicy.UPDATE, request)
     }
 
-    fun label(minutes: Int): String = "%02d:%02d".format(minutes / 60, minutes % 60)
+    fun label(minutes: Int, use24Hour: Boolean = true): String =
+        java.time.LocalTime.of(minutes / 60, minutes % 60).format(com.leftovers.app.util.timeFormatter(use24Hour))
 }
 
 class ReminderWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {

@@ -67,10 +67,9 @@ import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
-private val timeFormat = DateTimeFormatter.ofPattern("HH:mm")
-
+@Composable
 fun TransactionItem.timeLabel(): String =
-    Instant.ofEpochMilli(createdAt).atZone(ZoneId.systemDefault()).toLocalTime().format(timeFormat)
+    Instant.ofEpochMilli(createdAt).atZone(ZoneId.systemDefault()).toLocalTime().format(com.leftovers.app.util.timeFormatter(com.leftovers.app.util.LocalUse24Hour.current))
 
 @Composable
 fun TransactionRow(item: TransactionItem, onClick: () -> Unit, subtitle: String = item.timeLabel()) {
@@ -148,6 +147,35 @@ fun GlassTextField(
                     )
                 }
             }
+        }
+    }
+}
+
+/** Like [GlassTextField], but with the cursor and selection in [value], for fields that edit text around the cursor. */
+@Composable
+fun GlassTextField(
+    value: androidx.compose.ui.text.input.TextFieldValue,
+    onValueChange: (androidx.compose.ui.text.input.TextFieldValue) -> Unit,
+    placeholder: String,
+    modifier: Modifier = Modifier,
+    textStyle: TextStyle = MaterialTheme.typography.bodyLarge,
+    focusRequester: FocusRequester? = null,
+) {
+    val c = LocalAppColors.current
+    Glass(modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp)) {
+        Box(Modifier.padding(horizontal = 16.dp, vertical = 15.dp)) {
+            if (value.text.isEmpty()) Text(placeholder, style = textStyle, color = c.textTertiary)
+            BasicTextField(
+                value = value,
+                onValueChange = onValueChange,
+                singleLine = true,
+                textStyle = textStyle.copy(color = c.textPrimary),
+                cursorBrush = SolidColor(c.accent),
+                keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier),
+            )
         }
     }
 }

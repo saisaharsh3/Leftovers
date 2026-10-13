@@ -118,7 +118,7 @@ fun EmailSetupSheet(onDismiss: () -> Unit, viewModel: EmailSetupViewModel = view
                         Column(Modifier.weight(1f)) {
                             Text(conn.address, style = MaterialTheme.typography.titleSmall, color = c.textPrimary)
                             Text(
-                                if (conn.lastCheckedAt == 0L) "Not checked yet" else "Last checked ${lastChecked(conn.lastCheckedAt)}",
+                                if (conn.lastCheckedAt == 0L) "Not checked yet" else "Last checked ${lastChecked(conn.lastCheckedAt, com.leftovers.app.util.LocalUse24Hour.current)}",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = c.textSecondary,
                             )
@@ -201,9 +201,7 @@ fun EmailSetupSheet(onDismiss: () -> Unit, viewModel: EmailSetupViewModel = view
     }
 }
 
-private val timeFormat = DateTimeFormatter.ofPattern("HH:mm")
-
-private fun lastChecked(at: Long): String {
+private fun lastChecked(at: Long, use24Hour: Boolean): String {
     val time = Instant.ofEpochMilli(at).atZone(ZoneId.systemDefault())
-    return "${time.toLocalDate().friendlyLabel().lowercase().replaceFirstChar { if (it.isDigit()) it else it }} at ${time.format(timeFormat)}"
+    return "${time.toLocalDate().friendlyLabel().lowercase().replaceFirstChar { if (it.isDigit()) it else it }} at ${time.format(com.leftovers.app.util.timeFormatter(use24Hour))}"
 }

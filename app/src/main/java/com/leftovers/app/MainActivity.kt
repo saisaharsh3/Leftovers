@@ -102,6 +102,11 @@ class MainActivity : FragmentActivity() {
                 LeftoversTheme(darkTheme = dark, dynamicColor = s.dynamicColor, glassEffects = s.glassEffects) {
                     CompositionLocalProvider(
                         LocalMoney provides money,
+                        com.leftovers.app.util.LocalUse24Hour provides when (s.timeFormat) {
+                            com.leftovers.app.data.TimeFormat.H12 -> false
+                            com.leftovers.app.data.TimeFormat.H24 -> true
+                            com.leftovers.app.data.TimeFormat.PHONE -> android.text.format.DateFormat.is24HourFormat(this@MainActivity)
+                        },
                         LocalHazeState provides hazeState,
                         LocalContentColor provides LocalAppColors.current.textPrimary,
                     ) {

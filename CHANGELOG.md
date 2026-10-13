@@ -18,6 +18,10 @@ All notable changes to Leftovers. Download any version from
 - Subscriptions: swipe the calendar to see what's charged in the coming months
 - Email detection reads FamPay (FamApp) payments
 - The add screen works in landscape: the keypad sits on the right and the rest scrolls
+- Time format in Settings → Appearance: like the phone, 12-hour or 24-hour
+- Notes: the cursor starts at the end of the note, tag suggestions work anywhere in it, and picking one puts
+  the cursor after it
+- Tags need a letter and must start a word, so "Order #4521" no longer makes a tag
 - Tapping an Upcoming card on Home opens that subscription, on its day in the calendar
 - With no budget set, Home shows what you spent today instead of "over budget"
 - CSV import of a thousand entries takes under a second instead of several
