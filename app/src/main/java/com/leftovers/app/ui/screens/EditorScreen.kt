@@ -33,6 +33,7 @@ import android.app.Application
 import android.graphics.Bitmap
 import android.net.Uri
 import android.view.HapticFeedbackConstants
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -313,10 +314,38 @@ class EditorViewModel(
     val owedPeople = mutableStateListOf<String>()
     var owedName by mutableStateOf("")
         private set
-    /** With more than one person: true when each one gets the whole amount, false when it's split between them. */
-    var owedEach by mutableStateOf(true)
+    /** With more than one person: how the amount goes to each of them. */
+    var owedSplit by mutableStateOf(OwedSplit.EACH)
+    /** Typed amounts by person, as text, for [OwedSplit.BY_AMOUNT]. */
+    val owedAmounts = mutableStateMapOf<String, String>()
     var needPerson by mutableStateOf(false)
         private set
+    /** Set when amounts typed per person don't add up to the total. */
+    var needAmounts by mutableStateOf(false)
+        private set
+
+    fun chooseOwedSplit(next: OwedSplit) {
+        // Typing amounts starts from an even split.
+        if (next == OwedSplit.BY_AMOUNT && owedSplit != OwedSplit.BY_AMOUNT) {
+            val even = owedSplitEvenly()
+            even.forEach { (name, amount) -> owedAmounts[name] = AmountInput.fromMinor(amount) }
+        }
+        owedSplit = next
+        needAmounts = false
+    }
+
+    fun typeOwedAmount(person: String, text: String) {
+        owedAmounts[person] = text
+        needAmounts = false
+    }
+
+    private fun owedSplitEvenly(): List<Pair<String, Long>> {
+        val people = owedWith
+        if (people.isEmpty()) return emptyList()
+        val base = totalMinor / people.size
+        val left = totalMinor - base * people.size
+        return people.mapIndexed { i, name -> name to base + if (i < left) 1 else 0 }
+    }
 
     /** Who it's with, including a name typed but not added yet. */
     val owedWith: List<String> get() {
@@ -328,11 +357,16 @@ class EditorViewModel(
     fun owedShares(): List<Pair<String, Long>> {
         val people = owedWith
         if (people.isEmpty()) return emptyList()
-        if (owedEach || people.size == 1) return people.map { it to totalMinor }
-        val base = totalMinor / people.size
-        val left = totalMinor - base * people.size
-        return people.mapIndexed { i, name -> name to base + if (i < left) 1 else 0 }
+        if (people.size == 1) return people.map { it to totalMinor }
+        return when (owedSplit) {
+            OwedSplit.EACH -> people.map { it to totalMinor }
+            OwedSplit.SPLIT -> owedSplitEvenly()
+            OwedSplit.BY_AMOUNT -> people.map { it to (AmountInput.toMinor(owedAmounts[it].orEmpty()) ?: 0L) }
+        }
     }
+
+    /** Leaves lent or borrowed for whichever of expense or income it was on before. */
+    fun leaveOwed() = selectKind(if (type == TxType.INCOME) EntryKind.INCOME else EntryKind.EXPENSE)
 
     val kind: EntryKind get() = when {
         owed -> EntryKind.OWED
@@ -377,6 +411,10 @@ class EditorViewModel(
             needPerson = true
             return false
         }
+        if (shares.size > 1 && owedSplit == OwedSplit.BY_AMOUNT && (shares.any { it.second <= 0 } || shares.sumOf { it.second } != totalMinor)) {
+            needAmounts = true
+            return false
+        }
         val wasLent = lent
         val day = date.toEpochDay()
         val text = note.trim()
@@ -387,9 +425,9 @@ class EditorViewModel(
             }
             if (smsId > 0) sms.dismiss(smsId)
             val names = shares.map { it.first }.let { if (it.size == 1) it[0] else it.dropLast(1).joinToString(", ") + " and " + it.last() }
-            val each = if (shares.size > 1) " each" else ""
-            val amount = describe(shares.maxOf { it.second })
-            onDone(if (wasLent) "$amount$each lent to $names · in Money owed" else "$amount$each borrowed from $names · in Money owed")
+            val same = shares.map { it.second }.distinct().size == 1
+            val amount = if (same) describe(shares[0].second) + if (shares.size > 1) " each" else "" else describe(shares.sumOf { it.second })
+            onDone(if (wasLent) "$amount lent to $names · in Money owed" else "$amount borrowed from $names · in Money owed")
         }
         return true
     }
@@ -550,6 +588,9 @@ class EditorViewModel(
 
 private val stripDay = DateTimeFormatter.ofPattern("EEE")
 
+/** With several people: each owes the whole amount, it's split evenly, or each has their own amount. */
+enum class OwedSplit(val label: String) { EACH("Each"), SPLIT("Split"), BY_AMOUNT("By amount") }
+
 /** What the add screen is logging. Swiping across the amount moves between expense and income; the lent or borrowed button sets owed. */
 enum class EntryKind(val label: String) { EXPENSE("Expense"), INCOME("Income"), OWED("Lent or borrowed") }
 
@@ -573,6 +614,9 @@ fun EditorScreen(
     var showNote by rememberSaveable { mutableStateOf(false) }
     var showSplit by rememberSaveable { mutableStateOf(false) }
     var showForeign by rememberSaveable { mutableStateOf(false) }
+    var showOwedAmounts by rememberSaveable { mutableStateOf(false) }
+    // Back leaves lent or borrowed before it closes the screen.
+    BackHandler(enabled = viewModel.owed) { viewModel.leaveOwed() }
     val knownPeople by viewModel.knownPeople.collectAsStateWithLifecycle()
     var confirmDelete by rememberSaveable { mutableStateOf(false) }
     var receiptMenu by rememberSaveable { mutableStateOf(false) }
@@ -673,7 +717,8 @@ fun EditorScreen(
                 .padding(horizontal = 16.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            RoundButton(Lucide.X, "Close", onClose)
+            // In lent or borrowed, this goes back to the expense or income it came from.
+            if (viewModel.owed) RoundButton(Lucide.ChevronLeft, "Back", viewModel::leaveOwed) else RoundButton(Lucide.X, "Close", onClose)
             Spacer(Modifier.weight(1f))
             if (viewModel.owed) {
                 Text("Lent or borrowed", style = MaterialTheme.typography.titleMedium, color = c.textPrimary)
@@ -756,7 +801,7 @@ fun EditorScreen(
                     RoundButton(
                         Lucide.HandCoins,
                         "Not lent or borrowed",
-                        { viewModel.selectKind(EntryKind.EXPENSE) },
+                        viewModel::leaveOwed,
                         size = 40.dp,
                         tint = c.onAccent,
                         container = c.accent,
@@ -842,23 +887,21 @@ fun EditorScreen(
                 val shares = viewModel.owedShares()
                 val many = people.size > 1
                 val names = people.joinToString(", ")
+                val byAmount = many && viewModel.owedSplit == OwedSplit.BY_AMOUNT
                 val amount = money.format(shares.maxOfOrNull { it.second } ?: viewModel.totalMinor) + if (many) " each" else ""
                 Text(
                     when {
                         people.isEmpty() || viewModel.totalMinor <= 0 -> "Saved to Money owed · kept out of your budget"
+                        byAmount -> shares.joinToString(", ") { "${it.first} ${money.format(it.second)}" }
                         viewModel.lent -> "$names ${if (many) "owe" else "owes"} you $amount"
                         else -> "You owe $names $amount"
-                    } + when {
-                        !many || viewModel.totalMinor <= 0 -> ""
-                        viewModel.owedEach -> " · tap to split ${money.format(viewModel.totalMinor)} instead"
-                        else -> " · tap for ${money.format(viewModel.totalMinor)} each"
-                    },
+                    } + if (many && viewModel.totalMinor > 0) " · tap to change" else "",
                     textAlign = TextAlign.Center,
                     style = MaterialTheme.typography.labelMedium,
-                    color = c.accent,
+                    color = if (viewModel.needAmounts) c.warning else c.accent,
                     modifier = Modifier
                         .padding(top = 10.dp, start = 24.dp, end = 24.dp)
-                        .then(if (many) Modifier.pressable({ viewModel.owedEach = !viewModel.owedEach }, pressedScale = 0.96f) else Modifier),
+                        .then(if (many) Modifier.pressable({ showOwedAmounts = true }, pressedScale = 0.96f) else Modifier),
                 )
             }
             AnimatedVisibility(viewModel.repeatMonthly, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
@@ -952,6 +995,12 @@ fun EditorScreen(
         }
     }
     }
+    }
+
+    if (showOwedAmounts) {
+        GlassSheet(onDismiss = { showOwedAmounts = false }) {
+            OwedAmountsBody(viewModel, onDone = { showOwedAmounts = false })
+        }
     }
 
     if (showSplit) {
@@ -1326,6 +1375,64 @@ private fun DateStrip(selected: LocalDate, onSelect: (LocalDate) -> Unit, onOpen
             }
         }
         RoundButton(Lucide.Calendar, "Pick a date", onOpenCalendar, size = 52.dp, modifier = Modifier.padding(end = 16.dp))
+    }
+}
+
+/** With several people lent to or borrowed from: the whole amount each, an even split, or each person's own amount. */
+@Composable
+private fun OwedAmountsBody(viewModel: EditorViewModel, onDone: () -> Unit) {
+    val c = LocalAppColors.current
+    val money = LocalMoney.current
+    val total = viewModel.totalMinor
+    val shares = viewModel.owedShares()
+    val byAmount = viewModel.owedSplit == OwedSplit.BY_AMOUNT
+    val typed = shares.sumOf { it.second }
+    Column(
+        Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        Text(if (viewModel.lent) "How much each one owes" else "How much you owe each", style = MaterialTheme.typography.headlineSmall, color = c.textPrimary)
+        SegmentedToggle(
+            options = OwedSplit.entries,
+            selected = viewModel.owedSplit,
+            label = { it.label },
+            onSelect = viewModel::chooseOwedSplit,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        Text(
+            when (viewModel.owedSplit) {
+                OwedSplit.EACH -> "Each one ${if (viewModel.lent) "owes you" else "is owed"} the whole ${money.format(total)}."
+                OwedSplit.SPLIT -> "${money.format(total)} split evenly between them."
+                OwedSplit.BY_AMOUNT -> "Type each amount. Together they make the ${money.format(total)}."
+            },
+            style = MaterialTheme.typography.bodySmall,
+            color = c.textSecondary,
+        )
+        Glass(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(vertical = 6.dp)) {
+                shares.forEachIndexed { i, (name, amount) ->
+                    if (i > 0) com.leftovers.app.ui.components.RowDivider()
+                    com.leftovers.app.ui.components.ListRow(
+                        name,
+                        trailing = {
+                            if (byAmount) {
+                                MoneyField(viewModel.owedAmounts[name].orEmpty(), { viewModel.typeOwedAmount(name, it) }, Modifier.width(132.dp))
+                            } else {
+                                Text(money.format(amount), style = MaterialTheme.typography.titleSmall, color = c.textPrimary)
+                            }
+                        },
+                    )
+                }
+            }
+        }
+        if (byAmount && typed != total) {
+            Text(
+                if (typed < total) "${money.format(total - typed)} still to give someone" else "That's ${money.format(typed - total)} more than ${money.format(total)}",
+                style = MaterialTheme.typography.bodySmall,
+                color = c.negative,
+            )
+        }
+        PrimaryButton("Done", onDone, Modifier.fillMaxWidth())
     }
 }
 

@@ -6,8 +6,8 @@ All notable changes to Leftovers. Download any version from
 ## Unreleased
 
 - Lent or borrowed, right from the add screen: tap the hand button next to Split, pick I lent or I borrowed and
-  who it's with (one person or several, each the whole amount or split). It goes to Money owed and stays out of
-  your budget
+  who it's with: one person or several, each the whole amount, split evenly, or each their own amount. It goes
+  to Money owed and stays out of your budget. Back returns to expense or income
 - Money owed on Home: a card for each person. Tap one to edit it or mark it settled
 - Entries on Money owed end in a chevron, like other rows you can open
 - Swipe across the amount to move between Expense and Income
