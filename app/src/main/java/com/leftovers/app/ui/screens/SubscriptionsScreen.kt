@@ -82,6 +82,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.rememberCoroutineScope
 import com.leftovers.app.ui.components.RoundButton
 import kotlinx.coroutines.launch
@@ -162,6 +163,8 @@ fun SubscriptionsScreen(
     onBack: () -> Unit,
     /** Open on recurring income instead of payments. */
     startOnIncome: Boolean = false,
+    /** A subscription to show straight away, from tapping it on Home; -1 for none. */
+    openId: Long = -1L,
     viewModel: SubscriptionsViewModel = viewModel(factory = AppViewModelProvider.Factory),
 ) {
     val loadedItems by viewModel.items.collectAsStateWithLifecycle()
@@ -173,6 +176,15 @@ fun SubscriptionsScreen(
     val money = LocalMoney.current
     var filter by rememberSaveable { mutableStateOf(if (startOnIncome) TxType.INCOME else TxType.EXPENSE) }
     var editing by remember { mutableStateOf<Recurring?>(null) }
+    val focus = items.firstOrNull { it.id == openId }
+    // Coming from a card on Home: open that one's details once, over its day in the calendar.
+    var opened by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(focus) {
+        if (focus != null && !opened) {
+            opened = true
+            editing = focus.toRecurring()
+        }
+    }
     var showAll by rememberSaveable { mutableStateOf(false) }
 
     val active = items.filter { it.active }
@@ -268,7 +280,7 @@ fun SubscriptionsScreen(
 
             if (active.isNotEmpty()) {
                 item { SectionHeader("Schedule", Modifier.appear(1)) }
-                item { DeductionCalendar(active, Modifier.appear(1)) }
+                item { DeductionCalendar(active, Modifier.appear(1), focus = focus) }
             }
 
             item {
@@ -342,11 +354,14 @@ fun SubscriptionsScreen(
 
 /** A calendar with each billing day marked, so you can see when money leaves. Swipe for the months ahead. */
 @Composable
-private fun DeductionCalendar(items: List<RecurringItem>, modifier: Modifier = Modifier) {
+private fun DeductionCalendar(items: List<RecurringItem>, modifier: Modifier = Modifier, focus: RecurringItem? = null) {
     val c = LocalAppColors.current
     val money = LocalMoney.current
     val thisMonth = YearMonth.now()
-    val pager = androidx.compose.foundation.pager.rememberPagerState { 12 }
+    // Starts on the month of [focus]'s next charge, when there is one.
+    val focusDate = focus?.toRecurring()?.nextChargeDate()
+    val startPage = focusDate?.let { (YearMonth.from(it).year - thisMonth.year) * 12 + YearMonth.from(it).monthValue - thisMonth.monthValue }?.coerceIn(0, 11) ?: 0
+    val pager = androidx.compose.foundation.pager.rememberPagerState(initialPage = startPage) { 12 }
     val scope = rememberCoroutineScope()
     val shown = thisMonth.plusMonths(pager.currentPage.toLong())
     val goingOut = items.filter { it.type == TxType.EXPENSE && it.toRecurring().isDueIn(shown) }.sumOf { it.amountMinor }
@@ -386,7 +401,8 @@ private fun DeductionCalendar(items: List<RecurringItem>, modifier: Modifier = M
             }
             Spacer(Modifier.height(10.dp))
             androidx.compose.foundation.pager.HorizontalPager(pager, verticalAlignment = Alignment.Top) { page ->
-                MonthOfCharges(items, thisMonth.plusMonths(page.toLong()), Modifier.padding(horizontal = 14.dp))
+                val month = thisMonth.plusMonths(page.toLong())
+                MonthOfCharges(items, month, Modifier.padding(horizontal = 14.dp), focusDay = focusDate?.takeIf { YearMonth.from(it) == month }?.dayOfMonth)
             }
         }
     }
@@ -394,7 +410,7 @@ private fun DeductionCalendar(items: List<RecurringItem>, modifier: Modifier = M
 
 /** One month of [DeductionCalendar]: the days, and what's charged on the selected one. */
 @Composable
-private fun MonthOfCharges(items: List<RecurringItem>, month: YearMonth, modifier: Modifier = Modifier) {
+private fun MonthOfCharges(items: List<RecurringItem>, month: YearMonth, modifier: Modifier = Modifier, focusDay: Int? = null) {
     val c = LocalAppColors.current
     val money = LocalMoney.current
     val today = LocalDate.now()
@@ -403,7 +419,7 @@ private fun MonthOfCharges(items: List<RecurringItem>, month: YearMonth, modifie
     val leading = month.atDay(1).dayOfWeek.value - 1
     val cells: List<Int?> = List(leading) { null } + (1..month.lengthOfMonth()).toList()
     var selected by rememberSaveable(month.toString()) {
-        mutableStateOf((if (current) byDay.keys.filter { it >= today.dayOfMonth }.minOrNull() else null) ?: byDay.keys.minOrNull() ?: 1)
+        mutableStateOf(focusDay ?: (if (current) byDay.keys.filter { it >= today.dayOfMonth }.minOrNull() else null) ?: byDay.keys.minOrNull() ?: 1)
     }
 
     run {

@@ -221,6 +221,8 @@ fun HomeScreen(
     onOpenAccounts: () -> Unit,
     onOpenAssistant: () -> Unit,
     onOpenDebts: () -> Unit = {},
+    /** Opens Subscriptions on this one: its day in the calendar, and its details. */
+    onOpenSubscription: (RecurringItem) -> Unit = { onOpenSubscriptions(it.type == TxType.INCOME) },
     viewModel: HomeViewModel = viewModel(factory = AppViewModelProvider.Factory),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -438,7 +440,7 @@ fun HomeScreen(
                 item { SectionHeader("Upcoming", Modifier.appear(3), action = "Manage", onAction = { onOpenSubscriptions(false) }) }
                 item {
                     LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.appear(3)) {
-                        items(state.upcoming, key = { it.id }) { r -> UpcomingCard(r) { onOpenSubscriptions(r.type == TxType.INCOME) } }
+                        items(state.upcoming, key = { it.id }) { r -> UpcomingCard(r) { onOpenSubscription(r) } }
                     }
                 }
             }

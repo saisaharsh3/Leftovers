@@ -111,8 +111,9 @@ private object Routes {
     const val EDIT = "edit/{id}"
     const val BUDGET = "budget"
     const val BUDGET_PLAN = "budget/plan"
-    const val SUBSCRIPTIONS = "subscriptions?income={income}"
-    fun subscriptions(income: Boolean = false) = "subscriptions?income=$income"
+    const val SUBSCRIPTIONS = "subscriptions?income={income}&open={open}"
+    /** [open] is a subscription to show straight away, or -1. */
+    fun subscriptions(income: Boolean = false, open: Long = -1) = "subscriptions?income=$income&open=$open"
     const val GOALS = "goals"
     const val GOAL = "goals/{id}"
     const val ACCOUNTS = "accounts"
@@ -288,6 +289,7 @@ fun LeftoversNavHost(openAdd: Boolean = false, onOpenAddHandled: () -> Unit = {}
                             onOpenAccounts = { nav.navigate(Routes.ACCOUNTS) },
                             onOpenAssistant = { nav.navigate(Routes.ASSISTANT) },
                             onOpenDebts = { nav.navigate(Routes.DEBTS) },
+                            onOpenSubscription = { r -> nav.navigate(Routes.subscriptions(r.type == TxType.INCOME, r.id)) },
                         )
                     }
                     screen(Routes.ASSISTANT) { AssistantScreen(onBack = back) }
@@ -357,8 +359,18 @@ fun LeftoversNavHost(openAdd: Boolean = false, onOpenAddHandled: () -> Unit = {}
                         )
                     }
                     screen(Routes.BUDGET_PLAN) { BudgetPlanScreen(onBack = back) }
-                    screen(Routes.SUBSCRIPTIONS, listOf(navArgument("income") { type = NavType.BoolType; defaultValue = false })) { entry ->
-                        SubscriptionsScreen(onBack = back, startOnIncome = entry.arguments?.getBoolean("income") == true)
+                    screen(
+                        Routes.SUBSCRIPTIONS,
+                        listOf(
+                            navArgument("income") { type = NavType.BoolType; defaultValue = false },
+                            navArgument("open") { type = NavType.LongType; defaultValue = -1L },
+                        ),
+                    ) { entry ->
+                        SubscriptionsScreen(
+                            onBack = back,
+                            startOnIncome = entry.arguments?.getBoolean("income") == true,
+                            openId = entry.arguments?.getLong("open") ?: -1L,
+                        )
                     }
                     screen(Routes.GOALS) { GoalsScreen(onBack = back, onOpenGoal = { nav.navigate(Routes.goal(it)) }) }
                     screen(Routes.GOAL, idArg) { GoalDetailScreen(onBack = back) }
