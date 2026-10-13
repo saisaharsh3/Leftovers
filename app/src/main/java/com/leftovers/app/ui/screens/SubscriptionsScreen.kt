@@ -95,8 +95,9 @@ class SubscriptionsViewModel(
     private val settings: SettingsRepository,
     private val sync: suspend () -> Unit,
 ) : ViewModel() {
-    val items: StateFlow<List<RecurringItem>> =
-        planning.recurring.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+    /** Null until loaded, so the screen doesn't flash its empty state first. */
+    val items: StateFlow<List<RecurringItem>?> =
+        planning.recurring.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
     val categories: StateFlow<List<Category>> =
         repository.categories.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
     val accounts: StateFlow<List<AccountWithBalance>> =
@@ -163,7 +164,8 @@ fun SubscriptionsScreen(
     startOnIncome: Boolean = false,
     viewModel: SubscriptionsViewModel = viewModel(factory = AppViewModelProvider.Factory),
 ) {
-    val items by viewModel.items.collectAsStateWithLifecycle()
+    val loadedItems by viewModel.items.collectAsStateWithLifecycle()
+    val items = loadedItems.orEmpty()
     val categories by viewModel.categories.collectAsStateWithLifecycle()
     val accounts by viewModel.accounts.collectAsStateWithLifecycle()
     val suggestions by viewModel.suggestions.collectAsStateWithLifecycle()
@@ -219,6 +221,7 @@ fun SubscriptionsScreen(
                 bottom = padding.calculateBottomPadding() + 16.dp,
             ),
         ) {
+            if (loadedItems == null) return@LazyColumn
             item {
                 Glass(Modifier.fillMaxWidth().appear(0), strong = true, shape = RoundedCornerShape(32.dp)) {
                     Column(Modifier.padding(22.dp)) {

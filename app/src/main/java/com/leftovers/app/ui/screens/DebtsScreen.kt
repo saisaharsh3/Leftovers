@@ -49,6 +49,7 @@ import com.leftovers.app.data.PersonBalance
 import com.leftovers.app.data.PlanningRepository
 import com.leftovers.app.data.openBalances
 import com.leftovers.app.ui.AppViewModelProvider
+import com.leftovers.app.ui.components.sharedContainer
 import com.leftovers.app.ui.components.Chip
 import com.leftovers.app.ui.components.EmptyState
 import com.leftovers.app.ui.components.Glass
@@ -73,8 +74,9 @@ import java.time.LocalDate
 import kotlin.math.abs
 
 class DebtsViewModel(private val planning: PlanningRepository) : ViewModel() {
-    val balances: StateFlow<List<PersonBalance>> =
-        planning.debts.map { it.openBalances() }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+    /** Null until loaded, so the screen doesn't flash "All square" first. */
+    val balances: StateFlow<List<PersonBalance>?> =
+        planning.debts.map { it.openBalances() }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     /** Everyone ever recorded, for quick picking. */
     val people: StateFlow<List<String>> =
@@ -89,7 +91,8 @@ class DebtsViewModel(private val planning: PlanningRepository) : ViewModel() {
 /** Money lent to and borrowed from people. It never counts as spending or income. */
 @Composable
 fun DebtsScreen(onBack: () -> Unit, viewModel: DebtsViewModel = viewModel(factory = AppViewModelProvider.Factory)) {
-    val balances by viewModel.balances.collectAsStateWithLifecycle()
+    val loadedBalances by viewModel.balances.collectAsStateWithLifecycle()
+    val balances = loadedBalances.orEmpty()
     val people by viewModel.people.collectAsStateWithLifecycle()
     val c = LocalAppColors.current
     val money = LocalMoney.current
@@ -112,6 +115,7 @@ fun DebtsScreen(onBack: () -> Unit, viewModel: DebtsViewModel = viewModel(factor
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = padding.calculateTopPadding() + 12.dp, bottom = padding.calculateBottomPadding() + 16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            if (loadedBalances == null) return@LazyColumn
             if (balances.isEmpty()) {
                 item {
                     Glass(Modifier.fillMaxWidth().appear(0)) {
@@ -139,7 +143,7 @@ fun DebtsScreen(onBack: () -> Unit, viewModel: DebtsViewModel = viewModel(factor
                 }
             }
             items(balances, key = { it.person.lowercase() }) { b ->
-                Glass(Modifier.fillMaxWidth().appear(1), shape = RoundedCornerShape(26.dp)) {
+                Glass(Modifier.sharedContainer("owed-${b.person.lowercase()}").fillMaxWidth().appear(1), shape = RoundedCornerShape(26.dp)) {
                     Column(Modifier.padding(vertical = 8.dp)) {
                         Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                             Column(Modifier.weight(1f)) {

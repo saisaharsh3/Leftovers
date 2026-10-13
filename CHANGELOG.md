@@ -11,6 +11,7 @@ All notable changes to Leftovers. Download any version from
 - Money owed on Home: a card for each person. Tap one to edit it or mark it settled
 - Entries on Money owed end in a chevron, like other rows you can open
 - Swipe across the amount to move between Expense and Income
+- Safe to spend, Total balance and Money owed cards on Home grow into the page they open, like Saving for does
 - Subscriptions: swipe the calendar to see what's charged in the coming months
 - Email detection reads FamPay (FamApp) payments
 - The add screen works in landscape: the keypad sits on the right and the rest scrolls

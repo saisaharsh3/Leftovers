@@ -48,6 +48,7 @@ import com.leftovers.app.data.dailyBudget
 import com.leftovers.app.data.pendingExpenses
 import com.leftovers.app.data.totalOf
 import com.leftovers.app.ui.AppViewModelProvider
+import com.leftovers.app.ui.components.sharedContainer
 import com.leftovers.app.ui.components.CategoryIcon
 import com.leftovers.app.ui.components.Gauge
 import com.leftovers.app.ui.components.Glass
@@ -79,6 +80,8 @@ import kotlin.math.abs
 data class CategoryBudgetRow(val category: Category, val spent: Long)
 
 data class BudgetsUiState(
+    /** False until the first real values arrive, so nothing is drawn from the empty defaults. */
+    val loaded: Boolean = false,
     val month: YearMonth = YearMonth.now(),
     val plan: BudgetPlan = BudgetPlan(),
     val overallBudget: Long = 0,
@@ -113,6 +116,7 @@ class BudgetsViewModel(
             .groupBy { it.categoryId }
             .mapValues { (_, list) -> list.sumOf { it.amountMinor } }
         BudgetsUiState(
+            loaded = true,
             month = month,
             plan = s.plan,
             overallBudget = budget,
@@ -166,9 +170,11 @@ fun BudgetsScreen(
             Modifier.fillMaxSize(),
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = padding.calculateTopPadding() + 12.dp, bottom = 40.dp),
         ) {
+            // Until it loads there's nothing to show; drawing the defaults would flash "No budget yet".
+            if (!state.loaded) return@LazyColumn
             if (!state.plan.isSet) {
                 item {
-                    Glass(Modifier.fillMaxWidth(), strong = true, shape = RoundedCornerShape(32.dp)) {
+                    Glass(Modifier.sharedContainer("budget").fillMaxWidth(), strong = true, shape = RoundedCornerShape(32.dp)) {
                         Column(Modifier.padding(24.dp)) {
                             IconTile(Lucide.Target, c.accent, size = 48.dp)
                             Spacer(Modifier.height(16.dp))
@@ -185,7 +191,7 @@ fun BudgetsScreen(
                     val left = state.overallBudget - state.totalSpent
                     val used = if (state.overallBudget > 0) state.totalSpent.toFloat() / state.overallBudget else 1f
                     // Tapping the gauge opens the budget editor.
-                    Glass(Modifier.fillMaxWidth().appear(0), strong = true, shape = RoundedCornerShape(32.dp), onClick = onEditPlan) {
+                    Glass(Modifier.sharedContainer("budget").fillMaxWidth().appear(0), strong = true, shape = RoundedCornerShape(32.dp), onClick = onEditPlan) {
                         // A small pencil says the card opens the budget editor.
                         Icon(
                             Lucide.Pencil,

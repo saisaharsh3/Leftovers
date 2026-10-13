@@ -55,6 +55,7 @@ import com.leftovers.app.data.Palette
 import com.leftovers.app.data.SettingsRepository
 import com.leftovers.app.data.Transfer
 import com.leftovers.app.ui.AppViewModelProvider
+import com.leftovers.app.ui.components.sharedContainer
 import com.leftovers.app.ui.components.CategoryIcon
 import com.leftovers.app.ui.components.Chip
 import com.leftovers.app.ui.components.Glass
@@ -203,7 +204,7 @@ fun AccountsScreen(
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = padding.calculateTopPadding() + 12.dp, bottom = padding.calculateBottomPadding() + 16.dp),
         ) {
             item {
-                Glass(Modifier.fillMaxWidth().appear(0), strong = true, shape = RoundedCornerShape(32.dp)) {
+                Glass(Modifier.sharedContainer("accounts").fillMaxWidth().appear(0), strong = true, shape = RoundedCornerShape(32.dp)) {
                     Column(Modifier.padding(22.dp)) {
                         Text("Total across accounts", style = MaterialTheme.typography.labelLarge, color = c.textSecondary)
                         Spacer(Modifier.height(4.dp))

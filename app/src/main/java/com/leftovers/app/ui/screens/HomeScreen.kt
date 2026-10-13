@@ -340,7 +340,7 @@ fun HomeScreen(
 
             state.balance?.let { balance ->
                 item {
-                    Glass(Modifier.fillMaxWidth().padding(top = 12.dp).appear(2), onClick = onOpenAccounts) {
+                    Glass(Modifier.padding(top = 12.dp).sharedContainer("accounts").fillMaxWidth().appear(2), onClick = onOpenAccounts) {
                         Row(Modifier.padding(18.dp), verticalAlignment = Alignment.CenterVertically) {
                             IconTile(Lucide.Wallet, c.textPrimary, size = 44.dp)
                             Spacer(Modifier.width(14.dp))
@@ -502,7 +502,7 @@ private fun TodayCard(state: HomeUiState, onClick: () -> Unit, modifier: Modifie
     val c = LocalAppColors.current
     val money = LocalMoney.current
     val budget = state.today
-    Glass(modifier.fillMaxWidth(), strong = true, shape = RoundedCornerShape(32.dp), onClick = onClick) {
+    Glass(modifier.sharedContainer("budget").fillMaxWidth(), strong = true, shape = RoundedCornerShape(32.dp), onClick = onClick) {
         Column(Modifier.padding(24.dp)) {
             val over = budget != null && budget.leftToday < 0
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -573,7 +573,7 @@ private fun OwedCard(b: com.leftovers.app.data.PersonBalance, onClick: () -> Uni
     val c = LocalAppColors.current
     val money = LocalMoney.current
     val theyOwe = b.netMinor > 0
-    Glass(Modifier.width(156.dp), shape = RoundedCornerShape(24.dp), onClick = onClick) {
+    Glass(Modifier.sharedContainer("owed-${b.person.lowercase()}").width(156.dp), shape = RoundedCornerShape(24.dp), onClick = onClick) {
         Column(Modifier.padding(16.dp)) {
             IconTile(Lucide.HandCoins, if (theyOwe) c.positive else c.warning, size = 36.dp)
             Spacer(Modifier.height(12.dp))
