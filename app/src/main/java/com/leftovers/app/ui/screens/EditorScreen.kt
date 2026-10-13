@@ -309,10 +309,30 @@ class EditorViewModel(
         private set
     /** For [owed]: true when you lent it, false when you borrowed it. */
     var lent by mutableStateOf(true)
-    var owedPerson by mutableStateOf("")
+    /** For [owed]: everyone it's with. A name still being typed in [owedName] counts too. */
+    val owedPeople = mutableStateListOf<String>()
+    var owedName by mutableStateOf("")
         private set
+    /** With more than one person: true when each one gets the whole amount, false when it's split between them. */
+    var owedEach by mutableStateOf(true)
     var needPerson by mutableStateOf(false)
         private set
+
+    /** Who it's with, including a name typed but not added yet. */
+    val owedWith: List<String> get() {
+        val typed = owedName.trim()
+        return if (typed.isEmpty() || owedPeople.any { it.equals(typed, ignoreCase = true) }) owedPeople.toList() else owedPeople + typed
+    }
+
+    /** Each person's amount. Split, the odd paisa go to the first ones, so it adds up to the total. */
+    fun owedShares(): List<Pair<String, Long>> {
+        val people = owedWith
+        if (people.isEmpty()) return emptyList()
+        if (owedEach || people.size == 1) return people.map { it to totalMinor }
+        val base = totalMinor / people.size
+        val left = totalMinor - base * people.size
+        return people.mapIndexed { i, name -> name to base + if (i < left) 1 else 0 }
+    }
 
     val kind: EntryKind get() = when {
         owed -> EntryKind.OWED
@@ -332,27 +352,44 @@ class EditorViewModel(
         }
     }
 
-    fun pickPerson(name: String) {
-        owedPerson = name.take(30)
+    /** Adds [name], or takes it off if it's already there. */
+    fun togglePerson(name: String) {
+        val at = owedPeople.indexOfFirst { it.equals(name, ignoreCase = true) }
+        if (at >= 0) owedPeople.removeAt(at) else owedPeople += name.trim().take(30)
         needPerson = false
+    }
+
+    fun typeName(text: String) {
+        owedName = text.take(30)
+        needPerson = false
+    }
+
+    fun addTypedName() {
+        val typed = owedName.trim()
+        if (typed.isNotEmpty() && owedPeople.none { it.equals(typed, ignoreCase = true) }) owedPeople += typed
+        owedName = ""
     }
 
     private fun saveOwed(onDone: (String) -> Unit, describe: (Long) -> String): Boolean {
         if (amountMinor <= 0 || totalMinor <= 0) return false
-        val person = owedPerson.trim()
-        if (person.isEmpty()) {
+        val shares = owedShares()
+        if (shares.isEmpty()) {
             needPerson = true
             return false
         }
-        val amount = totalMinor
         val wasLent = lent
         val day = date.toEpochDay()
         val text = note.trim()
         val photo = receiptPath
         viewModelScope.launch {
-            planning.saveDebt(Debt(person = person, amountMinor = if (wasLent) amount else -amount, note = text, epochDay = day, receiptPath = photo))
+            shares.forEach { (person, amount) ->
+                planning.saveDebt(Debt(person = person, amountMinor = if (wasLent) amount else -amount, note = text, epochDay = day, receiptPath = photo))
+            }
             if (smsId > 0) sms.dismiss(smsId)
-            onDone(if (wasLent) "${describe(amount)} lent to $person · in Money owed" else "${describe(amount)} borrowed from $person · in Money owed")
+            val names = shares.map { it.first }.let { if (it.size == 1) it[0] else it.dropLast(1).joinToString(", ") + " and " + it.last() }
+            val each = if (shares.size > 1) " each" else ""
+            val amount = describe(shares.maxOf { it.second })
+            onDone(if (wasLent) "$amount$each lent to $names · in Money owed" else "$amount$each borrowed from $names · in Money owed")
         }
         return true
     }
@@ -788,18 +825,27 @@ fun EditorScreen(
                 )
             }
             AnimatedVisibility(viewModel.owed, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
-                val person = viewModel.owedPerson.trim()
-                val amount = money.format(viewModel.totalMinor)
+                val people = viewModel.owedWith
+                val shares = viewModel.owedShares()
+                val many = people.size > 1
+                val names = people.joinToString(", ")
+                val amount = money.format(shares.maxOfOrNull { it.second } ?: viewModel.totalMinor) + if (many) " each" else ""
                 Text(
                     when {
-                        person.isEmpty() || viewModel.totalMinor <= 0 -> "Saved to Money owed · kept out of your budget"
-                        viewModel.lent -> "$person owes you $amount · kept out of your budget"
-                        else -> "You owe $person $amount · kept out of your budget"
+                        people.isEmpty() || viewModel.totalMinor <= 0 -> "Saved to Money owed · kept out of your budget"
+                        viewModel.lent -> "$names ${if (many) "owe" else "owes"} you $amount"
+                        else -> "You owe $names $amount"
+                    } + when {
+                        !many || viewModel.totalMinor <= 0 -> ""
+                        viewModel.owedEach -> " · tap to split ${money.format(viewModel.totalMinor)} instead"
+                        else -> " · tap for ${money.format(viewModel.totalMinor)} each"
                     },
                     textAlign = TextAlign.Center,
                     style = MaterialTheme.typography.labelMedium,
                     color = c.accent,
-                    modifier = Modifier.padding(top = 10.dp, start = 24.dp, end = 24.dp),
+                    modifier = Modifier
+                        .padding(top = 10.dp, start = 24.dp, end = 24.dp)
+                        .then(if (many) Modifier.pressable({ viewModel.owedEach = !viewModel.owedEach }, pressedScale = 0.96f) else Modifier),
                 )
             }
             AnimatedVisibility(viewModel.repeatMonthly, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
@@ -841,14 +887,19 @@ fun EditorScreen(
             ) {
                 item {
                     GlassTextField(
-                        viewModel.owedPerson,
-                        viewModel::pickPerson,
+                        viewModel.owedName,
+                        viewModel::typeName,
                         placeholder = if (viewModel.lent) "Lent to" else "Borrowed from",
                         modifier = Modifier.width(170.dp),
                     )
                 }
-                items(knownPeople, key = { it }) { name ->
-                    Chip(name, onClick = { viewModel.pickPerson(name) }, selected = viewModel.owedPerson.trim().equals(name, ignoreCase = true))
+                if (viewModel.owedName.isNotBlank()) {
+                    item(key = "add") { Chip("Add", onClick = viewModel::addTypedName, icon = Lucide.Plus, selected = true) }
+                }
+                val choices = (viewModel.owedPeople + knownPeople).distinctBy { it.lowercase() }
+                items(choices, key = { it.lowercase() }) { name ->
+                    val picked = viewModel.owedPeople.any { it.equals(name, ignoreCase = true) }
+                    Chip(name, onClick = { viewModel.togglePerson(name) }, icon = if (picked) Lucide.Check else null, selected = picked)
                 }
             }
         } else {
