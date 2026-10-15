@@ -45,6 +45,7 @@ import com.leftovers.app.util.Money
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /** FragmentActivity because the biometric prompt needs it. */
@@ -52,6 +53,7 @@ class MainActivity : FragmentActivity() {
     companion object {
         const val EXTRA_OPEN_ADD = "open_add"
         private const val RELOCK_AFTER_MS = 30_000L
+        private const val SYNC_AFTER_LAUNCH_MS = 1_200L
     }
 
     /** Set when the widget or reminder asks to jump straight to "add". */
@@ -59,6 +61,7 @@ class MainActivity : FragmentActivity() {
     private var locked by mutableStateOf(true)
     private var lockChecked by mutableStateOf(false)
     private var backgroundedAt = 0L
+    private var firstStart = true
 
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
@@ -153,7 +156,13 @@ class MainActivity : FragmentActivity() {
     override fun onStart() {
         super.onStart()
         val container = (application as LeftoversApp).container
-        lifecycleScope.launch { container.syncRecurring() }
+        lifecycleScope.launch {
+            // On a cold start, let the first screen load its data before logging due subscriptions, which
+            // writes to the database and makes every screen reload once more.
+            if (firstStart) delay(SYNC_AFTER_LAUNCH_MS)
+            firstStart = false
+            container.syncRecurring()
+        }
         // Background email checks can be held back for hours to save battery; opening the app catches up.
         container.emailAccount.connection.value?.let { com.leftovers.app.util.EmailSync.checkSoon(this, it.lastCheckedAt) }
         if (backgroundedAt > 0 && SystemClock.elapsedRealtime() - backgroundedAt > RELOCK_AFTER_MS) {
