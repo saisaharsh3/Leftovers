@@ -90,7 +90,7 @@ Most budget apps want an account, show ads, or send your spending to a server. L
 
 **Extras**
 - Home-screen widgets: *Safe to spend today* (with one-tap add) and *Left this month*, plus an *Add expense* Quick Settings tile
-- Evening reminder, app lock (fingerprint, face or PIN)
+- Evening reminder, app lock with the phone's lock (fingerprint, face, screen lock) or its own PIN or password, locking as soon as you leave or after 30 s or 5 min
 - Import from a bank statement or another app (CSV), skipping anything already logged
 - Backup and restore to a file or Google Drive (photos included if you like), daily, weekly or monthly automatic
   backups to a folder you choose, CSV export
@@ -108,7 +108,8 @@ Everything stays on your device. There are no accounts, ads or analytics, and th
 network calls unless you connect the optional AI assistant or an email account.
 
 - The app is excluded from Android's automatic cloud backup, so backups go only where you save them.
-- With app lock on, screenshots are blocked and the app is hidden in the recent-apps preview.
+- With app lock on, screenshots are blocked and the app is hidden in the recent-apps preview. An app PIN or password is
+  kept only as a salted hash, and repeated wrong tries make you wait longer each time.
 - SMS detection is off by default. When on, messages are read on the device and nothing is added without your tap.
 - Payment app detection is off by default too. When on, it reads only notifications from the payment apps listed in
   Settings, keeps just a fingerprint of each, and needs notification access you give in the phone's settings.

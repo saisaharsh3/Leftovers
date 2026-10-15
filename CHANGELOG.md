@@ -3,6 +3,13 @@
 All notable changes to Leftovers. Download any version from
 [Releases](https://github.com/saisaharsh3/Leftovers/releases).
 
+## Unreleased
+
+- App lock locks as soon as you leave the app (or after 30 seconds or 5 minutes, in Settings → Lock options).
+  Picking a photo or sharing a file doesn't lock it
+- App lock can use its own PIN or password instead of the phone's screen lock, with fingerprint or face as a
+  shortcut. Only a salted hash is kept, and after five wrong tries it makes you wait, longer each time
+
 ## 1.7.0
 
 - Pure black (AMOLED) in Settings → Appearance: a black background with no glow, for OLED screens (#1)

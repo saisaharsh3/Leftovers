@@ -40,6 +40,10 @@ data class AppSettings(
     /** Minutes after midnight for the daily reminder. */
     val reminderMinutes: Int,
     val appLock: Boolean,
+    /** How long the app can be away before it locks again: 0 is straight away. */
+    val lockAfterSeconds: Int = 0,
+    /** With an app PIN or password, fingerprint or face can unlock too. */
+    val lockFingerprint: Boolean = true,
     val smsDetection: Boolean,
     /** Read payment apps' notifications (FamApp, Google Pay, PhonePe...) for payments; needs notification access. */
     val appNotifications: Boolean = false,
@@ -97,6 +101,8 @@ class SettingsRepository(context: Context) {
             reminderEnabled = p[REMINDER] ?: false,
             reminderMinutes = p[REMINDER_TIME] ?: (21 * 60),
             appLock = p[APP_LOCK] ?: false,
+            lockAfterSeconds = p[LOCK_AFTER] ?: 0,
+            lockFingerprint = p[LOCK_FINGERPRINT] ?: true,
             smsDetection = p[SMS] ?: false,
             appNotifications = p[APP_NOTIFICATIONS] ?: false,
             recapSeen = p[RECAP_SEEN].orEmpty(),
@@ -166,6 +172,10 @@ class SettingsRepository(context: Context) {
         it[REMINDER_TIME] = minutes
     }
     suspend fun setAppLock(enabled: Boolean) = store.edit { it[APP_LOCK] = enabled }
+
+    suspend fun setLockAfter(seconds: Int) = store.edit { it[LOCK_AFTER] = seconds }
+
+    suspend fun setLockFingerprint(enabled: Boolean) = store.edit { it[LOCK_FINGERPRINT] = enabled }
     suspend fun setSmsDetection(enabled: Boolean) = store.edit { it[SMS] = enabled }
 
     suspend fun setAppNotifications(enabled: Boolean) = store.edit { it[APP_NOTIFICATIONS] = enabled }
@@ -230,6 +240,8 @@ class SettingsRepository(context: Context) {
         val REMINDER = booleanPreferencesKey("reminder")
         val REMINDER_TIME = intPreferencesKey("reminder_time")
         val APP_LOCK = booleanPreferencesKey("app_lock")
+        val LOCK_AFTER = androidx.datastore.preferences.core.intPreferencesKey("lock_after_seconds")
+        val LOCK_FINGERPRINT = booleanPreferencesKey("lock_fingerprint")
         val SMS = booleanPreferencesKey("sms_detection")
         val APP_NOTIFICATIONS = booleanPreferencesKey("app_notifications")
         val RECAP_SEEN = stringPreferencesKey("recap_seen")

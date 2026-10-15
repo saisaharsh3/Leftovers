@@ -63,6 +63,8 @@ class AppContainer(private val context: Context) {
     val accounts = AccountRepository(database.accountDao(), database.transferDao(), database.transactionDao())
     val sms = SmsRepository(database.smsDao(), database.transactionDao())
     val backup = BackupManager(context, database, settings, com.leftovers.app.util.BackupPassword(context))
+    /** App lock's own PIN or password, when it doesn't use the phone's screen lock. */
+    val passcode = com.leftovers.app.util.AppPasscode(context)
     val budgetAlerts = BudgetAlertManager(context, repository, settings)
     val assistant = AssistantSettings(context)
     val emailAccount = com.leftovers.app.util.EmailAccount(context)
@@ -80,6 +82,7 @@ class AppContainer(private val context: Context) {
         emailAccount.clear()
         assistant.disconnect()
         backup.password.set(null)
+        passcode.clear()
         com.leftovers.app.util.DetectionLog.clear(context)
         settings.clearAll()
     }

@@ -52,7 +52,7 @@ import kotlinx.coroutines.launch
 class MainActivity : FragmentActivity() {
     companion object {
         const val EXTRA_OPEN_ADD = "open_add"
-        private const val RELOCK_AFTER_MS = 30_000L
+        private const val OWN_SCREEN_GRACE_MS = 10 * 60_000L
         private const val SYNC_AFTER_LAUNCH_MS = 1_200L
     }
 
@@ -62,6 +62,8 @@ class MainActivity : FragmentActivity() {
     private var lockChecked by mutableStateOf(false)
     private var backgroundedAt = 0L
     private var firstStart = true
+    /** When the app itself last opened another screen (photo picker, camera, share sheet, settings). */
+    private var openedOwnScreenAt = 0L
 
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
@@ -126,12 +128,33 @@ class MainActivity : FragmentActivity() {
                                 )
                             }
                             AnimatedVisibility(showLock, enter = fadeIn(), exit = fadeOut()) {
-                                LockScreen(onUnlock = ::authenticate)
+                                val kind by container.passcode.kind.collectAsStateWithLifecycle()
+                                val code = kind
+                                LockScreen(
+                                    kind = code,
+                                    onPhoneUnlock = ::authenticate,
+                                    onFingerprint = if (code != null && s.lockFingerprint && biometricAvailable()) {
+                                        { authenticateBiometric(code) }
+                                    } else {
+                                        null
+                                    },
+                                    check = { typed -> container.passcode.check(typed).also { if (it) locked = false } },
+                                    waitMs = container.passcode::waitMs,
+                                    canUsePhoneLock = phoneLockAvailable(),
+                                )
                             }
                         }
                     }
                 }
-                LaunchedEffect(showLock) { if (showLock) authenticate() }
+                LaunchedEffect(showLock) {
+                    if (showLock) {
+                        val code = container.passcode.kind.value
+                        when {
+                            code == null -> authenticate()
+                            s.lockFingerprint -> authenticateBiometric(code)
+                        }
+                    }
+                }
             }
         }
     }
@@ -165,8 +188,17 @@ class MainActivity : FragmentActivity() {
         }
         // Background email checks can be held back for hours to save battery; opening the app catches up.
         container.emailAccount.connection.value?.let { com.leftovers.app.util.EmailSync.checkSoon(this, it.lastCheckedAt) }
-        if (backgroundedAt > 0 && SystemClock.elapsedRealtime() - backgroundedAt > RELOCK_AFTER_MS) {
-            lifecycleScope.launch { if (container.settings.settings.first().appLock) locked = true }
+        if (backgroundedAt > 0) {
+            val away = SystemClock.elapsedRealtime() - backgroundedAt
+            // Picking a photo or sharing a file leaves the app on purpose; that doesn't lock it, unless it's long.
+            val ownTrip = openedOwnScreenAt > 0 && away < OWN_SCREEN_GRACE_MS
+            openedOwnScreenAt = 0
+            if (!ownTrip) {
+                lifecycleScope.launch {
+                    val s = container.settings.settings.first()
+                    if (s.appLock && away >= s.lockAfterSeconds * 1000L) locked = true
+                }
+            }
         }
     }
 
@@ -188,6 +220,38 @@ class MainActivity : FragmentActivity() {
             .filter { it.physicalWidth == current.physicalWidth && it.physicalHeight == current.physicalHeight }
             .maxByOrNull { it.refreshRate } ?: return
         window.attributes = window.attributes.apply { preferredDisplayModeId = best.modeId }
+    }
+
+    // Every screen the app opens goes through here, including startActivity and the photo and file pickers.
+    @Deprecated("Deprecated in Java")
+    @Suppress("DEPRECATION")
+    override fun startActivityForResult(intent: android.content.Intent, requestCode: Int, options: Bundle?) {
+        openedOwnScreenAt = SystemClock.elapsedRealtime()
+        super.startActivityForResult(intent, requestCode, options)
+    }
+
+    private fun biometricAvailable(): Boolean =
+        BiometricManager.from(this).canAuthenticate(BIOMETRIC_WEAK) == BiometricManager.BIOMETRIC_SUCCESS
+
+    /** With an app PIN or password: fingerprint or face as a shortcut, with the code as the way back. */
+    private fun authenticateBiometric(kind: com.leftovers.app.util.AppPasscode.Kind) {
+        if (!biometricAvailable()) return
+        val prompt = BiometricPrompt(
+            this,
+            ContextCompat.getMainExecutor(this),
+            object : BiometricPrompt.AuthenticationCallback() {
+                override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
+                    locked = false
+                }
+            },
+        )
+        val info = BiometricPrompt.PromptInfo.Builder()
+            .setTitle("Unlock Leftovers")
+            .setSubtitle("Use your fingerprint or face")
+            .setNegativeButtonText(if (kind == com.leftovers.app.util.AppPasscode.Kind.PIN) "Use PIN" else "Use password")
+            .setAllowedAuthenticators(BIOMETRIC_WEAK)
+            .build()
+        prompt.authenticate(info)
     }
 
     private fun authenticate() {
@@ -226,5 +290,12 @@ class MainActivity : FragmentActivity() {
             }
             .build()
         prompt.authenticate(info)
+    }
+
+    /** Whether the phone has a screen lock (or fingerprint) that can unlock the app. */
+    private fun phoneLockAvailable(): Boolean = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+        BiometricManager.from(this).canAuthenticate(BIOMETRIC_WEAK or DEVICE_CREDENTIAL) == BiometricManager.BIOMETRIC_SUCCESS
+    } else {
+        getSystemService(android.app.KeyguardManager::class.java).isDeviceSecure
     }
 }

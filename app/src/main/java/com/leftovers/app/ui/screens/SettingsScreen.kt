@@ -1,5 +1,10 @@
 package com.leftovers.app.ui.screens
 
+import com.leftovers.app.ui.components.SecondaryButton
+import com.leftovers.app.ui.components.PrimaryButton
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import com.leftovers.app.util.BackupPasswordException
 import kotlinx.coroutines.Dispatchers
 import android.Manifest
@@ -205,6 +210,14 @@ class SettingsViewModel(
         viewModelScope.launch { settingsRepository.setAppLock(enabled) }
     }
 
+    fun setLockAfter(seconds: Int) {
+        viewModelScope.launch { settingsRepository.setLockAfter(seconds) }
+    }
+
+    fun setLockFingerprint(enabled: Boolean) {
+        viewModelScope.launch { settingsRepository.setLockFingerprint(enabled) }
+    }
+
     fun setAutoBackupDays(days: Int) {
         viewModelScope.launch { settingsRepository.setAutoBackupDays(days) }
     }
@@ -356,6 +369,39 @@ fun SettingsScreen(
 
     GlassScreen(title = "Settings", onBack = onBack, snackbar = snackbar) { padding ->
         val s = settings ?: return@GlassScreen
+        val passcode = (context.applicationContext as com.leftovers.app.LeftoversApp).container.passcode
+        val passcodeKind by passcode.kind.collectAsStateWithLifecycle()
+        var showLockOptions by rememberSaveable { mutableStateOf(false) }
+        // App lock was switched on with no phone screen lock: it turns on once an app PIN or password is saved.
+        var enableLockAfterCode by rememberSaveable { mutableStateOf(false) }
+        if (showLockOptions) {
+            LockOptionsSheet(
+                kind = passcodeKind,
+                phoneLock = canLock(context),
+                lockAfter = s.lockAfterSeconds,
+                fingerprint = s.lockFingerprint,
+                onSaveCode = { code, kind ->
+                    // Read now: closing the sheet clears the flag before the save below finishes.
+                    val turnOn = enableLockAfterCode
+                    scope.launch {
+                        passcode.set(code, kind)
+                        if (turnOn) viewModel.setAppLock(true)
+                        enableLockAfterCode = false
+                        snackbar.showSnackbar(if (kind == com.leftovers.app.util.AppPasscode.Kind.PIN) "App PIN set" else "Password set")
+                    }
+                },
+                onUsePhoneLock = {
+                    passcode.clear()
+                    scope.launch { snackbar.showSnackbar("Unlocks with the phone's screen lock") }
+                },
+                onLockAfter = viewModel::setLockAfter,
+                onFingerprint = viewModel::setLockFingerprint,
+                onDismiss = {
+                    showLockOptions = false
+                    enableLockAfterCode = false
+                },
+            )
+        }
         val money = Money(s.currencyCode)
         LazyColumn(
             Modifier.fillMaxSize(),
@@ -400,8 +446,26 @@ fun SettingsScreen(
                 Glass(Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(vertical = 6.dp)) {
                         ToggleRow(Lucide.Lock, "App lock", s.appLock, { on ->
-                            if (on && !canLock(context)) toast("Set up a screen lock on your phone first") else viewModel.setAppLock(on)
+                            // Without a phone screen lock, an app PIN or password is the way to lock it.
+                            if (on && !canLock(context) && passcodeKind == null) {
+                                enableLockAfterCode = true
+                                showLockOptions = true
+                            } else {
+                                viewModel.setAppLock(on)
+                            }
                         })
+                        if (s.appLock) {
+                            RowDivider()
+                            NavRow(
+                                Lucide.Shield,
+                                "Lock options",
+                                when (passcodeKind) {
+                                    com.leftovers.app.util.AppPasscode.Kind.PIN -> "App PIN"
+                                    com.leftovers.app.util.AppPasscode.Kind.PASSWORD -> "Password"
+                                    null -> "Phone lock"
+                                } + " · " + lockAfterLabel(s.lockAfterSeconds).lowercase(),
+                            ) { showLockOptions = true }
+                        }
                         RowDivider()
                         ToggleRow(Lucide.Repeat, "Remind me before bills", s.billReminders, { on ->
                             if (on && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
@@ -837,5 +901,122 @@ private fun canLock(context: Context): Boolean {
         manager.canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_WEAK or BiometricManager.Authenticators.DEVICE_CREDENTIAL) == BiometricManager.BIOMETRIC_SUCCESS
     } else {
         context.getSystemService(android.app.KeyguardManager::class.java).isDeviceSecure
+    }
+}
+
+private fun lockAfterLabel(seconds: Int) = when (seconds) {
+    0 -> "Immediately"
+    30 -> "After 30 s"
+    else -> "After ${seconds / 60} min"
+}
+
+/** How app lock unlocks (the phone's lock, an app PIN or a password) and how soon it locks after leaving. */
+@Composable
+private fun LockOptionsSheet(
+    kind: com.leftovers.app.util.AppPasscode.Kind?,
+    phoneLock: Boolean,
+    lockAfter: Int,
+    fingerprint: Boolean,
+    onSaveCode: (String, com.leftovers.app.util.AppPasscode.Kind) -> Unit,
+    onUsePhoneLock: () -> Unit,
+    onLockAfter: (Int) -> Unit,
+    onFingerprint: (Boolean) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val c = LocalAppColors.current
+    val context = LocalContext.current
+    // null is the phone's lock; it can't be picked when the phone has none.
+    var method by rememberSaveable { mutableStateOf(kind?.name ?: if (phoneLock) "PHONE" else com.leftovers.app.util.AppPasscode.Kind.PIN.name) }
+    var first by rememberSaveable { mutableStateOf("") }
+    var again by rememberSaveable { mutableStateOf("") }
+    val choosing = method != "PHONE" && method != kind?.name
+    val pin = method == com.leftovers.app.util.AppPasscode.Kind.PIN.name
+    val hasBiometric = androidx.biometric.BiometricManager.from(context)
+        .canAuthenticate(androidx.biometric.BiometricManager.Authenticators.BIOMETRIC_WEAK) == androidx.biometric.BiometricManager.BIOMETRIC_SUCCESS
+    GlassSheet(onDismiss) {
+        Column(
+            Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            Text("Lock options", style = MaterialTheme.typography.headlineSmall, color = c.textPrimary)
+            Text("Unlock with", style = MaterialTheme.typography.labelMedium, color = c.textSecondary, modifier = Modifier.padding(start = 4.dp))
+            SegmentedToggle(
+                options = listOfNotNull("PHONE".takeIf { phoneLock }, "PIN", "PASSWORD"),
+                selected = method,
+                label = { when (it) { "PHONE" -> "Phone lock"; "PIN" -> "App PIN"; else -> "Password" } },
+                onSelect = { next ->
+                    method = next
+                    first = ""
+                    again = ""
+                    if (next == "PHONE" && kind != null) onUsePhoneLock()
+                },
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Text(
+                when (method) {
+                    "PHONE" -> "Your fingerprint, face or the phone's own screen lock."
+                    "PIN" -> "A PIN just for Leftovers, ${com.leftovers.app.util.AppPasscode.MIN_PIN} to ${com.leftovers.app.util.AppPasscode.MAX_PIN} digits, separate from the phone's lock."
+                    else -> "A password just for Leftovers, at least ${com.leftovers.app.util.AppPasscode.MIN_PASSWORD} characters."
+                } + if (method != "PHONE") " It can't be recovered; if you forget it, the phone's screen lock still opens the app${if (phoneLock) "" else " once you set one up"}." else "",
+                style = MaterialTheme.typography.bodySmall,
+                color = c.textSecondary,
+            )
+            if (method != "PHONE") {
+                if (choosing || kind == null) {
+                    val valid = if (pin) first.length in com.leftovers.app.util.AppPasscode.MIN_PIN..com.leftovers.app.util.AppPasscode.MAX_PIN else first.length >= com.leftovers.app.util.AppPasscode.MIN_PASSWORD
+                    GlassTextField(
+                        first,
+                        { first = if (pin) it.filter(Char::isDigit).take(com.leftovers.app.util.AppPasscode.MAX_PIN) else it.take(64) },
+                        placeholder = if (pin) "New PIN" else "New password",
+                        keyboardType = if (pin) KeyboardType.NumberPassword else KeyboardType.Text,
+                        password = true,
+                    )
+                    GlassTextField(
+                        again,
+                        { again = if (pin) it.filter(Char::isDigit).take(com.leftovers.app.util.AppPasscode.MAX_PIN) else it.take(64) },
+                        placeholder = if (pin) "Same PIN again" else "Same password again",
+                        keyboardType = if (pin) KeyboardType.NumberPassword else KeyboardType.Text,
+                        password = true,
+                    )
+                    if (again.isNotEmpty() && again != first) {
+                        Text("They don't match", style = MaterialTheme.typography.bodySmall, color = c.negative, modifier = Modifier.padding(start = 4.dp))
+                    }
+                    PrimaryButton(
+                        if (pin) "Save PIN" else "Save password",
+                        {
+                            onSaveCode(first, if (pin) com.leftovers.app.util.AppPasscode.Kind.PIN else com.leftovers.app.util.AppPasscode.Kind.PASSWORD)
+                            onDismiss()
+                        },
+                        Modifier.fillMaxWidth(),
+                        enabled = valid && first == again,
+                    )
+                } else {
+                    SecondaryButton(if (pin) "Change PIN" else "Change password", {
+                        method = ""
+                        method = if (pin) "PIN" else "PASSWORD"
+                        first = " "
+                        first = ""
+                    }, Modifier.fillMaxWidth())
+                }
+                if (hasBiometric && kind != null && !choosing) {
+                    Glass(Modifier.fillMaxWidth()) {
+                        ToggleRow(Lucide.Lock, "Also unlock with fingerprint or face", fingerprint, onFingerprint)
+                    }
+                }
+            }
+            Text("Lock after leaving the app", style = MaterialTheme.typography.labelMedium, color = c.textSecondary, modifier = Modifier.padding(start = 4.dp, top = 4.dp))
+            SegmentedToggle(
+                options = listOf(0, 30, 300),
+                selected = if (lockAfter in listOf(0, 30, 300)) lockAfter else 0,
+                label = { lockAfterLabel(it) },
+                onSelect = onLockAfter,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Text(
+                "Picking a photo, taking one or sharing a file doesn't lock it.",
+                style = MaterialTheme.typography.bodySmall,
+                color = c.textSecondary,
+            )
+        }
     }
 }

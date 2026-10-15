@@ -137,7 +137,7 @@ fun GlassTextField(
                         visualTransformation = if (password) androidx.compose.ui.text.input.PasswordVisualTransformation() else androidx.compose.ui.text.input.VisualTransformation.None,
                         cursorBrush = SolidColor(c.accent),
                         keyboardOptions = KeyboardOptions(
-                            keyboardType = if (password) KeyboardType.Password else keyboardType,
+                            keyboardType = if (password && keyboardType == KeyboardType.Text) KeyboardType.Password else keyboardType,
                             capitalization = if (keyboardType == KeyboardType.Text && !password) KeyboardCapitalization.Sentences else KeyboardCapitalization.None,
                             autoCorrectEnabled = !password,
                         ),
