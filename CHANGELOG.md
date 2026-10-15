@@ -3,7 +3,7 @@
 All notable changes to Leftovers. Download any version from
 [Releases](https://github.com/saisaharsh3/Leftovers/releases).
 
-## Unreleased
+## 1.7.0
 
 - Pure black (AMOLED) in Settings → Appearance: a black background with no glow, for OLED screens (#1)
 - AI: on the add screen, attach a bill photo and tap Fill in from this photo; the amount, date, category and note

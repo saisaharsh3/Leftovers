@@ -1,0 +1,6 @@
+- Lent or borrowed from the add screen, one person or several
+- Statement as a PDF for any month or year
+- Detects payments from FamApp, Google Pay, PhonePe and other payment apps (optional)
+- AI: fill an entry from a bill photo, Ask AI on Insights
+- Pure black (AMOLED) theme, 12- or 24-hour time
+- Add screen works in landscape; many fixes from testers
