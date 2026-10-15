@@ -44,16 +44,18 @@ val LocalHazeState = staticCompositionLocalOf { HazeState() }
 
 /**
  * Frosted-glass effect for anything floating above content (headers, tab bar). With [fadeBottom] the frost
- * fades out over its lower part instead of ending in a hard edge, for bars that sit over the top of a screen.
+ * fades out over its lower part instead of ending in a hard edge, for bars that sit over the top of a screen;
+ * [fadeTop] does the same at the top, for button bars at the bottom of a screen.
  */
 @Composable
-fun Modifier.frosted(colors: AppColors = LocalAppColors.current, fadeBottom: Boolean = false): Modifier = hazeBlur(
+fun Modifier.frosted(colors: AppColors = LocalAppColors.current, fadeBottom: Boolean = false, fadeTop: Boolean = false): Modifier = hazeBlur(
     input = HazeInput.Sources(LocalHazeState.current),
     style = HazeBlurStyle {
         blurRadius(28.dp)
         noiseFactor(0.04f)
         colorEffects(listOf(HazeColorEffect.tint(colors.barTint)))
         if (fadeBottom) mask(Brush.verticalGradient(0f to Color.Black, 0.74f to Color.Black, 1f to Color.Transparent))
+        if (fadeTop) mask(Brush.verticalGradient(0f to Color.Transparent, 0.25f to Color.Black, 1f to Color.Black))
     },
 )
 

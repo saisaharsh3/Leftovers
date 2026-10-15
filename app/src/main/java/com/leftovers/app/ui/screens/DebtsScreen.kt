@@ -107,7 +107,7 @@ fun DebtsScreen(onBack: () -> Unit, viewModel: DebtsViewModel = viewModel(factor
         subtitle = "Lent and borrowed · kept out of your budget",
         onBack = onBack,
         bottomBar = {
-            Box(Modifier.frosted().navigationBarsPadding().padding(16.dp)) {
+            Box(Modifier.frosted(fadeTop = true).navigationBarsPadding().padding(start = 16.dp, end = 16.dp, top = 26.dp, bottom = 16.dp)) {
                 PrimaryButton("Add", { editing = Debt(person = "", amountMinor = 0) }, Modifier.fillMaxWidth(), icon = Lucide.Plus)
             }
         },

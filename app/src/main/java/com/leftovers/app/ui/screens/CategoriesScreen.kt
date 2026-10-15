@@ -104,7 +104,7 @@ fun CategoriesScreen(
         onBack = onBack,
         snackbar = snackbar,
         bottomBar = {
-            Box(Modifier.frosted().navigationBarsPadding().padding(16.dp)) {
+            Box(Modifier.frosted(fadeTop = true).navigationBarsPadding().padding(start = 16.dp, end = 16.dp, top = 26.dp, bottom = 16.dp)) {
                 PrimaryButton(
                     "New category",
                     { editing = Category(name = "", emoji = CategoryIcons.keys.first(), color = Palette.all.first(), type = tab, addsToBudget = tab == TxType.INCOME) },

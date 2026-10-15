@@ -188,6 +188,7 @@ class EditorViewModel(
                     image,
                     cats.filter { it.type == TxType.EXPENSE }.map { it.name },
                     cats.filter { it.type == TxType.INCOME }.map { it.name },
+                    accounts.value.map { com.leftovers.app.ai.AssistantTools.scrub(it.name) },
                 )
             }.onSuccess { r ->
                 if (r == null) {
@@ -201,6 +202,8 @@ class EditorViewModel(
                         categories.value.firstOrNull { it.type == type && it.name.equals(name, ignoreCase = true) }?.let { selectCategory(it.id) }
                     }
                     if (note.isBlank()) r.note?.let { note = it }
+                    // "Paid by UPI" goes to a bank account, "cash" to cash, as the bill says.
+                    com.leftovers.app.ai.ReceiptReader.pickAccount(r, accounts.value.map { Triple(it.id, it.name, it.icon) }, accountId)?.let { accountId = it }
                     receiptMessage = "Filled in from the photo · check it before adding"
                 }
             }.onFailure { receiptMessage = it.message ?: "Couldn't read the photo" }

@@ -39,4 +39,22 @@ class ReceiptReaderTest {
     @Test fun refundsAreIncome() {
         assertEquals(true, ReceiptReader.parse("""{"amount": 300, "type": "income", "category": "Other"}""", today)!!.isIncome)
     }
+
+    private val accounts = listOf(Triple(1L, "Cash", "banknote"), Triple(2L, "HDFC Bank", "landmark"), Triple(3L, "Credit card", "credit-card"))
+    private fun reading(paidBy: String? = null, account: String? = null) = ReceiptReader.Reading(100, null, null, null, false, paidBy, account)
+
+    @Test fun readsHowItWasPaid() {
+        assertEquals("upi", ReceiptReader.parse("""{"amount": 10, "paid_by": "Paid by UPI"}""", today)!!.paidBy)
+        assertEquals("card", ReceiptReader.parse("""{"amount": 10, "paid_by": "VISA credit"}""", today)!!.paidBy)
+        assertNull(ReceiptReader.parse("""{"amount": 10, "paid_by": null}""", today)!!.paidBy)
+    }
+
+    @Test fun picksTheAccountItWasPaidFrom() {
+        assertEquals(2L, ReceiptReader.pickAccount(reading(account = "hdfc bank"), accounts, 1L))
+        assertEquals(2L, ReceiptReader.pickAccount(reading(paidBy = "upi"), accounts, 1L))
+        assertEquals(3L, ReceiptReader.pickAccount(reading(paidBy = "card"), accounts, 1L))
+        assertEquals(1L, ReceiptReader.pickAccount(reading(paidBy = "cash"), accounts, 2L))
+        // Not said: the account stays as it is.
+        assertNull(ReceiptReader.pickAccount(reading(), accounts, 1L))
+    }
 }

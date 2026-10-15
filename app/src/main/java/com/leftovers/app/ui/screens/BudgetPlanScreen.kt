@@ -177,10 +177,10 @@ fun BudgetPlanScreen(
         bottomBar = {
             Column(
                 Modifier
-                    .frosted()
+                    .frosted(fadeTop = true)
                     .navigationBarsPadding()
                     .imePadding()
-                    .padding(16.dp),
+                    .padding(start = 16.dp, end = 16.dp, top = 26.dp, bottom = 16.dp),
             ) {
                 PrimaryButton("Save plan", { saveAndClose() }, Modifier.fillMaxWidth(), enabled = plan.isSet)
                 if (viewModel.wasSet) {

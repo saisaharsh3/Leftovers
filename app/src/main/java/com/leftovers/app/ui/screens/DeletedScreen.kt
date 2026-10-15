@@ -122,7 +122,7 @@ fun DeletedScreen(onBack: () -> Unit, viewModel: DeletedViewModel = viewModel(fa
         bottomBar = {
             if (state.items.isNotEmpty()) {
                 Row(
-                    Modifier.frosted().navigationBarsPadding().padding(16.dp),
+                    Modifier.frosted(fadeTop = true).navigationBarsPadding().padding(start = 16.dp, end = 16.dp, top = 26.dp, bottom = 16.dp),
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
                     SecondaryButton("Restore ${if (state.filter == DeletedFilter.All) "all" else "these"}", { viewModel.restore(shownIds) }, Modifier.weight(1f), icon = Lucide.RotateCcw)
