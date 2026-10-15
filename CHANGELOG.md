@@ -5,6 +5,7 @@ All notable changes to Leftovers. Download any version from
 
 ## Unreleased
 
+- Activity shows the account chosen on Home however you open it, including from the tab bar (#13)
 - Detect payments from payment apps' notifications: FamApp, Google Pay, PhonePe, Paytm, BHIM and CRED (Settings →
   Detect payment apps, then allow notification access). Only those apps are read, offers and reminders are skipped,
   and money sent to you comes in as income. A payment also seen in a bank SMS shows up once

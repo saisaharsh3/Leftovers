@@ -107,6 +107,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -147,11 +149,22 @@ class HistoryViewModel(
     private val repository: TransactionRepository,
     accountRepository: AccountRepository,
     planning: PlanningRepository,
+    settings: com.leftovers.app.data.SettingsRepository,
 ) : ViewModel() {
     private val month = MutableStateFlow(YearMonth.now())
     private val filter = MutableStateFlow(TypeFilter.ALL)
     private val query = MutableStateFlow("")
     private val filters = MutableStateFlow(ActivityFilters())
+
+    init {
+        // Activity shows the account Home is showing, however it's opened; all accounts on Home shows them all.
+        // It can still be cleared here, until Home switches account again.
+        viewModelScope.launch {
+            settings.settings.map { it.homeAccountId }.distinctUntilChanged().collect { id ->
+                filters.value = filters.value.copy(accountId = id)
+            }
+        }
+    }
 
     val state: StateFlow<HistoryUiState> =
         combine(
