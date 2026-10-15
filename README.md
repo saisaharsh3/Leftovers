@@ -83,6 +83,9 @@ Most budget apps want an account, show ads, or send your spending to a server. L
 - Ask questions like *"How much did I spend on food this month?"* or *"Am I on track with my budget?"*
 - Tell it what to do: *"Add 250 for coffee today"*, *"Move yesterday's lunch to Cash"*, *"Set a 5,000 limit on Shopping"*
 - Snap a bill or receipt and it suggests the entries, split by category
+- On the add screen, attach a bill photo and tap **Fill in from this photo**: amount, date, category and note are filled in for you to check
+- **Ask AI about this month** on Insights: what changed against last month and your budget, and what to do about it
+- Knows about Money owed and tags too: *"Who owes me money?"*, *"I lent Arjun 500"*, *"How much did #goa cost?"*
 - Every change it proposes waits for you to tap **Apply**. See [AI assistant](#ai-assistant) below.
 
 **Extras**

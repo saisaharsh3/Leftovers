@@ -120,7 +120,9 @@ private object Routes {
     const val RECAP = "recap/{month}"
     const val SETTINGS = "settings"
     const val CATEGORIES = "categories"
-    const val ASSISTANT = "assistant"
+    const val ASSISTANT = "assistant?ask={ask}"
+    /** Opens the assistant; a non-empty [ask] is sent as the first question. */
+    fun assistant(ask: String = "") = "assistant?ask=" + android.net.Uri.encode(ask)
 
     fun add(day: Long = -1L, amount: Long = -1L, note: String = "", sms: Long = -1L) =
         "add?day=$day&amount=$amount&note=${Uri.encode(note)}&sms=$sms"
@@ -287,12 +289,14 @@ fun LeftoversNavHost(openAdd: Boolean = false, onOpenAddHandled: () -> Unit = {}
                             onReviewSms = { s -> nav.navigate(Routes.add(s.epochDay, s.amountMinor, s.merchant, s.id)) },
                             onOpenRecap = { nav.navigate(Routes.recap(it.toString())) },
                             onOpenAccounts = { nav.navigate(Routes.ACCOUNTS) },
-                            onOpenAssistant = { nav.navigate(Routes.ASSISTANT) },
+                            onOpenAssistant = { nav.navigate(Routes.assistant()) },
                             onOpenDebts = { nav.navigate(Routes.DEBTS) },
                             onOpenSubscription = { r -> nav.navigate(Routes.subscriptions(r.type == TxType.INCOME, r.id)) },
                         )
                     }
-                    screen(Routes.ASSISTANT) { AssistantScreen(onBack = back) }
+                    screen(Routes.ASSISTANT, listOf(navArgument("ask") { type = NavType.StringType; defaultValue = "" })) { entry ->
+                        AssistantScreen(onBack = back, ask = entry.arguments?.getString("ask").orEmpty())
+                    }
                     screen(Routes.ACTIVITY) {
                         HistoryScreen(
                             onOpenTransaction = { nav.navigate(Routes.edit(it)) },
@@ -307,6 +311,7 @@ fun LeftoversNavHost(openAdd: Boolean = false, onOpenAddHandled: () -> Unit = {}
                             onOpenRecap = { nav.navigate(Routes.recap(it.toString())) },
                             onOpenYear = { nav.navigate(Routes.recap(it.toString())) },
                             onOpenTransaction = { nav.navigate(Routes.edit(it)) },
+                            onAskAi = { nav.navigate(Routes.assistant(it)) },
                         )
                     }
                     screen(Routes.PLAN) {

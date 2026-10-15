@@ -31,7 +31,7 @@ object AppViewModelProvider {
         initializer { HomeViewModel(container().repository, container().settings, container().planning, container().sms, container().accounts) }
         initializer {
             val c = container()
-            EditorViewModel(createSavedStateHandle(), app(), c.repository, c.accounts, c.settings, c.sms, c.planning, c.budgetAlerts)
+            EditorViewModel(createSavedStateHandle(), app(), c.repository, c.accounts, c.settings, c.sms, c.planning, c.budgetAlerts, c.assistant)
         }
         initializer { AccountsViewModel(container().accounts, container().settings, container().repository) }
         initializer { RecapViewModel(createSavedStateHandle(), container().repository, container().planning, container().settings) }

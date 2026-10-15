@@ -332,13 +332,15 @@ private val suggestions = listOf(
     "How much did I spend on food this month?",
     "Am I on track with my budget?",
     "Add 250 for coffee today",
-    "What are my biggest expenses this month?",
+    "Who owes me money?",
     "Which subscriptions renew this week?",
 )
 
 @Composable
 fun AssistantScreen(
     onBack: () -> Unit,
+    /** A question to send straight away, e.g. from Insights; sent once, only when an AI is connected. */
+    ask: String = "",
     // Kept by the activity, not this screen: going back doesn't stop an answer, and the chat is still here
     // on return. It lives only in memory and is gone when the app closes.
     viewModel: AssistantViewModel = viewModel(
@@ -350,6 +352,13 @@ fun AssistantScreen(
     val config by viewModel.config.collectAsStateWithLifecycle()
     var input by rememberSaveable { mutableStateOf("") }
     var showSetup by rememberSaveable { mutableStateOf(false) }
+    var asked by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(ask, config) {
+        if (ask.isNotBlank() && config != null && !asked) {
+            asked = true
+            viewModel.send(ask)
+        }
+    }
     val listState = rememberLazyListState()
     val context = androidx.compose.ui.platform.LocalContext.current
     var attached by rememberSaveable { mutableStateOf<android.net.Uri?>(null) }
@@ -660,6 +669,7 @@ private fun ChangeCard(item: ChatItem.Change, waiting: Int, onDecide: (Boolean) 
         ChangeKind.SUBSCRIPTION -> Lucide.Repeat
         ChangeKind.TRANSFER -> Lucide.Wallet
         ChangeKind.GOAL -> Lucide.PiggyBank
+        ChangeKind.OWED -> Lucide.HandCoins
     }
     val tint = if (item.kind == ChangeKind.DELETE) c.negative else c.accent
     val pending = item.state == ChangeState.PENDING

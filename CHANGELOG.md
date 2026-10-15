@@ -5,6 +5,12 @@ All notable changes to Leftovers. Download any version from
 
 ## Unreleased
 
+- AI: on the add screen, attach a bill photo and tap Fill in from this photo; the amount, date, category and note
+  are filled in for you to check. The photo is only sent when you tap
+- AI: Ask AI about this month on Insights, for what changed against last month and your budget, and what to do
+- AI: the assistant now knows Money owed (who owes you, lending, borrowing, settling up) and #tags, and splits a
+  shared bill into your share and what others owe
+- AI: waits longer before giving up when the AI service is busy
 - Activity shows the account chosen on Home however you open it, including from the tab bar (#13)
 - Detect payments from payment apps' notifications: FamApp, Google Pay, PhonePe, Paytm, BHIM and CRED (Settings →
   Detect payment apps, then allow notification access). Only those apps are read, offers and reminders are skipped,

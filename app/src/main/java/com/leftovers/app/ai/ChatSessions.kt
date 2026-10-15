@@ -273,8 +273,9 @@ private suspend fun postJson(
         try {
             return postOnce(url, headers, body, errorMessage)
         } catch (e: RetryableException) {
-            if (++attempt > 2) throw AiException(e.message ?: "The AI service is busy. Try again in a moment.")
-            kotlinx.coroutines.delay(1500L * attempt * attempt)
+            // Busy spikes often last longer than a few seconds, so wait about 2, 4, 8 and 16 seconds before giving up.
+            if (++attempt > 4) throw AiException(e.message ?: "The AI service is busy. Try again in a moment.")
+            kotlinx.coroutines.delay(1000L shl attempt)
         }
     }
 }

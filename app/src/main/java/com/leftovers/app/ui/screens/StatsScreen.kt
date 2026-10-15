@@ -160,6 +160,8 @@ fun StatsScreen(
     onOpenRecap: (YearMonth) -> Unit,
     onOpenYear: (Int) -> Unit = {},
     onOpenTransaction: (Long) -> Unit,
+    /** Opens the assistant with this question; the row only shows when an AI is connected. */
+    onAskAi: (String) -> Unit = {},
     viewModel: StatsViewModel = viewModel(factory = AppViewModelProvider.Factory)) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val c = LocalAppColors.current
@@ -167,6 +169,8 @@ fun StatsScreen(
     val isExpense = state.type == TxType.EXPENSE
     val monthName = state.month.month.getDisplayName(TextStyle.FULL, Locale.getDefault())
     val context = androidx.compose.ui.platform.LocalContext.current
+    val aiConfig by (context.applicationContext as com.leftovers.app.LeftoversApp).container.assistant.config.collectAsStateWithLifecycle()
+    val aiConnected = aiConfig != null
     var showStatement by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
     if (showStatement) {
         StatementSheet(
@@ -243,6 +247,27 @@ fun StatsScreen(
                             style = MaterialTheme.typography.labelSmall,
                             color = c.textTertiary,
                             modifier = Modifier.padding(top = 6.dp),
+                        )
+                    }
+                }
+            }
+
+            // A read of the month from the AI, when one is connected: what changed and what to do about it.
+            if (aiConnected && state.count > 0) {
+                item {
+                    val previous = state.month.minusMonths(1).month.getDisplayName(TextStyle.FULL, Locale.getDefault())
+                    val question = if (isExpense) {
+                        "How did my spending go in $monthName ${state.month.year}? Compare it with $previous and my budget, " +
+                            "say what changed most, and suggest one or two things I could do differently."
+                    } else {
+                        "How did my income go in $monthName ${state.month.year} compared with $previous? Anything worth noticing?"
+                    }
+                    Glass(Modifier.fillMaxWidth().padding(top = 12.dp).appear(1), onClick = { onAskAi(question) }) {
+                        com.leftovers.app.ui.components.ListRow(
+                            "Ask AI about $monthName",
+                            subtitle = if (isExpense) "What changed, and what to do about it" else "How your income compares",
+                            leading = { com.leftovers.app.ui.components.IconTile(Lucide.MessageCircle, c.accent, size = 38.dp) },
+                            trailing = { Icon(Lucide.ChevronRight, contentDescription = null, tint = c.textTertiary) },
                         )
                     }
                 }

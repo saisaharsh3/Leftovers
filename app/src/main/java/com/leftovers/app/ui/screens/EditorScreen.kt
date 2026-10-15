@@ -162,7 +162,52 @@ class EditorViewModel(
     private val sms: SmsRepository,
     private val planning: PlanningRepository,
     private val budgetAlerts: BudgetAlertManager,
+    private val assistant: com.leftovers.app.ai.AssistantSettings,
 ) : ViewModel() {
+    /** Whether an AI is connected, for reading a receipt photo into the entry. */
+    val aiConfig = assistant.config
+    var readingReceipt by mutableStateOf(false)
+        private set
+    /** What happened when the photo was read: filled in, or why not. */
+    var receiptMessage by mutableStateOf<String?>(null)
+        private set
+
+    /** Sends the attached photo to the connected AI and fills in the amount, date, category and note it reads. */
+    fun fillFromReceipt() {
+        val path = receiptPath ?: return
+        val config = aiConfig.value ?: return
+        if (readingReceipt) return
+        readingReceipt = true
+        receiptMessage = null
+        viewModelScope.launch {
+            runCatching {
+                val image = com.leftovers.app.ai.ImagePrep.prepare(app, Uri.fromFile(File(path)))
+                val cats = categories.value
+                com.leftovers.app.ai.ReceiptReader.read(
+                    config,
+                    image,
+                    cats.filter { it.type == TxType.EXPENSE }.map { it.name },
+                    cats.filter { it.type == TxType.INCOME }.map { it.name },
+                )
+            }.onSuccess { r ->
+                if (r == null) {
+                    receiptMessage = "Couldn't find a total on that photo"
+                } else {
+                    if (r.isIncome != (type == TxType.INCOME)) onTypeChange(if (r.isIncome) TxType.INCOME else TxType.EXPENSE)
+                    amountText = AmountInput.fromMinor(r.amountMinor)
+                    cursor = null
+                    r.date?.let { date = it }
+                    r.category?.let { name ->
+                        categories.value.firstOrNull { it.type == type && it.name.equals(name, ignoreCase = true) }?.let { selectCategory(it.id) }
+                    }
+                    if (note.isBlank()) r.note?.let { note = it }
+                    receiptMessage = "Filled in from the photo · check it before adding"
+                }
+            }.onFailure { receiptMessage = it.message ?: "Couldn't read the photo" }
+            readingReceipt = false
+        }
+    }
+
     private val id: Long = savedState.get<Long>("id") ?: -1L
     private val smsId: Long = savedState.get<Long>("sms") ?: -1L
     val isEditing = id > 0
@@ -450,6 +495,7 @@ class EditorViewModel(
             if (path != null) {
                 if (receiptPath != originalReceipt) ReceiptStore.delete(receiptPath)
                 receiptPath = path
+                receiptMessage = null
             }
             onDone()
         }
@@ -458,6 +504,7 @@ class EditorViewModel(
     fun removeReceipt() {
         if (receiptPath != originalReceipt) ReceiptStore.delete(receiptPath)
         receiptPath = null
+        receiptMessage = null
     }
 
     /** Categories of the current type, most used first. */
@@ -865,6 +912,28 @@ fun EditorScreen(
                     color = c.textSecondary,
                     modifier = Modifier.padding(bottom = 6.dp).pressable({ showForeign = true }, pressedScale = 0.96f),
                 )
+            }
+            val aiConfig by viewModel.aiConfig.collectAsStateWithLifecycle()
+            if (aiConfig != null && viewModel.receiptPath != null && !viewModel.owed) {
+                val message = viewModel.receiptMessage
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .padding(top = 10.dp)
+                        .then(if (!viewModel.readingReceipt && message == null) Modifier.pressable(viewModel::fillFromReceipt, pressedScale = 0.96f) else Modifier),
+                ) {
+                    Icon(Lucide.Sparkles, contentDescription = null, tint = c.accent, modifier = Modifier.size(14.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        when {
+                            viewModel.readingReceipt -> "Reading the photo…"
+                            message != null -> message
+                            else -> "Fill in from this photo"
+                        },
+                        style = MaterialTheme.typography.labelMedium,
+                        color = c.accent,
+                    )
+                }
             }
             val splitting = viewModel.people.isNotEmpty() && viewModel.type == TxType.EXPENSE && !viewModel.repeatMonthly
             AnimatedVisibility(splitting, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
