@@ -171,6 +171,9 @@ class EditorViewModel(
     /** What happened when the photo was read: filled in, or why not. */
     var receiptMessage by mutableStateOf<String?>(null)
         private set
+    /** The last read failed (busy service, no connection), so tapping the message tries again. */
+    var receiptFailed by mutableStateOf(false)
+        private set
 
     /** Sends the attached photo to the connected AI and fills in the amount, date, category and note it reads. */
     fun fillFromReceipt() {
@@ -179,6 +182,7 @@ class EditorViewModel(
         if (readingReceipt) return
         readingReceipt = true
         receiptMessage = null
+        receiptFailed = false
         viewModelScope.launch {
             runCatching {
                 val image = com.leftovers.app.ai.ImagePrep.prepare(app, Uri.fromFile(File(path)))
@@ -206,7 +210,15 @@ class EditorViewModel(
                     com.leftovers.app.ai.ReceiptReader.pickAccount(r, accounts.value.map { Triple(it.id, it.name, it.icon) }, accountId)?.let { accountId = it }
                     receiptMessage = "Filled in from the photo · check it before adding"
                 }
-            }.onFailure { receiptMessage = it.message ?: "Couldn't read the photo" }
+            }.onFailure {
+                // One short line: the service's full error text is long and would push the screen around.
+                val short = when {
+                    (it as? com.leftovers.app.ai.AiException)?.status == 429 -> "The AI's usage limit is reached for now"
+                    else -> (it.message ?: "Couldn't read the photo").substringBefore(':').substringBefore(". ").take(80)
+                }
+                receiptMessage = "$short · tap to try again"
+                receiptFailed = true
+            }
             readingReceipt = false
         }
     }
@@ -923,7 +935,7 @@ fun EditorScreen(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier
                         .padding(top = 10.dp)
-                        .then(if (!viewModel.readingReceipt && message == null) Modifier.pressable(viewModel::fillFromReceipt, pressedScale = 0.96f) else Modifier),
+                        .then(if (!viewModel.readingReceipt && (message == null || viewModel.receiptFailed)) Modifier.pressable(viewModel::fillFromReceipt, pressedScale = 0.96f) else Modifier),
                 ) {
                     Icon(Lucide.Sparkles, contentDescription = null, tint = c.accent, modifier = Modifier.size(14.dp))
                     Spacer(Modifier.width(6.dp))

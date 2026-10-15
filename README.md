@@ -16,7 +16,7 @@ today, plan for the things you want, and ask an AI about your money if you'd lik
 
 ![Home, adding an expense, Insights and Plan](https://raw.githubusercontent.com/saisaharsh3/Leftovers/main/docs/screenshots/row1.png)
 
-![Activity calendar, filters, Money owed and the AI assistant](https://raw.githubusercontent.com/saisaharsh3/Leftovers/main/docs/screenshots/row2.png)
+![Activity calendar, lent or borrowed, Money owed and the AI assistant](https://raw.githubusercontent.com/saisaharsh3/Leftovers/main/docs/screenshots/row2.png)
 
 <a href="https://github.com/saisaharsh3/Leftovers/releases/latest"><img src="https://raw.githubusercontent.com/saisaharsh3/Leftovers/main/docs/badge-download.png" height="40" alt="Download the APK"></a>&nbsp;
 <a href="https://apps.obtainium.imranr.dev/redirect?r=obtainium://add/https://github.com/saisaharsh3/Leftovers"><img src="https://raw.githubusercontent.com/saisaharsh3/Leftovers/main/docs/badge-obtainium.png" height="40" alt="Get it on Obtainium"></a>

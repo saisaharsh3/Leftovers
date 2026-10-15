@@ -3,6 +3,14 @@
 All notable changes to Leftovers. Download any version from
 [Releases](https://github.com/saisaharsh3/Leftovers/releases).
 
+## Unreleased
+
+- Reading a bill photo also picks the account it was paid from: UPI or bank goes to a bank account, card to a
+  card, cash to cash
+- If reading a bill photo fails, a short message says why, and tapping it tries again
+- Bottom button bars (Add, Save) fade in at the top instead of starting with a hard edge (#11)
+- New screenshots in the README and the store listing
+
 ## 1.7.1
 
 - App lock locks as soon as you leave the app (or after 30 seconds or 5 minutes, in Settings → Lock options).

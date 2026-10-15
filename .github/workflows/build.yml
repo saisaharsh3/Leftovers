@@ -94,6 +94,10 @@ jobs:
             git push -f origin refs/tags/dev-build
             gh release upload dev-build leftovers-dev.apk --clobber
             gh release edit dev-build --prerelease --title "$title" --notes-file dev-notes.md
+            # GitHub shows the date a release was first published. Publishing it again from a draft moves that
+            # date to now, while the release, its file and its download link stay the same.
+            gh release edit dev-build --draft=true
+            gh release edit dev-build --draft=false --prerelease
           else
             gh release create dev-build leftovers-dev.apk --prerelease --target "$GITHUB_SHA" --title "$title" --notes-file dev-notes.md
           fi
