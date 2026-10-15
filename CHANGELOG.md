@@ -5,6 +5,7 @@ All notable changes to Leftovers. Download any version from
 
 ## Unreleased
 
+- Pure black (AMOLED) in Settings → Appearance: a black background with no glow, for OLED screens (#1)
 - AI: on the add screen, attach a bill photo and tap Fill in from this photo; the amount, date, category and note
   are filled in for you to check. The photo is only sent when you tap
 - AI: Ask AI about this month on Insights, for what changed against last month and your budget, and what to do

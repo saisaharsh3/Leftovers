@@ -28,6 +28,8 @@ data class AppSettings(
     val dynamicColor: Boolean,
     /** Frosted, see-through bars, cards and dialogs; off gives solid surfaces. */
     val glassEffects: Boolean,
+    /** Black background for OLED screens, when the dark theme is in use. */
+    val pureBlack: Boolean = false,
     val timeFormat: TimeFormat = TimeFormat.PHONE,
     /** Last exchange rate used per currency in travel mode, e.g. "AED" to "22.7" (home currency per unit). */
     val foreignRates: Map<String, String> = emptyMap(),
@@ -75,6 +77,7 @@ class SettingsRepository(context: Context) {
             themeMode = ThemeMode.entries.firstOrNull { it.name == p[THEME] } ?: ThemeMode.DARK,
             dynamicColor = p[DYNAMIC_COLOR] ?: false,
             glassEffects = p[GLASS_EFFECTS] ?: true,
+            pureBlack = p[PURE_BLACK] ?: false,
             timeFormat = TimeFormat.entries.firstOrNull { it.name == p[TIME_FORMAT] } ?: TimeFormat.PHONE,
             foreignRates = p[FOREIGN_RATES].orEmpty().split(';').mapNotNull { pair ->
                 pair.split('=').takeIf { it.size == 2 && it[0].isNotBlank() }?.let { it[0] to it[1] }
@@ -122,6 +125,8 @@ class SettingsRepository(context: Context) {
     suspend fun setThemeMode(mode: ThemeMode) = store.edit { it[THEME] = mode.name }
     suspend fun setDynamicColor(enabled: Boolean) = store.edit { it[DYNAMIC_COLOR] = enabled }
     suspend fun setGlassEffects(enabled: Boolean) = store.edit { it[GLASS_EFFECTS] = enabled }
+
+    suspend fun setPureBlack(enabled: Boolean) = store.edit { it[PURE_BLACK] = enabled }
 
     /** Remembers the rate last used for [code], so the next entry in that currency starts with it. */
     suspend fun setTimeFormat(format: TimeFormat) = store.edit { it[TIME_FORMAT] = format.name }
@@ -201,6 +206,7 @@ class SettingsRepository(context: Context) {
         val THEME = stringPreferencesKey("theme")
         val DYNAMIC_COLOR = booleanPreferencesKey("dynamic_color")
         val GLASS_EFFECTS = booleanPreferencesKey("glass_effects")
+        val PURE_BLACK = booleanPreferencesKey("pure_black")
         val FOREIGN_RATES = stringPreferencesKey("foreign_rates")
         val TIME_FORMAT = stringPreferencesKey("time_format")
         val MONTHLY_BUDGET = longPreferencesKey("monthly_budget")

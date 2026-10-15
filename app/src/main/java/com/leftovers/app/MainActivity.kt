@@ -102,7 +102,7 @@ class MainActivity : FragmentActivity() {
                 val money = remember(s.currencyCode) { Money(s.currencyCode) }
                 val hazeState = rememberHazeState()
                 val showLock = s.appLock && locked
-                LeftoversTheme(darkTheme = dark, dynamicColor = s.dynamicColor, glassEffects = s.glassEffects) {
+                LeftoversTheme(darkTheme = dark, dynamicColor = s.dynamicColor, glassEffects = s.glassEffects, pureBlack = s.pureBlack) {
                     CompositionLocalProvider(
                         LocalMoney provides money,
                         com.leftovers.app.util.LocalUse24Hour provides when (s.timeFormat) {

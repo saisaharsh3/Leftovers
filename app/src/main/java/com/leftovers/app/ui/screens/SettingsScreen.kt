@@ -189,6 +189,10 @@ class SettingsViewModel(
         viewModelScope.launch { settingsRepository.setGlassEffects(enabled) }
     }
 
+    fun setPureBlack(enabled: Boolean) {
+        viewModelScope.launch { settingsRepository.setPureBlack(enabled) }
+    }
+
     fun setBudgetAlerts(enabled: Boolean) {
         viewModelScope.launch { settingsRepository.setBudgetAlerts(enabled) }
     }
@@ -374,6 +378,10 @@ fun SettingsScreen(
                         }
                         // Off: solid bars, cards, dialogs and sheets, with no blur (also a little easier on the battery).
                         ToggleRow(Lucide.Droplet, "Glass effects", s.glassEffects, viewModel::setGlassEffects, inset = false)
+                        // Only means something with the dark theme, so it's hidden when the app is always light.
+                        if (s.themeMode != ThemeMode.LIGHT) {
+                            ToggleRow(Lucide.Moon, "Pure black (AMOLED)", s.pureBlack, viewModel::setPureBlack, inset = false)
+                        }
                         Spacer(Modifier.height(10.dp))
                         Text("Time", style = MaterialTheme.typography.labelMedium, color = c.textSecondary, modifier = Modifier.padding(start = 4.dp, bottom = 8.dp))
                         SegmentedToggle(

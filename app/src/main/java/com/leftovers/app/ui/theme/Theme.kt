@@ -119,6 +119,18 @@ private fun AppColors.solid(): AppColors = if (isDark) {
     )
 }
 
+/**
+ * True black for OLED screens: the background and bars are black and the coloured glow behind every screen is
+ * off, so unlit pixels stay off. Cards keep their faint glass so they still stand out.
+ */
+private fun AppColors.pureBlack(): AppColors = copy(
+    background = Color.Black,
+    barTint = Color.Black.copy(alpha = 0.6f),
+    auroraA = Color.Black,
+    auroraB = Color.Black,
+    auroraC = Color.Black,
+)
+
 private val DarkScheme = darkColorScheme(
     primary = DarkTokens.accent,
     onPrimary = DarkTokens.onAccent,
@@ -220,9 +232,12 @@ fun LeftoversTheme(
     darkTheme: Boolean,
     dynamicColor: Boolean,
     glassEffects: Boolean = true,
+    /** Dark theme only: black background and no glow, for OLED screens. */
+    pureBlack: Boolean = false,
     content: @Composable () -> Unit,
 ) {
-    val tokens = (if (darkTheme) DarkTokens else LightTokens).let { if (glassEffects) it else it.solid() }
+    val black = darkTheme && pureBlack
+    val tokens = (if (darkTheme) DarkTokens else LightTokens).let { if (glassEffects) it else it.solid() }.let { if (black) it.pureBlack() else it }
     val scheme = when {
         dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
             val context = LocalContext.current
@@ -232,7 +247,7 @@ fun LeftoversTheme(
         }
         darkTheme -> DarkScheme
         else -> LightScheme
-    }
+    }.let { if (black) it.copy(background = Color.Black, surface = Color.Black, surfaceContainerLowest = Color.Black, inverseOnSurface = Color.Black) else it }
     val resolvedTokens = if (scheme.primary != tokens.accent) tokens.copy(accent = scheme.primary, onAccent = scheme.onPrimary) else tokens
     CompositionLocalProvider(LocalAppColors provides resolvedTokens) {
         MaterialTheme(colorScheme = scheme, typography = AppTypography, shapes = AppShapes, content = content)
