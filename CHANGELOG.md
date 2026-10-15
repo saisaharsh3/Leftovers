@@ -3,7 +3,7 @@
 All notable changes to Leftovers. Download any version from
 [Releases](https://github.com/saisaharsh3/Leftovers/releases).
 
-## Unreleased
+## 1.7.1
 
 - App lock locks as soon as you leave the app (or after 30 seconds or 5 minutes, in Settings → Lock options).
   Picking a photo or sharing a file doesn't lock it

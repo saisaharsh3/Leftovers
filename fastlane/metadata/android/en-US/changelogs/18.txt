@@ -1,0 +1,2 @@
+- App lock locks as soon as you leave the app, or after 30 seconds or 5 minutes
+- App lock can use its own PIN or password, with fingerprint or face as a shortcut
