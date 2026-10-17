@@ -179,9 +179,12 @@ fun SubscriptionsScreen(
     var filter by rememberSaveable { mutableStateOf(if (startOnIncome) TxType.INCOME else TxType.EXPENSE) }
     var editing by remember { mutableStateOf<Recurring?>(null) }
     var viewing by rememberSaveable { mutableStateOf<Long?>(null) }
+    var viewingFrom by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
+    val rowBounds = remember { mutableMapOf<Long, androidx.compose.ui.geometry.Rect>() }
     items.firstOrNull { it.id == viewing }?.let { item ->
         SubscriptionCard(
             item,
+            from = viewingFrom,
             accountName = accounts.firstOrNull { it.id == item.accountId }?.name,
             onDismiss = { viewing = null },
             onEdit = {
@@ -328,7 +331,7 @@ fun SubscriptionsScreen(
                             val visible = if (showAll) shown else shown.take(5)
                             visible.forEachIndexed { i, item ->
                                 if (i > 0) RowDivider()
-                                RecurringRow(item, onClick = { viewing = item.id }, onToggle = { viewModel.setActive(item, it) })
+                                RecurringRow(item, onClick = { viewingFrom = rowBounds[item.id]; viewing = item.id }, onToggle = { viewModel.setActive(item, it) }, onBounds = { rowBounds[item.id] = it })
                             }
                             if (shown.size > 5) {
                                 RowDivider()
@@ -532,11 +535,12 @@ private fun MonthOfCharges(items: List<RecurringItem>, month: YearMonth, modifie
 }
 
 @Composable
-private fun RecurringRow(item: RecurringItem, onClick: () -> Unit, onToggle: (Boolean) -> Unit) {
+private fun RecurringRow(item: RecurringItem, onClick: () -> Unit, onToggle: (Boolean) -> Unit, onBounds: (androidx.compose.ui.geometry.Rect) -> Unit = {}) {
     val c = LocalAppColors.current
     val money = LocalMoney.current
     Row(
         Modifier
+            .trackScreenBounds(onBounds)
             .fillMaxWidth()
             .pressable(onClick, pressedScale = 0.985f)
             .padding(start = 16.dp, end = 12.dp, top = 12.dp, bottom = 12.dp),
@@ -861,7 +865,14 @@ private fun DayOfMonthGrid(selected: Int, onSelect: (Int) -> Unit) {
  * is, when it's next charged and how much it costs a year, with Edit and Pause or Resume.
  */
 @Composable
-internal fun SubscriptionCard(item: RecurringItem, accountName: String?, onDismiss: () -> Unit, onEdit: () -> Unit, onSetActive: (Boolean) -> Unit) {
+internal fun SubscriptionCard(
+    item: RecurringItem,
+    accountName: String?,
+    onDismiss: () -> Unit,
+    onEdit: () -> Unit,
+    onSetActive: (Boolean) -> Unit,
+    from: androidx.compose.ui.geometry.Rect? = null,
+) {
     val c = LocalAppColors.current
     val money = LocalMoney.current
     val r = item.toRecurring()
@@ -876,10 +887,7 @@ internal fun SubscriptionCard(item: RecurringItem, accountName: String?, onDismi
         else -> "Monthly"
     }
     val started = YearMonth.parse(item.startMonth).let { "${it.month.getDisplayName(java.time.format.TextStyle.SHORT, java.util.Locale.getDefault())} ${it.year}" }
-    GlassAlertDialog(
-        onDismissRequest = onDismiss,
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+    MorphCard(from = from, onDismiss = onDismiss) { close ->
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     CategoryIcon(item.categoryEmoji, item.categoryColor, size = 52.dp)
                     Spacer(Modifier.width(14.dp))
@@ -934,19 +942,16 @@ internal fun SubscriptionCard(item: RecurringItem, accountName: String?, onDismi
                     RowDivider(inset = 0.dp)
                     SubscriptionFact("Since", started)
                 }
-            }
-        },
-        confirmButton = {
+            
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                SecondaryButton("Edit", onEdit, Modifier.weight(1f))
+                SecondaryButton("Edit", { close(onEdit) }, Modifier.weight(1f))
                 if (item.active) {
                     SecondaryButton("Pause", { onSetActive(false); onDismiss() }, Modifier.weight(1f), icon = Lucide.Pause)
                 } else {
                     PrimaryButton("Resume", { onSetActive(true); onDismiss() }, Modifier.weight(1f), icon = Lucide.Play)
                 }
             }
-        },
-    )
+        }
 }
 
 @Composable

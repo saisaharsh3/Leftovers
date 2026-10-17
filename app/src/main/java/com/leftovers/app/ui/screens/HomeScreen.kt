@@ -241,11 +241,16 @@ fun HomeScreen(
     val money = LocalMoney.current
     if (!state.loaded) return
     var owedOpen by remember { mutableStateOf<String?>(null) }
+    // Where the tapped card was, for the pop-up to grow out of.
+    var owedFrom by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
+    var subscriptionFrom by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
     var editingDebt by remember { mutableStateOf<com.leftovers.app.data.Debt?>(null) }
     var viewingSubscription by remember { mutableStateOf<Long?>(null) }
+    val upcomingBounds = remember { mutableMapOf<Long, androidx.compose.ui.geometry.Rect>() }
     state.upcoming.firstOrNull { it.id == viewingSubscription }?.let { r ->
         SubscriptionCard(
             r,
+            from = subscriptionFrom,
             accountName = state.accounts.firstOrNull { it.id == r.accountId }?.name,
             onDismiss = { viewingSubscription = null },
             onEdit = {
@@ -263,10 +268,7 @@ fun HomeScreen(
         val entries = b.entries.sortedByDescending { it.epochDay }
         val lent = b.entries.filter { it.amountMinor > 0 }.sumOf { it.amountMinor }
         val borrowed = b.entries.filter { it.amountMinor < 0 }.sumOf { -it.amountMinor }
-        GlassAlertDialog(
-            onDismissRequest = { owedOpen = null },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        MorphCard(from = owedFrom, onDismiss = { owedOpen = null }) { close ->
                     // Who, and since when.
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Box(
@@ -351,22 +353,18 @@ fun HomeScreen(
                             }
                         }
                     }
-                }
-            },
-            confirmButton = {
+                
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     SecondaryButton("Edit", {
-                        owedOpen = null
                         // One entry opens right here; several are easier to see on Money owed.
-                        if (b.entries.size == 1) editingDebt = b.entries[0] else onOpenDebts()
+                        close { if (b.entries.size == 1) editingDebt = b.entries[0] else onOpenDebts() }
                     }, Modifier.weight(1f))
                     PrimaryButton("Mark settled", {
                         owedOpen = null
                         viewModel.settle(b.person)
                     }, Modifier.weight(1.4f), icon = Lucide.Check)
                 }
-            },
-        )
+            }
     }
     editingDebt?.let { debt ->
         DebtEditor(
@@ -559,14 +557,14 @@ fun HomeScreen(
                 item { SectionHeader("Upcoming", Modifier.appear(3), action = "Manage", onAction = { onOpenSubscriptions(false) }) }
                 item {
                     LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.appear(3)) {
-                        items(state.upcoming, key = { it.id }) { r -> UpcomingCard(r) { viewingSubscription = r.id } }
+                        items(state.upcoming, key = { it.id }) { r -> UpcomingCard(r, onBounds = { upcomingBounds[r.id] = it }) { subscriptionFrom = upcomingBounds[r.id]; viewingSubscription = r.id } }
                     }
                 }
             }
 
             if (state.owed.isNotEmpty()) {
                 item { SectionHeader("Money owed", Modifier.appear(3), action = "See all", onAction = onOpenDebts) }
-                item { OwedSummary(state.owed, Modifier.appear(3), onOpen = { owedOpen = it }, onSeeAll = onOpenDebts) }
+                item { OwedSummary(state.owed, Modifier.appear(3), onOpen = { person, at -> owedFrom = at; owedOpen = person }, onSeeAll = onOpenDebts) }
             }
 
             if (state.goals.isNotEmpty()) {
@@ -666,10 +664,10 @@ private fun TodayCard(state: HomeUiState, onClick: () -> Unit, modifier: Modifie
 }
 
 @Composable
-private fun UpcomingCard(r: RecurringItem, onClick: () -> Unit) {
+private fun UpcomingCard(r: RecurringItem, onBounds: (androidx.compose.ui.geometry.Rect) -> Unit = {}, onClick: () -> Unit) {
     val c = LocalAppColors.current
     val money = LocalMoney.current
-    Glass(Modifier.width(156.dp), shape = RoundedCornerShape(24.dp), onClick = onClick) {
+    Glass(Modifier.width(156.dp).trackScreenBounds(onBounds), shape = RoundedCornerShape(24.dp), onClick = onClick) {
         Column(Modifier.padding(16.dp)) {
             CategoryIcon(r.categoryEmoji, r.categoryColor, size = 36.dp)
             Spacer(Modifier.height(12.dp))
@@ -690,7 +688,13 @@ private fun UpcomingCard(r: RecurringItem, onClick: () -> Unit) {
  * was for. Tapping someone offers Edit or Settled.
  */
 @Composable
-private fun OwedSummary(owed: List<com.leftovers.app.data.PersonBalance>, modifier: Modifier = Modifier, onOpen: (String) -> Unit, onSeeAll: () -> Unit) {
+private fun OwedSummary(
+    owed: List<com.leftovers.app.data.PersonBalance>,
+    modifier: Modifier = Modifier,
+    onOpen: (String, androidx.compose.ui.geometry.Rect?) -> Unit,
+    onSeeAll: () -> Unit,
+) {
+    val rows = remember { mutableMapOf<String, androidx.compose.ui.geometry.Rect>() }
     val c = LocalAppColors.current
     val money = LocalMoney.current
     val owedToYou = owed.filter { it.netMinor > 0 }.sumOf { it.netMinor }
@@ -725,8 +729,8 @@ private fun OwedSummary(owed: List<com.leftovers.app.data.PersonBalance>, modifi
                             Text(if (theyOwe) "owes you" else "you owe", style = MaterialTheme.typography.labelSmall, color = c.textTertiary)
                         }
                     },
-                    onClick = { onOpen(b.person) },
-                    modifier = Modifier.sharedContainer("owed-${b.person.lowercase()}"),
+                    onClick = { onOpen(b.person, rows[b.person]) },
+                    modifier = Modifier.sharedContainer("owed-${b.person.lowercase()}").trackScreenBounds { rows[b.person] = it },
                 )
             }
             if (owed.size > shown.size) {

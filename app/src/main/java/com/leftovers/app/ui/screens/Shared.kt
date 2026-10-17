@@ -1,5 +1,15 @@
 package com.leftovers.app.ui.screens
 
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.animation.core.spring
+import kotlinx.coroutines.launch
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.layout.positionOnScreen
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Icon
 import android.os.Build
@@ -15,6 +25,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -396,3 +407,115 @@ fun ordinal(n: Int): String = when {
     n % 10 == 3 -> "${n}rd"
     else -> "${n}th"
 }
+
+/** Where an element sits on the screen, for [MorphCard] to grow out of. */
+fun Modifier.trackScreenBounds(onBounds: (androidx.compose.ui.geometry.Rect) -> Unit): Modifier =
+    this.then(Modifier.onGloballyPositioned { c ->
+        val at = c.positionOnScreen()
+        onBounds(androidx.compose.ui.geometry.Rect(at, androidx.compose.ui.geometry.Size(c.size.width.toFloat(), c.size.height.toFloat())))
+    })
+
+/**
+ * A card in the middle of the screen that grows out of the card that was tapped ([from], in screen coordinates),
+ * like a Saving for card growing into its goal, and shrinks back into it when closed. The screen behind blurs
+ * in as it opens. [content] gets a `close` that plays the shrink, dismisses, then runs what it's given.
+ */
+@Composable
+fun MorphCard(from: androidx.compose.ui.geometry.Rect?, onDismiss: () -> Unit, content: @Composable ColumnScope.(close: (then: () -> Unit) -> Unit) -> Unit) {
+    val c = LocalAppColors.current
+    val blurs = rememberWindowBlur()
+    val progress = remember { Animatable(0f) }
+    val scope = rememberCoroutineScope()
+    var target by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
+    var closing by remember { mutableStateOf(false) }
+    val resolver = LocalContext.current.contentResolver
+    // With animations turned off on the phone, the card just appears.
+    val reduceMotion = remember { runCatching { android.provider.Settings.Global.getFloat(resolver, android.provider.Settings.Global.ANIMATOR_DURATION_SCALE, 1f) }.getOrDefault(1f) }
+    fun close(then: () -> Unit = {}) {
+        if (closing) return
+        closing = true
+        scope.launch {
+            progress.animateTo(0f, tween(260, easing = FastOutSlowInEasing))
+            onDismiss()
+            then()
+        }
+    }
+    androidx.compose.ui.window.Dialog(
+        onDismissRequest = { close() },
+        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
+    ) {
+        // The window behind blurs and dims with the card, so it never arrives late.
+        val window = (LocalView.current.parent as? DialogWindowProvider)?.window
+        val radius = with(LocalDensity.current) { 24.dp.roundToPx() }
+        LaunchedEffect(window) {
+            if (window == null) {
+                progress.animateTo(1f, spring(dampingRatio = 0.86f, stiffness = 420f))
+                return@LaunchedEffect
+            }
+            // The window fills the screen before anything moves, so the card's end place doesn't shift mid-way.
+            window.setLayout(WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.MATCH_PARENT)
+            window.setWindowAnimations(0)
+            window.setDimAmount(0f)
+            repeat(2) { androidx.compose.runtime.withFrameNanos { } }
+            launch { progress.animateTo(1f, spring(dampingRatio = 0.86f, stiffness = 420f)) }
+            if (blurs) window.addFlags(WindowManager.LayoutParams.FLAG_BLUR_BEHIND)
+            snapshotFlow { progress.value }.collect { v ->
+                window.attributes = window.attributes.apply {
+                    if (blurs && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) blurBehindRadius = (radius * v.coerceIn(0f, 1f)).toInt()
+                }
+            }
+        }
+        Box(
+            Modifier
+                .fillMaxSize()
+                .background(c.background.copy(alpha = (if (blurs) 0.28f else 0.6f) * progress.value.coerceIn(0f, 1f)))
+                .pointerInput(Unit) { detectTapGestures { close() } },
+            contentAlignment = Alignment.Center,
+        ) {
+            val glassShape = RoundedCornerShape(30.dp)
+            Column(
+                Modifier
+                    .padding(horizontal = 24.dp)
+                    .widthIn(max = 460.dp)
+                    .fillMaxWidth()
+                    .onGloballyPositioned { co ->
+                        val at = co.positionOnScreen()
+                        target = androidx.compose.ui.geometry.Rect(at, androidx.compose.ui.geometry.Size(co.size.width.toFloat(), co.size.height.toFloat()))
+                    }
+                    .graphicsLayer {
+                        val p = progress.value
+                        val src = from
+                        val dst = target
+                        if (src != null && dst != null && dst.width > 0 && dst.height > 0 && reduceMotion > 0f) {
+                            // Start at the tapped card's size and place, end at the centre: scaled, not re-laid out.
+                            transformOrigin = androidx.compose.ui.graphics.TransformOrigin.Center
+                            scaleX = androidx.compose.ui.util.lerp(src.width / dst.width, 1f, p)
+                            scaleY = androidx.compose.ui.util.lerp(src.height / dst.height, 1f, p)
+                            translationX = androidx.compose.ui.util.lerp(src.center.x - dst.center.x, 0f, p)
+                            translationY = androidx.compose.ui.util.lerp(src.center.y - dst.center.y, 0f, p)
+                        } else {
+                            val k = 0.94f + 0.06f * p
+                            scaleX = k
+                            scaleY = k
+                            alpha = p.coerceIn(0f, 1f)
+                        }
+                        shape = glassShape
+                        clip = true
+                    }
+                    .background(MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = if (blurs) 0.72f else 1f), glassShape)
+                    .background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(c.glassStrong, androidx.compose.ui.graphics.Color.Transparent)), glassShape)
+                    .border(1.dp, com.leftovers.app.ui.components.glassBorder(c), glassShape)
+                    // Taps on the card stay on the card.
+                    .pointerInput(Unit) { detectTapGestures { } }
+                    .padding(22.dp)
+                    // The contents fade in once the card has mostly grown, so squashed text is never seen.
+                    .graphicsLayer { alpha = ((progress.value - 0.35f) / 0.65f).coerceIn(0f, 1f) },
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
+                androidx.activity.compose.BackHandler { close() }
+                content { then -> close(then) }
+            }
+        }
+    }
+}
+
