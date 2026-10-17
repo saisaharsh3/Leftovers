@@ -1,5 +1,6 @@
 package com.leftovers.app.ui.screens
 
+import androidx.compose.foundation.border
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.heightIn
@@ -241,61 +242,112 @@ fun HomeScreen(
     // Tapping someone on Money owed: a card in the middle with everything about them, to edit or settle.
     state.owed.firstOrNull { it.person.equals(owedOpen, ignoreCase = true) }?.let { b ->
         val theyOwe = b.netMinor > 0
+        val tone = if (theyOwe) c.positive else c.warning
+        val entries = b.entries.sortedByDescending { it.epochDay }
+        val lent = b.entries.filter { it.amountMinor > 0 }.sumOf { it.amountMinor }
+        val borrowed = b.entries.filter { it.amountMinor < 0 }.sumOf { -it.amountMinor }
         GlassAlertDialog(
             onDismissRequest = { owedOpen = null },
-            title = {
-                Column {
-                    Text(b.person, style = MaterialTheme.typography.headlineSmall, color = c.textPrimary)
-                    Text(
-                        if (theyOwe) "Owes you" else "You owe",
-                        style = MaterialTheme.typography.labelLarge,
-                        color = c.textSecondary,
-                        modifier = Modifier.padding(top = 10.dp),
-                    )
-                    Text(money.format(abs(b.netMinor)), style = MaterialTheme.typography.displaySmall, color = if (theyOwe) c.positive else c.textPrimary)
-                }
-            },
             text = {
-                // Every entry with this person; tapping one edits it.
-                Column(Modifier.heightIn(max = 300.dp).verticalScroll(rememberScrollState())) {
-                    b.entries.sortedByDescending { it.epochDay }.forEachIndexed { i, d ->
-                        if (i > 0) RowDivider(inset = 0.dp)
-                        Row(
-                            Modifier
-                                .fillMaxWidth()
-                                .pressable({ owedOpen = null; editingDebt = d }, pressedScale = 0.98f)
-                                .padding(vertical = 10.dp),
-                            verticalAlignment = Alignment.CenterVertically,
+                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    // Who, and since when.
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            Modifier.size(52.dp).clip(CircleShape).background(tone.copy(alpha = 0.16f)),
+                            contentAlignment = Alignment.Center,
                         ) {
-                            Column(Modifier.weight(1f)) {
-                                Text(d.note.ifBlank { if (d.amountMinor > 0) "Lent" else "Borrowed" }, style = MaterialTheme.typography.bodyMedium, color = c.textPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                Text(
-                                    LocalDate.ofEpochDay(d.epochDay).friendlyLabel() + if (d.photos.isNotEmpty()) " · photo" else "",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = c.textSecondary,
-                                )
-                            }
+                            Text(b.person.trim().take(1).uppercase(), style = MaterialTheme.typography.titleLarge, color = tone)
+                        }
+                        Spacer(Modifier.width(14.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(b.person, style = MaterialTheme.typography.titleLarge, color = c.textPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             Text(
-                                (if (d.amountMinor > 0) "Lent " else "Borrowed ") + money.format(abs(d.amountMinor)),
-                                style = MaterialTheme.typography.labelLarge,
-                                color = c.textPrimary,
+                                "Since " + LocalDate.ofEpochDay(b.entries.minOf { it.epochDay }).friendlyLabel() +
+                                    " · ${b.entries.size} ${if (b.entries.size == 1) "entry" else "entries"}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = c.textSecondary,
                             )
+                        }
+                    }
+                    // The balance, on its own tinted panel.
+                    Column(
+                        Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(22.dp))
+                            .background(tone.copy(alpha = 0.09f))
+                            .border(1.dp, tone.copy(alpha = 0.22f), RoundedCornerShape(22.dp))
+                            .padding(horizontal = 18.dp, vertical = 16.dp),
+                    ) {
+                        Text(if (theyOwe) "Owes you" else "You owe", style = MaterialTheme.typography.labelLarge, color = tone)
+                        Text(money.format(abs(b.netMinor)), style = MaterialTheme.typography.displaySmall, color = c.textPrimary)
+                        if (lent > 0 && borrowed > 0) {
+                            Text(
+                                "Lent ${money.format(lent)} · Borrowed ${money.format(borrowed)}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = c.textSecondary,
+                                modifier = Modifier.padding(top = 2.dp),
+                            )
+                        }
+                    }
+                    // Every entry; tapping one edits it.
+                    Column(Modifier.heightIn(max = 260.dp).verticalScroll(rememberScrollState())) {
+                        entries.forEachIndexed { i, d ->
+                            if (i > 0) RowDivider(inset = 44.dp)
+                            val out = d.amountMinor > 0
+                            Row(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .pressable({ owedOpen = null; editingDebt = d }, pressedScale = 0.98f)
+                                    .padding(vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Box(
+                                    Modifier.size(32.dp).clip(CircleShape).background(c.glass),
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    Icon(
+                                        if (out) Lucide.ArrowUpRight else Lucide.ArrowDownLeft,
+                                        contentDescription = if (out) "Lent" else "Borrowed",
+                                        tint = if (out) c.positive else c.warning,
+                                        modifier = Modifier.size(16.dp),
+                                    )
+                                }
+                                Spacer(Modifier.width(12.dp))
+                                Column(Modifier.weight(1f)) {
+                                    Text(
+                                        d.note.ifBlank { if (out) "Lent" else "Borrowed" },
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = c.textPrimary,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                    Text(
+                                        LocalDate.ofEpochDay(d.epochDay).friendlyLabel() + if (d.photos.isNotEmpty()) " · photo" else "",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = c.textSecondary,
+                                    )
+                                }
+                                Column(horizontalAlignment = Alignment.End) {
+                                    Text(money.format(abs(d.amountMinor)), style = MaterialTheme.typography.titleSmall, color = c.textPrimary)
+                                    Text(if (out) "lent" else "borrowed", style = MaterialTheme.typography.labelSmall, color = c.textTertiary)
+                                }
+                            }
                         }
                     }
                 }
             },
-            dismissButton = {
-                TextButton(onClick = {
-                    owedOpen = null
-                    // One entry opens right here; several are easier to see on Money owed.
-                    if (b.entries.size == 1) editingDebt = b.entries[0] else onOpenDebts()
-                }) { Text("Edit", color = c.textSecondary) }
-            },
             confirmButton = {
-                TextButton(onClick = {
-                    owedOpen = null
-                    viewModel.settle(b.person)
-                }) { Text("Settled", color = c.textPrimary) }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    SecondaryButton("Edit", {
+                        owedOpen = null
+                        // One entry opens right here; several are easier to see on Money owed.
+                        if (b.entries.size == 1) editingDebt = b.entries[0] else onOpenDebts()
+                    }, Modifier.weight(1f))
+                    PrimaryButton("Mark settled", {
+                        owedOpen = null
+                        viewModel.settle(b.person)
+                    }, Modifier.weight(1.4f), icon = Lucide.Check)
+                }
             },
         )
     }
