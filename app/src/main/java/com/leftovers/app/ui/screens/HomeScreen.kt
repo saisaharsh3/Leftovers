@@ -190,6 +190,10 @@ class HomeViewModel(
         viewModelScope.launch { settings.setCarryChoice(YearMonth.now().minusMonths(1), carry) }
     }
 
+    fun setSubscriptionActive(item: RecurringItem, active: Boolean) {
+        viewModelScope.launch { planning.saveRecurring(item.toRecurring().copy(active = active)) }
+    }
+
     fun settle(person: String) {
         viewModelScope.launch { planning.settle(person) }
     }
@@ -238,6 +242,19 @@ fun HomeScreen(
     if (!state.loaded) return
     var owedOpen by remember { mutableStateOf<String?>(null) }
     var editingDebt by remember { mutableStateOf<com.leftovers.app.data.Debt?>(null) }
+    var viewingSubscription by remember { mutableStateOf<Long?>(null) }
+    state.upcoming.firstOrNull { it.id == viewingSubscription }?.let { r ->
+        SubscriptionCard(
+            r,
+            accountName = state.accounts.firstOrNull { it.id == r.accountId }?.name,
+            onDismiss = { viewingSubscription = null },
+            onEdit = {
+                viewingSubscription = null
+                onOpenSubscription(r)
+            },
+            onSetActive = { viewModel.setSubscriptionActive(r, it) },
+        )
+    }
 
     // Tapping someone on Money owed: a card in the middle with everything about them, to edit or settle.
     state.owed.firstOrNull { it.person.equals(owedOpen, ignoreCase = true) }?.let { b ->
@@ -542,7 +559,7 @@ fun HomeScreen(
                 item { SectionHeader("Upcoming", Modifier.appear(3), action = "Manage", onAction = { onOpenSubscriptions(false) }) }
                 item {
                     LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.appear(3)) {
-                        items(state.upcoming, key = { it.id }) { r -> UpcomingCard(r) { onOpenSubscription(r) } }
+                        items(state.upcoming, key = { it.id }) { r -> UpcomingCard(r) { viewingSubscription = r.id } }
                     }
                 }
             }

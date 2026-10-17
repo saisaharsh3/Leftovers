@@ -5,6 +5,8 @@ All notable changes to Leftovers. Download any version from
 
 ## Unreleased
 
+- Tapping a subscription (on Home or in Subscriptions) opens a card with its next charge, yearly cost and start, with
+  Edit and Pause or Resume
 - Payment apps: choose which apps' notifications are read (Settings → Payment apps), including your bank's own app
   once it has sent you a notification, and pick the account each one's payments go to (#17)
 - Money owed on Home is one card with what you're owed and owe, and the people with the biggest balances and what

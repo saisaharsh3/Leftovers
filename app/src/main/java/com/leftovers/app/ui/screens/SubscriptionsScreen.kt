@@ -1,5 +1,7 @@
 package com.leftovers.app.ui.screens
 
+import androidx.compose.ui.text.style.TextOverflow
+import com.leftovers.app.ui.components.SecondaryButton
 import com.leftovers.app.data.AccountRepository
 import com.leftovers.app.data.AccountWithBalance
 import androidx.compose.animation.animateColorAsState
@@ -176,6 +178,19 @@ fun SubscriptionsScreen(
     val money = LocalMoney.current
     var filter by rememberSaveable { mutableStateOf(if (startOnIncome) TxType.INCOME else TxType.EXPENSE) }
     var editing by remember { mutableStateOf<Recurring?>(null) }
+    var viewing by rememberSaveable { mutableStateOf<Long?>(null) }
+    items.firstOrNull { it.id == viewing }?.let { item ->
+        SubscriptionCard(
+            item,
+            accountName = accounts.firstOrNull { it.id == item.accountId }?.name,
+            onDismiss = { viewing = null },
+            onEdit = {
+                viewing = null
+                editing = item.toRecurring()
+            },
+            onSetActive = { viewModel.setActive(item, it) },
+        )
+    }
     val focus = items.firstOrNull { it.id == openId }
     // Coming from a card on Home: open that one's details once, over its day in the calendar.
     var opened by rememberSaveable { mutableStateOf(false) }
@@ -313,7 +328,7 @@ fun SubscriptionsScreen(
                             val visible = if (showAll) shown else shown.take(5)
                             visible.forEachIndexed { i, item ->
                                 if (i > 0) RowDivider()
-                                RecurringRow(item, onClick = { editing = item.toRecurring() }, onToggle = { viewModel.setActive(item, it) })
+                                RecurringRow(item, onClick = { viewing = item.id }, onToggle = { viewModel.setActive(item, it) })
                             }
                             if (shown.size > 5) {
                                 RowDivider()
@@ -838,5 +853,107 @@ private fun DayOfMonthGrid(selected: Int, onSelect: (Int) -> Unit) {
                 }
             }
         }
+    }
+}
+
+/**
+ * A subscription or recurring income as a card in the middle of the screen, like a person on Money owed: what it
+ * is, when it's next charged and how much it costs a year, with Edit and Pause or Resume.
+ */
+@Composable
+internal fun SubscriptionCard(item: RecurringItem, accountName: String?, onDismiss: () -> Unit, onEdit: () -> Unit, onSetActive: (Boolean) -> Unit) {
+    val c = LocalAppColors.current
+    val money = LocalMoney.current
+    val r = item.toRecurring()
+    val income = item.type == TxType.INCOME
+    val tone = if (!item.active) c.textSecondary else if (income) c.positive else Color(item.categoryColor)
+    val next = if (item.active) r.nextChargeDate() else null
+    val days = next?.let { java.time.temporal.ChronoUnit.DAYS.between(LocalDate.now(), it) }
+    val cycle = when (item.everyMonths) {
+        12 -> "Yearly"
+        6 -> "Every 6 months"
+        3 -> "Every 3 months"
+        else -> "Monthly"
+    }
+    val started = YearMonth.parse(item.startMonth).let { "${it.month.getDisplayName(java.time.format.TextStyle.SHORT, java.util.Locale.getDefault())} ${it.year}" }
+    GlassAlertDialog(
+        onDismissRequest = onDismiss,
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    CategoryIcon(item.categoryEmoji, item.categoryColor, size = 52.dp)
+                    Spacer(Modifier.width(14.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(item.name, style = MaterialTheme.typography.titleLarge, color = c.textPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(
+                            listOfNotNull(cycle, item.categoryName, accountName?.let { if (income) "into $it" else "from $it" }).joinToString(" · "),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = c.textSecondary,
+                        )
+                    }
+                }
+                // When it's next charged, on its own tinted panel.
+                Column(
+                    Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(22.dp))
+                        .background(tone.copy(alpha = 0.10f))
+                        .border(1.dp, tone.copy(alpha = 0.24f), RoundedCornerShape(22.dp))
+                        .padding(horizontal = 18.dp, vertical = 16.dp),
+                ) {
+                    Text(
+                        when {
+                            !item.active -> "Paused"
+                            income -> "Next payment"
+                            else -> "Next charge"
+                        },
+                        style = MaterialTheme.typography.labelLarge,
+                        color = tone,
+                    )
+                    Text((if (income) "+" else "") + money.format(item.amountMinor), style = MaterialTheme.typography.displaySmall, color = c.textPrimary)
+                    Text(
+                        if (next == null) "Not logged until you resume it"
+                        else next.friendlyLabel() + when (days) {
+                            0L -> " · today"
+                            1L -> " · tomorrow"
+                            else -> " · in $days days"
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = c.textSecondary,
+                        modifier = Modifier.padding(top = 2.dp),
+                    )
+                }
+                // Label on the left, value on the right, so long amounts and dates never get cut.
+                Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(c.glass).padding(horizontal = 14.dp, vertical = 4.dp)) {
+                    SubscriptionFact(if (income) "In a year" else "Costs a year", money.format(r.monthlyShareMinor * 12))
+                    RowDivider(inset = 0.dp)
+                    SubscriptionFact(
+                        if (income) "Paid on" else "Charged on",
+                        if (item.everyMonths == 1) "the ${ordinal(item.dayOfMonth)}, monthly" else "the ${ordinal(item.dayOfMonth)}, every ${item.everyMonths} months",
+                    )
+                    RowDivider(inset = 0.dp)
+                    SubscriptionFact("Since", started)
+                }
+            }
+        },
+        confirmButton = {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                SecondaryButton("Edit", onEdit, Modifier.weight(1f))
+                if (item.active) {
+                    SecondaryButton("Pause", { onSetActive(false); onDismiss() }, Modifier.weight(1f), icon = Lucide.Pause)
+                } else {
+                    PrimaryButton("Resume", { onSetActive(true); onDismiss() }, Modifier.weight(1f), icon = Lucide.Play)
+                }
+            }
+        },
+    )
+}
+
+@Composable
+private fun SubscriptionFact(label: String, value: String) {
+    val c = LocalAppColors.current
+    Row(Modifier.fillMaxWidth().padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(label, style = MaterialTheme.typography.bodySmall, color = c.textSecondary, modifier = Modifier.weight(1f))
+        Text(value, style = MaterialTheme.typography.labelLarge, color = c.textPrimary)
     }
 }
