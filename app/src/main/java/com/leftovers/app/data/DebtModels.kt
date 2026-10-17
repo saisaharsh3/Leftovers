@@ -4,7 +4,10 @@ import androidx.room.Entity
 import androidx.room.PrimaryKey
 import java.time.LocalDate
 
-/** Money lent to or borrowed from someone. Kept apart from spending, so it never touches the budget. */
+/**
+ * Money lent to or borrowed from someone. Kept apart from spending, so it never touches the budget, but while
+ * it's open it moves [accountId]'s balance: lending takes the money out, borrowing puts it in.
+ */
 @Entity(tableName = "debts")
 data class Debt(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
@@ -17,6 +20,8 @@ data class Debt(
     val createdAt: Long = System.currentTimeMillis(),
     /** Photos of bills, chats or receipts in the app's private files, one path per line. */
     val receiptPath: String? = null,
+    /** The account the money left or came into; null for entries made before accounts were tracked here. */
+    val accountId: Long? = null,
 ) {
     val photos: List<String> get() = receiptPath?.split('\n')?.filter { it.isNotBlank() }.orEmpty()
 }

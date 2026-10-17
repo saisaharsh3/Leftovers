@@ -461,6 +461,7 @@ fun HomeScreen(
         DebtEditor(
             initial = debt,
             people = state.owed.map { it.person },
+            accounts = state.accounts,
             onDismiss = { editingDebt = null },
             onSave = {
                 viewModel.saveDebt(it)

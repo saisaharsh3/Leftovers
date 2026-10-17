@@ -60,7 +60,7 @@ class AppContainer(private val context: Context) {
     val settings = SettingsRepository(context)
     val repository = TransactionRepository(database.transactionDao(), database.categoryDao(), database.recurringDao(), database.deletedDao())
     val planning = PlanningRepository(database)
-    val accounts = AccountRepository(database.accountDao(), database.transferDao(), database.transactionDao())
+    val accounts = AccountRepository(database.accountDao(), database.transferDao(), database.transactionDao(), database.debtDao())
     val sms = SmsRepository(database.smsDao(), database.transactionDao())
     val backup = BackupManager(context, database, settings, com.leftovers.app.util.BackupPassword(context))
     /** App lock's own PIN or password, when it doesn't use the phone's screen lock. */

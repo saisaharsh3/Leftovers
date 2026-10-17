@@ -75,7 +75,16 @@ import kotlinx.coroutines.launch
 import java.time.LocalDate
 import kotlin.math.abs
 
-class DebtsViewModel(private val planning: PlanningRepository) : ViewModel() {
+class DebtsViewModel(
+    private val planning: PlanningRepository,
+    accountRepository: com.leftovers.app.data.AccountRepository,
+    settings: com.leftovers.app.data.SettingsRepository,
+) : ViewModel() {
+    val accounts: StateFlow<List<com.leftovers.app.data.AccountWithBalance>> =
+        accountRepository.accounts.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+    val defaultAccountId: StateFlow<Long?> =
+        settings.settings.map<com.leftovers.app.data.AppSettings, Long?> { it.defaultAccountId }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
     /** Null until loaded, so the screen doesn't flash "All square" first. */
     val balances: StateFlow<List<PersonBalance>?> =
         planning.debts.map { it.openBalances() }.flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
@@ -96,6 +105,8 @@ fun DebtsScreen(onBack: () -> Unit, viewModel: DebtsViewModel = viewModel(factor
     val loadedBalances by viewModel.balances.collectAsStateWithLifecycle()
     val balances = loadedBalances.orEmpty()
     val people by viewModel.people.collectAsStateWithLifecycle()
+    val accounts by viewModel.accounts.collectAsStateWithLifecycle()
+    val defaultAccountId by viewModel.defaultAccountId.collectAsStateWithLifecycle()
     val c = LocalAppColors.current
     val money = LocalMoney.current
     var editing by remember { mutableStateOf<Debt?>(null) }
@@ -196,6 +207,8 @@ fun DebtsScreen(onBack: () -> Unit, viewModel: DebtsViewModel = viewModel(factor
         DebtEditor(
             initial = debt,
             people = people,
+            accounts = accounts,
+            defaultAccountId = defaultAccountId,
             onDismiss = { editing = null },
             onSave = {
                 viewModel.save(it)
@@ -215,8 +228,24 @@ fun DebtsScreen(onBack: () -> Unit, viewModel: DebtsViewModel = viewModel(factor
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun DebtEditor(initial: Debt, people: List<String>, onDismiss: () -> Unit, onSave: (Debt) -> Unit, onDelete: (() -> Unit)?) {
+fun DebtEditor(
+    initial: Debt,
+    people: List<String>,
+    onDismiss: () -> Unit,
+    onSave: (Debt) -> Unit,
+    onDelete: (() -> Unit)?,
+    accounts: List<com.leftovers.app.data.AccountWithBalance> = emptyList(),
+    defaultAccountId: Long? = null,
+) {
     val c = LocalAppColors.current
+    // New entries start on the default account; older ones made before this keep no account until one is picked.
+    val known = accounts.map { it.id }
+    var accountId by rememberSaveable {
+        mutableStateOf(
+            if (initial.id == 0L) initial.accountId ?: defaultAccountId?.takeIf { it in known } ?: known.firstOrNull()
+            else initial.accountId,
+        )
+    }
     var lent by rememberSaveable { mutableStateOf(initial.amountMinor >= 0) }
     var person by rememberSaveable { mutableStateOf(initial.person) }
     var amountText by rememberSaveable { mutableStateOf(if (initial.amountMinor != 0L) AmountInput.fromMinor(abs(initial.amountMinor)) else "") }
@@ -268,6 +297,21 @@ fun DebtEditor(initial: Debt, people: List<String>, onDismiss: () -> Unit, onSav
                 }
             }
             MoneyField(amountText, { amountText = it }, label = "Amount")
+            // Lending takes the money out of this account until it's paid back; borrowing puts it in.
+            if (accounts.size > 1 || (accounts.isNotEmpty() && accountId == null)) {
+                Text(
+                    if (lent) "Paid from" else "Received into",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = c.textSecondary,
+                    modifier = Modifier.padding(start = 6.dp),
+                )
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    accounts.forEach { a ->
+                        Chip(a.name, { accountId = a.id }, icon = com.leftovers.app.ui.icons.CategoryIcons[a.icon], iconTint = androidx.compose.ui.graphics.Color(a.color), selected = accountId == a.id)
+                    }
+                    if (initial.accountId == null && initial.id != 0L) Chip("No account", { accountId = null }, selected = accountId == null)
+                }
+            }
             GlassTextField(note, { note = it.take(60) }, placeholder = "e.g. Dinner at Toit", label = "Note")
             // Photos of the bill, chat screenshots or payment receipts. Everything wraps on narrow phones.
             if (photos.isNotEmpty()) {
@@ -295,7 +339,7 @@ fun DebtEditor(initial: Debt, people: List<String>, onDismiss: () -> Unit, onSav
                 {
                     // Photos removed while editing are deleted once the change is saved.
                     original.filter { it !in photos }.forEach { ReceiptStore.delete(it) }
-                    onSave(initial.copy(person = person.trim(), amountMinor = if (lent) amount else -amount, note = note.trim(), receiptPath = photosToPath(photos)))
+                    onSave(initial.copy(person = person.trim(), amountMinor = if (lent) amount else -amount, note = note.trim(), receiptPath = photosToPath(photos), accountId = accountId))
                 },
                 Modifier.fillMaxWidth(),
                 enabled = person.isNotBlank() && amount > 0,

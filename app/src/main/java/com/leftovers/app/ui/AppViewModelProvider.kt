@@ -34,7 +34,7 @@ object AppViewModelProvider {
             val c = container()
             EditorViewModel(createSavedStateHandle(), app(), c.repository, c.accounts, c.settings, c.sms, c.planning, c.budgetAlerts, c.assistant)
         }
-        initializer { AccountsViewModel(container().accounts, container().settings, container().repository) }
+        initializer { AccountsViewModel(container().accounts, container().settings, container().repository, container().planning) }
         initializer { RecapViewModel(createSavedStateHandle(), container().repository, container().planning, container().settings) }
         initializer { HistoryViewModel(container().repository, container().accounts, container().planning, container().settings) }
         initializer { StatsViewModel(container().repository, container().settings, container().planning) }
@@ -46,7 +46,7 @@ object AppViewModelProvider {
             SubscriptionsViewModel(c.planning, c.repository, c.accounts, c.settings) { c.syncRecurring() }
         }
         initializer { GoalsViewModel(container().planning) }
-        initializer { DebtsViewModel(container().planning) }
+        initializer { DebtsViewModel(container().planning, container().accounts, container().settings) }
         initializer { DeletedViewModel(container().repository, container().settings) }
         initializer { GoalDetailViewModel(createSavedStateHandle(), container().planning) }
         initializer { CategoriesViewModel(container().repository) }

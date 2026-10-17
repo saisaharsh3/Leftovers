@@ -110,6 +110,7 @@ class BackupManager(
                 put("debts", JSONArray(debtList.map { d ->
                     JSONObject().put("id", d.id).put("person", d.person).put("amount", d.amountMinor).put("note", d.note)
                         .put("day", d.epochDay).put("settled", d.settled).put("createdAt", d.createdAt)
+                        .put("account", d.accountId ?: JSONObject.NULL)
                         .put("receipts", JSONArray(d.photos.map { photoRef(it) }.filter { it != JSONObject.NULL }))
                 }))
                 if (photos.length() > 0) put("photos", photos)
@@ -190,6 +191,8 @@ class BackupManager(
                 Debt(
                     it.getLong("id"), it.getString("person"), it.getLong("amount"), it.optString("note"), it.getLong("day"),
                     it.optBoolean("settled"), it.getLong("createdAt"), photosToPath(names.mapNotNull(::restorePhoto)),
+                    // Older backups have no account: those entries stay out of every balance, as before.
+                    accountId = if (it.isNull("account")) null else it.optLong("account"),
                 )
             }
 

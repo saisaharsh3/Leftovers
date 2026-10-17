@@ -93,24 +93,32 @@ data class BalanceBreakdown(
     val spent: Long,
     val transfersIn: Long,
     val transfersOut: Long,
+    /** Still open: money lent out of this account, and money borrowed into it. */
+    val lent: Long = 0,
+    val borrowed: Long = 0,
     val entries: Int,
     /** Entries dated before the account was added, whose effect the opening balance may already include. */
     val olderCount: Int,
     val olderNet: Long,
 ) {
-    val balance: Long get() = opening + income - spent + transfersIn - transfersOut
+    val balance: Long get() = opening + income - spent + transfersIn - transfersOut - lent + borrowed
 }
 
 class AccountsViewModel(
     private val repository: AccountRepository,
     private val settings: SettingsRepository,
     transactions: TransactionRepository,
+    planning: com.leftovers.app.data.PlanningRepository,
 ) : ViewModel() {
+    val debts: StateFlow<List<com.leftovers.app.data.Debt>> =
+        planning.debts.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
     val allTransactions: StateFlow<List<TransactionItem>> =
         transactions.allTransactions.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
-    fun breakdown(account: Account, items: List<TransactionItem>, transferList: List<Transfer>): BalanceBreakdown {
+    fun breakdown(account: Account, items: List<TransactionItem>, transferList: List<Transfer>, debtList: List<com.leftovers.app.data.Debt> = debts.value): BalanceBreakdown {
         val mine = items.filter { it.accountId == account.id }
+        val open = debtList.filter { it.accountId == account.id && !it.settled }
         val addedOn = java.time.Instant.ofEpochMilli(account.createdAt).atZone(java.time.ZoneId.systemDefault()).toLocalDate().toEpochDay()
         val older = mine.filter { it.epochDay < addedOn }
         return BalanceBreakdown(
@@ -119,6 +127,8 @@ class AccountsViewModel(
             spent = mine.filter { it.type == TxType.EXPENSE }.sumOf { it.amountMinor },
             transfersIn = transferList.filter { it.toAccountId == account.id }.sumOf { it.amountMinor },
             transfersOut = transferList.filter { it.fromAccountId == account.id }.sumOf { it.amountMinor },
+            lent = open.filter { it.amountMinor > 0 }.sumOf { it.amountMinor },
+            borrowed = open.filter { it.amountMinor < 0 }.sumOf { -it.amountMinor },
             entries = mine.size,
             olderCount = older.size,
             olderNet = older.sumOf { if (it.type == TxType.INCOME) it.amountMinor else -it.amountMinor },
@@ -147,11 +157,11 @@ class AccountsViewModel(
         }
     }
 
-    fun moveEntries(from: Long, to: Long, onDone: (List<Long>) -> Unit) {
+    fun moveEntries(from: Long, to: Long, onDone: (AccountRepository.Moved) -> Unit) {
         viewModelScope.launch { onDone(repository.moveEntries(from, to)) }
     }
 
-    fun undoMove(ids: List<Long>, backTo: Long) {
+    fun undoMove(ids: AccountRepository.Moved, backTo: Long) {
         viewModelScope.launch { repository.setAccount(ids, backTo) }
     }
 
@@ -281,7 +291,8 @@ fun AccountsScreen(
 
     accounts.firstOrNull { it.id == viewing }?.let { a ->
         val all by viewModel.allTransactions.collectAsStateWithLifecycle()
-        val b = viewModel.breakdown(a.toAccount(), all, transfers)
+        val debts by viewModel.debts.collectAsStateWithLifecycle()
+        val b = viewModel.breakdown(a.toAccount(), all, transfers, debts)
         val latest = all.filter { it.accountId == a.id }.sortedWith(compareByDescending<TransactionItem> { it.epochDay }.thenByDescending { it.createdAt }).take(4)
         MorphCard(from = viewingFrom, onDismiss = { viewing = null; hidden = null }, onReveal = { hidden = null }) { close ->
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -307,7 +318,7 @@ fun AccountsScreen(
                 Text("Balance", style = MaterialTheme.typography.labelLarge, color = c.textSecondary)
                 Text(money.format(a.balanceMinor), style = MaterialTheme.typography.displaySmall, color = if (a.balanceMinor < 0) c.negative else c.textPrimary)
                 Text(
-                    "In ${money.formatWhole(b.income + b.transfersIn)} · Out ${money.formatWhole(b.spent + b.transfersOut)}",
+                    "In ${money.formatWhole(b.income + b.transfersIn + b.borrowed)} · Out ${money.formatWhole(b.spent + b.transfersOut + b.lent)}",
                     style = MaterialTheme.typography.bodySmall,
                     color = c.textSecondary,
                     modifier = Modifier.padding(top = 2.dp),
@@ -343,9 +354,10 @@ fun AccountsScreen(
 
     editing?.let { account ->
         val all by viewModel.allTransactions.collectAsStateWithLifecycle()
+        val debts by viewModel.debts.collectAsStateWithLifecycle()
         AccountEditor(
             initial = account,
-            breakdown = if (account.id != 0L) viewModel.breakdown(account, all, transfers) else null,
+            breakdown = if (account.id != 0L) viewModel.breakdown(account, all, transfers, debts) else null,
             isDefault = account.id == defaultId,
             onDismiss = { editing = null },
             onSave = { a, makeDefault ->
@@ -584,6 +596,8 @@ private fun BalanceBreakdownCard(b: BalanceBreakdown, createdAt: Long) {
             line("Spending", b.spent, "− ", c.negative)
             if (b.transfersIn > 0) line("Transfers in", b.transfersIn, "+ ")
             if (b.transfersOut > 0) line("Transfers out", b.transfersOut, "− ")
+            if (b.lent > 0) line("Lent, not paid back yet", b.lent, "− ")
+            if (b.borrowed > 0) line("Borrowed, not paid back yet", b.borrowed, "+ ")
             RowDivider(inset = 0.dp)
             Spacer(Modifier.height(4.dp))
             line("Balance", b.balance, "")

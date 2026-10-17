@@ -5,6 +5,10 @@ All notable changes to Leftovers. Download any version from
 
 ## Unreleased
 
+- Lent and borrowed money now moves your account balance while it's open: lending takes it out of the account
+  it was paid from, borrowing puts it into the account it came into, and marking it settled puts the balance back.
+  It still never counts as spending or touches the budget. Entries from before this update have no account, so
+  balances don't change until you pick one for them (#19)
 - Tapping an entry (on Home, in Activity or Stats) opens a card with its amount, category, account, date and
   photos, to edit it or delete it with Undo
 - Tapping the balance on Home opens a card with every account, to switch which one Home shows. Tapping an account

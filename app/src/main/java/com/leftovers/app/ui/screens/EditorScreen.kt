@@ -480,9 +480,10 @@ class EditorViewModel(
         val day = date.toEpochDay()
         val text = note.trim()
         val photo = receiptPath
+        val account = accountId
         viewModelScope.launch {
             shares.forEach { (person, amount) ->
-                planning.saveDebt(Debt(person = person, amountMinor = if (wasLent) amount else -amount, note = text, epochDay = day, receiptPath = photo))
+                planning.saveDebt(Debt(person = person, amountMinor = if (wasLent) amount else -amount, note = text, epochDay = day, receiptPath = photo, accountId = account))
             }
             if (smsId > 0) sms.dismiss(smsId)
             val names = shares.map { it.first }.let { if (it.size == 1) it[0] else it.dropLast(1).joinToString(", ") + " and " + it.last() }
@@ -590,7 +591,7 @@ class EditorViewModel(
             if (originalReceipt != null && originalReceipt != receiptPath) ReceiptStore.delete(originalReceipt)
             val owedNote = note.trim().ifBlank { categories.value.find { it.id == category }?.name.orEmpty() }
             sharers.forEach { (person, share) ->
-                planning.saveDebt(Debt(person = person, amountMinor = share, note = owedNote, epochDay = savedDate.toEpochDay()))
+                planning.saveDebt(Debt(person = person, amountMinor = share, note = owedNote, epochDay = savedDate.toEpochDay(), accountId = accountId))
             }
             if (smsId > 0) sms.dismiss(smsId)
             val repeats = repeatMonthly && !isEditing
@@ -918,6 +919,11 @@ fun EditorScreen(
                 } else {
                     ReceiptThumb(path, onOpen = { viewReceipt = true })
                 }
+            }
+            // Lent or borrowed money still comes out of, or goes into, an account.
+            if (viewModel.owed && accounts.size > 1) {
+                Spacer(Modifier.height(10.dp))
+                AccountPicker(accounts, viewModel.accountId) { viewModel.accountId = it }
             }
             viewModel.foreignCurrency?.let { code ->
                 Text(
