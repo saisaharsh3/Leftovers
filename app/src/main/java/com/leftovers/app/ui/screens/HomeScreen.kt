@@ -1,5 +1,6 @@
 package com.leftovers.app.ui.screens
 
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.border
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -241,6 +242,9 @@ fun HomeScreen(
     val money = LocalMoney.current
     if (!state.loaded) return
     var owedOpen by remember { mutableStateOf<String?>(null) }
+    // The tapped card steps out of the way until its pop-up shrinks back into it.
+    var owedHidden by remember { mutableStateOf<String?>(null) }
+    var hiddenSubscription by remember { mutableStateOf<Long?>(null) }
     // Where the tapped card was, for the pop-up to grow out of.
     var owedFrom by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
     var subscriptionFrom by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
@@ -252,7 +256,8 @@ fun HomeScreen(
             r,
             from = subscriptionFrom,
             accountName = state.accounts.firstOrNull { it.id == r.accountId }?.name,
-            onDismiss = { viewingSubscription = null },
+            onDismiss = { viewingSubscription = null; hiddenSubscription = null },
+            onReveal = { hiddenSubscription = null },
             onEdit = {
                 viewingSubscription = null
                 onOpenSubscription(r)
@@ -268,7 +273,7 @@ fun HomeScreen(
         val entries = b.entries.sortedByDescending { it.epochDay }
         val lent = b.entries.filter { it.amountMinor > 0 }.sumOf { it.amountMinor }
         val borrowed = b.entries.filter { it.amountMinor < 0 }.sumOf { -it.amountMinor }
-        MorphCard(from = owedFrom, onDismiss = { owedOpen = null }) { close ->
+        MorphCard(from = owedFrom, onDismiss = { owedOpen = null; owedHidden = null }, onReveal = { owedHidden = null }) { close ->
                     // Who, and since when.
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Box(
@@ -557,14 +562,14 @@ fun HomeScreen(
                 item { SectionHeader("Upcoming", Modifier.appear(3), action = "Manage", onAction = { onOpenSubscriptions(false) }) }
                 item {
                     LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.appear(3)) {
-                        items(state.upcoming, key = { it.id }) { r -> UpcomingCard(r, onBounds = { upcomingBounds[r.id] = it }) { subscriptionFrom = upcomingBounds[r.id]; viewingSubscription = r.id } }
+                        items(state.upcoming, key = { it.id }) { r -> UpcomingCard(r, hidden = hiddenSubscription == r.id, onBounds = { upcomingBounds[r.id] = it }) { subscriptionFrom = upcomingBounds[r.id]; viewingSubscription = r.id; hiddenSubscription = r.id } }
                     }
                 }
             }
 
             if (state.owed.isNotEmpty()) {
                 item { SectionHeader("Money owed", Modifier.appear(3), action = "See all", onAction = onOpenDebts) }
-                item { OwedSummary(state.owed, Modifier.appear(3), onOpen = { person, at -> owedFrom = at; owedOpen = person }, onSeeAll = onOpenDebts) }
+                item { OwedSummary(state.owed, Modifier.appear(3), open = owedHidden, onOpen = { person, at -> owedFrom = at; owedOpen = person; owedHidden = person }, onSeeAll = onOpenDebts) }
             }
 
             if (state.goals.isNotEmpty()) {
@@ -664,10 +669,10 @@ private fun TodayCard(state: HomeUiState, onClick: () -> Unit, modifier: Modifie
 }
 
 @Composable
-private fun UpcomingCard(r: RecurringItem, onBounds: (androidx.compose.ui.geometry.Rect) -> Unit = {}, onClick: () -> Unit) {
+private fun UpcomingCard(r: RecurringItem, hidden: Boolean = false, onBounds: (androidx.compose.ui.geometry.Rect) -> Unit = {}, onClick: () -> Unit) {
     val c = LocalAppColors.current
     val money = LocalMoney.current
-    Glass(Modifier.width(156.dp).trackScreenBounds(onBounds), shape = RoundedCornerShape(24.dp), onClick = onClick) {
+    Glass(Modifier.width(156.dp).trackScreenBounds(onBounds).graphicsLayer { alpha = if (hidden) 0f else 1f }, shape = RoundedCornerShape(24.dp), onClick = onClick) {
         Column(Modifier.padding(16.dp)) {
             CategoryIcon(r.categoryEmoji, r.categoryColor, size = 36.dp)
             Spacer(Modifier.height(12.dp))
@@ -691,6 +696,7 @@ private fun UpcomingCard(r: RecurringItem, onBounds: (androidx.compose.ui.geomet
 private fun OwedSummary(
     owed: List<com.leftovers.app.data.PersonBalance>,
     modifier: Modifier = Modifier,
+    open: String? = null,
     onOpen: (String, androidx.compose.ui.geometry.Rect?) -> Unit,
     onSeeAll: () -> Unit,
 ) {
@@ -730,7 +736,8 @@ private fun OwedSummary(
                         }
                     },
                     onClick = { onOpen(b.person, rows[b.person]) },
-                    modifier = Modifier.sharedContainer("owed-${b.person.lowercase()}").trackScreenBounds { rows[b.person] = it },
+                    modifier = Modifier.sharedContainer("owed-${b.person.lowercase()}").trackScreenBounds { rows[b.person] = it }
+                        .graphicsLayer { alpha = if (b.person.equals(open, ignoreCase = true)) 0f else 1f },
                 )
             }
             if (owed.size > shown.size) {

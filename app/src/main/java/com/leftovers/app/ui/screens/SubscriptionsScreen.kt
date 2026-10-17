@@ -1,5 +1,6 @@
 package com.leftovers.app.ui.screens
 
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.style.TextOverflow
 import com.leftovers.app.ui.components.SecondaryButton
 import com.leftovers.app.data.AccountRepository
@@ -179,6 +180,8 @@ fun SubscriptionsScreen(
     var filter by rememberSaveable { mutableStateOf(if (startOnIncome) TxType.INCOME else TxType.EXPENSE) }
     var editing by remember { mutableStateOf<Recurring?>(null) }
     var viewing by rememberSaveable { mutableStateOf<Long?>(null) }
+    // The row whose card is open steps out of the way until the card shrinks back into it.
+    var hiddenRow by remember { mutableStateOf<Long?>(null) }
     var viewingFrom by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
     val rowBounds = remember { mutableMapOf<Long, androidx.compose.ui.geometry.Rect>() }
     items.firstOrNull { it.id == viewing }?.let { item ->
@@ -186,7 +189,8 @@ fun SubscriptionsScreen(
             item,
             from = viewingFrom,
             accountName = accounts.firstOrNull { it.id == item.accountId }?.name,
-            onDismiss = { viewing = null },
+            onDismiss = { viewing = null; hiddenRow = null },
+            onReveal = { hiddenRow = null },
             onEdit = {
                 viewing = null
                 editing = item.toRecurring()
@@ -331,7 +335,7 @@ fun SubscriptionsScreen(
                             val visible = if (showAll) shown else shown.take(5)
                             visible.forEachIndexed { i, item ->
                                 if (i > 0) RowDivider()
-                                RecurringRow(item, onClick = { viewingFrom = rowBounds[item.id]; viewing = item.id }, onToggle = { viewModel.setActive(item, it) }, onBounds = { rowBounds[item.id] = it })
+                                RecurringRow(item, onClick = { viewingFrom = rowBounds[item.id]; viewing = item.id; hiddenRow = item.id }, onToggle = { viewModel.setActive(item, it) }, onBounds = { rowBounds[item.id] = it }, hidden = hiddenRow == item.id)
                             }
                             if (shown.size > 5) {
                                 RowDivider()
@@ -535,12 +539,13 @@ private fun MonthOfCharges(items: List<RecurringItem>, month: YearMonth, modifie
 }
 
 @Composable
-private fun RecurringRow(item: RecurringItem, onClick: () -> Unit, onToggle: (Boolean) -> Unit, onBounds: (androidx.compose.ui.geometry.Rect) -> Unit = {}) {
+private fun RecurringRow(item: RecurringItem, onClick: () -> Unit, onToggle: (Boolean) -> Unit, onBounds: (androidx.compose.ui.geometry.Rect) -> Unit = {}, hidden: Boolean = false) {
     val c = LocalAppColors.current
     val money = LocalMoney.current
     Row(
         Modifier
             .trackScreenBounds(onBounds)
+            .graphicsLayer { alpha = if (hidden) 0f else 1f }
             .fillMaxWidth()
             .pressable(onClick, pressedScale = 0.985f)
             .padding(start = 16.dp, end = 12.dp, top = 12.dp, bottom = 12.dp),
@@ -872,6 +877,7 @@ internal fun SubscriptionCard(
     onEdit: () -> Unit,
     onSetActive: (Boolean) -> Unit,
     from: androidx.compose.ui.geometry.Rect? = null,
+    onReveal: () -> Unit = {},
 ) {
     val c = LocalAppColors.current
     val money = LocalMoney.current
@@ -887,7 +893,7 @@ internal fun SubscriptionCard(
         else -> "Monthly"
     }
     val started = YearMonth.parse(item.startMonth).let { "${it.month.getDisplayName(java.time.format.TextStyle.SHORT, java.util.Locale.getDefault())} ${it.year}" }
-    MorphCard(from = from, onDismiss = onDismiss) { close ->
+    MorphCard(from = from, onDismiss = onDismiss, onReveal = onReveal) { close ->
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     CategoryIcon(item.categoryEmoji, item.categoryColor, size = 52.dp)
                     Spacer(Modifier.width(14.dp))

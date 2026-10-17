@@ -421,7 +421,11 @@ fun Modifier.trackScreenBounds(onBounds: (androidx.compose.ui.geometry.Rect) -> 
  * in as it opens. [content] gets a `close` that plays the shrink, dismisses, then runs what it's given.
  */
 @Composable
-fun MorphCard(from: androidx.compose.ui.geometry.Rect?, onDismiss: () -> Unit, content: @Composable ColumnScope.(close: (then: () -> Unit) -> Unit) -> Unit) {
+fun MorphCard(
+    from: androidx.compose.ui.geometry.Rect?,
+    onDismiss: () -> Unit,
+    onReveal: () -> Unit = {},
+    content: @Composable ColumnScope.(close: (then: () -> Unit) -> Unit) -> Unit) {
     val c = LocalAppColors.current
     val blurs = rememberWindowBlur()
     val progress = remember { Animatable(0f) }
@@ -435,7 +439,15 @@ fun MorphCard(from: androidx.compose.ui.geometry.Rect?, onDismiss: () -> Unit, c
         if (closing) return
         closing = true
         scope.launch {
-            progress.animateTo(0f, tween(260, easing = FastOutSlowInEasing))
+            var revealed = false
+            // The tapped card comes back while the pop-up is still fading into it, so there's no empty gap.
+            progress.animateTo(0f, tween(260, easing = FastOutSlowInEasing)) {
+                if (!revealed && value < 0.3f) {
+                    revealed = true
+                    onReveal()
+                }
+            }
+            if (!revealed) onReveal()
             onDismiss()
             then()
         }
@@ -487,12 +499,17 @@ fun MorphCard(from: androidx.compose.ui.geometry.Rect?, onDismiss: () -> Unit, c
                         val src = from
                         val dst = target
                         if (src != null && dst != null && dst.width > 0 && dst.height > 0 && reduceMotion > 0f) {
-                            // Start at the tapped card's size and place, end at the centre: scaled, not re-laid out.
+                            // Grows evenly from the tapped card's size and place to the centre, like a zoom, so the
+                            // contents are never squashed. It fades in over the first part and out over the last, so
+                            // no empty box is left over the tapped card.
                             transformOrigin = androidx.compose.ui.graphics.TransformOrigin.Center
-                            scaleX = androidx.compose.ui.util.lerp(src.width / dst.width, 1f, p)
-                            scaleY = androidx.compose.ui.util.lerp(src.height / dst.height, 1f, p)
+                            val from = minOf(src.width / dst.width, src.height / dst.height).coerceIn(0.2f, 1f)
+                            val k = androidx.compose.ui.util.lerp(from, 1f, p)
+                            scaleX = k
+                            scaleY = k
                             translationX = androidx.compose.ui.util.lerp(src.center.x - dst.center.x, 0f, p)
                             translationY = androidx.compose.ui.util.lerp(src.center.y - dst.center.y, 0f, p)
+                            alpha = (p / 0.3f).coerceIn(0f, 1f)
                         } else {
                             val k = 0.94f + 0.06f * p
                             scaleX = k
@@ -502,14 +519,12 @@ fun MorphCard(from: androidx.compose.ui.geometry.Rect?, onDismiss: () -> Unit, c
                         shape = glassShape
                         clip = true
                     }
-                    .background(MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = if (blurs) 0.72f else 1f), glassShape)
+                    .background(MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = if (blurs) 0.9f else 1f), glassShape)
                     .background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(c.glassStrong, androidx.compose.ui.graphics.Color.Transparent)), glassShape)
                     .border(1.dp, com.leftovers.app.ui.components.glassBorder(c), glassShape)
                     // Taps on the card stay on the card.
                     .pointerInput(Unit) { detectTapGestures { } }
-                    .padding(22.dp)
-                    // The contents fade in once the card has mostly grown, so squashed text is never seen.
-                    .graphicsLayer { alpha = ((progress.value - 0.35f) / 0.65f).coerceIn(0f, 1f) },
+                    .padding(22.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
                 androidx.activity.compose.BackHandler { close() }
