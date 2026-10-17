@@ -23,3 +23,6 @@ keystore.properties
 *.iml
 .DS_Store
 Thumbs.db
+
+# Local knowledge graph (graphify)
+graphify-out/
