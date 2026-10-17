@@ -243,6 +243,9 @@ fun HistoryScreen(
     var mode by rememberSaveable { mutableStateOf(ActivityView.LIST) }
     var selectedDay by rememberSaveable { mutableStateOf(LocalDate.now().toEpochDay()) }
     var filterSheet by rememberSaveable { mutableStateOf(false) }
+    // Tapping an entry opens a card about it; Edit there opens the full editor.
+    val peek = rememberTransactionPeek()
+    TransactionPeekCard(peek, onEdit = onOpenTransaction)
     LaunchedEffect(requestedFilter) {
         requestedFilter?.let {
             mode = ActivityView.LIST
@@ -315,7 +318,7 @@ fun HistoryScreen(
                 }
                 item {
                     val day = LocalDate.ofEpochDay(selectedDay)
-                    DayPanel(day, state.monthItems.filter { it.epochDay == selectedDay }, onAdd = { onAddForDay(day) }, onOpen = onOpenTransaction)
+                    DayPanel(day, state.monthItems.filter { it.epochDay == selectedDay }, onAdd = { onAddForDay(day) }, peek = peek)
                 }
                 return@LazyColumn
             }
@@ -399,7 +402,7 @@ fun HistoryScreen(
                         ) {
                             if (i > 0) RowDivider()
                             // No swipe actions: they fired by accident. A tap opens the entry, where it can be edited or deleted.
-                            TransactionRow(item, onClick = { onOpenTransaction(item.id) })
+                            TransactionRow(item, onClick = { peek.show(item) }, modifier = Modifier.peekSource(peek, item.id))
                         }
                     }
                 }
@@ -594,7 +597,7 @@ private fun MonthCalendar(
 }
 
 @Composable
-private fun DayPanel(day: LocalDate, items: List<TransactionItem>, onAdd: () -> Unit, onOpen: (Long) -> Unit) {
+private fun DayPanel(day: LocalDate, items: List<TransactionItem>, onAdd: () -> Unit, peek: TransactionPeek) {
     val c = LocalAppColors.current
     val money = LocalMoney.current
     val spent = items.filter { it.type == TxType.EXPENSE }.sumOf { it.amountMinor }
@@ -617,7 +620,7 @@ private fun DayPanel(day: LocalDate, items: List<TransactionItem>, onAdd: () -> 
                     Column(Modifier.padding(vertical = 4.dp)) {
                         items.forEachIndexed { i, item ->
                             if (i > 0) RowDivider()
-                            TransactionRow(item, onClick = { onOpen(item.id) })
+                            TransactionRow(item, onClick = { peek.show(item) }, modifier = Modifier.peekSource(peek, item.id))
                         }
                     }
                 } else {

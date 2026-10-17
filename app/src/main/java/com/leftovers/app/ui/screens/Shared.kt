@@ -85,12 +85,13 @@ fun TransactionItem.timeLabel(): String =
     Instant.ofEpochMilli(createdAt).atZone(ZoneId.systemDefault()).toLocalTime().format(com.leftovers.app.util.timeFormatter(com.leftovers.app.util.LocalUse24Hour.current))
 
 @Composable
-fun TransactionRow(item: TransactionItem, onClick: () -> Unit, subtitle: String = item.timeLabel()) {
+fun TransactionRow(item: TransactionItem, onClick: () -> Unit, subtitle: String = item.timeLabel(), modifier: Modifier = Modifier) {
     val money = LocalMoney.current
     val c = LocalAppColors.current
     val hasNote = item.note.isNotBlank()
     ListRow(
         title = if (hasNote) item.note else item.categoryName,
+        modifier = modifier,
         subtitle = if (hasNote) "${item.categoryName} · $subtitle" else subtitle,
         leading = { CategoryIcon(item.categoryEmoji, item.categoryColor, size = 42.dp) },
         trailing = {
@@ -519,8 +520,8 @@ fun MorphCard(
                         shape = glassShape
                         clip = true
                     }
-                    .background(MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = if (blurs) 0.9f else 1f), glassShape)
-                    .background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(c.glassStrong, androidx.compose.ui.graphics.Color.Transparent)), glassShape)
+                    // The same glass as the cards on screen, over the blurred screen behind.
+                    .background(com.leftovers.app.ui.components.glassFill(c.glassStrong), glassShape)
                     .border(1.dp, com.leftovers.app.ui.components.glassBorder(c), glassShape)
                     // Taps on the card stay on the card.
                     .pointerInput(Unit) { detectTapGestures { } }

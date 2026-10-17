@@ -171,6 +171,9 @@ fun StatsScreen(
     val context = androidx.compose.ui.platform.LocalContext.current
     val aiConfig by (context.applicationContext as com.leftovers.app.LeftoversApp).container.assistant.config.collectAsStateWithLifecycle()
     val aiConnected = aiConfig != null
+    // Tapping an entry opens a card about it; Edit there opens the full editor.
+    val peek = rememberTransactionPeek()
+    TransactionPeekCard(peek, onEdit = onOpenTransaction)
     var showStatement by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
     if (showStatement) {
         StatementSheet(
@@ -356,7 +359,7 @@ fun StatsScreen(
                             AnimatedVisibility(open, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
                                 Column(Modifier.padding(start = 30.dp, bottom = 6.dp)) {
                                     state.items.filter { it.categoryId == cat.categoryId }.forEach { item ->
-                                        TransactionRow(item, onClick = { onOpenTransaction(item.id) }, subtitle = item.date.friendlyLabel())
+                                        TransactionRow(item, onClick = { peek.show(item) }, subtitle = item.date.friendlyLabel(), modifier = Modifier.peekSource(peek, item.id))
                                     }
                                 }
                             }
@@ -413,7 +416,7 @@ fun StatsScreen(
                                         )
                                     } else {
                                         entries.forEach { item ->
-                                            TransactionRow(item, onClick = { onOpenTransaction(item.id) })
+                                            TransactionRow(item, onClick = { peek.show(item) }, modifier = Modifier.peekSource(peek, item.id))
                                         }
                                     }
                                 }

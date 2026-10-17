@@ -1,5 +1,7 @@
 package com.leftovers.app.ui.screens
 
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.graphics.graphicsLayer
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.Dispatchers
 import com.leftovers.app.data.TxType
@@ -181,6 +183,11 @@ fun AccountsScreen(
     var editing by remember { mutableStateOf<Account?>(null) }
     var transferring by rememberSaveable { mutableStateOf(false) }
     var moving by remember { mutableStateOf<Account?>(null) }
+    // Tapping an account opens a card with its balance and latest entries; Edit there opens the editor.
+    var viewing by remember { mutableStateOf<Long?>(null) }
+    var hidden by remember { mutableStateOf<Long?>(null) }
+    var viewingFrom by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
+    val rowBounds = remember { mutableMapOf<Long, androidx.compose.ui.geometry.Rect>() }
 
     GlassScreen(
         title = "Accounts",
@@ -224,6 +231,9 @@ fun AccountsScreen(
                             if (i > 0) RowDivider()
                             ListRow(
                                 title = a.name,
+                                modifier = Modifier
+                                    .trackScreenBounds { rowBounds[a.id] = it }
+                                    .graphicsLayer { alpha = if (hidden == a.id) 0f else 1f },
                                 subtitle = if (a.id == defaultId) "Default for new entries" else null,
                                 leading = { CategoryIcon(a.icon, a.color, size = 42.dp) },
                                 trailing = {
@@ -233,7 +243,7 @@ fun AccountsScreen(
                                         color = if (a.balanceMinor < 0) c.negative else c.textPrimary,
                                     )
                                 },
-                                onClick = { editing = a.toAccount() },
+                                onClick = { viewingFrom = rowBounds[a.id]; viewing = a.id; hidden = a.id },
                             )
                         }
                     }
@@ -265,6 +275,68 @@ fun AccountsScreen(
                         }
                     }
                 }
+            }
+        }
+    }
+
+    accounts.firstOrNull { it.id == viewing }?.let { a ->
+        val all by viewModel.allTransactions.collectAsStateWithLifecycle()
+        val b = viewModel.breakdown(a.toAccount(), all, transfers)
+        val latest = all.filter { it.accountId == a.id }.sortedWith(compareByDescending<TransactionItem> { it.epochDay }.thenByDescending { it.createdAt }).take(4)
+        MorphCard(from = viewingFrom, onDismiss = { viewing = null; hidden = null }, onReveal = { hidden = null }) { close ->
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                CategoryIcon(a.icon, a.color, size = 52.dp)
+                Spacer(Modifier.width(14.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(a.name, style = MaterialTheme.typography.titleLarge, color = c.textPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(
+                        listOfNotNull("Default".takeIf { a.id == defaultId }, if (b.entries == 1) "1 entry" else "${b.entries} entries").joinToString(" · "),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = c.textSecondary,
+                    )
+                }
+            }
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(22.dp))
+                    .background(c.glass)
+                    .border(1.dp, c.glassStrong, RoundedCornerShape(22.dp))
+                    .padding(horizontal = 18.dp, vertical = 16.dp),
+            ) {
+                Text("Balance", style = MaterialTheme.typography.labelLarge, color = c.textSecondary)
+                Text(money.format(a.balanceMinor), style = MaterialTheme.typography.displaySmall, color = if (a.balanceMinor < 0) c.negative else c.textPrimary)
+                Text(
+                    "In ${money.formatWhole(b.income + b.transfersIn)} · Out ${money.formatWhole(b.spent + b.transfersOut)}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = c.textSecondary,
+                    modifier = Modifier.padding(top = 2.dp),
+                )
+            }
+            if (latest.isNotEmpty()) {
+                Column {
+                    Text("Latest", style = MaterialTheme.typography.labelLarge, color = c.textSecondary, modifier = Modifier.padding(bottom = 4.dp))
+                    latest.forEachIndexed { i, item ->
+                        if (i > 0) RowDivider(inset = 50.dp)
+                        Row(Modifier.fillMaxWidth().padding(vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
+                            CategoryIcon(item.categoryEmoji, item.categoryColor, size = 36.dp)
+                            Spacer(Modifier.width(14.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(item.note.ifBlank { item.categoryName }, style = MaterialTheme.typography.bodyMedium, color = c.textPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                Text(item.date.friendlyLabel(), style = MaterialTheme.typography.bodySmall, color = c.textSecondary)
+                            }
+                            Text(
+                                money.signed(item.amountMinor, item.type),
+                                style = MaterialTheme.typography.titleSmall,
+                                color = if (item.type == TxType.INCOME) c.positive else c.textPrimary,
+                            )
+                        }
+                    }
+                }
+            }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                if (accounts.size >= 2) SecondaryButton("Transfer", { close { transferring = true } }, Modifier.weight(1f), icon = Lucide.Repeat)
+                PrimaryButton("Edit", { close { editing = a.toAccount() } }, Modifier.weight(1.4f), icon = Lucide.Pencil)
             }
         }
     }

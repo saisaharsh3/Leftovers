@@ -252,6 +252,80 @@ fun HomeScreen(
     var editingDebt by remember { mutableStateOf<com.leftovers.app.data.Debt?>(null) }
     var viewingSubscription by remember { mutableStateOf<Long?>(null) }
     val upcomingBounds = remember { mutableMapOf<Long, androidx.compose.ui.geometry.Rect>() }
+    // Tapping the balance opens a card with every account, to switch which one Home shows.
+    var balanceOpen by remember { mutableStateOf(false) }
+    var balanceHidden by remember { mutableStateOf(false) }
+    var balanceFrom by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
+    var balanceBounds by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
+    if (balanceOpen) state.balance?.let { balance ->
+        val selected = state.selectedAccount
+        MorphCard(from = balanceFrom, onDismiss = { balanceOpen = false; balanceHidden = false }, onReveal = { balanceHidden = false }) { close ->
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (selected != null) CategoryIcon(selected.icon, selected.color, size = 52.dp) else IconTile(Lucide.Wallet, c.textPrimary, size = 52.dp)
+                Spacer(Modifier.width(14.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(selected?.name ?: "Total balance", style = MaterialTheme.typography.titleLarge, color = c.textPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(
+                        if (selected != null) "One of ${state.accountCount} accounts" else if (state.accountCount == 1) "1 account" else "Across ${state.accountCount} accounts",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = c.textSecondary,
+                    )
+                }
+            }
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(22.dp))
+                    .background(c.glass)
+                    .border(1.dp, c.glassStrong, RoundedCornerShape(22.dp))
+                    .padding(horizontal = 18.dp, vertical = 16.dp),
+            ) {
+                Text("Balance", style = MaterialTheme.typography.labelLarge, color = c.textSecondary)
+                Text(money.format(balance), style = MaterialTheme.typography.displaySmall, color = if (balance < 0) c.negative else c.textPrimary)
+                state.forecast?.let { f ->
+                    val end = state.month.atEndOfMonth().format(java.time.format.DateTimeFormatter.ofPattern("d MMM"))
+                    Text(
+                        "About ${money.formatWhole(f)} by $end",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (f < 0) c.negative else c.textSecondary,
+                        modifier = Modifier.padding(top = 2.dp),
+                    )
+                }
+            }
+            // Which account Home shows; the one showing has a tick.
+            if (state.accounts.size > 1) {
+                Column(Modifier.heightIn(max = 280.dp).verticalScroll(rememberScrollState())) {
+                    val rows = listOf<AccountWithBalance?>(null) + state.accounts
+                    rows.forEachIndexed { i, a ->
+                        if (i > 0) RowDivider(inset = 50.dp)
+                        Row(
+                            Modifier
+                                .fillMaxWidth()
+                                .pressable({ viewModel.showAccount(a?.id) }, pressedScale = 0.98f)
+                                .padding(vertical = 9.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            if (a != null) CategoryIcon(a.icon, a.color, size = 36.dp) else IconTile(Lucide.Wallet, c.textSecondary, size = 36.dp)
+                            Spacer(Modifier.width(14.dp))
+                            Text(a?.name ?: "All accounts", style = MaterialTheme.typography.bodyMedium, color = c.textPrimary, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            val amount = a?.balanceMinor ?: state.accounts.sumOf { it.balanceMinor }
+                            Text(money.formatWhole(amount), style = MaterialTheme.typography.titleSmall, color = if (amount < 0) c.negative else c.textPrimary)
+                            Box(Modifier.width(28.dp), contentAlignment = Alignment.CenterEnd) {
+                                if (a?.id == selected?.id) Icon(Lucide.Check, contentDescription = "Showing", tint = c.accent, modifier = Modifier.size(18.dp))
+                            }
+                        }
+                    }
+                }
+            }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                SecondaryButton("Accounts", { close(onOpenAccounts) }, Modifier.weight(1f))
+                PrimaryButton("See activity", { close { onOpenActivity(null, selected?.id) } }, Modifier.weight(1.4f), icon = Lucide.ArrowUpRight)
+            }
+        }
+    }
+    // Tapping an entry opens a card about it; Edit there opens the full editor.
+    val peek = rememberTransactionPeek()
+    TransactionPeekCard(peek, onEdit = onOpenTransaction)
     state.upcoming.firstOrNull { it.id == viewingSubscription }?.let { r ->
         SubscriptionCard(
             r,
@@ -468,16 +542,21 @@ fun HomeScreen(
 
             state.balance?.let { balance ->
                 item {
-                    Glass(Modifier.padding(top = 12.dp).sharedContainer("accounts").fillMaxWidth().appear(2), onClick = onOpenAccounts) {
+                    Glass(
+                        Modifier
+                            .padding(top = 12.dp)
+                            .sharedContainer("accounts")
+                            .fillMaxWidth()
+                            .appear(2)
+                            .trackScreenBounds { balanceBounds = it }
+                            .graphicsLayer { alpha = if (balanceHidden) 0f else 1f },
+                        onClick = { balanceFrom = balanceBounds; balanceOpen = true; balanceHidden = true },
+                    ) {
                         Row(Modifier.padding(18.dp), verticalAlignment = Alignment.CenterVertically) {
                             IconTile(Lucide.Wallet, c.textPrimary, size = 44.dp)
                             Spacer(Modifier.width(14.dp))
                             Column(Modifier.weight(1f)) {
-                                if (state.accounts.size > 1) {
-                                    AccountSwitch(state.accounts, state.selectedAccount, viewModel::showAccount)
-                                } else {
-                                    Text("Total balance", style = MaterialTheme.typography.labelLarge, color = c.textSecondary)
-                                }
+                                Text(state.selectedAccount?.name ?: "Total balance", style = MaterialTheme.typography.labelLarge, color = c.textSecondary)
                                 RollingText(money.formatWhole(balance), MaterialTheme.typography.headlineSmall, if (balance < 0) c.negative else c.textPrimary)
                                 state.forecast?.let { f ->
                                     val end = state.month.atEndOfMonth().format(java.time.format.DateTimeFormatter.ofPattern("d MMM"))
@@ -488,7 +567,7 @@ fun HomeScreen(
                                     )
                                 }
                             }
-                            // On narrow phones the balance needs the room; the arrow still opens Accounts.
+                            // On narrow phones the balance needs the room.
                             if (androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp >= 400) {
                                 Text(
                                     if (state.accountCount == 1) "1 account" else "${state.accountCount} accounts",
@@ -602,7 +681,7 @@ fun HomeScreen(
                         Column(Modifier.padding(vertical = 6.dp)) {
                             state.recent.forEachIndexed { i, item ->
                                 if (i > 0) RowDivider()
-                                TransactionRow(item, onClick = { onOpenTransaction(item.id) }, subtitle = item.date.friendlyLabel())
+                                TransactionRow(item, onClick = { peek.show(item) }, subtitle = item.date.friendlyLabel(), modifier = Modifier.peekSource(peek, item.id))
                             }
                         }
                     }
@@ -785,65 +864,3 @@ private fun GoalMiniCard(g: GoalWithSaved, onClick: () -> Unit) {
     }
 }
 
-/** "Total balance ⌄" or the chosen account: tap to show one account's money, like switching wallets. */
-@Composable
-private fun AccountSwitch(accounts: List<AccountWithBalance>, selected: AccountWithBalance?, onSelect: (Long?) -> Unit) {
-    val c = LocalAppColors.current
-    val money = LocalMoney.current
-    var open by remember { mutableStateOf(false) }
-    Box {
-        Row(
-            Modifier.clip(CircleShape).pressable({ open = true }, pressedScale = 0.95f).padding(vertical = 2.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(selected?.name ?: "Total balance", style = MaterialTheme.typography.labelLarge, color = c.textSecondary)
-            Spacer(Modifier.width(4.dp))
-            Icon(Lucide.ChevronDown, contentDescription = "Choose account", tint = c.textSecondary, modifier = Modifier.size(14.dp))
-        }
-        DropdownMenu(
-            expanded = open,
-            onDismissRequest = { open = false },
-            shape = RoundedCornerShape(20.dp),
-            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-        ) {
-            DropdownMenuItem(
-                text = {
-                    Column {
-                        Text("All accounts", color = c.textPrimary)
-                        Text(money.formatWhole(accounts.sumOf { it.balanceMinor }), style = MaterialTheme.typography.bodySmall, color = c.textSecondary)
-                    }
-                },
-                leadingIcon = { Icon(Lucide.Wallet, contentDescription = null, tint = c.textSecondary, modifier = Modifier.size(18.dp)) },
-                trailingIcon = if (selected == null) {
-                    { Icon(Lucide.Check, contentDescription = "Selected", tint = c.accent, modifier = Modifier.size(18.dp)) }
-                } else {
-                    null
-                },
-                onClick = {
-                    onSelect(null)
-                    open = false
-                },
-            )
-            accounts.forEach { a ->
-                DropdownMenuItem(
-                    text = {
-                        Column {
-                            Text(a.name, color = c.textPrimary)
-                            Text(money.formatWhole(a.balanceMinor), style = MaterialTheme.typography.bodySmall, color = if (a.balanceMinor < 0) c.negative else c.textSecondary)
-                        }
-                    },
-                    leadingIcon = { Icon(CategoryIcons[a.icon], contentDescription = null, tint = Color(a.color), modifier = Modifier.size(18.dp)) },
-                    trailingIcon = if (a.id == selected?.id) {
-                        { Icon(Lucide.Check, contentDescription = "Selected", tint = c.accent, modifier = Modifier.size(18.dp)) }
-                    } else {
-                        null
-                    },
-                    onClick = {
-                        onSelect(a.id)
-                        open = false
-                    },
-                )
-            }
-        }
-    }
-}

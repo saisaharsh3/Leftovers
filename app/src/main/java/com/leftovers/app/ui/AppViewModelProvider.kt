@@ -25,6 +25,7 @@ import com.leftovers.app.ui.screens.RecapViewModel
 import com.leftovers.app.ui.screens.SettingsViewModel
 import com.leftovers.app.ui.screens.StatsViewModel
 import com.leftovers.app.ui.screens.SubscriptionsViewModel
+import com.leftovers.app.ui.screens.TransactionPeekViewModel
 
 object AppViewModelProvider {
     val Factory = viewModelFactory {
@@ -49,6 +50,7 @@ object AppViewModelProvider {
         initializer { DeletedViewModel(container().repository, container().settings) }
         initializer { GoalDetailViewModel(createSavedStateHandle(), container().planning) }
         initializer { CategoriesViewModel(container().repository) }
+        initializer { TransactionPeekViewModel(container().repository, container().accounts) }
         initializer {
             val c = container()
             SettingsViewModel(c.repository, c.settings, c.backup, c.assistant, c.planning, c.accounts) { c.resetEverything() }
