@@ -273,10 +273,7 @@ fun DebtEditor(initial: Debt, people: List<String>, onDismiss: () -> Unit, onSav
             if (photos.isNotEmpty()) {
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     photos.forEach { p ->
-                        ReceiptThumb(p, onOpen = { viewing = p }, onRemove = {
-                            if (p !in original) ReceiptStore.delete(p)
-                            photoText = photos.filter { it != p }.joinToString("\n")
-                        })
+                        ReceiptThumb(p, onOpen = { viewing = p }, size = 64.dp)
                     }
                 }
             }
@@ -303,7 +300,12 @@ fun DebtEditor(initial: Debt, people: List<String>, onDismiss: () -> Unit, onSav
                 Modifier.fillMaxWidth(),
                 enabled = person.isNotBlank() && amount > 0,
             )
-            viewing?.let { ReceiptViewer(it) { viewing = null } }
+            viewing?.let { p ->
+                ReceiptViewer(p, onDismiss = { viewing = null }, onRemove = {
+                    if (p !in original) ReceiptStore.delete(p)
+                    photoText = photos.filter { it != p }.joinToString("\n")
+                })
+            }
             if (onDelete != null) {
                 Text(
                     "Delete",

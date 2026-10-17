@@ -1,5 +1,7 @@
 package com.leftovers.app.ui.screens
 
+import com.leftovers.app.ui.components.pressable
+import androidx.compose.foundation.layout.Box
 import com.leftovers.app.ui.components.SecondaryButton
 import com.leftovers.app.ui.components.PrimaryButton
 import androidx.compose.ui.text.input.KeyboardType
@@ -372,6 +374,8 @@ fun SettingsScreen(
         val passcode = (context.applicationContext as com.leftovers.app.LeftoversApp).container.passcode
         val passcodeKind by passcode.kind.collectAsStateWithLifecycle()
         var showLockOptions by rememberSaveable { mutableStateOf(false) }
+    var showPaymentApps by rememberSaveable { mutableStateOf(false) }
+    if (showPaymentApps) PaymentAppsSheet(onDismiss = { showPaymentApps = false })
         // App lock was switched on with no phone screen lock: it turns on once an app PIN or password is saved.
         var enableLockAfterCode by rememberSaveable { mutableStateOf(false) }
         if (showLockOptions) {
@@ -498,6 +502,12 @@ fun SettingsScreen(
                                     .onFailure { runCatching { context.startActivity(android.content.Intent(android.provider.Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) } }
                             }
                         })
+                        if (s.appNotifications && notificationAccess) {
+                            RowDivider()
+                            val apps by (context.applicationContext as com.leftovers.app.LeftoversApp).container.paymentApps.apps.collectAsStateWithLifecycle()
+                            val reading = apps.count { it.read }
+                            NavRow(Lucide.Smartphone, "Payment apps", "$reading ${if (reading == 1) "app" else "apps"}") { showPaymentApps = true }
+                        }
                         RowDivider()
                         NavRow(Lucide.Mail, "Detect payments in email", emailConnection?.address ?: "Off") { showEmail = true }
                         if (s.smsDetection || emailConnection != null) {
@@ -1014,6 +1024,84 @@ private fun LockOptionsSheet(
             )
             Text(
                 "Picking a photo, taking one or sharing a file doesn't lock it.",
+                style = MaterialTheme.typography.bodySmall,
+                color = c.textSecondary,
+            )
+        }
+    }
+}
+
+/**
+ * Which apps' notifications are read for payments: the built-in payment apps, and any app that has sent a
+ * notification recently (a bank's own app, say). Each can put its payments in a chosen account.
+ */
+@Composable
+private fun PaymentAppsSheet(onDismiss: () -> Unit) {
+    val c = LocalAppColors.current
+    val container = (LocalContext.current.applicationContext as com.leftovers.app.LeftoversApp).container
+    val apps by container.paymentApps.apps.collectAsStateWithLifecycle()
+    val accounts by container.accounts.accounts.collectAsStateWithLifecycle(emptyList())
+    GlassSheet(onDismiss) {
+        Column(
+            Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            Text("Payment apps", style = MaterialTheme.typography.headlineSmall, color = c.textPrimary)
+            Text(
+                "Only the apps switched on are read. Apps that sent you a notification lately show up here too, so you can add your bank's app.",
+                style = MaterialTheme.typography.bodySmall,
+                color = c.textSecondary,
+            )
+            Glass(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(vertical = 4.dp)) {
+                    apps.forEachIndexed { i, app ->
+                        if (i > 0) RowDivider()
+                        var choosing by remember { mutableStateOf(false) }
+                        val account = accounts.firstOrNull { it.id == app.accountId }
+                        Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 12.dp, top = 10.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f)) {
+                                Text(app.name, style = MaterialTheme.typography.titleSmall, color = c.textPrimary)
+                                if (app.read && accounts.size > 1) {
+                                    Box {
+                                        Row(
+                                            Modifier.padding(top = 2.dp).pressable({ choosing = true }, pressedScale = 0.96f),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                        ) {
+                                            Text(
+                                                account?.let { "Goes to ${it.name}" } ?: "Account from the message",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = c.accent,
+                                            )
+                                            Icon(Lucide.ChevronDown, contentDescription = "Choose account", tint = c.accent, modifier = Modifier.size(14.dp))
+                                        }
+                                        androidx.compose.material3.DropdownMenu(expanded = choosing, onDismissRequest = { choosing = false }) {
+                                            androidx.compose.material3.DropdownMenuItem(
+                                                text = { Text("Account from the message") },
+                                                onClick = { container.paymentApps.setAccount(app.pkg, null); choosing = false },
+                                            )
+                                            accounts.forEach { a ->
+                                                androidx.compose.material3.DropdownMenuItem(
+                                                    text = { Text(a.name) },
+                                                    onClick = { container.paymentApps.setAccount(app.pkg, a.id); choosing = false },
+                                                )
+                                            }
+                                        }
+                                    }
+                                } else if (!app.read && app.pkg !in com.leftovers.app.util.PaymentApps.names) {
+                                    Text("Sent you a notification lately", style = MaterialTheme.typography.bodySmall, color = c.textTertiary)
+                                }
+                            }
+                            Switch(
+                                checked = app.read,
+                                onCheckedChange = { container.paymentApps.setRead(app.pkg, it) },
+                                colors = SwitchDefaults.colors(checkedTrackColor = c.accent, checkedThumbColor = c.onAccent),
+                            )
+                        }
+                    }
+                }
+            }
+            Text(
+                "With no account chosen, the message's last digits or bank name pick it, like bank SMS.",
                 style = MaterialTheme.typography.bodySmall,
                 color = c.textSecondary,
             )

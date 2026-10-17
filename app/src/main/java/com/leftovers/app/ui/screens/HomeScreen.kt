@@ -1,5 +1,9 @@
 package com.leftovers.app.ui.screens
 
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.material3.TextButton
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.Dispatchers
 import com.leftovers.app.data.AccountWithBalance
@@ -234,30 +238,66 @@ fun HomeScreen(
     var owedOpen by remember { mutableStateOf<String?>(null) }
     var editingDebt by remember { mutableStateOf<com.leftovers.app.data.Debt?>(null) }
 
-    // Tapping someone on the Money owed row: edit what's noted, or mark it all paid back.
+    // Tapping someone on Money owed: a card in the middle with everything about them, to edit or settle.
     state.owed.firstOrNull { it.person.equals(owedOpen, ignoreCase = true) }?.let { b ->
-        GlassSheet(onDismiss = { owedOpen = null }) {
-            Column(Modifier.padding(horizontal = 20.dp).padding(bottom = 16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                Text(b.person, style = MaterialTheme.typography.headlineSmall, color = c.textPrimary)
-                Text(
-                    (if (b.netMinor > 0) "Owes you ${money.format(b.netMinor)}" else "You owe ${money.format(-b.netMinor)}") +
-                        if (b.entries.size > 1) " · ${b.entries.size} entries" else "",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = if (b.netMinor > 0) c.positive else c.textSecondary,
-                )
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    SecondaryButton("Edit", {
-                        owedOpen = null
-                        // One entry opens right here; several are easier to see on Money owed.
-                        if (b.entries.size == 1) editingDebt = b.entries[0] else onOpenDebts()
-                    }, Modifier.weight(1f))
-                    PrimaryButton("Settled", {
-                        owedOpen = null
-                        viewModel.settle(b.person)
-                    }, Modifier.weight(1f))
+        val theyOwe = b.netMinor > 0
+        GlassAlertDialog(
+            onDismissRequest = { owedOpen = null },
+            title = {
+                Column {
+                    Text(b.person, style = MaterialTheme.typography.headlineSmall, color = c.textPrimary)
+                    Text(
+                        if (theyOwe) "Owes you" else "You owe",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = c.textSecondary,
+                        modifier = Modifier.padding(top = 10.dp),
+                    )
+                    Text(money.format(abs(b.netMinor)), style = MaterialTheme.typography.displaySmall, color = if (theyOwe) c.positive else c.textPrimary)
                 }
-            }
-        }
+            },
+            text = {
+                // Every entry with this person; tapping one edits it.
+                Column(Modifier.heightIn(max = 300.dp).verticalScroll(rememberScrollState())) {
+                    b.entries.sortedByDescending { it.epochDay }.forEachIndexed { i, d ->
+                        if (i > 0) RowDivider(inset = 0.dp)
+                        Row(
+                            Modifier
+                                .fillMaxWidth()
+                                .pressable({ owedOpen = null; editingDebt = d }, pressedScale = 0.98f)
+                                .padding(vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Column(Modifier.weight(1f)) {
+                                Text(d.note.ifBlank { if (d.amountMinor > 0) "Lent" else "Borrowed" }, style = MaterialTheme.typography.bodyMedium, color = c.textPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                Text(
+                                    LocalDate.ofEpochDay(d.epochDay).friendlyLabel() + if (d.photos.isNotEmpty()) " · photo" else "",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = c.textSecondary,
+                                )
+                            }
+                            Text(
+                                (if (d.amountMinor > 0) "Lent " else "Borrowed ") + money.format(abs(d.amountMinor)),
+                                style = MaterialTheme.typography.labelLarge,
+                                color = c.textPrimary,
+                            )
+                        }
+                    }
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    owedOpen = null
+                    // One entry opens right here; several are easier to see on Money owed.
+                    if (b.entries.size == 1) editingDebt = b.entries[0] else onOpenDebts()
+                }) { Text("Edit", color = c.textSecondary) }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    owedOpen = null
+                    viewModel.settle(b.person)
+                }) { Text("Settled", color = c.textPrimary) }
+            },
+        )
     }
     editingDebt?.let { debt ->
         DebtEditor(
@@ -457,11 +497,7 @@ fun HomeScreen(
 
             if (state.owed.isNotEmpty()) {
                 item { SectionHeader("Money owed", Modifier.appear(3), action = "See all", onAction = onOpenDebts) }
-                item {
-                    LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.appear(3)) {
-                        items(state.owed, key = { it.person.lowercase() }) { b -> OwedCard(b) { owedOpen = b.person } }
-                    }
-                }
+                item { OwedSummary(state.owed, Modifier.appear(3), onOpen = { owedOpen = it }, onSeeAll = onOpenDebts) }
             }
 
             if (state.goals.isNotEmpty()) {
@@ -580,19 +616,59 @@ private fun UpcomingCard(r: RecurringItem, onClick: () -> Unit) {
     }
 }
 
+/**
+ * Money owed on Home: the totals, then the people with the biggest balances, each with what their latest entry
+ * was for. Tapping someone offers Edit or Settled.
+ */
 @Composable
-private fun OwedCard(b: com.leftovers.app.data.PersonBalance, onClick: () -> Unit) {
+private fun OwedSummary(owed: List<com.leftovers.app.data.PersonBalance>, modifier: Modifier = Modifier, onOpen: (String) -> Unit, onSeeAll: () -> Unit) {
     val c = LocalAppColors.current
     val money = LocalMoney.current
-    val theyOwe = b.netMinor > 0
-    Glass(Modifier.sharedContainer("owed-${b.person.lowercase()}").width(156.dp), shape = RoundedCornerShape(24.dp), onClick = onClick) {
-        Column(Modifier.padding(16.dp)) {
-            IconTile(Lucide.HandCoins, if (theyOwe) c.positive else c.warning, size = 36.dp)
-            Spacer(Modifier.height(12.dp))
-            Text(b.person, style = MaterialTheme.typography.titleSmall, color = c.textPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(if (theyOwe) "Owes you" else "You owe", style = MaterialTheme.typography.bodySmall, color = c.textSecondary, maxLines = 1)
-            Spacer(Modifier.height(8.dp))
-            Text(money.format(abs(b.netMinor)), style = MaterialTheme.typography.titleMedium, color = if (theyOwe) c.positive else c.textPrimary)
+    val owedToYou = owed.filter { it.netMinor > 0 }.sumOf { it.netMinor }
+    val youOwe = owed.filter { it.netMinor < 0 }.sumOf { -it.netMinor }
+    val shown = owed.sortedByDescending { abs(it.netMinor) }.take(3)
+    Glass(modifier.fillMaxWidth(), shape = RoundedCornerShape(26.dp)) {
+        Column(Modifier.padding(vertical = 6.dp)) {
+            Row(Modifier.padding(horizontal = 18.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("You're owed", style = MaterialTheme.typography.labelMedium, color = c.textSecondary)
+                    Text(money.format(owedToYou), style = MaterialTheme.typography.titleLarge, color = if (owedToYou > 0) c.positive else c.textPrimary)
+                }
+                Column(horizontalAlignment = Alignment.End) {
+                    Text("You owe", style = MaterialTheme.typography.labelMedium, color = c.textSecondary)
+                    Text(money.format(youOwe), style = MaterialTheme.typography.titleLarge, color = c.textPrimary)
+                }
+            }
+            shown.forEach { b ->
+                val theyOwe = b.netMinor > 0
+                val latest = b.entries.maxByOrNull { it.epochDay }
+                RowDivider(inset = 16.dp)
+                com.leftovers.app.ui.components.ListRow(
+                    b.person,
+                    subtitle = latest?.let { d ->
+                        listOfNotNull(d.note.ifBlank { null }, LocalDate.ofEpochDay(d.epochDay).friendlyLabel()).joinToString(" · ") +
+                            if (b.entries.size > 1) " · +${b.entries.size - 1} more" else ""
+                    },
+                    leading = { IconTile(Lucide.HandCoins, if (theyOwe) c.positive else c.warning, size = 38.dp) },
+                    trailing = {
+                        Column(horizontalAlignment = Alignment.End) {
+                            Text(money.format(abs(b.netMinor)), style = MaterialTheme.typography.titleSmall, color = if (theyOwe) c.positive else c.textPrimary)
+                            Text(if (theyOwe) "owes you" else "you owe", style = MaterialTheme.typography.labelSmall, color = c.textTertiary)
+                        }
+                    },
+                    onClick = { onOpen(b.person) },
+                    modifier = Modifier.sharedContainer("owed-${b.person.lowercase()}"),
+                )
+            }
+            if (owed.size > shown.size) {
+                RowDivider(inset = 16.dp)
+                Text(
+                    "${owed.size - shown.size} more · See all",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = c.textSecondary,
+                    modifier = Modifier.fillMaxWidth().pressable(onSeeAll, pressedScale = 0.98f).padding(horizontal = 18.dp, vertical = 12.dp),
+                )
+            }
         }
     }
 }

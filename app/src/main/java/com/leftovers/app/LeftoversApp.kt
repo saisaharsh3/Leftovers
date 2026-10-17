@@ -65,6 +65,8 @@ class AppContainer(private val context: Context) {
     val backup = BackupManager(context, database, settings, com.leftovers.app.util.BackupPassword(context))
     /** App lock's own PIN or password, when it doesn't use the phone's screen lock. */
     val passcode = com.leftovers.app.util.AppPasscode(context)
+    /** Which apps' notifications are read for payments, and the account each one goes to. */
+    val paymentApps = com.leftovers.app.util.PaymentAppPrefs(context)
     val budgetAlerts = BudgetAlertManager(context, repository, settings)
     val assistant = AssistantSettings(context)
     val emailAccount = com.leftovers.app.util.EmailAccount(context)
@@ -83,6 +85,7 @@ class AppContainer(private val context: Context) {
         assistant.disconnect()
         backup.password.set(null)
         passcode.clear()
+        paymentApps.clear()
         com.leftovers.app.util.DetectionLog.clear(context)
         settings.clearAll()
     }

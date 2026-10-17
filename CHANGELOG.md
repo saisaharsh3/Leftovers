@@ -5,6 +5,12 @@ All notable changes to Leftovers. Download any version from
 
 ## Unreleased
 
+- Payment apps: choose which apps' notifications are read (Settings → Payment apps), including your bank's own app
+  once it has sent you a notification, and pick the account each one's payments go to (#17)
+- Money owed on Home is one card with what you're owed and owe, and the people with the biggest balances and what
+  their latest entry was for. Tapping someone opens a card with every entry, to edit or mark settled (#18)
+- Photos: tapping a photo opens it full size, with pinch to zoom and Remove there; the small thumbnail no longer has
+  a cross to hit by mistake. Entries with a photo show a camera icon on Home and in Activity (#18)
 - Reading a bill photo also picks the account it was paid from: UPI or bank goes to a bank account, card to a
   card, cash to cash
 - If reading a bill photo fails, a short message says why, and tapping it tries again

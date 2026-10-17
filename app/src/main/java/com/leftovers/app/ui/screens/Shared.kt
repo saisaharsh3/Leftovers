@@ -1,5 +1,7 @@
 package com.leftovers.app.ui.screens
 
+import androidx.compose.foundation.layout.size
+import androidx.compose.material3.Icon
 import android.os.Build
 import android.view.WindowManager
 import androidx.compose.runtime.SideEffect
@@ -90,8 +92,15 @@ fun TransactionRow(item: TransactionItem, onClick: () -> Unit, subtitle: String 
                 // Spent abroad: what was paid there, in that currency.
                 val foreign = item.foreignMinor
                 val code = item.foreignCurrency
-                if (foreign != null && code != null) {
-                    Text(com.leftovers.app.util.Money(code).format(foreign), style = MaterialTheme.typography.labelSmall, color = c.textTertiary)
+                val photo = item.receiptPath != null
+                if ((foreign != null && code != null) || photo) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (photo) Icon(com.leftovers.app.ui.icons.Lucide.Camera, contentDescription = "Has a photo", tint = c.textTertiary, modifier = Modifier.size(13.dp))
+                        if (foreign != null && code != null) {
+                            if (photo) Spacer(Modifier.width(5.dp))
+                            Text(com.leftovers.app.util.Money(code).format(foreign), style = MaterialTheme.typography.labelSmall, color = c.textTertiary)
+                        }
+                    }
                 }
             }
         },

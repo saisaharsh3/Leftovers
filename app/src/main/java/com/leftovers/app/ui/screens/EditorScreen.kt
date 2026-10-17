@@ -1,5 +1,6 @@
 package com.leftovers.app.ui.screens
 
+import androidx.compose.foundation.gestures.transformable
 import kotlin.math.abs
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.graphics.graphicsLayer
@@ -915,7 +916,7 @@ fun EditorScreen(
                 if (path == null) {
                     RoundButton(Lucide.Camera, "Attach receipt", { receiptMenu = true }, size = 40.dp, tint = c.textSecondary)
                 } else {
-                    ReceiptThumb(path, onOpen = { viewReceipt = true }, onRemove = viewModel::removeReceipt)
+                    ReceiptThumb(path, onOpen = { viewReceipt = true })
                 }
             }
             viewModel.foreignCurrency?.let { code ->
@@ -1157,7 +1158,7 @@ fun EditorScreen(
     }
 
     if (viewReceipt) {
-        viewModel.receiptPath?.let { path -> ReceiptViewer(path) { viewReceipt = false } }
+        viewModel.receiptPath?.let { path -> ReceiptViewer(path, onDismiss = { viewReceipt = false }, onRemove = viewModel::removeReceipt) }
     }
 
     if (showCalendar) {
@@ -1386,45 +1387,64 @@ private fun rememberReceiptBitmap(path: String, maxSide: Int): Bitmap? {
 }
 
 @Composable
-internal fun ReceiptThumb(path: String, onOpen: () -> Unit, onRemove: () -> Unit) {
+/** A photo's thumbnail. Tapping opens it full size, where it can be removed; there's no cross here to hit by mistake. */
+internal fun ReceiptThumb(path: String, onOpen: () -> Unit, size: androidx.compose.ui.unit.Dp = 44.dp) {
     val c = LocalAppColors.current
-    val bitmap = rememberReceiptBitmap(path, 200)
-    Box {
-        Box(
-            Modifier
-                .size(42.dp)
-                .pressable(onOpen)
-                .clip(RoundedCornerShape(12.dp))
-                .background(c.glass)
-                .border(1.dp, glassBorder(c), RoundedCornerShape(12.dp)),
-        ) {
-            bitmap?.let { Image(it.asImageBitmap(), contentDescription = "Receipt", contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize()) }
-        }
-        Box(
-            Modifier
-                .align(Alignment.TopEnd)
-                .padding(start = 30.dp)
-                .size(18.dp)
-                .pressable(onRemove)
-                .clip(RoundedCornerShape(50))
-                .background(c.negative),
-            contentAlignment = Alignment.Center,
-        ) { Icon(Lucide.X, contentDescription = "Remove receipt", tint = Color.White, modifier = Modifier.size(11.dp)) }
+    val bitmap = rememberReceiptBitmap(path, 300)
+    Box(
+        Modifier
+            .size(size)
+            .pressable(onOpen)
+            .clip(RoundedCornerShape(12.dp))
+            .background(c.glass)
+            .border(1.dp, glassBorder(c), RoundedCornerShape(12.dp)),
+    ) {
+        bitmap?.let { Image(it.asImageBitmap(), contentDescription = "Receipt photo, tap to view", contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize()) }
     }
 }
 
 @Composable
-internal fun ReceiptViewer(path: String, onDismiss: () -> Unit) {
+/** A photo full screen: pinch to zoom, and with [onRemove], a button to take it off the entry. */
+internal fun ReceiptViewer(path: String, onDismiss: () -> Unit, onRemove: (() -> Unit)? = null) {
     val bitmap = rememberReceiptBitmap(path, 2000)
+    var scale by remember { mutableStateOf(1f) }
+    var offset by remember { mutableStateOf(androidx.compose.ui.geometry.Offset.Zero) }
+    val zoom = androidx.compose.foundation.gestures.rememberTransformableState { change, pan, _ ->
+        scale = (scale * change).coerceIn(1f, 5f)
+        offset = if (scale == 1f) androidx.compose.ui.geometry.Offset.Zero else offset + pan
+    }
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        Box(
-            Modifier
-                .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.92f))
-                .pressable(onDismiss, pressedScale = 1f),
-            contentAlignment = Alignment.Center,
-        ) {
-            bitmap?.let { Image(it.asImageBitmap(), contentDescription = "Receipt", contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize().padding(16.dp)) }
+        Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.94f))) {
+            bitmap?.let {
+                Image(
+                    it.asImageBitmap(),
+                    contentDescription = "Receipt photo",
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 12.dp, vertical = 72.dp)
+                        .transformable(zoom)
+                        .graphicsLayer { scaleX = scale; scaleY = scale; translationX = offset.x; translationY = offset.y },
+                )
+            }
+            RoundButton(Lucide.X, "Close", onDismiss, modifier = Modifier.align(Alignment.TopStart).statusBarsPadding().padding(16.dp), tint = Color.White)
+            if (onRemove != null) {
+                Row(
+                    Modifier
+                        .align(Alignment.BottomCenter)
+                        .navigationBarsPadding()
+                        .padding(bottom = 20.dp)
+                        .pressable({ onRemove(); onDismiss() }, pressedScale = 0.95f)
+                        .clip(RoundedCornerShape(50))
+                        .background(Color.White.copy(alpha = 0.12f))
+                        .padding(horizontal = 20.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(Lucide.Trash2, contentDescription = null, tint = Color(0xFFF58A8A), modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("Remove photo", style = MaterialTheme.typography.labelLarge, color = Color(0xFFF58A8A))
+                }
+            }
         }
     }
 }
