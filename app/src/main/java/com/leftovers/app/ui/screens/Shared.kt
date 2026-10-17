@@ -1,5 +1,7 @@
 package com.leftovers.app.ui.screens
 
+import kotlinx.coroutines.flow.first
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.animation.core.spring
 import kotlinx.coroutines.launch
@@ -409,6 +411,13 @@ fun ordinal(n: Int): String = when {
     else -> "${n}th"
 }
 
+/**
+ * Growing eases in and settles slowly; shrinking starts slowly and speeds up into the tapped card.
+ * Timed rather than a spring, so the motion is spread evenly over its frames instead of mostly in the first few.
+ */
+private val MorphGrow = androidx.compose.animation.core.CubicBezierEasing(0.2f, 0f, 0f, 1f)
+private val MorphShrink = androidx.compose.animation.core.CubicBezierEasing(0.3f, 0f, 0.8f, 0.15f)
+
 /** Where an element sits on the screen, for [MorphCard] to grow out of. */
 fun Modifier.trackScreenBounds(onBounds: (androidx.compose.ui.geometry.Rect) -> Unit): Modifier =
     this.then(Modifier.onGloballyPositioned { c ->
@@ -442,7 +451,7 @@ fun MorphCard(
         scope.launch {
             var revealed = false
             // The tapped card comes back while the pop-up is still fading into it, so there's no empty gap.
-            progress.animateTo(0f, tween(260, easing = FastOutSlowInEasing)) {
+            progress.animateTo(0f, tween(300, easing = MorphShrink)) {
                 if (!revealed && value < 0.3f) {
                     revealed = true
                     onReveal()
@@ -462,7 +471,7 @@ fun MorphCard(
         val radius = with(LocalDensity.current) { 24.dp.roundToPx() }
         LaunchedEffect(window) {
             if (window == null) {
-                progress.animateTo(1f, spring(dampingRatio = 0.86f, stiffness = 420f))
+                progress.animateTo(1f, tween(400, easing = MorphGrow))
                 return@LaunchedEffect
             }
             // The window fills the screen before anything moves, so the card's end place doesn't shift mid-way.
@@ -470,18 +479,20 @@ fun MorphCard(
             window.setWindowAnimations(0)
             window.setDimAmount(0f)
             repeat(2) { androidx.compose.runtime.withFrameNanos { } }
-            launch { progress.animateTo(1f, spring(dampingRatio = 0.86f, stiffness = 420f)) }
+            launch { progress.animateTo(1f, tween(400, easing = MorphGrow)) }
+            // The blur starts with the card's first frame, so the screen never blurs with no card on it.
+            snapshotFlow { progress.value }.first { it > 0f }
             if (blurs) window.addFlags(WindowManager.LayoutParams.FLAG_BLUR_BEHIND)
-            snapshotFlow { progress.value }.collect { v ->
-                window.attributes = window.attributes.apply {
-                    if (blurs && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) blurBehindRadius = (radius * v.coerceIn(0f, 1f)).toInt()
-                }
+            // Set once: changing the window's blur each frame makes the system redo the window every frame.
+            if (blurs && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                window.attributes = window.attributes.apply { blurBehindRadius = radius }
             }
         }
         Box(
             Modifier
                 .fillMaxSize()
-                .background(c.background.copy(alpha = (if (blurs) 0.28f else 0.6f) * progress.value.coerceIn(0f, 1f)))
+                // Read while drawing, not composing, so the fade doesn't rebuild the card every frame.
+                .drawBehind { drawRect(c.background.copy(alpha = (if (blurs) 0.28f else 0.6f) * progress.value.coerceIn(0f, 1f))) }
                 .pointerInput(Unit) { detectTapGestures { close() } },
             contentAlignment = Alignment.Center,
         ) {
