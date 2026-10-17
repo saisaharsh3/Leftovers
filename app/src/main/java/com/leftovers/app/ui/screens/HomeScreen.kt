@@ -1,5 +1,6 @@
 package com.leftovers.app.ui.screens
 
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.border
 import androidx.compose.foundation.rememberScrollState
@@ -313,6 +314,9 @@ fun HomeScreen(
                             )
                         }
                     }
+                    // A photo on an entry opens full screen from here.
+                    var photo by remember { mutableStateOf<String?>(null) }
+                    photo?.let { ReceiptViewer(it, onDismiss = { photo = null }) }
                     // Every entry; tapping one edits it.
                     Column(Modifier.heightIn(max = 260.dp).verticalScroll(rememberScrollState())) {
                         entries.forEachIndexed { i, d ->
@@ -346,7 +350,7 @@ fun HomeScreen(
                                         overflow = TextOverflow.Ellipsis,
                                     )
                                     Text(
-                                        LocalDate.ofEpochDay(d.epochDay).friendlyLabel() + if (d.photos.isNotEmpty()) " · photo" else "",
+                                        LocalDate.ofEpochDay(d.epochDay).friendlyLabel(),
                                         style = MaterialTheme.typography.bodySmall,
                                         color = c.textSecondary,
                                     )
@@ -354,6 +358,14 @@ fun HomeScreen(
                                 Column(horizontalAlignment = Alignment.End) {
                                     Text(money.format(abs(d.amountMinor)), style = MaterialTheme.typography.titleSmall, color = c.textPrimary)
                                     Text(if (out) "lent" else "borrowed", style = MaterialTheme.typography.labelSmall, color = c.textTertiary)
+                                }
+                            }
+                            if (d.photos.isNotEmpty()) {
+                                Row(
+                                    Modifier.padding(start = 44.dp, bottom = 10.dp).horizontalScroll(rememberScrollState()),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                ) {
+                                    d.photos.forEach { path -> ReceiptThumb(path, onOpen = { photo = path }, size = 52.dp) }
                                 }
                             }
                         }
