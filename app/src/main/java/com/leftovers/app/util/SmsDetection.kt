@@ -21,7 +21,8 @@ import java.time.LocalDate
  */
 object SmsParser {
     private val debitWords = Regex(
-        """\b(debited|spent|paid|sent|withdrawn|purchase|txn of|debit|thank you for using|used at|used for)\b""",
+        // "Dr. from A/C" is Bank of Baroda's "debited".
+        """\b(debited|spent|paid|sent|withdrawn|purchase|txn of|debit|thank you for using|used at|used for)\b|\bdr\.?\s+(from|to)\b""",
         RegexOption.IGNORE_CASE,
     )
     private val creditOnly = Regex("""\b(credited|received|refund|cashback)\b""", RegexOption.IGNORE_CASE)
@@ -35,9 +36,9 @@ object SmsParser {
             """\bdue (date|on)\b|\b(declined|failed|unsuccessful)\b)""",
         RegexOption.IGNORE_CASE,
     )
-    /** "debited by 500.0" (SBI and others write the amount with no currency). */
+    /** "debited by 500.0" (SBI and others write the amount with no currency); Union Bank writes "Rs:200.00". */
     private val bareAmount = Regex(
-        """\b(?:debited|spent|paid|sent|withdrawn|credited|received)\s+(?:by|with|for|of)?\s*(?:rs\.?|inr|₹)?\s*([0-9][0-9,]*(?:\.[0-9]{1,2})?)\b""",
+        """\b(?:debited|spent|paid|sent|withdrawn|credited|received)\s+(?:by|with|for|of)?\s*(?:rs[.:]?|inr[.:]?|₹)?\s*([0-9][0-9,]*(?:\.[0-9]{1,2})?)\b""",
         RegexOption.IGNORE_CASE,
     )
     /** The account or card digits a message names, e.g. "A/C *1234", "Acct XX234", "Card ending 1234". */
@@ -48,12 +49,13 @@ object SmsParser {
 
     /** The last digits of the account or card in [body], if it names one. */
     fun accountDigits(body: String): String? = accountRef.find(body)?.groupValues?.get(1)?.takeLast(4)
+    /** "to X", "at X", or the shop after the date, as ICICI cards write it: "on 07-Oct-26 on MYNTRA". */
     private val merchant = Regex(
-        """\b(?:at|to|towards|vpa|info:?)\s+([A-Za-z0-9@._&' -]{2,40}?)(?=\s+(?:on|via|ref\w*|upi|txn|avl|avail|from|using)\b|\s*[(\[]|[.,;]|$)""",
+        """(?:\b(?:at|to|towards|vpa|info:?)|(?<=\d{2}[-/ ][A-Za-z0-9]{2,3}[-/ ]\d{2,4}\s)on)\s+([A-Za-z0-9@._&' -]{2,40}?)(?=\s+(?:on|via|ref\w*|upi|txn|avl|avail|from|using)\b|\s*[(\[]|[.,;]|$)""",
         RegexOption.IGNORE_CASE,
     )
     /** The payee in a UPI narration: "UPI/P2A/971133155005/DHULIPALA S N V S K" or "UPI/DR/123456/SWIGGY/YESB". */
-    private val upiNarration = Regex("""\bUPI/(?:[A-Z0-9]{1,6}/)*\d{6,}/([A-Za-z][A-Za-z0-9 .&'-]{1,40}?)\s*(?=/|\n|$|\s{2})""", RegexOption.IGNORE_CASE)
+    private val upiNarration = Regex("""\bUPI/(?:[A-Z0-9]{1,6}/)*\d{6,}/([A-Za-z][A-Za-z0-9 .&'-]{1,40}?)\s*(?=/|\n|$|\s{2}|\s+(?:on|via|ref\w*|avl|avail)\b|[,;]|\.\s)""", RegexOption.IGNORE_CASE)
     /** "to block UPI", "to report", "at your branch": footer phrases, not a payee. */
     private val notPayee = Regex(
         """^(block|report|avoid|know|view|check|call|contact|dial|sms|visit|reach|login|log|unsubscribe|update|change|help|keep|protect|ensure|receive|stop|your|you|us|our|the|this|be|any|all|bank|branch)\b|^\+?\d{6,}""",

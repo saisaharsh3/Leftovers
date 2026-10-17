@@ -5,6 +5,14 @@ All notable changes to Leftovers. Download any version from
 
 ## Unreleased
 
+- Tapping an entry (on Home, in Activity or Stats) opens a card with its amount, category, account, date and
+  photos, to edit it or delete it with Undo
+- Tapping the balance on Home opens a card with every account, to switch which one Home shows. Tapping an account
+  in Accounts shows its balance, money in and out, and its latest entries
+- Pop-up cards grow out of what was tapped and shrink back into it, in the same glass as the other cards. Money
+  owed cards show each entry's photos
+- Bank messages from Kotak, Bank of Baroda, PNB, Canara, Union Bank, IDFC First, Yes Bank, IndusInd, Federal and
+  AU are recognised, plus card spends, ATM withdrawals, EMIs, salary, refunds and interest (#7)
 - Tapping a subscription (on Home or in Subscriptions) opens a card with its next charge, yearly cost and start, with
   Edit and Pause or Resume
 - Payment apps: choose which apps' notifications are read (Settings → Payment apps), including your bank's own app
