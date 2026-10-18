@@ -12,7 +12,13 @@
   const root = document.documentElement;
   const saved = (() => { try { return localStorage.getItem("theme"); } catch { return null; } })();
   const prefersLight = matchMedia("(prefers-color-scheme: light)");
-  const applyTheme = (t) => { root.dataset.theme = t; };
+  // The app's screens are shown in the same theme as the page.
+  const applyTheme = (t) => {
+    root.dataset.theme = t;
+    document.querySelectorAll("img.shot").forEach((img) => {
+      img.src = `assets/${t === "light" ? "light/" : ""}${img.dataset.name}.jpg`;
+    });
+  };
   applyTheme(saved || (prefersLight.matches ? "light" : "dark"));
   prefersLight.addEventListener("change", (e) => { if (!saved) applyTheme(e.matches ? "light" : "dark"); });
   $("#theme").addEventListener("click", () => {
@@ -139,15 +145,107 @@
   $("#budget").addEventListener("input", (e) => { state.budget = Number(e.target.value); render(); });
   render();
 
-  // ---- Screens gallery ----
-  const gallery = $("#gallery");
-  const step = () => (gallery.querySelector("li")?.getBoundingClientRect().width || 260) + 22;
-  $("#prev").addEventListener("click", () => gallery.scrollBy({ left: -step(), behavior: reduceMotion ? "auto" : "smooth" }));
-  $("#next").addEventListener("click", () => gallery.scrollBy({ left: step(), behavior: reduceMotion ? "auto" : "smooth" }));
-  gallery.addEventListener("keydown", (e) => {
-    if (e.key === "ArrowRight") { e.preventDefault(); $("#next").click(); }
-    if (e.key === "ArrowLeft") { e.preventDefault(); $("#prev").click(); }
+  // ---- Screens: a highlights reel that moves on by itself ----
+  const track = $("#track");
+  const slides = $$(".slide", track);
+  const dotsEl = $("#dots");
+  const play = $("#play");
+  const SLIDE_MS = 5000;
+  let current = 0;
+  let reel = reduceMotion ? "paused" : "playing"; // playing, paused or ended
+  let inView = false;
+  let programmatic = 0;
+
+  const dots = slides.map((slide, i) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "dot";
+    b.setAttribute("aria-label", `Show ${slide.querySelector("h3").textContent}`);
+    b.innerHTML = '<span class="fill"></span>';
+    b.addEventListener("click", () => { go(i); if (reel === "ended") setState("playing"); else restartTimer(); });
+    dotsEl.append(b);
+    return b;
   });
+
+  function mark(i) {
+    current = i;
+    slides.forEach((s, k) => s.classList.toggle("current", k === i));
+    dots.forEach((d, k) => { d.classList.toggle("active", k === i); d.toggleAttribute("aria-current", k === i); });
+    restartTimer();
+  }
+  function go(i, smooth = true) {
+    const slide = slides[i];
+    programmatic = Date.now();
+    track.scrollTo({ left: slide.offsetLeft - (track.clientWidth - slide.clientWidth) / 2, behavior: smooth && !reduceMotion ? "smooth" : "auto" });
+    mark(i);
+  }
+  // The active dot fills over SLIDE_MS while playing, on screen and the tab is in front; when it's full,
+  // the next slide comes in.
+  let elapsed = 0;
+  let last = 0;
+  function restartTimer() {
+    elapsed = 0;
+    paint();
+  }
+  function paint() {
+    dots.forEach((d, k) => {
+      const fill = d.firstChild;
+      fill.style.width = k !== current ? "0%" : reel === "playing" ? `${Math.min(100, (elapsed / SLIDE_MS) * 100)}%` : "100%";
+    });
+  }
+  function tick(t) {
+    const dt = last ? Math.min(100, t - last) : 0;
+    last = t;
+    if (reel === "playing" && inView && !document.hidden) {
+      elapsed += dt;
+      if (elapsed >= SLIDE_MS) {
+        if (current < slides.length - 1) go(current + 1);
+        else setState("ended");
+      }
+      paint();
+    }
+    requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+  function setState(next) {
+    reel = next;
+    play.dataset.state = next;
+    play.setAttribute("aria-label", next === "playing" ? "Pause" : next === "ended" ? "Play again" : "Play");
+    restartTimer();
+  }
+  play.addEventListener("click", () => {
+    if (reel === "playing") setState("paused");
+    else if (reel === "ended") { go(0); setState("playing"); }
+    else setState("playing");
+  });
+
+  // Swiping, scrolling or using the keys yourself pauses it; the slide nearest the middle becomes the current one.
+  const userStop = () => { if (reel === "playing") setState("paused"); };
+  ["pointerdown", "wheel", "touchstart"].forEach((e) => track.addEventListener(e, userStop, { passive: true }));
+  let settleTimer;
+  track.addEventListener("scroll", () => {
+    clearTimeout(settleTimer);
+    settleTimer = setTimeout(() => {
+      if (Date.now() - programmatic < 900) return;
+      const middle = track.scrollLeft + track.clientWidth / 2;
+      let best = 0;
+      slides.forEach((s, k) => { if (Math.abs(s.offsetLeft + s.clientWidth / 2 - middle) < Math.abs(slides[best].offsetLeft + slides[best].clientWidth / 2 - middle)) best = k; });
+      if (best !== current) mark(best);
+    }, 120);
+  }, { passive: true });
+  track.addEventListener("keydown", (e) => {
+    const d = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : 0;
+    if (!d) return;
+    e.preventDefault();
+    userStop();
+    go(Math.max(0, Math.min(slides.length - 1, current + d)));
+  });
+  // Only plays while it's on screen.
+  new IntersectionObserver(([entry]) => { inView = entry.isIntersecting; restartTimer(); }, { threshold: 0.5 }).observe(track);
+  addEventListener("resize", () => go(current, false));
+
+  setState(reel);
+  requestAnimationFrame(() => go(0, false));
 
   // ---- What it notices: real message formats and what the app makes of them ----
   const messages = [

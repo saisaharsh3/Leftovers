@@ -101,25 +101,74 @@
       </div>
     </section>
 
-    <section class="screens" id="screens" aria-labelledby="screens-title">
+    <section class="screens" id="screens" aria-labelledby="screens-title" aria-roledescription="carousel">
       <div class="section-head">
-        <h2 id="screens-title">Everything in four tabs</h2>
-        <div class="gallery-nav">
-          <button class="icon-btn" type="button" id="prev" aria-label="Previous screen"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></button>
-          <button class="icon-btn" type="button" id="next" aria-label="Next screen"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button>
-        </div>
+        <h2 id="screens-title">Take a look around</h2>
       </div>
-      <ol class="gallery" id="gallery" tabindex="0" aria-label="Screens from the app">
-        <li><img src="assets/home.jpg" alt="Home: safe to spend today, total balance, detected payments and upcoming bills" loading="lazy" width="1080" height="2400"><p><b>Home.</b> Today's number, your balance across accounts, payments spotted for you and the bills coming up.</p></li>
-        <li><img src="assets/add.jpg" alt="Add: a keypad with categories and a date strip" loading="lazy" width="1080" height="2400"><p><b>Add.</b> The keypad opens first. Two taps and it's logged, on any day you forgot.</p></li>
-        <li><img src="assets/insights.jpg" alt="Insights: daily spending bars and comparison with last month" loading="lazy" width="1080" height="2400"><p><b>Insights.</b> Touch any day's bar, see where the month is heading and what changed since last month.</p></li>
-        <li><img src="assets/plan.jpg" alt="Plan: budget gauge, subscriptions and savings goals" loading="lazy" width="1080" height="2400"><p><b>Plan.</b> Your budget, the subscriptions it already knows about, and what to save each month for a goal.</p></li>
-        <li><img src="assets/calendar.jpg" alt="Activity calendar showing each day's spending" loading="lazy" width="1080" height="2400"><p><b>Activity.</b> A calendar of every day's spending. Tap a day to see or add to it.</p></li>
-        <li><img src="assets/filters.jpg" alt="Filters for account, category and tags" loading="lazy" width="1080" height="2400"><p><b>Search.</b> Find anything by note, amount, account, category or #tag, with a total.</p></li>
-        <li><img src="assets/lent-borrowed.jpg" alt="Lent or borrowed: an amount split between friends" loading="lazy" width="1080" height="2400"><p><b>Split a bill.</b> Your share is your spending; what each friend owes goes to Money owed.</p></li>
-        <li><img src="assets/money-owed.jpg" alt="Money owed: balances per person" loading="lazy" width="1080" height="2400"><p><b>Money owed.</b> Who owes you and whom you owe, paid back in full or a bit at a time.</p></li>
-        <li><img src="assets/assistant.jpg" alt="AI assistant chat proposing a change to confirm" loading="lazy" width="1080" height="2400"><p><b>Assistant.</b> Optional. Ask about your money or tell it what to log, with your own AI key.</p></li>
+      <ol class="track" id="track" tabindex="0" aria-label="Screens from the app">
+        <li class="slide" id="slide-0" aria-roledescription="slide" aria-label="1 of 9: Home">
+          <div class="slide-card glass">
+            <div class="slide-copy"><h3>Home</h3><p>Today's number first, then your balance across accounts, payments spotted for you and the bills coming up.</p></div>
+            <img class="shot" data-name="home" src="assets/home.jpg" alt="Home: safe to spend today, total balance, spending, income and upcoming bills" loading="eager" width="540" height="1200">
+          </div>
+        </li>
+        <li class="slide" id="slide-1" aria-roledescription="slide" aria-label="2 of 9: Add">
+          <div class="slide-card glass">
+            <div class="slide-copy"><h3>Add</h3><p>The keypad opens first. Two taps and a spend is logged, on any day you forgot.</p></div>
+            <img class="shot" data-name="add" src="assets/add.jpg" alt="Add: a keypad with categories and a date strip" loading="eager" width="540" height="1200">
+          </div>
+        </li>
+        <li class="slide" id="slide-2" aria-roledescription="slide" aria-label="3 of 9: Insights">
+          <div class="slide-card glass">
+            <div class="slide-copy"><h3>Insights</h3><p>Touch any day's bar, see where the month is heading and what changed since last month.</p></div>
+            <img class="shot" data-name="insights" src="assets/insights.jpg" alt="Insights: daily spending bars and comparison with last month" loading="lazy" width="540" height="1200">
+          </div>
+        </li>
+        <li class="slide" id="slide-3" aria-roledescription="slide" aria-label="4 of 9: Plan">
+          <div class="slide-card glass">
+            <div class="slide-copy"><h3>Plan</h3><p>Your budget, the subscriptions it already knows about, and what to save each month for a goal.</p></div>
+            <img class="shot" data-name="plan" src="assets/plan.jpg" alt="Plan: budget gauge, subscriptions and savings goals" loading="lazy" width="540" height="1200">
+          </div>
+        </li>
+        <li class="slide" id="slide-4" aria-roledescription="slide" aria-label="5 of 9: Activity">
+          <div class="slide-card glass">
+            <div class="slide-copy"><h3>Activity</h3><p>A calendar of every day's spending. Tap a day to see it, or to add something you forgot.</p></div>
+            <img class="shot" data-name="calendar" src="assets/calendar.jpg" alt="Activity calendar showing each day's spending" loading="lazy" width="540" height="1200">
+          </div>
+        </li>
+        <li class="slide" id="slide-5" aria-roledescription="slide" aria-label="6 of 9: Search and filters">
+          <div class="slide-card glass">
+            <div class="slide-copy"><h3>Search and filters</h3><p>Find anything by note, amount, account, category or #tag, with a total for what you found.</p></div>
+            <img class="shot" data-name="filters" src="assets/filters.jpg" alt="Filters for account, category and tags" loading="lazy" width="540" height="1200">
+          </div>
+        </li>
+        <li class="slide" id="slide-6" aria-roledescription="slide" aria-label="7 of 9: Split a bill">
+          <div class="slide-card glass">
+            <div class="slide-copy"><h3>Split a bill</h3><p>Your share is your spending. What each friend owes goes to Money owed, from the account you paid with.</p></div>
+            <img class="shot" data-name="lent-borrowed" src="assets/lent-borrowed.jpg" alt="Lent or borrowed: an amount split between friends" loading="lazy" width="540" height="1200">
+          </div>
+        </li>
+        <li class="slide" id="slide-7" aria-roledescription="slide" aria-label="8 of 9: Money owed">
+          <div class="slide-card glass">
+            <div class="slide-copy"><h3>Money owed</h3><p>Who owes you and whom you owe, paid back in full or a bit at a time.</p></div>
+            <img class="shot" data-name="money-owed" src="assets/money-owed.jpg" alt="Money owed: balances per person with Pay back" loading="lazy" width="540" height="1200">
+          </div>
+        </li>
+        <li class="slide" id="slide-8" aria-roledescription="slide" aria-label="9 of 9: Assistant">
+          <div class="slide-card glass">
+            <div class="slide-copy"><h3>Assistant</h3><p>Optional. Ask about your money or tell it what to log, with your own AI key. Nothing changes until you confirm.</p></div>
+            <img class="shot" data-name="assistant" src="assets/assistant.jpg" alt="The AI assistant" loading="lazy" width="540" height="1200">
+          </div>
+        </li>
       </ol>
+      <div class="player">
+        <div class="dots" id="dots" role="group" aria-label="Choose a screen"></div>
+        <button class="icon-btn play" id="play" type="button" aria-label="Pause">
+          <svg class="i-pause" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5v14M15 5v14"/></svg>
+          <svg class="i-play" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l11-6.5z"/></svg>
+          <svg class="i-replay" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>
+        </button>
+      </div>
     </section>
 
     <section class="notice" aria-labelledby="notice-title">
