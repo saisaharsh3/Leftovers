@@ -196,7 +196,7 @@
   function tick(t) {
     const dt = last ? Math.min(100, t - last) : 0;
     last = t;
-    if (reel === "playing" && inView && !document.hidden) {
+    if (reel === "playing" && inView && !document.hidden && !touching) {
       elapsed += dt;
       if (elapsed >= SLIDE_MS) {
         if (current < slides.length - 1) go(current + 1);
@@ -220,19 +220,27 @@
   });
 
   // Swiping, scrolling or using the keys yourself pauses it; the slide nearest the middle becomes the current one.
-  const userStop = () => { if (reel === "playing") setState("paused"); };
-  ["pointerdown", "wheel", "touchstart"].forEach((e) => track.addEventListener(e, userStop, { passive: true }));
+  let touching = false;
+  const userStop = () => { programmatic = 0; if (reel === "playing") setState("paused"); };
+  track.addEventListener("touchstart", () => { touching = true; userStop(); }, { passive: true });
+  addEventListener("touchend", () => { touching = false; }, { passive: true });
+  addEventListener("touchcancel", () => { touching = false; }, { passive: true });
+  ["pointerdown", "wheel"].forEach((e) => track.addEventListener(e, userStop, { passive: true }));
+  const nearest = () => {
+    const middle = track.scrollLeft + track.clientWidth / 2;
+    let best = 0;
+    slides.forEach((s, k) => { if (Math.abs(s.offsetLeft + s.clientWidth / 2 - middle) < Math.abs(slides[best].offsetLeft + slides[best].clientWidth / 2 - middle)) best = k; });
+    return best;
+  };
   let settleTimer;
-  track.addEventListener("scroll", () => {
-    clearTimeout(settleTimer);
-    settleTimer = setTimeout(() => {
-      if (Date.now() - programmatic < 900) return;
-      const middle = track.scrollLeft + track.clientWidth / 2;
-      let best = 0;
-      slides.forEach((s, k) => { if (Math.abs(s.offsetLeft + s.clientWidth / 2 - middle) < Math.abs(slides[best].offsetLeft + slides[best].clientWidth / 2 - middle)) best = k; });
-      if (best !== current) mark(best);
-    }, 120);
-  }, { passive: true });
+  const settled = () => {
+    // A swipe always wins; only the reel's own scrolling is ignored while it glides.
+    if (!touching && programmatic && Date.now() - programmatic < 900) return;
+    const best = nearest();
+    if (best !== current) mark(best);
+  };
+  track.addEventListener("scroll", () => { clearTimeout(settleTimer); settleTimer = setTimeout(settled, 140); }, { passive: true });
+  track.addEventListener("scrollend", settled, { passive: true });
   track.addEventListener("keydown", (e) => {
     const d = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : 0;
     if (!d) return;
@@ -242,7 +250,14 @@
   });
   // Only plays while it's on screen.
   new IntersectionObserver(([entry]) => { inView = entry.isIntersecting; restartTimer(); }, { threshold: 0.5 }).observe(track);
-  addEventListener("resize", () => go(current, false));
+  // Phones resize the page as the address bar shows and hides; only a real change of width re-centres the slide,
+  // and never under a finger.
+  let lastWidth = innerWidth;
+  addEventListener("resize", () => {
+    if (innerWidth === lastWidth || touching) return;
+    lastWidth = innerWidth;
+    go(current, false);
+  });
 
   setState(reel);
   requestAnimationFrame(() => go(0, false));

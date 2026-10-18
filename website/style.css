@@ -312,6 +312,10 @@ input[type="range"] { width: 100%; accent-color: var(--accent); height: 28px; }
 .private dl div { padding: 18px 0; border-top: 1px solid var(--glass-strong); display: grid; grid-template-columns: minmax(0, 14ch) minmax(0, 1fr); gap: 20px; }
 .private dl div:last-child { border-bottom: 1px solid var(--glass-strong); }
 .private dt { font-weight: 700; }
+.ico { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.private dl div { grid-template-columns: 22px minmax(0, 14ch) minmax(0, 1fr); align-items: baseline; }
+.private dl .ico { color: var(--accent); align-self: center; }
+.ways .ico { color: var(--accent); width: 26px; height: 26px; }
 .private dd { margin: 0; color: var(--text-2); }
 
 .chat { padding: 22px; display: grid; gap: 14px; }
@@ -343,6 +347,8 @@ input[type="range"] { width: 100%; accent-color: var(--accent); height: 28px; }
 /* Install */
 .ways { list-style: none; padding: 0; margin: 32px 0 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; border-top: 1px solid var(--glass-strong); }
 .ways li { padding: 26px 24px 28px 0; display: flex; flex-direction: column; gap: 10px; }
+.ways li.glass { background: none; backdrop-filter: none; -webkit-backdrop-filter: none; border-radius: 0; }
+.ways li.glass::before { display: none; }
 .ways li + li { padding-left: 24px; border-left: 1px solid var(--glass-strong); }
 .ways p { color: var(--text-2); font-size: var(--step--1); flex: 1; }
 .ways .btn { align-self: start; min-height: 46px; padding: 0 18px; font-size: var(--step--1); }
@@ -366,12 +372,32 @@ input[type="range"] { width: 100%; accent-color: var(--accent); height: 28px; }
 }
 
 @media (max-width: 640px) {
+  /* Phones: the headline big, the demo and the install options as glass panels like the app's cards. */
+  main > section { padding-top: 64px; }
+  .hero { padding-top: 28px !important; gap: 28px; }
+  .hero h1 { font-size: clamp(3.1rem, 15.5vw, 4.4rem); line-height: .95; }
+  .lede { font-size: var(--step-0); margin-top: 18px; }
+  .ctas { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; margin-top: 24px; }
+  .ctas .btn { width: 100%; }
+  .phone { padding: 18px; }
+  .log-area { height: 150px; }
+  .controls { padding: 18px; border-radius: var(--radius-l); background: linear-gradient(180deg, color-mix(in srgb, var(--glass) 170%, transparent), var(--glass)); box-shadow: inset 0 0 0 1px var(--rim-bottom); }
+  .tabs { flex-wrap: nowrap; overflow-x: auto; margin: 22px calc(-1 * var(--gutter)) 0; padding: 0 var(--gutter); scrollbar-width: none; }
+  .tabs::-webkit-scrollbar { display: none; }
+  .tabs button { flex: none; }
+  .private dl div { grid-template-columns: 22px minmax(0, 1fr); column-gap: 14px; row-gap: 2px; }
+  .private dl dd { grid-column: 2; }
+  .ways { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: 12px; border-top: 0; }
+  .ways li.glass, .ways li.glass + li.glass {
+    padding: 18px; border: 0; border-radius: var(--radius-l);
+    background: linear-gradient(180deg, color-mix(in srgb, var(--glass) 170%, transparent), var(--glass));
+    backdrop-filter: blur(22px) saturate(140%); -webkit-backdrop-filter: blur(22px) saturate(140%);
+  }
+  .ways li.glass::before { display: block; }
+  .ways h3 { font-size: var(--step-0); }
+  .ways .btn { align-self: stretch; width: 100%; padding: 0 10px; }
   .top nav { display: none; }
   .top-actions { margin-left: auto; }
-  .ways { grid-template-columns: minmax(0, 1fr); }
-  .ways li, .ways li + li { padding: 22px 0; border-left: 0; }
-  .ways li + li { border-top: 1px solid var(--glass-strong); }
-  .private dl div { grid-template-columns: minmax(0, 1fr); gap: 4px; }
   .foot nav { margin-left: 0; }
   .slide-card { grid-template-columns: minmax(0, 1fr); align-items: start; justify-items: center; height: 640px; padding: 28px 24px 0; gap: 18px; }
   .slide-copy { justify-self: start; }
