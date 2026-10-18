@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Leftovers — know what's left</title>
+  <meta name="description" content="A fast, private expense tracker for Android. See what's safe to spend today, log a spend in two taps, and keep your money data on your phone.">
+  <meta name="theme-color" content="#09090C" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#EDEEF4" media="(prefers-color-scheme: light)">
+  <meta property="og:title" content="Leftovers — know what's left">
+  <meta property="og:description" content="A fast, private expense tracker for Android. No account, no ads, open source.">
+  <meta property="og:image" content="https://saisaharsh3.github.io/Leftovers/assets/social-preview.png">
+  <meta property="og:url" content="https://saisaharsh3.github.io/Leftovers/">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+  <link rel="preload" href="assets/manrope.ttf" as="font" type="font/ttf" crossorigin>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+  <div class="aurora" aria-hidden="true"><i></i><i></i><i></i></div>
+
+  <header class="top">
+    <a class="brand" href="#top" aria-label="Leftovers home">
+      <img src="assets/icon.svg" alt="" width="32" height="32">
+      <span>Leftovers</span>
+    </a>
+    <nav aria-label="Sections">
+      <a href="#screens">Screens</a>
+      <a href="#private">Privacy</a>
+      <a href="#new">What's new</a>
+    </nav>
+    <div class="top-actions">
+      <button class="icon-btn" id="theme" type="button" aria-label="Switch between light and dark">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9 7 7 0 0 1-9-9Z"/></svg>
+      </button>
+      <a class="btn small" href="#get">Get the app</a>
+    </div>
+  </header>
+
+  <main id="main">
+    <!-- The hero is the app's own Home number, live: tap spends and watch it move. -->
+    <section class="hero" id="top">
+      <div class="hero-copy">
+        <h1>Know what's left.</h1>
+        <p class="lede">Leftovers is an expense tracker for Android that answers one question first: how much can you spend today? It works it out from your budget, what you've spent and the bills still to come, and keeps all of it on your phone.</p>
+        <div class="ctas">
+          <a class="btn primary" id="apk" href="https://github.com/saisaharsh3/Leftovers/releases/latest">Download for Android</a>
+          <a class="btn ghost" href="#get">Other ways to install</a>
+        </div>
+        <p class="fine" id="version-line">Free and open source. Android 8.0 or newer.</p>
+      </div>
+
+      <div class="demo" aria-label="Try the safe-to-spend number">
+        <div class="phone glass strong">
+          <div class="phone-head">
+            <span id="greeting">Good evening</span>
+            <strong id="month-name">October</strong>
+          </div>
+          <div class="today glass">
+            <div class="today-label">Safe to spend today</div>
+            <div class="odometer" id="safe" aria-live="polite" aria-atomic="true"></div>
+            <div class="bar" role="presentation"><span id="bar-fill"></span></div>
+            <div class="today-foot">
+              <span id="spent-today">₹0 of ₹0</span>
+              <span id="days-left">0 days left</span>
+            </div>
+          </div>
+          <div class="log-area">
+            <ul class="log" id="log" aria-label="Spent today"></ul>
+            <p class="log-empty" id="log-empty">Nothing spent today yet. Tap a spend below.</p>
+          </div>
+        </div>
+
+        <div class="controls">
+          <div class="control">
+            <div class="control-head">
+              <label for="budget">Your monthly budget</label>
+              <output id="budget-out" for="budget">₹50,000</output>
+            </div>
+            <input type="range" id="budget" min="10000" max="150000" step="1000" value="50000">
+          </div>
+
+          <div class="control">
+            <div class="control-head"><span id="spend-label">Log a spend</span><button class="link" id="undo" type="button" hidden>Undo</button></div>
+            <div class="chips" role="group" aria-labelledby="spend-label">
+              <button type="button" class="chip" data-spend="120" data-note="Coffee">Coffee ₹120</button>
+              <button type="button" class="chip" data-spend="40" data-note="Metro">Metro ₹40</button>
+              <button type="button" class="chip" data-spend="250" data-note="Lunch">Lunch ₹250</button>
+              <button type="button" class="chip" data-spend="1200" data-note="Groceries">Groceries ₹1,200</button>
+            </div>
+          </div>
+
+          <div class="control">
+            <div class="control-head"><span id="bills-label">Bills still due this month</span></div>
+            <div class="chips" role="group" aria-labelledby="bills-label" id="bills"></div>
+          </div>
+
+          <p class="sum" id="sum"></p>
+        </div>
+      </div>
+    </section>
+
+    <section class="screens" id="screens" aria-labelledby="screens-title">
+      <div class="section-head">
+        <h2 id="screens-title">Everything in four tabs</h2>
+        <div class="gallery-nav">
+          <button class="icon-btn" type="button" id="prev" aria-label="Previous screen"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></button>
+          <button class="icon-btn" type="button" id="next" aria-label="Next screen"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button>
+        </div>
+      </div>
+      <ol class="gallery" id="gallery" tabindex="0" aria-label="Screens from the app">
+        <li><img src="assets/home.jpg" alt="Home: safe to spend today, total balance, detected payments and upcoming bills" loading="lazy" width="1080" height="2400"><p><b>Home.</b> Today's number, your balance across accounts, payments spotted for you and the bills coming up.</p></li>
+        <li><img src="assets/add.jpg" alt="Add: a keypad with categories and a date strip" loading="lazy" width="1080" height="2400"><p><b>Add.</b> The keypad opens first. Two taps and it's logged, on any day you forgot.</p></li>
+        <li><img src="assets/insights.jpg" alt="Insights: daily spending bars and comparison with last month" loading="lazy" width="1080" height="2400"><p><b>Insights.</b> Touch any day's bar, see where the month is heading and what changed since last month.</p></li>
+        <li><img src="assets/plan.jpg" alt="Plan: budget gauge, subscriptions and savings goals" loading="lazy" width="1080" height="2400"><p><b>Plan.</b> Your budget, the subscriptions it already knows about, and what to save each month for a goal.</p></li>
+        <li><img src="assets/calendar.jpg" alt="Activity calendar showing each day's spending" loading="lazy" width="1080" height="2400"><p><b>Activity.</b> A calendar of every day's spending. Tap a day to see or add to it.</p></li>
+        <li><img src="assets/filters.jpg" alt="Filters for account, category and tags" loading="lazy" width="1080" height="2400"><p><b>Search.</b> Find anything by note, amount, account, category or #tag, with a total.</p></li>
+        <li><img src="assets/lent-borrowed.jpg" alt="Lent or borrowed: an amount split between friends" loading="lazy" width="1080" height="2400"><p><b>Split a bill.</b> Your share is your spending; what each friend owes goes to Money owed.</p></li>
+        <li><img src="assets/money-owed.jpg" alt="Money owed: balances per person" loading="lazy" width="1080" height="2400"><p><b>Money owed.</b> Who owes you and whom you owe, paid back in full or a bit at a time.</p></li>
+        <li><img src="assets/assistant.jpg" alt="AI assistant chat proposing a change to confirm" loading="lazy" width="1080" height="2400"><p><b>Assistant.</b> Optional. Ask about your money or tell it what to log, with your own AI key.</p></li>
+      </ol>
+    </section>
+
+    <section class="notice" aria-labelledby="notice-title">
+      <div class="notice-copy">
+        <h2 id="notice-title">It notices payments, you decide</h2>
+        <p>Turn on detection and Leftovers reads bank texts, payment app notifications or bank emails on your phone, and suggests the entry. Nothing is logged until you tap it, and one-time passwords and payment requests are ignored.</p>
+        <div class="tabs" role="tablist" aria-label="Example messages">
+          <button role="tab" type="button" aria-selected="true" data-msg="0">Bank SMS</button>
+          <button role="tab" type="button" aria-selected="false" data-msg="1">Payment app</button>
+          <button role="tab" type="button" aria-selected="false" data-msg="2">Salary</button>
+          <button role="tab" type="button" aria-selected="false" data-msg="3">An OTP</button>
+        </div>
+      </div>
+      <div class="notice-demo" role="tabpanel" aria-live="polite">
+        <div class="message glass">
+          <div class="message-from" id="msg-from">AD-HDFCBK</div>
+          <p id="msg-text"></p>
+        </div>
+        <svg class="flow" viewBox="0 0 24 48" aria-hidden="true"><path d="M12 2v40m-7-7 7 7 7-7"/></svg>
+        <div class="suggestion glass strong" id="suggestion"></div>
+      </div>
+    </section>
+
+    <section class="private" id="private" aria-labelledby="private-title">
+      <h2 id="private-title">Your money stays on your phone</h2>
+      <div class="private-grid">
+        <dl>
+          <div><dt>No account</dt><dd>Open it and start. There's nothing to sign up for.</dd></div>
+          <div><dt>No ads, no analytics</dt><dd>The app doesn't report what you do to anyone.</dd></div>
+          <div><dt>No network unless you ask</dt><dd>It goes online only for things you turn on: the AI assistant, bank email alerts, or checking a product's price.</dd></div>
+          <div><dt>Locked and encrypted</dt><dd>App lock with your fingerprint or a PIN, encrypted backups, and API keys kept in the phone's keystore.</dd></div>
+          <div><dt>Open source</dt><dd>Every line is on GitHub under the MIT licence, and releases are built in the open.</dd></div>
+        </dl>
+        <div class="chat glass" aria-label="Example of the AI assistant">
+          <div class="bubble me">Add 250 for coffee today</div>
+          <div class="change" id="change">
+            <div class="change-top"><span>Add an expense</span><strong>₹250</strong></div>
+            <div class="change-sub">Coffee, Food &amp; Dining, today</div>
+            <div class="change-actions">
+              <button type="button" class="btn tiny ghost" id="not-now">Not now</button>
+              <button type="button" class="btn tiny primary" id="confirm">Confirm</button>
+            </div>
+          </div>
+          <p class="chat-note">The assistant is optional. It proposes changes; nothing happens until you confirm.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="new" id="new" aria-labelledby="new-title">
+      <div class="section-head">
+        <h2 id="new-title">What's new</h2>
+        <a class="link" href="https://github.com/saisaharsh3/Leftovers/blob/main/CHANGELOG.md">Full changelog</a>
+      </div>
+      <div id="changelog" class="changelog">
+        <p class="muted">Loading the latest changes…</p>
+      </div>
+    </section>
+
+    <section class="get" id="get" aria-labelledby="get-title">
+      <h2 id="get-title">Get Leftovers</h2>
+      <ul class="ways">
+        <li>
+          <h3>F-Droid</h3>
+          <p id="fdroid-text">Accepted into F-Droid and being built. It'll appear in the F-Droid app shortly.</p>
+          <a class="btn ghost" href="https://f-droid.org/packages/com.leftovers.app/">Open on F-Droid</a>
+        </li>
+        <li>
+          <h3>Obtainium</h3>
+          <p>Installs from GitHub and keeps the app up to date for you.</p>
+          <a class="btn ghost" href="https://apps.obtainium.imranr.dev/redirect?r=obtainium://add/https://github.com/saisaharsh3/Leftovers">Add to Obtainium</a>
+        </li>
+        <li>
+          <h3>APK from GitHub</h3>
+          <p id="apk-text">Download the signed APK and open it. Updates install over the top and keep your data.</p>
+          <a class="btn primary" id="apk2" href="https://github.com/saisaharsh3/Leftovers/releases/latest">Download the APK</a>
+        </li>
+        <li>
+          <h3>Dev build</h3>
+          <p>The newest changes, built on every update. It installs next to the real app, with its own data.</p>
+          <a class="btn ghost" href="https://github.com/saisaharsh3/Leftovers/releases/tag/dev-build">Get the Dev build</a>
+        </li>
+      </ul>
+    </section>
+  </main>
+
+  <footer class="foot">
+    <img src="assets/icon.svg" alt="" width="28" height="28">
+    <p>Leftovers is made by C. Sai Saharsh and released under the MIT licence.</p>
+    <nav aria-label="Project">
+      <a href="https://github.com/saisaharsh3/Leftovers">Source code</a>
+      <a href="https://github.com/saisaharsh3/Leftovers/issues/new/choose">Report a problem</a>
+      <a href="https://github.com/saisaharsh3/Leftovers/discussions">Discussions</a>
+    </nav>
+  </footer>
+
+  <script src="app.js" defer></script>
+</body>
+</html>
