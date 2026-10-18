@@ -97,6 +97,7 @@ class DebtsViewModel(
     fun save(debt: Debt) = viewModelScope.launch { planning.saveDebt(debt) }
     fun delete(debt: Debt) = viewModelScope.launch { planning.deleteDebt(debt) }
     fun settle(person: String) = viewModelScope.launch { planning.settle(person) }
+    fun settleUp(person: String, amountMinor: Long, accountId: Long?) = viewModelScope.launch { planning.settleUp(person, amountMinor, accountId, chosen = true) }
 }
 
 /** Money lent to and borrowed from people. It never counts as spending or income. */
@@ -110,6 +111,7 @@ fun DebtsScreen(onBack: () -> Unit, viewModel: DebtsViewModel = viewModel(factor
     val c = LocalAppColors.current
     val money = LocalMoney.current
     var editing by remember { mutableStateOf<Debt?>(null) }
+    var settling by remember { mutableStateOf<String?>(null) }
     val owedToYou = balances.filter { it.netMinor > 0 }.sumOf { it.netMinor }
     val youOwe = balances.filter { it.netMinor < 0 }.sumOf { -it.netMinor }
 
@@ -171,7 +173,7 @@ fun DebtsScreen(onBack: () -> Unit, viewModel: DebtsViewModel = viewModel(factor
                                     color = if (b.netMinor > 0) c.positive else c.textSecondary,
                                 )
                             }
-                            Chip("Settle up", { viewModel.settle(b.person) }, icon = Lucide.Check)
+                            Chip("Pay back", { settling = b.person }, icon = Lucide.Check)
                         }
                         b.entries.forEach { d ->
                             RowDivider(inset = 16.dp)
@@ -189,7 +191,7 @@ fun DebtsScreen(onBack: () -> Unit, viewModel: DebtsViewModel = viewModel(factor
                                     Icon(Lucide.Camera, contentDescription = if (d.photos.size == 1) "Has a photo" else "Has ${d.photos.size} photos", tint = c.textTertiary, modifier = Modifier.padding(end = 8.dp).size(14.dp))
                                 }
                                 Text(
-                                    (if (d.amountMinor > 0) "Lent " else "Borrowed ") + money.format(abs(d.amountMinor)),
+                                    (if (d.repayment) "Paid back " else if (d.amountMinor > 0) "Lent " else "Borrowed ") + money.format(abs(d.amountMinor)),
                                     style = MaterialTheme.typography.labelLarge,
                                     color = c.textPrimary,
                                 )
@@ -200,6 +202,13 @@ fun DebtsScreen(onBack: () -> Unit, viewModel: DebtsViewModel = viewModel(factor
                     }
                 }
             }
+        }
+    }
+
+    balances.firstOrNull { it.person.equals(settling, ignoreCase = true) }?.let { b ->
+        SettleSheet(b, accounts, onDismiss = { settling = null }) { amount, account ->
+            viewModel.settleUp(b.person, amount, account)
+            settling = null
         }
     }
 
@@ -358,6 +367,72 @@ fun DebtEditor(
                     modifier = Modifier.align(Alignment.CenterHorizontally).pressable(onDelete),
                 )
             }
+        }
+    }
+}
+
+/**
+ * Paying back, all of it or part (#20): the amount starts at everything owed, and the account it went into
+ * or came out of starts at the one their latest entry used. Entries from before accounts were tracked have
+ * none, so their repayment starts with none too and balances stay as they were.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun SettleSheet(
+    balance: com.leftovers.app.data.PersonBalance,
+    accounts: List<com.leftovers.app.data.AccountWithBalance>,
+    onDismiss: () -> Unit,
+    onSettle: (amountMinor: Long, accountId: Long?) -> Unit,
+) {
+    val c = LocalAppColors.current
+    val money = LocalMoney.current
+    val owed = abs(balance.netMinor)
+    val theyPay = balance.netMinor > 0
+    var amountText by rememberSaveable { mutableStateOf(AmountInput.fromMinor(owed)) }
+    val noAccountYet = balance.entries.all { it.accountId == null }
+    var accountId by rememberSaveable { mutableStateOf(balance.entries.firstNotNullOfOrNull { it.accountId }) }
+    val amount = AmountInput.toMinor(amountText) ?: 0L
+    val all = amount >= owed
+    GlassSheet(onDismiss) {
+        Column(
+            Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            Text(if (theyPay) "${balance.person} paid you back" else "You paid ${balance.person} back", style = MaterialTheme.typography.headlineSmall, color = c.textPrimary)
+            Text(
+                if (theyPay) "They owe you ${money.format(owed)}. Change the amount if they paid part of it." else "You owe ${money.format(owed)}. Change the amount if you paid part of it.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = c.textSecondary,
+            )
+            MoneyField(amountText, { amountText = it }, label = "Amount")
+            if (accounts.size > 1 || noAccountYet) {
+                Text(
+                    if (theyPay) "Received into" else "Paid from",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = c.textSecondary,
+                    modifier = Modifier.padding(start = 6.dp),
+                )
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    accounts.forEach { a ->
+                        Chip(a.name, { accountId = a.id }, icon = com.leftovers.app.ui.icons.CategoryIcons[a.icon], iconTint = androidx.compose.ui.graphics.Color(a.color), selected = accountId == a.id)
+                    }
+                    if (noAccountYet) Chip("No account", { accountId = null }, selected = accountId == null)
+                }
+            }
+            Spacer(Modifier.height(2.dp))
+            PrimaryButton(
+                if (all) "Settle up" else "Save ${money.format(amount)} paid back",
+                { onSettle(minOf(amount, owed), accountId) },
+                Modifier.fillMaxWidth(),
+                enabled = amount > 0,
+                icon = Lucide.Check,
+            )
+            Text(
+                if (all) "Everything with ${balance.person} is then settled." else "${money.format(owed - amount)} stays open.",
+                style = MaterialTheme.typography.bodySmall,
+                color = c.textTertiary,
+                modifier = Modifier.align(Alignment.CenterHorizontally),
+            )
         }
     }
 }

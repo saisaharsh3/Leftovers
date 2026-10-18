@@ -156,7 +156,7 @@ interface AccountDao {
                         FROM transactions t WHERE t.accountId = a.id), 0)
             + COALESCE((SELECT SUM(amountMinor) FROM transfers WHERE toAccountId = a.id), 0)
             - COALESCE((SELECT SUM(amountMinor) FROM transfers WHERE fromAccountId = a.id), 0)
-            - COALESCE((SELECT SUM(amountMinor) FROM debts WHERE accountId = a.id AND settled = 0), 0) AS balanceMinor
+            - COALESCE((SELECT SUM(amountMinor) FROM debts WHERE accountId = a.id), 0) AS balanceMinor
         FROM accounts a ORDER BY a.id
         """,
     )
@@ -248,6 +248,9 @@ interface DebtDao {
 
     @Query("UPDATE debts SET settled = 1 WHERE settled = 0 AND LOWER(TRIM(person)) = LOWER(TRIM(:person))")
     suspend fun settle(person: String)
+
+    @Query("SELECT * FROM debts WHERE settled = 0 AND LOWER(TRIM(person)) = LOWER(TRIM(:person)) ORDER BY createdAt DESC")
+    suspend fun openFor(person: String): List<Debt>
 
     @Query("SELECT id FROM debts WHERE accountId = :accountId")
     suspend fun idsForAccount(accountId: Long): List<Long>

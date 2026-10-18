@@ -97,22 +97,30 @@ class SettingsViewModel(
 ) : ViewModel() {
 
     /** A CSV file read and waiting for the user to confirm: what would be added, and what's skipped. */
-    data class CsvPreview(val toAdd: List<com.leftovers.app.data.Transaction>, val duplicates: Int, val unreadable: Int, val unmatched: Int, val noCategory: Int)
+    data class CsvPreview(val toAdd: List<com.leftovers.app.data.Transaction>, val duplicates: Int, val unreadable: Int, val unmatched: Int, val noCategory: Int, val transfers: Int = 0)
 
     var csvPreview by mutableStateOf<CsvPreview?>(null)
         private set
 
-    /** Reads [uri] and prepares the entries; nothing is saved until [confirmCsvImport]. */
+    /** Reads [uri] (CSV, Excel or a bank's statement file) and prepares the entries; nothing is saved until [confirmCsvImport]. */
     fun readCsv(context: android.content.Context, uri: android.net.Uri, onError: (String) -> Unit) {
         viewModelScope.launch {
-            val text = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                runCatching { context.contentResolver.openInputStream(uri)?.use { it.readBytes().decodeToString() } }.getOrNull()
+            val file = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                runCatching { context.contentResolver.openInputStream(uri)?.use { it.readBytes() } }.getOrNull()
+                    ?.let(com.leftovers.app.util.StatementFile::read)
             }
-            if (text == null) {
-                onError("Couldn't open that file")
-                return@launch
+            val parsed = when (file) {
+                null -> {
+                    onError("Couldn't open that file")
+                    return@launch
+                }
+                is com.leftovers.app.util.StatementFile.Result.Unsupported -> {
+                    onError(file.message)
+                    return@launch
+                }
+                is com.leftovers.app.util.StatementFile.Result.Text -> com.leftovers.app.util.CsvImporter.parse(file.text)
+                is com.leftovers.app.util.StatementFile.Result.Table -> com.leftovers.app.util.CsvImporter.parseTable(file.rows)
             }
-            val parsed = com.leftovers.app.util.CsvImporter.parse(text)
             parsed.error?.let {
                 onError(it)
                 return@launch
@@ -147,7 +155,7 @@ class SettingsViewModel(
                     accountId = account,
                 )
             }
-            csvPreview = CsvPreview(toAdd, duplicates, parsed.unreadable, unmatched, noCategory)
+            csvPreview = CsvPreview(toAdd, duplicates, parsed.unreadable, unmatched, noCategory, parsed.transfers)
         }
     }
 
@@ -279,12 +287,22 @@ class SettingsViewModel(
     }
 
     /** [onNeedPassword] is called when the backup is protected and no saved or typed password opens it. */
-    fun restoreFrom(uri: Uri, password: String? = null, onNeedPassword: (wrong: Boolean) -> Unit, onResult: (String) -> Unit) {
+    fun restoreFrom(
+        uri: Uri,
+        password: String? = null,
+        onNeedPassword: (wrong: Boolean) -> Unit,
+        onNotBackup: () -> Unit = {},
+        onResult: (String) -> Unit,
+    ) {
         viewModelScope.launch {
             backup.import(uri, password).fold(
                 { onResult("Restored $it entries") },
                 {
-                    if (it is BackupPasswordException) onNeedPassword(password != null) else onResult("Couldn't restore: ${it.message}")
+                    when (it) {
+                        is BackupPasswordException -> onNeedPassword(password != null)
+                        is com.leftovers.app.util.NotABackupException -> onNotBackup()
+                        else -> onResult("Couldn't restore: ${it.message}")
+                    }
                 },
             )
         }
@@ -596,8 +614,13 @@ fun SettingsScreen(
                             viewModel.export(context) { scope.launch { snackbar.showSnackbar("Nothing to export yet") } }
                         }
                         RowDivider()
-                        NavRow(Lucide.Download, "Import from CSV", "Bank statement or another app") {
-                            openCsv.launch(arrayOf("text/*", "application/csv", "application/vnd.ms-excel", "application/octet-stream"))
+                        NavRow(Lucide.Download, "Import entries", "CSV or Excel, from a bank or another app") {
+                            openCsv.launch(
+                                arrayOf(
+                                    "text/*", "application/csv", "application/vnd.ms-excel", "application/octet-stream",
+                                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "application/pdf",
+                                ),
+                            )
                         }
                         RowDivider()
                         ListRow(
@@ -700,7 +723,14 @@ fun SettingsScreen(
                 confirmButton = {
                     TextButton(onClick = {
                         pendingRestore = null
-                        viewModel.restoreFrom(uri, onNeedPassword = { wrong -> lockedRestore = uri to wrong }) { toast(it) }
+                        viewModel.restoreFrom(
+                            uri,
+                            onNeedPassword = { wrong -> lockedRestore = uri to wrong },
+                            // Not a backup, but maybe a statement or another app's export: offer its entries instead.
+                            onNotBackup = {
+                                viewModel.readCsv(context, uri) { message -> toast("That isn't a Leftovers backup. $message") }
+                            },
+                        ) { toast(it) }
                     }) { Text("Restore", color = c.textPrimary) }
                 },
                 dismissButton = { TextButton(onClick = { pendingRestore = null }) { Text("Cancel", color = c.textSecondary) } },
@@ -826,6 +856,7 @@ fun SettingsScreen(
                             if (preview.noCategory > 0) "${if (preview.noCategory == adding) "They have" else "${preview.noCategory} have"} no category, so ${if (preview.noCategory == 1) "it goes" else "they go"} to Other; change any later." else null,
                             if (preview.unmatched > 0) "${preview.unmatched} with a category you don't have go to Other." else null,
                             if (preview.unreadable > 0) "${preview.unreadable} ${if (preview.unreadable == 1) "row" else "rows"} without a readable date or amount ${if (preview.unreadable == 1) "is" else "are"} left out." else null,
+                            if (preview.transfers > 0) "${preview.transfers} ${if (preview.transfers == 1) "transfer" else "transfers"} between accounts ${if (preview.transfers == 1) "is" else "are"} left out, as ${if (preview.transfers == 1) "it isn't" else "they aren't"} spending or income." else null,
                         ).joinToString(" "),
                     )
                 },

@@ -5,6 +5,15 @@ All notable changes to Leftovers. Download any version from
 
 ## Unreleased
 
+- Pay back part of what's owed: Pay back on Money owed (or on someone's card on Home) starts at everything owed;
+  change the amount for part of it, and pick the account it went into. What's left stays open, and paying the
+  rest settles it (#20)
+- Import entries reads Excel files (.xlsx and the older .xls), the HTML ".xls" many banks download, and CSV or
+  tab-separated text in UTF-16 as well as UTF-8, from a bank or any other app. Moves between your own accounts
+  are left out (#21)
+- Picking a statement or another app's export under Restore no longer shows a technical error: it offers to import
+  its entries instead (#21)
+- On Home, one subscription or one savings goal fills the whole width, and two share it (#18)
 - Lent and borrowed money now moves your account balance while it's open: lending takes it out of the account
   it was paid from, borrowing puts it into the account it came into, and marking it settled puts the balance back.
   It still never counts as spending or touches the budget. Entries from before this update have no account, so

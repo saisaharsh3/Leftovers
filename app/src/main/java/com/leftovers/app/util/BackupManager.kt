@@ -110,7 +110,7 @@ class BackupManager(
                 put("debts", JSONArray(debtList.map { d ->
                     JSONObject().put("id", d.id).put("person", d.person).put("amount", d.amountMinor).put("note", d.note)
                         .put("day", d.epochDay).put("settled", d.settled).put("createdAt", d.createdAt)
-                        .put("account", d.accountId ?: JSONObject.NULL)
+                        .put("account", d.accountId ?: JSONObject.NULL).put("repayment", d.repayment)
                         .put("receipts", JSONArray(d.photos.map { photoRef(it) }.filter { it != JSONObject.NULL }))
                 }))
                 if (photos.length() > 0) put("photos", photos)
@@ -128,9 +128,12 @@ class BackupManager(
      */
     suspend fun import(source: Uri, typedPassword: String? = null): Result<Int> = withContext(Dispatchers.IO) {
         runCatching {
-            val text = context.contentResolver.openInputStream(source)?.use { it.readBytes().decodeToString() }
+            val bytes = context.contentResolver.openInputStream(source)?.use { it.readBytes() }
                 ?: error("Couldn't open the file")
-            var json = JSONObject(text)
+            // A spreadsheet or another app's export picked here by mistake: say so, rather than a JSON error.
+            val text = StatementFile.decodeText(bytes).trimStart()
+            if (!text.startsWith("{")) throw NotABackupException()
+            var json = runCatching { JSONObject(text) }.getOrElse { throw NotABackupException() }
             if (BackupCrypto.isEncrypted(json)) {
                 val key = typedPassword ?: password.get() ?: throw BackupPasswordException("This backup has a password")
                 json = JSONObject(BackupCrypto.decrypt(json, key))
@@ -193,6 +196,7 @@ class BackupManager(
                     it.optBoolean("settled"), it.getLong("createdAt"), photosToPath(names.mapNotNull(::restorePhoto)),
                     // Older backups have no account: those entries stay out of every balance, as before.
                     accountId = if (it.isNull("account")) null else it.optLong("account"),
+                    repayment = it.optBoolean("repayment"),
                 )
             }
 
@@ -238,3 +242,6 @@ class BackupManager(
         }
     }
 }
+
+/** The file picked to restore isn't a Leftovers backup, e.g. a bank statement or another app's export. */
+class NotABackupException : Exception("This isn't a Leftovers backup")

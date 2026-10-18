@@ -18,10 +18,12 @@ import org.robolectric.annotation.Config
 class LentBorrowedBalanceTest {
     private lateinit var db: AppDatabase
     private lateinit var accounts: AccountRepository
+    private lateinit var planning: PlanningRepository
 
     @Before fun setUp() {
         db = Room.inMemoryDatabaseBuilder(ApplicationProvider.getApplicationContext(), AppDatabase::class.java).allowMainThreadQueries().build()
         accounts = AccountRepository(db.accountDao(), db.transferDao(), db.transactionDao(), db.debtDao())
+        planning = PlanningRepository(db)
         runBlocking {
             db.accountDao().upsert(Account(1, "Cash", "banknote", 0, openingMinor = 100_000))
             db.accountDao().upsert(Account(2, "Bank", "landmark", 0, openingMinor = 0))
@@ -35,8 +37,34 @@ class LentBorrowedBalanceTest {
     @Test fun lendingTakesMoneyOutUntilSettled() = runBlocking {
         db.debtDao().upsert(Debt(10, "Nick", 30_000, accountId = 1))
         assertEquals(70_000L, balance(1))
-        db.debtDao().settle("Nick")
+        planning.settle("Nick")
         assertEquals(100_000L, balance(1))
+        assertEquals(true, db.debtDao().getAll().all { it.settled })
+    }
+
+    // #20: part of it paid back at a time.
+    @Test fun partPaymentsUntilSettled() = runBlocking {
+        db.debtDao().upsert(Debt(20, "Nick", 30_000, accountId = 1))
+        planning.settleUp("Nick", 10_000)
+        assertEquals(80_000L, balance(1))
+        assertEquals(20_000L, db.debtDao().getAll().filter { !it.settled }.sumOf { it.amountMinor })
+        // Paying more than is left counts as the rest.
+        planning.settleUp("Nick", 50_000)
+        assertEquals(100_000L, balance(1))
+        assertEquals(true, db.debtDao().getAll().all { it.settled })
+    }
+
+    @Test fun paidBackIntoAnotherAccount() = runBlocking {
+        db.debtDao().upsert(Debt(21, "Nick", 30_000, accountId = 1))
+        planning.settleUp("Nick", accountId = 2, chosen = true)
+        assertEquals(70_000L, balance(1))
+        assertEquals(30_000L, balance(2))
+    }
+
+    @Test fun payingBackWhatYouBorrowed() = runBlocking {
+        db.debtDao().upsert(Debt(22, "Priya", -20_000, accountId = 1))
+        planning.settleUp("Priya", 5_000)
+        assertEquals(115_000L, balance(1))
     }
 
     @Test fun borrowingPutsMoneyIn() = runBlocking {

@@ -9,8 +9,9 @@ import java.time.format.DateTimeFormatterBuilder
 import java.util.Locale
 
 /**
- * Reads entries from a CSV file: Leftovers' own export, a bank statement, or another app's export.
- * Columns are found by their names, so the order doesn't matter. Nothing is saved here; see [Parsed].
+ * Reads entries from a table: Leftovers' own export, a bank statement, or another app's export, from CSV
+ * text or a spreadsheet already turned into rows by [StatementFile]. Columns are found by their names, so
+ * the order doesn't matter. Nothing is saved here; see [Parsed].
  */
 object CsvImporter {
     data class Row(
@@ -22,16 +23,16 @@ object CsvImporter {
         val account: String?,
     )
 
-    /** What was read: the rows, and how many lines couldn't be (no date or amount). */
-    data class Parsed(val rows: List<Row>, val unreadable: Int, val error: String? = null)
+    /** What was read: the rows, how many lines couldn't be (no date or amount), and how many were transfers between accounts. */
+    data class Parsed(val rows: List<Row>, val unreadable: Int, val error: String? = null, val transfers: Int = 0)
 
     private val dateNames = listOf("date", "transaction date", "txn date", "value date", "posting date", "posted", "booking date")
-    private val amountNames = listOf("amount", "amt", "transaction amount", "value")
+    private val amountNames = listOf("amount", "amt", "transaction amount", "value", "sum", "total", "price")
     private val debitNames = listOf("debit", "withdrawal", "withdrawals", "dr", "money out", "paid out", "debit amount", "withdrawal amt")
     private val creditNames = listOf("credit", "deposit", "deposits", "cr", "money in", "paid in", "credit amount", "deposit amt")
     private val typeNames = listOf("type", "transaction type", "dr/cr", "cr/dr")
-    private val categoryNames = listOf("category", "categories")
-    private val noteNames = listOf("note", "notes", "description", "narration", "details", "particulars", "memo", "payee", "remarks", "merchant", "name")
+    private val categoryNames = listOf("category", "categories", "category name")
+    private val noteNames = listOf("note", "notes", "title", "description", "comment", "comments", "label", "narration", "details", "particulars", "memo", "payee", "remarks", "merchant", "name")
     private val accountNames = listOf("account", "account name", "wallet")
 
     fun parse(text: String): Parsed {
@@ -41,7 +42,16 @@ object CsvImporter {
         val headerAt = lines.indexOfFirst { line -> split(line, delimiterOf(line)).any { cell -> cell.clean() in dateNames } }
         if (headerAt < 0) return Parsed(emptyList(), 0, "Couldn't find a header row with a Date column.")
         val delimiter = delimiterOf(lines[headerAt])
-        val header = split(lines[headerAt], delimiter).map { it.clean() }
+        return parseTable(lines.map { split(it, delimiter) })
+    }
+
+    /** The same as [parse], for a table already split into cells (a spreadsheet, or a bank's HTML "Excel" file). */
+    fun parseTable(table: List<List<String>>): Parsed {
+        val rowsWithText = table.filter { cells -> cells.any { it.isNotBlank() } }
+        if (rowsWithText.isEmpty()) return Parsed(emptyList(), 0, "The file is empty.")
+        val headerAt = rowsWithText.indexOfFirst { cells -> cells.any { it.clean() in dateNames } }
+        if (headerAt < 0) return Parsed(emptyList(), 0, "Couldn't find a header row with a Date column.")
+        val header = rowsWithText[headerAt].map { it.clean() }
         fun column(names: List<String>) = names.firstNotNullOfOrNull { n -> header.indexOf(n).takeIf { it >= 0 } }
             ?: header.indexOfFirst { h -> names.any { n -> h.contains(n) && n.length > 3 } }.takeIf { it >= 0 }
 
@@ -55,15 +65,21 @@ object CsvImporter {
         val noteCol = column(noteNames)
         val accountCol = column(accountNames)
 
-        val body = lines.drop(headerAt + 1).map { split(it, delimiter) }
+        val body = rowsWithText.drop(headerAt + 1)
         val dayFirst = dayComesFirst(body.mapNotNull { it.getOrNull(dateCol) })
         var unreadable = 0
+        var transfers = 0
         // With one amount column and no type, a file that has negative amounts uses the sign (minus is spending);
         // one without any is an expenses-only export.
         val signedFile = amountCol != null && body.any { cells -> cells.getOrNull(amountCol)?.let(::parseAmount)?.let { it < 0 } == true }
         val rows = body.mapNotNull { cells ->
             val date = cells.getOrNull(dateCol)?.let { parseDate(it, dayFirst) }
             val typeText = typeCol?.let { cells.getOrNull(it) }?.trim()?.lowercase().orEmpty()
+            // A move between two of the user's own accounts isn't spending or income, whichever app exported it.
+            if (typeText.startsWith("transfer")) {
+                transfers++
+                return@mapNotNull null
+            }
             val debit = debitCol?.let { cells.getOrNull(it) }?.let(::parseAmount)?.takeIf { it != 0L }
             val credit = creditCol?.let { cells.getOrNull(it) }?.let(::parseAmount)?.takeIf { it != 0L }
             val signed: Long? = when {
@@ -101,7 +117,7 @@ object CsvImporter {
                 account = accountCol?.let { cells.getOrNull(it) }?.trim()?.takeIf { it.isNotEmpty() },
             )
         }
-        return Parsed(rows, unreadable)
+        return Parsed(rows, unreadable, transfers = transfers)
     }
 
     private fun String.clean() = trim().trim('"').trim().lowercase().replace(Regex("""\s*\(.*\)$"""), "").replace(Regex("""[.:]$"""), "").trim()
@@ -158,6 +174,10 @@ object CsvImporter {
     internal fun parseDate(raw: String, dayFirst: Boolean = true): LocalDate? {
         val t = raw.trim().trim('"').substringBefore('T').substringBefore(' ').takeIf { it.isNotEmpty() } ?: return null
         runCatching { return LocalDate.parse(t, isoDate) }
+        // Spreadsheets keep dates as a day count from 30 December 1899 ("46312" is 17 Oct 2026).
+        Regex("""^(\d{5})(\.\d+)?$""").find(t)?.groupValues?.get(1)?.toLong()?.takeIf { it in 20_000..80_000 }?.let {
+            return LocalDate.of(1899, 12, 30).plusDays(it)
+        }
         Regex("""^(\d{1,2})[/.-](\d{1,2})[/.-](\d{2,4})$""").find(t)?.destructured?.let { (a, b, y) ->
             val year = y.toInt().let { if (it < 100) 2000 + it else it }
             val (day, month) = if (dayFirst) a.toInt() to b.toInt() else b.toInt() to a.toInt()

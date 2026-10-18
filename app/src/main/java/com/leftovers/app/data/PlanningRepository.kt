@@ -31,7 +31,42 @@ class PlanningRepository(private val database: AppDatabase) {
         debtDao.delete(debt)
         debt.photos.forEach { com.leftovers.app.util.ReceiptStore.delete(it) }
     }
-    suspend fun settle(person: String) = debtDao.settle(person)
+    /**
+     * Records [amountMinor] paid back by or to [person], into or out of [accountId] (unless [chosen], the account of
+     * their latest entry; none when their entries have none). Paying all of it settles them; paying more than is
+     * owed counts as paying it all.
+     */
+    suspend fun settleUp(
+        person: String,
+        amountMinor: Long? = null,
+        accountId: Long? = null,
+        chosen: Boolean = false,
+        epochDay: Long = LocalDate.now().toEpochDay(),
+    ) {
+        database.withTransaction {
+            val open = debtDao.openFor(person)
+            val net = open.sumOf { it.amountMinor }
+            if (net == 0L) {
+                debtDao.settle(person)
+                return@withTransaction
+            }
+            val paid = (amountMinor ?: kotlin.math.abs(net)).coerceIn(1, kotlin.math.abs(net))
+            debtDao.upsert(
+                Debt(
+                    person = open.first().person.trim(),
+                    amountMinor = if (net > 0) -paid else paid,
+                    note = "Paid back",
+                    epochDay = epochDay,
+                    accountId = if (chosen) accountId else open.firstNotNullOfOrNull { it.accountId },
+                    repayment = true,
+                ),
+            )
+            if (paid == kotlin.math.abs(net)) debtDao.settle(person)
+        }
+    }
+
+    /** Everything with [person] paid back in full. */
+    suspend fun settle(person: String) = settleUp(person)
 
     /** Removes every lent or borrowed entry, with its photos. */
     suspend fun deleteAllDebts() {

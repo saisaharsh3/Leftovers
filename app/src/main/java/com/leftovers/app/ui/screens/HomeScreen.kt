@@ -1,5 +1,6 @@
 package com.leftovers.app.ui.screens
 
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.border
@@ -196,8 +197,8 @@ class HomeViewModel(
         viewModelScope.launch { planning.saveRecurring(item.toRecurring().copy(active = active)) }
     }
 
-    fun settle(person: String) {
-        viewModelScope.launch { planning.settle(person) }
+    fun settleUp(person: String, amountMinor: Long, accountId: Long?) {
+        viewModelScope.launch { planning.settleUp(person, amountMinor, accountId, chosen = true) }
     }
 
     fun saveDebt(debt: com.leftovers.app.data.Debt) {
@@ -250,6 +251,7 @@ fun HomeScreen(
     var owedFrom by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
     var subscriptionFrom by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
     var editingDebt by remember { mutableStateOf<com.leftovers.app.data.Debt?>(null) }
+    var settling by remember { mutableStateOf<String?>(null) }
     var viewingSubscription by remember { mutableStateOf<Long?>(null) }
     val upcomingBounds = remember { mutableMapOf<Long, androidx.compose.ui.geometry.Rect>() }
     // Tapping the balance opens a card with every account, to switch which one Home shows.
@@ -346,8 +348,15 @@ fun HomeScreen(
         val theyOwe = b.netMinor > 0
         val tone = if (theyOwe) c.positive else c.warning
         val entries = b.entries.sortedByDescending { it.epochDay }
-        val lent = b.entries.filter { it.amountMinor > 0 }.sumOf { it.amountMinor }
-        val borrowed = b.entries.filter { it.amountMinor < 0 }.sumOf { -it.amountMinor }
+        val lent = b.entries.filter { !it.repayment && it.amountMinor > 0 }.sumOf { it.amountMinor }
+        val borrowed = b.entries.filter { !it.repayment && it.amountMinor < 0 }.sumOf { -it.amountMinor }
+        val paidBack = b.entries.filter { it.repayment }.sumOf { abs(it.amountMinor) }
+        // How it adds up, when there's more than one kind of entry.
+        val parts = listOfNotNull(
+            if (lent > 0) "Lent ${money.format(lent)}" else null,
+            if (borrowed > 0) "Borrowed ${money.format(borrowed)}" else null,
+            if (paidBack > 0) "Paid back ${money.format(paidBack)}" else null,
+        )
         MorphCard(from = owedFrom, onDismiss = { owedOpen = null; owedHidden = null }, onReveal = { owedHidden = null }) { close ->
                     // Who, and since when.
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -379,9 +388,9 @@ fun HomeScreen(
                     ) {
                         Text(if (theyOwe) "Owes you" else "You owe", style = MaterialTheme.typography.labelLarge, color = tone)
                         Text(money.format(abs(b.netMinor)), style = MaterialTheme.typography.displaySmall, color = c.textPrimary)
-                        if (lent > 0 && borrowed > 0) {
+                        if (parts.size > 1) {
                             Text(
-                                "Lent ${money.format(lent)} · Borrowed ${money.format(borrowed)}",
+                                parts.joinToString(" · "),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = c.textSecondary,
                                 modifier = Modifier.padding(top = 2.dp),
@@ -399,7 +408,7 @@ fun HomeScreen(
                             Row(
                                 Modifier
                                     .fillMaxWidth()
-                                    .pressable({ owedOpen = null; editingDebt = d }, pressedScale = 0.98f)
+                                    .pressable({ close { editingDebt = d } }, pressedScale = 0.98f)
                                     .padding(vertical = 10.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
@@ -408,16 +417,16 @@ fun HomeScreen(
                                     contentAlignment = Alignment.Center,
                                 ) {
                                     Icon(
-                                        if (out) Lucide.ArrowUpRight else Lucide.ArrowDownLeft,
-                                        contentDescription = if (out) "Lent" else "Borrowed",
-                                        tint = if (out) c.positive else c.warning,
+                                        if (d.repayment) Lucide.Check else if (out) Lucide.ArrowUpRight else Lucide.ArrowDownLeft,
+                                        contentDescription = if (d.repayment) "Paid back" else if (out) "Lent" else "Borrowed",
+                                        tint = if (d.repayment) c.textSecondary else if (out) c.positive else c.warning,
                                         modifier = Modifier.size(16.dp),
                                     )
                                 }
                                 Spacer(Modifier.width(12.dp))
                                 Column(Modifier.weight(1f)) {
                                     Text(
-                                        d.note.ifBlank { if (out) "Lent" else "Borrowed" },
+                                        d.note.ifBlank { if (d.repayment) "Paid back" else if (out) "Lent" else "Borrowed" },
                                         style = MaterialTheme.typography.bodyMedium,
                                         color = c.textPrimary,
                                         maxLines = 1,
@@ -431,7 +440,7 @@ fun HomeScreen(
                                 }
                                 Column(horizontalAlignment = Alignment.End) {
                                     Text(money.format(abs(d.amountMinor)), style = MaterialTheme.typography.titleSmall, color = c.textPrimary)
-                                    Text(if (out) "lent" else "borrowed", style = MaterialTheme.typography.labelSmall, color = c.textTertiary)
+                                    Text(if (d.repayment) "paid back" else if (out) "lent" else "borrowed", style = MaterialTheme.typography.labelSmall, color = c.textTertiary)
                                 }
                             }
                             if (d.photos.isNotEmpty()) {
@@ -450,12 +459,15 @@ fun HomeScreen(
                         // One entry opens right here; several are easier to see on Money owed.
                         close { if (b.entries.size == 1) editingDebt = b.entries[0] else onOpenDebts() }
                     }, Modifier.weight(1f))
-                    PrimaryButton("Mark settled", {
-                        owedOpen = null
-                        viewModel.settle(b.person)
-                    }, Modifier.weight(1.4f), icon = Lucide.Check)
+                    PrimaryButton("Pay back", { close { settling = b.person } }, Modifier.weight(1.4f), icon = Lucide.Check)
                 }
             }
+    }
+    state.owed.firstOrNull { it.person.equals(settling, ignoreCase = true) }?.let { b ->
+        SettleSheet(b, state.accounts, onDismiss = { settling = null }) { amount, account ->
+            viewModel.settleUp(b.person, amount, account)
+            settling = null
+        }
     }
     editingDebt?.let { debt ->
         DebtEditor(
@@ -653,8 +665,8 @@ fun HomeScreen(
             if (state.upcoming.isNotEmpty()) {
                 item { SectionHeader("Upcoming", Modifier.appear(3), action = "Manage", onAction = { onOpenSubscriptions(false) }) }
                 item {
-                    LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.appear(3)) {
-                        items(state.upcoming, key = { it.id }) { r -> UpcomingCard(r, hidden = hiddenSubscription == r.id, onBounds = { upcomingBounds[r.id] = it }) { subscriptionFrom = upcomingBounds[r.id]; viewingSubscription = r.id; hiddenSubscription = r.id } }
+                    CardStrip(state.upcoming, key = { it.id }, modifier = Modifier.appear(3)) { r, size ->
+                        UpcomingCard(r, size ?: Modifier.width(156.dp), hidden = hiddenSubscription == r.id, onBounds = { upcomingBounds[r.id] = it }) { subscriptionFrom = upcomingBounds[r.id]; viewingSubscription = r.id; hiddenSubscription = r.id }
                     }
                 }
             }
@@ -667,9 +679,7 @@ fun HomeScreen(
             if (state.goals.isNotEmpty()) {
                 item { SectionHeader("Saving for", Modifier.appear(4), action = "All goals", onAction = onOpenGoals) }
                 item {
-                    LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.appear(4)) {
-                        items(state.goals, key = { it.id }) { g -> GoalMiniCard(g) { onOpenGoal(g.id) } }
-                    }
+                    CardStrip(state.goals, key = { it.id }, modifier = Modifier.appear(4)) { g, size -> GoalMiniCard(g, size ?: Modifier.width(200.dp)) { onOpenGoal(g.id) } }
                 }
             }
 
@@ -760,11 +770,34 @@ private fun TodayCard(state: HomeUiState, onClick: () -> Unit, modifier: Modifie
     }
 }
 
+/**
+ * A row of small cards that fills the width: one card spans it, two share it equally, and more scroll
+ * sideways at their own size. [content] gets the size to give its card, or null for its usual one.
+ */
 @Composable
-private fun UpcomingCard(r: RecurringItem, hidden: Boolean = false, onBounds: (androidx.compose.ui.geometry.Rect) -> Unit = {}, onClick: () -> Unit) {
+private fun <T> CardStrip(items: List<T>, key: (T) -> Any, modifier: Modifier = Modifier, content: @Composable (T, Modifier?) -> Unit) {
+    when (items.size) {
+        1 -> Box(modifier.fillMaxWidth()) { content(items[0], Modifier.fillMaxWidth()) }
+        2 -> Row(modifier.fillMaxWidth().height(androidx.compose.foundation.layout.IntrinsicSize.Max), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            items.forEach { item -> Box(Modifier.weight(1f)) { content(item, Modifier.fillMaxWidth().fillMaxHeight()) } }
+        }
+        else -> LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = modifier) {
+            items(items, key = key) { item -> content(item, null) }
+        }
+    }
+}
+
+@Composable
+private fun UpcomingCard(
+    r: RecurringItem,
+    size: Modifier = Modifier.width(156.dp),
+    hidden: Boolean = false,
+    onBounds: (androidx.compose.ui.geometry.Rect) -> Unit = {},
+    onClick: () -> Unit,
+) {
     val c = LocalAppColors.current
     val money = LocalMoney.current
-    Glass(Modifier.width(156.dp).trackScreenBounds(onBounds).graphicsLayer { alpha = if (hidden) 0f else 1f }, shape = RoundedCornerShape(24.dp), onClick = onClick) {
+    Glass(size.trackScreenBounds(onBounds).graphicsLayer { alpha = if (hidden) 0f else 1f }, shape = RoundedCornerShape(24.dp), onClick = onClick) {
         Column(Modifier.padding(16.dp)) {
             CategoryIcon(r.categoryEmoji, r.categoryColor, size = 36.dp)
             Spacer(Modifier.height(12.dp))
@@ -846,10 +879,10 @@ private fun OwedSummary(
 }
 
 @Composable
-private fun GoalMiniCard(g: GoalWithSaved, onClick: () -> Unit) {
+private fun GoalMiniCard(g: GoalWithSaved, size: Modifier = Modifier.width(200.dp), onClick: () -> Unit) {
     val c = LocalAppColors.current
     val money = LocalMoney.current
-    Glass(Modifier.sharedContainer("goal-${g.id}").width(200.dp), shape = RoundedCornerShape(24.dp), onClick = onClick) {
+    Glass(Modifier.sharedContainer("goal-${g.id}").then(size), shape = RoundedCornerShape(24.dp), onClick = onClick) {
         Column(Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 CategoryIcon(g.emoji, g.color, size = 36.dp)
