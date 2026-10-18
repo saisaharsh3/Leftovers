@@ -164,7 +164,7 @@ object CsvImporter {
     private val monthNameFormats = listOf("d MMM yyyy", "d-MMM-yyyy", "d-MMM-yy", "d MMM yy", "d/MMM/yyyy", "MMM d, yyyy", "d MMMM yyyy").map(::named)
 
     /** Whether dates are day-first (10/09/2026 is 10 September), judged from every row; day-first unless a row proves otherwise. */
-    private fun dayComesFirst(samples: List<String>): Boolean {
+    internal fun dayComesFirst(samples: List<String>): Boolean {
         val pairs = samples.mapNotNull { Regex("""^\s*(\d{1,2})[/.-](\d{1,2})[/.-]\d{2,4}""").find(it)?.destructured?.let { (a, b) -> a.toInt() to b.toInt() } }
         if (pairs.any { it.first > 12 }) return true
         if (pairs.any { it.second > 12 }) return false

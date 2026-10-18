@@ -12,13 +12,16 @@ import org.xml.sax.helpers.DefaultHandler
 /**
  * Turns a bank statement or another app's export into rows of cells for [CsvImporter.parseTable], whatever it
  * was saved as: CSV or tab-separated text in any common encoding, an Excel workbook (.xlsx, or the older .xls),
- * or the HTML table many banks save with an .xls name. Everything is read on the phone; nothing is sent anywhere.
+ * the HTML table many banks save with an .xls name, or a PDF statement (read by [PdfStatement]). Everything is
+ * read on the phone; nothing is sent anywhere.
  */
 object StatementFile {
     sealed interface Result {
         data class Table(val rows: List<List<String>>) : Result
         data class Text(val text: String) : Result
         data class Unsupported(val message: String) : Result
+        /** A PDF statement: its text is read with [PdfStatement], which may need the statement's password. */
+        class Pdf(val bytes: ByteArray) : Result
     }
 
     fun read(bytes: ByteArray): Result {
@@ -28,9 +31,7 @@ object StatementFile {
                 .getOrElse { Result.Unsupported("Couldn't read this Excel file. Try saving it again as .xlsx or .csv.") }
             bytes.startsWith(0xD0, 0xCF, 0x11, 0xE0) -> runCatching { Result.Table(readXls(bytes)) }
                 .getOrElse { Result.Unsupported("Couldn't read this Excel file. Try saving it again as .xlsx or .csv.") }
-            bytes.startsWith(0x25, 0x50, 0x44, 0x46) -> Result.Unsupported(
-                "PDF statements can't be read yet. Most banks also let you download the statement as Excel or CSV.",
-            )
+            bytes.startsWith(0x25, 0x50, 0x44, 0x46) -> Result.Pdf(bytes)
             else -> {
                 val text = decodeText(bytes)
                 if (text.trimStart().startsWith("<")) Result.Table(readHtmlTable(text)) else Result.Text(text)

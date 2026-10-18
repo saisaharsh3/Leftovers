@@ -5,6 +5,11 @@ All notable changes to Leftovers. Download any version from
 
 ## Unreleased
 
+- PDF bank statements can be imported too, password-protected ones included (the password is only used to open
+  the file on the phone). Each row's date and amounts are read, and the running balance says which way the money went
+- Savings goals can have a product link (Amazon, Flipkart or any shop). Check price reads the price from the shop's
+  page when you tap it, to compare with your target or use as the target; nothing is checked in the background
+- A lone Upcoming or Saving for card on Home lays out across the row instead of leaving the width empty
 - Pay back part of what's owed: Pay back on Money owed (or on someone's card on Home) starts at everything owed;
   change the amount for part of it, and pick the account it went into. What's left stays open, and paying the
   rest settles it (#20)

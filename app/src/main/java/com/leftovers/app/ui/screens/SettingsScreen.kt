@@ -103,7 +103,13 @@ class SettingsViewModel(
         private set
 
     /** Reads [uri] (CSV, Excel or a bank's statement file) and prepares the entries; nothing is saved until [confirmCsvImport]. */
-    fun readCsv(context: android.content.Context, uri: android.net.Uri, onError: (String) -> Unit) {
+    fun readCsv(
+        context: android.content.Context,
+        uri: android.net.Uri,
+        password: String? = null,
+        onNeedPassword: (wrong: Boolean) -> Unit = {},
+        onError: (String) -> Unit,
+    ) {
         viewModelScope.launch {
             val file = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                 runCatching { context.contentResolver.openInputStream(uri)?.use { it.readBytes() } }.getOrNull()
@@ -120,6 +126,17 @@ class SettingsViewModel(
                 }
                 is com.leftovers.app.util.StatementFile.Result.Text -> com.leftovers.app.util.CsvImporter.parse(file.text)
                 is com.leftovers.app.util.StatementFile.Result.Table -> com.leftovers.app.util.CsvImporter.parseTable(file.rows)
+                is com.leftovers.app.util.StatementFile.Result.Pdf -> {
+                    // Most bank e-statements have a password (often a date of birth or customer ID).
+                    val text = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                        runCatching { com.leftovers.app.util.PdfStatement.text(context, file.bytes, password) }
+                    }
+                    text.exceptionOrNull()?.let {
+                        if (it is com.leftovers.app.util.PdfStatement.PasswordNeeded) onNeedPassword(it.wrong) else onError("Couldn't read this PDF.")
+                        return@launch
+                    }
+                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { com.leftovers.app.util.PdfStatement.parse(text.getOrThrow()) }
+                }
             }
             parsed.error?.let {
                 onError(it)
@@ -362,6 +379,7 @@ fun SettingsScreen(
     var pendingRestore by remember { mutableStateOf<Uri?>(null) }
     // A protected backup waiting for its password; the flag says the last try was wrong.
     var lockedRestore by remember { mutableStateOf<Pair<Uri, Boolean>?>(null) }
+    var lockedPdf by remember { mutableStateOf<Pair<Uri, Boolean>?>(null) }
     var setPassword by rememberSaveable { mutableStateOf(false) }
     val passwordSet by viewModel.backupPasswordSet.collectAsStateWithLifecycle()
     fun toast(text: String) = scope.launch { snackbar.showSnackbar(text) }
@@ -371,7 +389,7 @@ fun SettingsScreen(
     }
     val openBackup = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> pendingRestore = uri }
     val openCsv = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        if (uri != null) viewModel.readCsv(context, uri) { message -> scope.launch { snackbar.showSnackbar(message) } }
+        if (uri != null) viewModel.readCsv(context, uri, onNeedPassword = { wrong -> lockedPdf = uri to wrong }) { message -> scope.launch { snackbar.showSnackbar(message) } }
     }
     val pickBackupFolder = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { tree ->
         if (tree != null) {
@@ -614,7 +632,7 @@ fun SettingsScreen(
                             viewModel.export(context) { scope.launch { snackbar.showSnackbar("Nothing to export yet") } }
                         }
                         RowDivider()
-                        NavRow(Lucide.Download, "Import entries", "CSV or Excel, from a bank or another app") {
+                        NavRow(Lucide.Download, "Import entries", "Statement (PDF, Excel, CSV) or another app") {
                             openCsv.launch(
                                 arrayOf(
                                     "text/*", "application/csv", "application/vnd.ms-excel", "application/octet-stream",
@@ -728,12 +746,40 @@ fun SettingsScreen(
                             onNeedPassword = { wrong -> lockedRestore = uri to wrong },
                             // Not a backup, but maybe a statement or another app's export: offer its entries instead.
                             onNotBackup = {
-                                viewModel.readCsv(context, uri) { message -> toast("That isn't a Leftovers backup. $message") }
+                                viewModel.readCsv(context, uri, onNeedPassword = { wrong -> lockedPdf = uri to wrong }) { message -> toast("That isn't a Leftovers backup. $message") }
                             },
                         ) { toast(it) }
                     }) { Text("Restore", color = c.textPrimary) }
                 },
                 dismissButton = { TextButton(onClick = { pendingRestore = null }) { Text("Cancel", color = c.textSecondary) } },
+            )
+        }
+
+        lockedPdf?.let { (uri, wrong) ->
+            var typed by remember(uri, wrong) { mutableStateOf("") }
+            GlassAlertDialog(
+                onDismissRequest = { lockedPdf = null },
+                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                shape = RoundedCornerShape(30.dp),
+                title = { Text("This statement has a password") },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(
+                            "Banks usually set it to something like your date of birth or customer ID; the email or the bank's website says which. It's only used to open the file on this phone.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = c.textSecondary,
+                        )
+                        GlassTextField(typed, { typed = it }, placeholder = "Password", password = true)
+                        if (wrong) Text("That password didn't work", style = MaterialTheme.typography.bodySmall, color = c.negative)
+                    }
+                },
+                confirmButton = {
+                    TextButton(enabled = typed.isNotEmpty(), onClick = {
+                        lockedPdf = null
+                        viewModel.readCsv(context, uri, typed, onNeedPassword = { w -> lockedPdf = uri to w }) { toast(it) }
+                    }) { Text("Open", color = c.textPrimary) }
+                },
+                dismissButton = { TextButton(onClick = { lockedPdf = null }) { Text("Cancel", color = c.textSecondary) } },
             )
         }
 

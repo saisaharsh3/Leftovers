@@ -772,12 +772,16 @@ private fun TodayCard(state: HomeUiState, onClick: () -> Unit, modifier: Modifie
 
 /**
  * A row of small cards that fills the width: one card spans it, two share it equally, and more scroll
- * sideways at their own size. [content] gets the size to give its card, or null for its usual one.
+ * sideways at their own size. [content] gets the size to give its card, or null for its usual one; a lone card
+ * gets [WideCard], and lays itself out in a row so the width isn't left empty.
  */
+/** The size a card gets when it's the only one in its row. */
+private val WideCard = Modifier.fillMaxWidth()
+
 @Composable
 private fun <T> CardStrip(items: List<T>, key: (T) -> Any, modifier: Modifier = Modifier, content: @Composable (T, Modifier?) -> Unit) {
     when (items.size) {
-        1 -> Box(modifier.fillMaxWidth()) { content(items[0], Modifier.fillMaxWidth()) }
+        1 -> Box(modifier.fillMaxWidth()) { content(items[0], WideCard) }
         2 -> Row(modifier.fillMaxWidth().height(androidx.compose.foundation.layout.IntrinsicSize.Max), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             items.forEach { item -> Box(Modifier.weight(1f)) { content(item, Modifier.fillMaxWidth().fillMaxHeight()) } }
         }
@@ -798,17 +802,29 @@ private fun UpcomingCard(
     val c = LocalAppColors.current
     val money = LocalMoney.current
     Glass(size.trackScreenBounds(onBounds).graphicsLayer { alpha = if (hidden) 0f else 1f }, shape = RoundedCornerShape(24.dp), onClick = onClick) {
-        Column(Modifier.padding(16.dp)) {
-            CategoryIcon(r.categoryEmoji, r.categoryColor, size = 36.dp)
-            Spacer(Modifier.height(12.dp))
-            Text(r.name, style = MaterialTheme.typography.titleSmall, color = c.textPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(r.toRecurring().nextChargeDate().friendlyLabel(), style = MaterialTheme.typography.bodySmall, color = c.textSecondary, maxLines = 1)
-            Spacer(Modifier.height(8.dp))
-            Text(
-                (if (r.type == TxType.INCOME) "+" else "") + money.format(r.amountMinor),
-                style = MaterialTheme.typography.titleMedium,
-                color = if (r.type == TxType.INCOME) c.positive else c.textPrimary,
-            )
+        val amount = (if (r.type == TxType.INCOME) "+" else "") + money.format(r.amountMinor)
+        val tint = if (r.type == TxType.INCOME) c.positive else c.textPrimary
+        if (size === WideCard) {
+            // On its own: icon, name and date, and the amount across one row.
+            Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                CategoryIcon(r.categoryEmoji, r.categoryColor, size = 44.dp)
+                Spacer(Modifier.width(14.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(r.name, style = MaterialTheme.typography.titleMedium, color = c.textPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(r.toRecurring().nextChargeDate().friendlyLabel(), style = MaterialTheme.typography.bodySmall, color = c.textSecondary, maxLines = 1)
+                }
+                Spacer(Modifier.width(12.dp))
+                Text(amount, style = MaterialTheme.typography.titleLarge, color = tint)
+            }
+        } else {
+            Column(Modifier.padding(16.dp)) {
+                CategoryIcon(r.categoryEmoji, r.categoryColor, size = 36.dp)
+                Spacer(Modifier.height(12.dp))
+                Text(r.name, style = MaterialTheme.typography.titleSmall, color = c.textPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(r.toRecurring().nextChargeDate().friendlyLabel(), style = MaterialTheme.typography.bodySmall, color = c.textSecondary, maxLines = 1)
+                Spacer(Modifier.height(8.dp))
+                Text(amount, style = MaterialTheme.typography.titleMedium, color = tint)
+            }
         }
     }
 }
@@ -883,17 +899,38 @@ private fun GoalMiniCard(g: GoalWithSaved, size: Modifier = Modifier.width(200.d
     val c = LocalAppColors.current
     val money = LocalMoney.current
     Glass(Modifier.sharedContainer("goal-${g.id}").then(size), shape = RoundedCornerShape(24.dp), onClick = onClick) {
-        Column(Modifier.padding(16.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                CategoryIcon(g.emoji, g.color, size = 36.dp)
-                Spacer(Modifier.width(10.dp))
-                Text(g.name, style = MaterialTheme.typography.titleSmall, color = c.textPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        if (size === WideCard) {
+            // On its own: the goal on the left, how far along on the right, and the bar under both.
+            Column(Modifier.padding(16.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    CategoryIcon(g.emoji, g.color, size = 44.dp)
+                    Spacer(Modifier.width(14.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(g.name, style = MaterialTheme.typography.titleMedium, color = c.textPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text("${(g.fraction * 100).toInt()}% saved", style = MaterialTheme.typography.bodySmall, color = c.textSecondary)
+                    }
+                    Spacer(Modifier.width(12.dp))
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text(money.format(g.savedMinor), style = MaterialTheme.typography.titleLarge, color = c.textPrimary)
+                        Text("of ${money.format(g.targetMinor)}", style = MaterialTheme.typography.bodySmall, color = c.textSecondary)
+                    }
+                }
+                Spacer(Modifier.height(14.dp))
+                ProgressLine(g.fraction, color = Color(g.color), height = 5.dp)
             }
-            Spacer(Modifier.height(14.dp))
-            Text(money.format(g.savedMinor), style = MaterialTheme.typography.titleMedium, color = c.textPrimary)
-            Text("of ${money.format(g.targetMinor)}", style = MaterialTheme.typography.bodySmall, color = c.textSecondary)
-            Spacer(Modifier.height(10.dp))
-            ProgressLine(g.fraction, color = Color(g.color), height = 5.dp)
+        } else {
+            Column(Modifier.padding(16.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    CategoryIcon(g.emoji, g.color, size = 36.dp)
+                    Spacer(Modifier.width(10.dp))
+                    Text(g.name, style = MaterialTheme.typography.titleSmall, color = c.textPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+                Spacer(Modifier.height(14.dp))
+                Text(money.format(g.savedMinor), style = MaterialTheme.typography.titleMedium, color = c.textPrimary)
+                Text("of ${money.format(g.targetMinor)}", style = MaterialTheme.typography.bodySmall, color = c.textSecondary)
+                Spacer(Modifier.height(10.dp))
+                ProgressLine(g.fraction, color = Color(g.color), height = 5.dp)
+            }
         }
     }
 }

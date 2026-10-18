@@ -87,7 +87,15 @@ android {
             // The Jakarta Mail jars each carry the same licence files (credited in THIRD_PARTY_NOTICES.md).
             // Their META-INF/javamail.* provider lists are kept: the library needs them at run time.
             excludes += setOf("META-INF/NOTICE.md", "META-INF/LICENSE.md", "META-INF/NOTICE", "META-INF/LICENSE")
+            // PDF statements only need their text read: BouncyCastle's post-quantum tables (megabytes, never used to
+            // open a PDF) are left out.
+            excludes += setOf("org/bouncycastle/pqc/**", "org/bouncycastle/x509/**/*.properties")
         }
+    }
+    androidResources {
+        // The PDF library's font for drawing pages, and its Chinese, Japanese and Korean character maps, aren't needed
+        // to read a bank statement's text. Identity mappings stay, for PDFs whose fonts use them.
+        ignoreAssetsPatterns += listOf("!LiberationSans-*.ttf", "!Uni*", "!Adobe-*", "!GB*", "!B5*", "!ETen*", "!HKscs*", "!KSC*", "!83pv*", "!90*", "!Add-*", "!CNS*", "!EUC*", "!Ext-*", "!H", "!V", "!78*", "!NWP*", "!RKSJ*", "!Hankaku", "!Hiragana", "!Katakana", "!Roman", "!WP-Symbol")
     }
 
     // Database upgrade tests run on the JVM (Robolectric), which reads the debug build's assets;
@@ -147,4 +155,5 @@ dependencies {
     implementation(libs.androidx.exifinterface)
     // Email payment detection (IMAP over TLS). Only used when the user connects a mailbox.
     implementation(libs.angus.mail)
+    implementation(libs.pdfbox.android)
 }

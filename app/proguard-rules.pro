@@ -13,3 +13,6 @@
 -dontwarn javax.security.sasl.**
 -dontwarn org.graalvm.**
 -dontwarn javax.security.auth.callback.**
+
+# PdfBox can decode JPEG 2000 images with an optional library; statements are only read for their text.
+-dontwarn com.gemalto.jp2.**

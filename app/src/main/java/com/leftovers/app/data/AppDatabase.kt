@@ -37,10 +37,13 @@ abstract class AppDatabase : RoomDatabase() {
     }
 }
 
-/** v17 marks money paid back, so part of what's owed can be paid at a time. */
+/** v17 marks money paid back, so part of what's owed can be paid at a time, and gives goals a product link. */
 private val MIGRATION_16_17 = object : Migration(16, 17) {
     override fun migrate(db: SupportSQLiteDatabase) {
         db.execSQL("ALTER TABLE `debts` ADD COLUMN `repayment` INTEGER NOT NULL DEFAULT 0")
+        db.execSQL("ALTER TABLE `goals` ADD COLUMN `link` TEXT")
+        db.execSQL("ALTER TABLE `goals` ADD COLUMN `linkPriceMinor` INTEGER")
+        db.execSQL("ALTER TABLE `goals` ADD COLUMN `linkCheckedAt` INTEGER")
     }
 }
 

@@ -103,6 +103,10 @@ data class Goal(
     /** Month by which the goal should be reached, as "yyyy-MM". */
     val targetMonth: String,
     val createdAt: Long = System.currentTimeMillis(),
+    /** A shop's page for what's being saved for, and the price last found there and when. */
+    val link: String? = null,
+    val linkPriceMinor: Long? = null,
+    val linkCheckedAt: Long? = null,
 )
 
 /** Money put into (positive) or taken out of (negative) a goal. */
@@ -130,8 +134,11 @@ data class GoalWithSaved(
     val targetMonth: String,
     val createdAt: Long,
     val savedMinor: Long,
+    val link: String? = null,
+    val linkPriceMinor: Long? = null,
+    val linkCheckedAt: Long? = null,
 ) {
-    fun toGoal() = Goal(id, name, emoji, color, targetMinor, targetMonth, createdAt)
+    fun toGoal() = Goal(id, name, emoji, color, targetMinor, targetMonth, createdAt, link, linkPriceMinor, linkCheckedAt)
 
     val remainingMinor: Long get() = (targetMinor - savedMinor).coerceAtLeast(0)
     val fraction: Float get() = if (targetMinor > 0) (savedMinor.toFloat() / targetMinor).coerceIn(0f, 1f) else 0f

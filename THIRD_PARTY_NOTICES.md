@@ -18,6 +18,14 @@ contributors. Licensed under the Eclipse Distribution License 1.0 (BSD-3-Clause)
 or GPL 2.0 with the Classpath Exception; Leftovers uses them under the BSD-3-Clause terms. See
 [eclipse-ee4j/angus-mail](https://github.com/eclipse-ee4j/angus-mail). GreenMail (Apache 2.0) is used only in tests.
 
+## PdfBox-Android
+
+Used to read the text of PDF bank statements on the phone: `com.tom-roush:pdfbox-android`, fetched by Gradle.
+A port of Apache PDFBox. Copyright the Apache Software Foundation and Tom Roush. Licensed under the Apache License
+2.0. See [TomRoush/PdfBox-Android](https://github.com/TomRoush/PdfBox-Android). It brings in the Bouncy Castle
+cryptography library (`org.bouncycastle:bcprov`, MIT licence, copyright the Legion of the Bouncy Castle Inc.),
+used to open password-protected statements.
+
 ## Lucide icons
 
 Icon outlines in `app/src/main/java/com/leftovers/app/ui/icons/Lucide.kt` were converted from

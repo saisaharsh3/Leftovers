@@ -4,6 +4,7 @@ orgjson = "20240303"
 robolectric = "4.17"
 testCore = "1.7.0"
 angusMail = "2.0.5"
+pdfbox = "2.0.27.0"
 greenmail = "2.1.14"
 agp = "9.4.1"
 kotlin = "2.4.20"
@@ -30,6 +31,8 @@ robolectric = { group = "org.robolectric", name = "robolectric", version.ref = "
 androidx-test-core = { group = "androidx.test", name = "core", version.ref = "testCore" }
 androidx-room-testing = { group = "androidx.room", name = "room-testing", version.ref = "room" }
 angus-mail = { group = "org.eclipse.angus", name = "angus-mail", version.ref = "angusMail" }
+# Reads the text of PDF bank statements, on the phone (Apache 2.0).
+pdfbox-android = { group = "com.tom-roush", name = "pdfbox-android", version.ref = "pdfbox" }
 greenmail = { group = "com.icegreen", name = "greenmail", version.ref = "greenmail" }
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 androidx-activity-compose = { group = "androidx.activity", name = "activity-compose", version.ref = "activityCompose" }

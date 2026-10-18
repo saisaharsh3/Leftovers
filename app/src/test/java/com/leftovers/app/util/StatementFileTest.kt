@@ -14,6 +14,7 @@ class StatementFileTest {
         is StatementFile.Result.Text -> CsvImporter.parse(r.text)
         is StatementFile.Result.Table -> CsvImporter.parseTable(r.rows)
         is StatementFile.Result.Unsupported -> error(r.message)
+        is StatementFile.Result.Pdf -> error("PDFs are read in PdfStatementTest")
     }
 
     private val csv = "Date,Description,Amount\n2026-10-01,Coffee,-120.50\n2026-10-02,Salary,50000\n"
@@ -88,8 +89,7 @@ class StatementFileTest {
         assertEquals("Groceries", p.rows[0].note)
     }
 
-    @Test fun pdfSaysWhatToDo() {
-        val r = StatementFile.read("%PDF-1.7 ...".toByteArray())
-        assertTrue(r is StatementFile.Result.Unsupported)
+    @Test fun pdfIsRecognised() {
+        assertTrue(StatementFile.read("%PDF-1.7 ...".toByteArray()) is StatementFile.Result.Pdf)
     }
 }

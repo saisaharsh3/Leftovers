@@ -102,6 +102,8 @@ class BackupManager(
                 put("goals", JSONArray(dao.goals().map { g ->
                     JSONObject().put("id", g.id).put("name", g.name).put("icon", g.emoji).put("color", g.color)
                         .put("target", g.targetMinor).put("targetMonth", g.targetMonth).put("createdAt", g.createdAt)
+                        .put("link", g.link ?: JSONObject.NULL).put("linkPrice", g.linkPriceMinor ?: JSONObject.NULL)
+                        .put("linkCheckedAt", g.linkCheckedAt ?: JSONObject.NULL)
                 }))
                 put("deposits", JSONArray(dao.deposits().map { d ->
                     JSONObject().put("id", d.id).put("goalId", d.goalId).put("amount", d.amountMinor)
@@ -183,7 +185,10 @@ class BackupManager(
                 )
             }
             val goals = json.optJSONArray("goals")?.objects().orEmpty().map {
-                Goal(it.getLong("id"), it.getString("name"), it.getString("icon"), it.getLong("color"), it.getLong("target"), it.getString("targetMonth"), it.getLong("createdAt"))
+                Goal(
+                    it.getLong("id"), it.getString("name"), it.getString("icon"), it.getLong("color"), it.getLong("target"), it.getString("targetMonth"), it.getLong("createdAt"),
+                    link = it.stringOrNull("link"), linkPriceMinor = it.longOrNull("linkPrice"), linkCheckedAt = it.longOrNull("linkCheckedAt"),
+                )
             }
             val deposits = json.optJSONArray("deposits")?.objects().orEmpty().map {
                 GoalDeposit(it.getLong("id"), it.getLong("goalId"), it.getLong("amount"), it.getLong("day"), it.getLong("createdAt"))

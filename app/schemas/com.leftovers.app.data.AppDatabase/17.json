@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 17,
-    "identityHash": "3d63901dc3ff3d31e8fedcf4cd72ff4a",
+    "identityHash": "1595edcfb02237a37f15fba1f2c429e2",
     "entities": [
       {
         "tableName": "categories",
@@ -277,7 +277,7 @@
       },
       {
         "tableName": "goals",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `name` TEXT NOT NULL, `emoji` TEXT NOT NULL, `color` INTEGER NOT NULL, `targetMinor` INTEGER NOT NULL, `targetMonth` TEXT NOT NULL, `createdAt` INTEGER NOT NULL)",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `name` TEXT NOT NULL, `emoji` TEXT NOT NULL, `color` INTEGER NOT NULL, `targetMinor` INTEGER NOT NULL, `targetMonth` TEXT NOT NULL, `createdAt` INTEGER NOT NULL, `link` TEXT, `linkPriceMinor` INTEGER, `linkCheckedAt` INTEGER)",
         "fields": [
           {
             "fieldPath": "id",
@@ -320,6 +320,21 @@
             "columnName": "createdAt",
             "affinity": "INTEGER",
             "notNull": true
+          },
+          {
+            "fieldPath": "link",
+            "columnName": "link",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "linkPriceMinor",
+            "columnName": "linkPriceMinor",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "linkCheckedAt",
+            "columnName": "linkCheckedAt",
+            "affinity": "INTEGER"
           }
         ],
         "primaryKey": {
@@ -801,7 +816,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '3d63901dc3ff3d31e8fedcf4cd72ff4a')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '1595edcfb02237a37f15fba1f2c429e2')"
     ]
   }
 }
