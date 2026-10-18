@@ -5,6 +5,9 @@ All notable changes to Leftovers. Download any version from
 
 ## Unreleased
 
+- Restoring a backup asks whether to keep what's in the app and add the backup's entries, or replace everything.
+  Keeping adds only what isn't already here, into the categories, accounts and goals with the same names, and
+  leaves your settings as they are
 - PDF bank statements can be imported too, password-protected ones included (the password is only used to open
   the file on the phone). Each row's date and amounts are read, and the running balance says which way the money went
 - Savings goals can have a product link (Amazon, Flipkart or any shop). Check price reads the price from the shop's

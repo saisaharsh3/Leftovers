@@ -307,13 +307,22 @@ class SettingsViewModel(
     fun restoreFrom(
         uri: Uri,
         password: String? = null,
+        keep: Boolean = false,
         onNeedPassword: (wrong: Boolean) -> Unit,
         onNotBackup: () -> Unit = {},
         onResult: (String) -> Unit,
     ) {
         viewModelScope.launch {
-            backup.import(uri, password).fold(
-                { onResult("Restored $it entries") },
+            backup.import(uri, password, keep).fold(
+                {
+                    onResult(
+                        when {
+                            !keep -> "Restored ${it.entries} entries"
+                            it.alreadyHere > 0 -> "Added ${it.entries} entries; ${it.alreadyHere} were already here"
+                            else -> "Added ${it.entries} entries"
+                        },
+                    )
+                },
                 {
                     when (it) {
                         is BackupPasswordException -> onNeedPassword(password != null)
@@ -380,6 +389,8 @@ fun SettingsScreen(
     // A protected backup waiting for its password; the flag says the last try was wrong.
     var lockedRestore by remember { mutableStateOf<Pair<Uri, Boolean>?>(null) }
     var lockedPdf by remember { mutableStateOf<Pair<Uri, Boolean>?>(null) }
+    // Whether the restore being done keeps what's already in the app (true) or replaces it.
+    var restoreKeeps by remember { mutableStateOf(true) }
     var setPassword by rememberSaveable { mutableStateOf(false) }
     val passwordSet by viewModel.backupPasswordSet.collectAsStateWithLifecycle()
     fun toast(text: String) = scope.launch { snackbar.showSnackbar(text) }
@@ -737,20 +748,35 @@ fun SettingsScreen(
                 containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
                 shape = RoundedCornerShape(30.dp),
                 title = { Text("Restore this backup?") },
-                text = { Text("Everything currently in the app will be replaced with the backup's contents.", color = c.textSecondary) },
-                confirmButton = {
-                    TextButton(onClick = {
+                text = {
+                    fun restore(keep: Boolean) {
                         pendingRestore = null
+                        restoreKeeps = keep
                         viewModel.restoreFrom(
                             uri,
+                            keep = keep,
                             onNeedPassword = { wrong -> lockedRestore = uri to wrong },
                             // Not a backup, but maybe a statement or another app's export: offer its entries instead.
                             onNotBackup = {
                                 viewModel.readCsv(context, uri, onNeedPassword = { wrong -> lockedPdf = uri to wrong }) { message -> toast("That isn't a Leftovers backup. $message") }
                             },
                         ) { toast(it) }
-                    }) { Text("Restore", color = c.textPrimary) }
+                    }
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Text(
+                            "Keep what's in the app and add the backup's entries (any already here aren't added twice), or replace everything with the backup.",
+                            color = c.textSecondary,
+                        )
+                        PrimaryButton("Keep mine and add the backup", { restore(keep = true) }, Modifier.fillMaxWidth())
+                        SecondaryButton("Replace everything", { restore(keep = false) }, Modifier.fillMaxWidth())
+                        Text(
+                            "Replacing removes what's in the app now, including its settings.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = c.textTertiary,
+                        )
+                    }
                 },
+                confirmButton = {},
                 dismissButton = { TextButton(onClick = { pendingRestore = null }) { Text("Cancel", color = c.textSecondary) } },
             )
         }
@@ -799,7 +825,7 @@ fun SettingsScreen(
                 confirmButton = {
                     TextButton(enabled = typed.isNotEmpty(), onClick = {
                         lockedRestore = null
-                        viewModel.restoreFrom(uri, typed, onNeedPassword = { w -> lockedRestore = uri to w }) { toast(it) }
+                        viewModel.restoreFrom(uri, typed, keep = restoreKeeps, onNeedPassword = { w -> lockedRestore = uri to w }) { toast(it) }
                     }) { Text("Restore", color = c.textPrimary) }
                 },
                 dismissButton = { TextButton(onClick = { lockedRestore = null }) { Text("Cancel", color = c.textSecondary) } },

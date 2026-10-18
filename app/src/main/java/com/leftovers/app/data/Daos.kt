@@ -304,6 +304,7 @@ interface BackupDao {
     @Query("SELECT * FROM accounts") suspend fun accounts(): List<Account>
     @Query("SELECT * FROM transfers") suspend fun transfers(): List<Transfer>
     @Query("SELECT * FROM debts") suspend fun debts(): List<Debt>
+    @Query("SELECT id FROM deleted_transactions") suspend fun deletedIds(): List<Long>
 
     @Query("DELETE FROM goal_deposits") suspend fun clearDeposits()
     @Query("DELETE FROM debts") suspend fun clearDebts()

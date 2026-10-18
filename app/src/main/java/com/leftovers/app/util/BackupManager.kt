@@ -124,11 +124,15 @@ class BackupManager(
         }
     }
 
+    /** What a restore did: entries brought in, and (keeping what's here) how many were already in the app. */
+    data class Restored(val entries: Int, val alreadyHere: Int = 0)
+
     /**
-     * Replaces all data with the backup's contents. A protected backup is opened with [typedPassword],
+     * Replaces all data with the backup's contents, or with [keep], adds the backup's data to what's already here
+     * (see [BackupMerge]) and leaves the settings as they are. A protected backup is opened with [typedPassword],
      * or else the saved backup password; without the right one it fails with [BackupPasswordException].
      */
-    suspend fun import(source: Uri, typedPassword: String? = null): Result<Int> = withContext(Dispatchers.IO) {
+    suspend fun import(source: Uri, typedPassword: String? = null, keep: Boolean = false): Result<Restored> = withContext(Dispatchers.IO) {
         runCatching {
             val bytes = context.contentResolver.openInputStream(source)?.use { it.readBytes() }
                 ?: error("Couldn't open the file")
@@ -205,6 +209,30 @@ class BackupManager(
                 )
             }
 
+            if (keep) {
+                val plan = database.withTransaction {
+                    val existing = BackupMerge.Data(
+                        dao.categories(), dao.accounts(), dao.transactions(), dao.transfers(), dao.recurring(), dao.goals(), dao.deposits(), dao.debts(),
+                    )
+                    val plan = BackupMerge.plan(existing, BackupMerge.Data(categories, accounts, transactions, transfers, recurring, goals, deposits, debts), dao.deletedIds())
+                    with(plan.add) {
+                        dao.insertCategories(this.categories)
+                        dao.insertAccounts(this.accounts)
+                        dao.insertTransactions(this.transactions)
+                        dao.insertTransfers(this.transfers)
+                        dao.insertRecurring(this.recurring)
+                        dao.insertGoals(this.goals)
+                        dao.insertDeposits(this.deposits)
+                        dao.insertDebts(this.debts)
+                    }
+                    plan
+                }
+                // Photos of entries that were already here were written out for nothing.
+                val used = (plan.add.transactions.mapNotNull { it.receiptPath } + plan.add.debts.flatMap { it.photos }).toSet()
+                restoredPhotos.values.filter { it !in used }.forEach(ReceiptStore::delete)
+                return@runCatching Restored(plan.add.transactions.size, plan.skipped)
+            }
+
             database.withTransaction {
                 dao.clearDebts()
                 // Deleted entries belong to the data being replaced.
@@ -243,7 +271,7 @@ class BackupManager(
                     ),
                 )
             }
-            transactions.size
+            Restored(transactions.size)
         }
     }
 }
