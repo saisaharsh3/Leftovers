@@ -19,7 +19,7 @@
     fig.setAttribute("aria-roledescription", "slide");
     fig.setAttribute("aria-label", `${i + 1} of ${n}: ${$("h3", s).textContent}`);
     fig.innerHTML = `<div class="g-phone"><img class="g-shot" alt="" width="540" height="1200" decoding="async"></div>
-      <figcaption><h3>${$("h3", s).textContent}</h3><p>${$("p", s).textContent}</p></figcaption>`;
+      <figcaption><h3>${$("h3", s).textContent}</h3><p>${$("p:not(.step-num)", s).textContent}</p></figcaption>`;
     $(".g-shot", fig).dataset.name = s.dataset.shot;
     $(".g-shot", fig).alt = $(".inline-shot", s)?.alt || "";
     view.append(fig);

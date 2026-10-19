@@ -72,12 +72,15 @@
       <h2 id="tour-title">Everything in four tabs and a few taps</h2>
       <div class="tour-grid">
         <div class="phone-wrap" aria-hidden="true">
-          <div class="phone" id="phone">
-            <img class="screen" id="screen-a" alt="" width="540" height="1200">
-            <img class="screen" id="screen-b" alt="" width="540" height="1200">
+          <!-- The phone tilts toward the pointer; the screens slide with the scroll; notes about each screen float around it. -->
+          <div class="phone-stage" id="stage">
+            <div class="t-halo" id="halo"></div>
+            <div class="phone" id="phone"><div class="t-strip" id="strip"></div></div>
+            <div class="t-callouts" id="callouts"></div>
           </div>
         </div>
         <ol class="steps" id="steps">
+          <li class="t-rail" aria-hidden="true"><i id="rail"></i></li>
           <li class="step" data-shot="home">
             <h3>Home</h3>
             <p>Today's number first, then your balance across accounts, payments it spotted for you, and the bills coming up.</p>
@@ -289,5 +292,7 @@
   <script src="app.js" defer></script>
   <script src="play.js" defer></script>
   <script src="gallery.js" defer></script>
+  <script src="tour.js" defer></script>
+  <script src="fx.js" defer></script>
 </body>
 </html>

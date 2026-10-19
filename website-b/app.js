@@ -75,8 +75,7 @@
   const shotUrl = (name) => `assets/${root.dataset.theme === "light" ? "light/" : ""}${name}.jpg`;
   const setTheme = (t) => {
     root.dataset.theme = t;
-    $$(".inline-shot, .g-shot[src]").forEach((img) => { img.src = shotUrl(img.dataset.name); });
-    if (tour.ready) tour.show(tour.current, true);
+    $$(".inline-shot, .g-shot[src], .t-shot[src]").forEach((img) => { img.src = shotUrl(img.dataset.name); });
   };
   $("#theme").addEventListener("click", () => {
     const next = root.dataset.theme === "light" ? "dark" : "light";
@@ -300,31 +299,8 @@
   });
   layoutDeck();
 
-  // ---- Tour: the screen follows the step that's in the middle of the window ----
-  const tour = {
-    ready: false, current: 0, front: $("#screen-a"), back: $("#screen-b"),
-    steps: $$(".step"),
-    show(i, force = false) {
-      if (i === this.current && !force && this.ready) return;
-      this.current = i;
-      this.steps.forEach((s, k) => s.classList.toggle("on", k === i));
-      const url = shotUrl(this.steps[i].dataset.shot);
-      const next = this.back, prev = this.front;
-      next.src = url;
-      const swap = () => { next.style.opacity = "1"; prev.style.opacity = "0"; this.front = next; this.back = prev; };
-      (next.decode ? next.decode() : Promise.resolve()).then(swap, swap);
-    },
-  };
-  tour.front.style.opacity = "1"; tour.back.style.opacity = "0";
-  const io = new IntersectionObserver((entries) => {
-    entries.forEach((en) => { if (en.isIntersecting) tour.show(tour.steps.indexOf(en.target)); });
-  }, { rootMargin: "-45% 0px -45% 0px" });
-  tour.steps.forEach((s) => io.observe(s));
-
+  // The tour lives in tour.js (wide screens) and gallery.js (phones).
   setTheme(saved || (light.matches ? "light" : "dark"));
-  tour.front.src = shotUrl(tour.steps[0].dataset.shot);
-  tour.steps[0].classList.add("on");
-  tour.ready = true;
 
   // ---- Privacy switches: tap, or drag the thumb; letting go, the direction of the flick decides ----
   $$(".switches li").forEach((row) => {
