@@ -234,7 +234,7 @@
     lead.el.setPointerCapture(e.pointerId);
     lead.el.classList.add("held");
     // Catch it where it is, even if it was springing back.
-    hold = { id: e.pointerId, card: lead, x0: e.clientX - lead.x.x, y0: e.clientY - lead.y.x, track: tracker() };
+    hold = { id: e.pointerId, card: lead, x0: e.clientX - lead.x.x, y0: e.clientY - lead.y.x, sx: e.clientX, sy: e.clientY, track: tracker() };
     lead.x.set(lead.x.x); lead.y.set(lead.y.x);
     hold.track.add(e);
   });
@@ -247,6 +247,12 @@
     hold.card.y.set(rubber(e.clientY - hold.y0, w * 0.6));
     layoutDeck();
   });
+  // Sideways belongs to the card; once a drag is clearly sideways the page doesn't scroll under it.
+  deck.addEventListener("touchmove", (e) => {
+    if (!hold || !e.touches[0]) return;
+    const t = e.touches[0];
+    if (Math.abs(t.clientX - hold.sx) > Math.abs(t.clientY - hold.sy)) e.preventDefault();
+  }, { passive: false });
   const letGo = (e) => {
     if (!hold || e.pointerId !== hold.id) return;
     const { card, track } = hold;

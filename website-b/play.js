@@ -125,12 +125,15 @@
       if (selected !== null) pinX.to(colCenter(selected), { response: 0.22 });
       if (e.pointerType !== "mouse") setTimeout(() => { if (!scrub) select(null); }, 2200);
     };
+    // Once it's clearly a sideways scrub, the page stays put even if the finger drifts up or down.
+    chart.addEventListener("touchmove", (e) => { if (scrub && scrub.locked) e.preventDefault(); }, { passive: false });
     chart.addEventListener("pointerup", end);
     chart.addEventListener("pointercancel", end);
     chart.addEventListener("pointerleave", (e) => { if (e.pointerType === "mouse" && !scrub) select(null); });
     chart.addEventListener("keydown", (e) => {
       const dir = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : 0;
       if (e.key === "Escape") { select(null); return; }
+      if (e.key === "Home" || e.key === "End") { e.preventDefault(); select(e.key === "Home" ? 0 : today - 1); pinX.to(colCenter(selected), { response: 0.22 }); return; }
       if (!dir) return;
       e.preventDefault();
       select(selected === null ? (dir > 0 ? 0 : today - 1) : selected + dir);
@@ -234,13 +237,15 @@
       setMonths(MIN + clamp(landing, 0, 1) * (MAX - MIN));
       thumbP.to((months - MIN) / (MAX - MIN), { response: 0.3, damping: 1 });
     };
+    track.addEventListener("touchmove", (e) => { if (g && g.locked) e.preventDefault(); }, { passive: false });
     track.addEventListener("pointerup", up);
     track.addEventListener("pointercancel", up);
     track.addEventListener("keydown", (e) => {
       const dir = e.key === "ArrowRight" || e.key === "ArrowUp" ? 1 : e.key === "ArrowLeft" || e.key === "ArrowDown" ? -1 : 0;
-      if (!dir) return;
+      const jump = e.key === "Home" ? MIN : e.key === "End" ? MAX : null;
+      if (!dir && jump === null) return;
       e.preventDefault();
-      setMonths(months + dir);
+      setMonths(jump ?? months + dir);
       thumbP.to((months - MIN) / (MAX - MIN), { response: 0.25 });
     });
     addEventListener("resize", () => loop.wake());
@@ -354,7 +359,8 @@
       it.y.set(hold.fy - hold.cy - it.s.x * hold.gy);
     }
     // While a message is held on a touch screen, the page doesn't scroll under it.
-    addEventListener("touchmove", (e) => { if (hold && hold.lifted) e.preventDefault(); }, { passive: false });
+    // On the list only, so scrolling anywhere else on the page never waits for this.
+    list.addEventListener("touchmove", (e) => { if (hold && hold.lifted) e.preventDefault(); }, { passive: false });
     addEventListener("pointermove", (e) => {
       if (!hold || e.pointerId !== hold.id) return;
       if (!hold.lifted) {
@@ -390,6 +396,8 @@
         it.s.to(1, { response: 0.3 });
       }
     };
+    // A long press is how a message is picked up, so it shouldn't also open the browser's menu.
+    list.addEventListener("contextmenu", (e) => { if (e.target.closest(".msg")) e.preventDefault(); });
     addEventListener("pointerup", drop);
     addEventListener("pointercancel", drop);
     list.addEventListener("click", (e) => {
