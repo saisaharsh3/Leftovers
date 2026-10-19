@@ -73,4 +73,26 @@ class JsonExportTest {
         assertTrue(StatementFile.read("""{"theme": "dark", "items": [{"id": 1, "name": "x"}]}""".toByteArray()) is StatementFile.Result.Unsupported)
         assertNull(JsonExport.rows("not json"))
     }
+
+    // Asked for in #21: the title, the description, the tags and the category all come across.
+    @Test fun titleDescriptionAndTagsBecomeTheNote() {
+        val json = """
+            {
+              "tags": [{"id": 7, "name": "trip"}, {"id": 8, "name": "goa"}],
+              "categories": [{"id": 3, "name": "Pets"}],
+              "expenses": [
+                {"date": "2026-10-04", "amount": 640, "title": "Vet visit", "description": "Annual shots", "categoryId": 3, "tagIds": [7, 8]},
+                {"date": "2026-10-05", "amount": 90, "title": "Chai", "tags": ["snacks", "work friends"]},
+                {"date": "2026-10-06", "amount": 50, "title": "Bus", "tags": ["client work"]}
+              ]
+            }
+        """.trimIndent()
+        val p = import(json.toByteArray())
+        assertEquals(3, p.rows.size)
+        assertEquals("Bus #client-work", p.rows.first { it.amountMinor == 5_000L }.note)
+        val vet = p.rows.first { it.amountMinor == 64_000L }
+        assertEquals("Vet visit · Annual shots #trip #goa", vet.note)
+        assertEquals("Pets", vet.category)
+        assertEquals("Chai #snacks #work-friends", p.rows.first { it.amountMinor == 9_000L }.note)
+    }
 }

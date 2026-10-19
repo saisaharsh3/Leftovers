@@ -34,6 +34,7 @@ object CsvImporter {
     private val categoryNames = listOf("category", "categories", "category name")
     private val noteNames = listOf("note", "notes", "title", "description", "comment", "comments", "label", "narration", "details", "particulars", "memo", "payee", "remarks", "merchant", "name")
     private val accountNames = listOf("account", "account name", "wallet")
+    private val tagNames = listOf("tags", "tag", "hashtags", "labels")
 
     fun parse(text: String): Parsed {
         val lines = text.removePrefix("﻿").lines().filter { it.isNotBlank() }
@@ -62,8 +63,12 @@ object CsvImporter {
         if (amountCol == null && debitCol == null && creditCol == null) return Parsed(emptyList(), 0, "Couldn't find an Amount, Debit or Credit column.")
         val typeCol = column(typeNames)
         val categoryCol = column(categoryNames)
-        val noteCol = column(noteNames)
         val accountCol = column(accountNames)
+        val tagCol = tagNames.firstNotNullOfOrNull { n -> header.indexOf(n).takeIf { it >= 0 } }
+        // A title and a description (or a note) are both kept, in that order, as one note.
+        val taken = setOfNotNull(dateCol, amountCol, debitCol, creditCol, typeCol, categoryCol, accountCol, tagCol)
+        val noteCols = noteNames.mapNotNull { n -> header.indexOf(n).takeIf { it >= 0 && it !in taken } }.distinct()
+            .ifEmpty { listOfNotNull(column(noteNames)?.takeIf { it !in taken }) }
 
         val body = rowsWithText.drop(headerAt + 1)
         val dayFirst = dayComesFirst(body.mapNotNull { it.getOrNull(dateCol) })
@@ -113,11 +118,29 @@ object CsvImporter {
                 amountMinor = kotlin.math.abs(signed),
                 type = type,
                 category = categoryCol?.let { cells.getOrNull(it) }?.trim()?.takeIf { it.isNotEmpty() },
-                note = noteCol?.let { cells.getOrNull(it) }?.trim()?.removePrefix("'").orEmpty().take(120),
+                note = noteOf(noteCols.map { cells.getOrNull(it).orEmpty() }, tagCol?.let { cells.getOrNull(it) }),
                 account = accountCol?.let { cells.getOrNull(it) }?.trim()?.takeIf { it.isNotEmpty() },
             )
         }
         return Parsed(rows, unreadable, transfers = transfers)
+    }
+
+    /** The note texts joined (repeats left out), then the tags as #tags, all within the editor's 120 characters. */
+    internal fun noteOf(parts: List<String>, tags: String?): String {
+        val texts = parts.map { it.trim().removePrefix("'").trim() }.filter { it.isNotEmpty() }
+            .fold(listOf<String>()) { acc, t -> if (acc.any { it.equals(t, ignoreCase = true) }) acc else acc + t }
+        val text = texts.joinToString(" · ")
+        val have = com.leftovers.app.data.hashtags(text).toSet()
+        // "trip, work friends" is two tags (#trip #work-friends); with no commas, "trip goa" is two words, two tags.
+        val raw = tags.orEmpty()
+        val tagText = raw.split(if (Regex("""[,;|#]""").containsMatchIn(raw)) Regex("""[,;|#]+""") else Regex("""\s+"""))
+            .map { it.trim().replace(Regex("""\s+"""), "-").replace(Regex("""[^\p{L}\p{N}_-]"""), "") }
+            .filter { t -> t.any(Char::isLetter) && t.lowercase() !in have }
+            .distinctBy { it.lowercase() }
+            .joinToString(" ") { "#$it" }
+        if (tagText.isEmpty()) return text.take(120)
+        val room = 120 - tagText.length - 1
+        return if (room <= 0) tagText.take(120) else listOf(text.take(room).trim(), tagText).filter { it.isNotEmpty() }.joinToString(" ")
     }
 
     private fun String.clean() = trim().trim('"').trim().lowercase().replace(Regex("""\s*\(.*\)$"""), "").replace(Regex("""[.:]$"""), "").trim()

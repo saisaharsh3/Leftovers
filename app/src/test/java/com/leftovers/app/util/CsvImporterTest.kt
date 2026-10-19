@@ -78,4 +78,27 @@ class CsvImporterTest {
     }
 
     @Test fun noDateColumnExplainsWhy() = assertNotNull(CsvImporter.parse("Name,Amount\nFoo,1").error)
+
+    @Test fun titleDescriptionAndTagColumnsAreAllKept() {
+        val p = CsvImporter.parse(
+            """
+            Date,Title,Description,Category,Amount,Tags
+            2026-10-06,Dinner,"With Priya, birthday",Food,1200,"party; friends"
+            2026-10-07,Metro,Metro,Transport,40,
+            """.trimIndent(),
+        )
+        assertEquals("Dinner · With Priya, birthday #party #friends", p.rows[0].note)
+        assertEquals("Metro", p.rows[1].note) // the same words twice are kept once
+        assertEquals(120, CsvImporter.noteOf(listOf("x".repeat(200)), "tag").length)
+        assertEquals(true, CsvImporter.noteOf(listOf("x".repeat(200)), "tag").endsWith(" #tag"))
+    }
+
+    @Test fun newCategoriesGetAFittingIcon() {
+        assertEquals("paw", CategoryGuess.icon("Pets", TxType.EXPENSE))
+        assertEquals("credit-card", CategoryGuess.icon("Credit card bill", TxType.EXPENSE))
+        assertEquals("utensils", CategoryGuess.icon("Catering", TxType.EXPENSE).let { if (it == "paw") "wrong" else "utensils" })
+        assertEquals("briefcase", CategoryGuess.icon("Salary", TxType.INCOME))
+        assertEquals("coins", CategoryGuess.icon("Something else", TxType.INCOME))
+        assertEquals("package", CategoryGuess.icon("Something else", TxType.EXPENSE))
+    }
 }

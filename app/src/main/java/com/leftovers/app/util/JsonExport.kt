@@ -50,8 +50,21 @@ object JsonExport {
                 else -> k
             }
         }
+        // Tags kept as a list on each entry (names, or ids pointing at a list of tags) become one "tags" column.
+        val tagKeys = keys.filter { k -> Regex("""^(tags?|tagids?|labels?|labelids?|hashtags)$""").matches(norm(k)) && entries.any { it.opt(k) is JSONArray } }
+        fun tagsOf(o: JSONObject): String = tagKeys.flatMap { key ->
+            val arr = o.opt(key) as? JSONArray ?: return@flatMap emptyList()
+            (0 until arr.length()).mapNotNull { i ->
+                when (val t = arr.opt(i)) {
+                    is JSONObject -> nameKeys.firstNotNullOfOrNull { nk -> t.optString(nk).takeIf { it.isNotBlank() } }
+                    null, JSONObject.NULL -> null
+                    else -> if (norm(key).endsWith("ids")) nameFor(key, t.toString()) else t.toString()
+                }
+            }
+        }.joinToString(",") { it.trim().replace(Regex("""\s+"""), "-") } // one tag stays one tag, even with a space in it
+        val tagged = tagKeys.isNotEmpty() && columns.none { norm(it) in setOf("tags", "tag") }
         val body = entries.map { o ->
-            columns.map { k ->
+            (if (tagged) listOf(tagsOf(o)) else emptyList()) + columns.map { k ->
                 val v = o.opt(k)
                 val n = norm(k)
                 when {
@@ -61,7 +74,7 @@ object JsonExport {
                 }
             }
         }
-        return listOf(header) + body
+        return listOf((if (tagged) listOf("tags") else emptyList()) + header) + body
     }
 
     private fun cell(v: Any?): String = when (v) {
