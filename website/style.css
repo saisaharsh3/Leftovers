@@ -67,6 +67,7 @@
 html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
 
 body {
+  transition: background-color .45s ease, color .45s ease;
   margin: 0;
   font-family: "Manrope", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   font-size: var(--step-0);
@@ -127,9 +128,15 @@ p { margin: 0; }
   position: sticky; top: 0; z-index: 20;
   display: flex; align-items: center; gap: 24px;
   padding: calc(12px + env(safe-area-inset-top, 0px)) var(--gutter) 12px;
-  background: var(--header);
-  backdrop-filter: blur(18px) saturate(150%); -webkit-backdrop-filter: blur(18px) saturate(150%);
+  background: transparent;
+  transition: background-color .3s ease, backdrop-filter .3s ease;
 }
+.top::after {
+  content: ""; position: absolute; left: 0; right: 0; top: 100%; height: 18px; pointer-events: none;
+  background: linear-gradient(var(--header), transparent); opacity: 0; transition: opacity .3s ease;
+}
+.top.scrolled { background: var(--header); backdrop-filter: blur(18px) saturate(150%); -webkit-backdrop-filter: blur(18px) saturate(150%); }
+.top.scrolled::after { opacity: 1; }
 .brand { display: flex; align-items: center; gap: 10px; text-decoration: none; font-weight: 700; font-size: 1.1rem; }
 .brand img { border-radius: 9px; }
 .top nav { display: flex; gap: 22px; margin-left: auto; }
@@ -143,7 +150,7 @@ p { margin: 0; }
   font: inherit; font-weight: 700; text-decoration: none; cursor: pointer;
   transition: transform .15s ease, background-color .2s ease;
 }
-.btn:active { transform: scale(0.97); }
+.btn:active { transform: scale(0.97); transition-duration: .1s; }
 .btn.primary { background: var(--accent); color: var(--on-accent); }
 .btn.ghost { background: var(--glass-strong); color: var(--text); box-shadow: inset 0 0 0 1px var(--rim-top); }
 .btn.ghost:hover { background: color-mix(in srgb, var(--glass-strong) 160%, transparent); }
@@ -236,17 +243,17 @@ input[type="range"] { width: 100%; accent-color: var(--accent); height: 28px; }
 /* Screens: one large slide at a time, the next ones peeking in, moving on by itself like a highlights reel. */
 .screens { max-width: none !important; padding-left: 0 !important; padding-right: 0 !important; }
 .screens .section-head { max-width: 1200px; margin: 0 auto 28px; padding: 0 var(--gutter); }
-.track {
+/* The reel is moved by hand or by a spring, never by the browser's own scrolling, so it follows the finger 1:1,
+   carries a flick's speed and can be caught mid-way. Vertical swipes still scroll the page (touch-action: pan-y). */
+.viewport { overflow: hidden; touch-action: pan-y; padding: 8px 0; cursor: grab; user-select: none; -webkit-user-select: none; }
+.viewport.dragging { cursor: grabbing; }
+.viewport:focus-visible { outline-offset: -4px; }
+.rail {
   --slide: min(1000px, calc(100vw - 2 * var(--gutter) - 48px));
-  list-style: none; margin: 0; padding: 8px calc((100vw - var(--slide)) / 2) 8px;
-  display: grid; grid-auto-flow: column; grid-auto-columns: var(--slide); gap: 20px;
-  overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; overscroll-behavior-x: contain;
+  list-style: none; margin: 0; padding: 0; display: flex; gap: 20px; will-change: transform;
 }
-.track::-webkit-scrollbar { display: none; }
-.track:focus-visible { outline-offset: -4px; }
-.track { user-select: none; -webkit-user-select: none; }
-.slide { scroll-snap-align: center; transition: opacity .5s ease, transform .5s ease; opacity: .45; transform: scale(.97); }
-.slide.current { opacity: 1; transform: none; }
+/* --d is how far a slide is from the centre, 0 to 1, set every frame: the neighbours dim and settle back as they move. */
+.slide { flex: 0 0 var(--slide); --d: 0; opacity: calc(1 - .55 * var(--d)); transform: scale(calc(1 - .03 * var(--d))); }
 .slide-card {
   height: clamp(460px, 62vw, 620px); border-radius: var(--radius-xl); overflow: hidden;
   display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 24px;
@@ -258,9 +265,9 @@ input[type="range"] { width: 100%; accent-color: var(--accent); height: 28px; }
 .shot {
   width: clamp(220px, 26vw, 290px); height: auto; aspect-ratio: 540 / 1200;
   border-radius: 30px 30px 0 0; box-shadow: var(--shadow), 0 0 0 1px var(--rim-top);
-  transform: translateY(8%); transition: transform .8s cubic-bezier(.2, .8, .2, 1);
+  transform: translateY(calc(4% + 5% * var(--d))); transition: opacity .25s ease;
+  -webkit-user-drag: none; pointer-events: none;
 }
-.slide.current .shot { transform: translateY(4%); }
 
 .player { display: flex; justify-content: center; align-items: center; gap: 12px; margin-top: 26px; padding: 0 var(--gutter); }
 .dots {
@@ -274,6 +281,7 @@ input[type="range"] { width: 100%; accent-color: var(--accent); height: 28px; }
 }
 .dot::before { content: ""; position: absolute; inset: -12px -4px; }
 .dot:hover { opacity: 1; }
+.dot:active { transform: scale(.85); }
 .dot.active { width: 46px; opacity: 1; background: color-mix(in srgb, var(--text-3) 55%, transparent); }
 .dot .fill { position: absolute; inset: 0 auto 0 0; width: 0; background: var(--text); border-radius: inherit; }
 .play { width: 50px; height: 50px; }
@@ -329,7 +337,8 @@ input[type="range"] { width: 100%; accent-color: var(--accent); height: 28px; }
 .chat-note { color: var(--text-3); font-size: var(--step--1); }
 
 /* What's new */
-.changelog { display: grid; gap: 10px; }
+.changelog { display: grid; gap: 10px; align-content: start; min-height: 440px; }
+@media (max-width: 640px) { .changelog { min-height: 620px; } }
 .release { border-top: 1px solid var(--glass-strong); }
 .release:last-child { border-bottom: 1px solid var(--glass-strong); }
 .release summary {
@@ -345,6 +354,8 @@ input[type="range"] { width: 100%; accent-color: var(--accent); height: 28px; }
 .release code { font-size: .92em; background: var(--glass-strong); padding: 1px 6px; border-radius: 6px; }
 
 /* Install */
+.pair { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; }
+.pair .link { font-size: var(--step--1); }
 .ways { list-style: none; padding: 0; margin: 32px 0 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; border-top: 1px solid var(--glass-strong); }
 .ways li { padding: 26px 24px 28px 0; display: flex; flex-direction: column; gap: 10px; }
 .ways li.glass { background: none; backdrop-filter: none; -webkit-backdrop-filter: none; border-radius: 0; }
@@ -408,4 +419,19 @@ input[type="range"] { width: 100%; accent-color: var(--accent); height: 28px; }
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
   *, *::before, *::after { animation: none !important; transition: none !important; }
+}
+
+/* Small text reads better a touch looser; large text is already tightened where it's set. */
+.fine, .control-head, .chip, .tabs button, .message-from, .today-foot, .dot, .ways p, .gallery p { letter-spacing: .01em; }
+
+@media (prefers-reduced-transparency: reduce) {
+  .glass, .glass.strong, .top.scrolled, .dots, .controls { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
+  .glass, .glass.strong { background: color-mix(in srgb, var(--bg) 88%, var(--text) 12%); }
+  .top.scrolled { background: var(--bg); }
+  .aurora { display: none; }
+}
+@media (prefers-contrast: more) {
+  .glass::before { background: var(--text-3); }
+  .chip, .tabs button, .btn.ghost, .icon-btn { box-shadow: inset 0 0 0 1.5px var(--text-2); }
+  .muted, .lede, .fine { color: var(--text); }
 }

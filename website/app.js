@@ -8,16 +8,33 @@
   const fmt = (n) => (n < 0 ? "−₹" : "₹") + rupees.format(Math.abs(Math.round(n)));
   const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
 
+  // The header becomes a material only once something scrolls under it.
+  const top = document.querySelector(".top");
+  const onScroll = () => top.classList.toggle("scrolled", scrollY > 4);
+  addEventListener("scroll", onScroll, { passive: true });
+  onScroll();
+
   // Theme: follow the phone or computer, unless switched here.
   const root = document.documentElement;
   const saved = (() => { try { return localStorage.getItem("theme"); } catch { return null; } })();
   const prefersLight = matchMedia("(prefers-color-scheme: light)");
-  // The app's screens are shown in the same theme as the page.
+  // The app's screens are shown in the same theme as the page. When the theme changes they cross-fade: each one
+  // fades out, the other theme's picture loads behind it, and it fades back in, so the page never flashes.
+  let themed = false;
   const applyTheme = (t) => {
     root.dataset.theme = t;
     document.querySelectorAll("img.shot").forEach((img) => {
-      img.src = `assets/${t === "light" ? "light/" : ""}${img.dataset.name}.jpg`;
+      const url = `assets/${t === "light" ? "light/" : ""}${img.dataset.name}.jpg`;
+      if (!themed || reduceMotion) { img.src = url; return; }
+      img.style.opacity = "0";
+      const next = new Image();
+      next.src = url;
+      const show = () => { img.src = url; requestAnimationFrame(() => { img.style.opacity = ""; }); };
+      // Swap only once the fade-out has finished and the new picture is ready.
+      const ready = (next.decode ? next.decode() : Promise.resolve()).catch(() => {});
+      Promise.all([ready, new Promise((r) => setTimeout(r, 230))]).then(show);
     });
+    themed = true;
   };
   applyTheme(saved || (prefersLight.matches ? "light" : "dark"));
   prefersLight.addEventListener("change", (e) => { if (!saved) applyTheme(e.matches ? "light" : "dark"); });
@@ -145,16 +162,61 @@
   $("#budget").addEventListener("input", (e) => { state.budget = Number(e.target.value); render(); });
   render();
 
-  // ---- Screens: a highlights reel that moves on by itself ----
-  const track = $("#track");
-  const slides = $$(".slide", track);
+  // ---- Screens: a highlights reel you can grab ----
+  // The rail is moved by hand or by a spring, never by native scrolling, so it follows the finger 1:1, keeps a
+  // flick's speed when let go, and can be caught mid-way. The spring is solved exactly each frame from the current
+  // position and speed, so anything (a drag, a dot, the timer) can take over at any moment without a jump.
+  const viewport = $("#track");
+  const rail = $("#rail");
+  const slides = $$(".slide", rail);
+  slides.forEach((s) => s.querySelectorAll("img").forEach((img) => { img.draggable = false; }));
   const dotsEl = $("#dots");
   const play = $("#play");
   const SLIDE_MS = 5000;
-  let current = 0;
+  let current = -1;
   let reel = reduceMotion ? "paused" : "playing"; // playing, paused or ended
   let inView = false;
-  let programmatic = 0;
+
+  let x = 0, v = 0;            // the rail's offset (px) and speed (px/s)
+  let target = null;           // where the spring is headed, or null when at rest or held
+  let zeta = 1;                // 1: no overshoot; below 1 only after a flick
+  const RESPONSE = 0.42;       // seconds: how quickly the spring gets there
+  let pos = [];                // the offset that centres each slide
+  let step = 1;
+
+  function layout() {
+    const vw = viewport.clientWidth;
+    pos = slides.map((s) => vw / 2 - (s.offsetLeft + s.offsetWidth / 2));
+    step = slides.length > 1 ? Math.abs(pos[1] - pos[0]) : 1;
+  }
+  const nearestTo = (value) => pos.reduce((best, p, k) => (Math.abs(p - value) < Math.abs(pos[best] - value) ? k : best), 0);
+
+  function springTo(k, velocity, damping) {
+    if (reduceMotion) { x = pos[k]; v = 0; target = null; draw(); return; }
+    target = pos[k]; v = velocity; zeta = damping;
+  }
+  function stepSpring(dt) {
+    const w = (2 * Math.PI) / RESPONSE;
+    const c1 = x - target;
+    if (zeta >= 1) {
+      const c2 = v + w * c1, e = Math.exp(-w * dt);
+      x = target + (c1 + c2 * dt) * e;
+      v = (c2 - w * (c1 + c2 * dt)) * e;
+    } else {
+      const wd = w * Math.sqrt(1 - zeta * zeta), c2 = (v + zeta * w * c1) / wd, e = Math.exp(-zeta * w * dt);
+      const cos = Math.cos(wd * dt), sin = Math.sin(wd * dt);
+      x = target + e * (c1 * cos + c2 * sin);
+      v = e * ((c2 * wd - zeta * w * c1) * cos - (c1 * wd + zeta * w * c2) * sin);
+    }
+    if (Math.abs(x - target) < 0.25 && Math.abs(v) < 4) { x = target; v = 0; target = null; }
+  }
+
+  function draw() {
+    rail.style.transform = `translate3d(${x}px, 0, 0)`;
+    slides.forEach((s, k) => s.style.setProperty("--d", Math.min(1, Math.abs(x - pos[k]) / step).toFixed(3)));
+    const k = nearestTo(x);
+    if (k !== current) mark(k);
+  }
 
   const dots = slides.map((slide, i) => {
     const b = document.createElement("button");
@@ -166,47 +228,22 @@
     dotsEl.append(b);
     return b;
   });
-
   function mark(i) {
     current = i;
-    slides.forEach((s, k) => s.classList.toggle("current", k === i));
+    slides.forEach((s, k) => { s.classList.toggle("current", k === i); s.setAttribute("aria-hidden", String(k !== i)); });
     dots.forEach((d, k) => { d.classList.toggle("active", k === i); d.toggleAttribute("aria-current", k === i); });
     restartTimer();
   }
-  function go(i, smooth = true) {
-    const slide = slides[i];
-    programmatic = Date.now();
-    track.scrollTo({ left: slide.offsetLeft - (track.clientWidth - slide.clientWidth) / 2, behavior: smooth && !reduceMotion ? "smooth" : "auto" });
-    mark(i);
-  }
-  // The active dot fills over SLIDE_MS while playing, on screen and the tab is in front; when it's full,
-  // the next slide comes in.
+  function go(i) { springTo(Math.max(0, Math.min(slides.length - 1, i)), v, 1); }
+
+  // The active dot fills over SLIDE_MS while it plays on screen; then the next slide comes in.
   let elapsed = 0;
-  let last = 0;
-  function restartTimer() {
-    elapsed = 0;
-    paint();
-  }
+  function restartTimer() { elapsed = 0; paint(); }
   function paint() {
     dots.forEach((d, k) => {
-      const fill = d.firstChild;
-      fill.style.width = k !== current ? "0%" : reel === "playing" ? `${Math.min(100, (elapsed / SLIDE_MS) * 100)}%` : "100%";
+      d.firstChild.style.width = k !== current ? "0%" : reel === "playing" ? `${Math.min(100, (elapsed / SLIDE_MS) * 100)}%` : "100%";
     });
   }
-  function tick(t) {
-    const dt = last ? Math.min(100, t - last) : 0;
-    last = t;
-    if (reel === "playing" && inView && !document.hidden && !touching) {
-      elapsed += dt;
-      if (elapsed >= SLIDE_MS) {
-        if (current < slides.length - 1) go(current + 1);
-        else setState("ended");
-      }
-      paint();
-    }
-    requestAnimationFrame(tick);
-  }
-  requestAnimationFrame(tick);
   function setState(next) {
     reel = next;
     play.dataset.state = next;
@@ -218,49 +255,117 @@
     else if (reel === "ended") { go(0); setState("playing"); }
     else setState("playing");
   });
+  const userStop = () => { if (reel === "playing") setState("paused"); };
 
-  // Swiping, scrolling or using the keys yourself pauses it; the slide nearest the middle becomes the current one.
-  let touching = false;
-  const userStop = () => { programmatic = 0; if (reel === "playing") setState("paused"); };
-  track.addEventListener("touchstart", () => { touching = true; userStop(); }, { passive: true });
-  addEventListener("touchend", () => { touching = false; }, { passive: true });
-  addEventListener("touchcancel", () => { touching = false; }, { passive: true });
-  ["pointerdown", "wheel"].forEach((e) => track.addEventListener(e, userStop, { passive: true }));
-  const nearest = () => {
-    const middle = track.scrollLeft + track.clientWidth / 2;
-    let best = 0;
-    slides.forEach((s, k) => { if (Math.abs(s.offsetLeft + s.clientWidth / 2 - middle) < Math.abs(slides[best].offsetLeft + slides[best].clientWidth / 2 - middle)) best = k; });
-    return best;
+  // ---- Dragging: 1:1 with the finger, softly resisting past the ends ----
+  const rubber = (over, dim) => (over * dim * 0.55) / (dim + 0.55 * Math.abs(over));
+  const bounded = (raw) => {
+    const max = pos[0], min = pos[pos.length - 1], dim = viewport.clientWidth;
+    if (raw > max) return max + rubber(raw - max, dim);
+    if (raw < min) return min - rubber(min - raw, dim);
+    return raw;
   };
-  let settleTimer;
-  const settled = () => {
-    // A swipe always wins; only the reel's own scrolling is ignored while it glides.
-    if (!touching && programmatic && Date.now() - programmatic < 900) return;
-    const best = nearest();
-    if (best !== current) mark(best);
+  // Where a flick would carry it, as scrolling decelerates (the projection Apple uses, d = 0.998).
+  const project = (velocity, d = 0.998) => ((velocity / 1000) * d) / (1 - d);
+
+  let drag = null;
+  viewport.addEventListener("pointerdown", (e) => {
+    if (e.button !== 0 || pos.length === 0) return;
+    // Grabbing a moving reel stops it right where it is.
+    target = null; v = 0;
+    drag = { id: e.pointerId, x0: e.clientX, y0: e.clientY, start: x, axis: null, hist: [{ t: e.timeStamp, x: e.clientX }] };
+    userStop();
+  });
+  viewport.addEventListener("pointermove", (e) => {
+    if (!drag || e.pointerId !== drag.id) return;
+    const dx = e.clientX - drag.x0, dy = e.clientY - drag.y0;
+    if (!drag.axis) {
+      if (Math.hypot(dx, dy) < 8) return;
+      drag.axis = Math.abs(dx) > Math.abs(dy) ? "x" : "y";
+      if (drag.axis === "y") { drag = null; springTo(nearestTo(x), 0, 1); return; }
+      viewport.setPointerCapture(e.pointerId);
+      viewport.classList.add("dragging");
+      drag.x0 = e.clientX; drag.start = x;
+    }
+    x = bounded(drag.start + (e.clientX - drag.x0));
+    drag.hist.push({ t: e.timeStamp, x: e.clientX });
+    while (drag.hist.length > 2 && e.timeStamp - drag.hist[0].t > 100) drag.hist.shift();
+    draw();
+  });
+  const release = (e) => {
+    if (!drag || e.pointerId !== drag.id) return;
+    const d = drag;
+    drag = null;
+    viewport.classList.remove("dragging");
+    if (d.axis !== "x") {
+      // A tap on a neighbouring slide brings it in.
+      const k = slides.indexOf(e.target.closest(".slide"));
+      if (e.type === "pointerup" && k >= 0 && k !== current) go(k); else springTo(nearestTo(x), 0, 1);
+      return;
+    }
+    const a = d.hist[0], b = d.hist[d.hist.length - 1];
+    const speed = b.t > a.t ? ((b.x - a.x) / (b.t - a.t)) * 1000 : 0;
+    // Choose the slide from where the flick is going, not where the finger let go, at most two away.
+    let k = nearestTo(x + project(speed));
+    k = Math.max(current - 2, Math.min(current + 2, k));
+    springTo(k, speed, Math.abs(speed) > 600 ? 0.82 : 1);
   };
-  track.addEventListener("scroll", () => { clearTimeout(settleTimer); settleTimer = setTimeout(settled, 140); }, { passive: true });
-  track.addEventListener("scrollend", settled, { passive: true });
-  track.addEventListener("keydown", (e) => {
-    const d = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : 0;
-    if (!d) return;
+  viewport.addEventListener("pointerup", release);
+  viewport.addEventListener("pointercancel", release);
+
+  // Trackpads swipe sideways with the wheel: move with it, then settle on the nearest slide.
+  let wheelEnd;
+  viewport.addEventListener("wheel", (e) => {
+    if (Math.abs(e.deltaX) <= Math.abs(e.deltaY)) return;
     e.preventDefault();
     userStop();
-    go(Math.max(0, Math.min(slides.length - 1, current + d)));
-  });
-  // Only plays while it's on screen.
-  new IntersectionObserver(([entry]) => { inView = entry.isIntersecting; restartTimer(); }, { threshold: 0.5 }).observe(track);
-  // Phones resize the page as the address bar shows and hides; only a real change of width re-centres the slide,
-  // and never under a finger.
-  let lastWidth = innerWidth;
-  addEventListener("resize", () => {
-    if (innerWidth === lastWidth || touching) return;
-    lastWidth = innerWidth;
-    go(current, false);
+    target = null; v = 0;
+    x = bounded(x - e.deltaX);
+    draw();
+    clearTimeout(wheelEnd);
+    wheelEnd = setTimeout(() => springTo(nearestTo(x), 0, 1), 140);
+  }, { passive: false });
+
+  viewport.addEventListener("keydown", (e) => {
+    const dir = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : 0;
+    if (!dir) return;
+    e.preventDefault();
+    userStop();
+    go(current + dir);
   });
 
+  // Only plays while it's on screen.
+  new IntersectionObserver(([entry]) => { inView = entry.isIntersecting; restartTimer(); }, { threshold: 0.5 }).observe(viewport);
+  // Phones resize the page as the address bar shows and hides; only a real change of width re-lays it out.
+  let lastWidth = innerWidth;
+  addEventListener("resize", () => {
+    if (innerWidth === lastWidth) return;
+    lastWidth = innerWidth;
+    layout();
+    if (!drag) { target = null; v = 0; x = pos[current]; draw(); }
+  });
+
+  // One clock for the spring and the timer.
+  let last = 0;
+  function frame(t) {
+    const dt = last ? Math.min(0.05, (t - last) / 1000) : 0;
+    last = t;
+    if (target !== null && dt > 0) { stepSpring(dt); draw(); }
+    if (reel === "playing" && inView && !document.hidden && !drag) {
+      elapsed += dt * 1000;
+      if (elapsed >= SLIDE_MS) {
+        if (current < slides.length - 1) { const next = current + 1; go(next); mark(next); }
+        else setState("ended");
+      }
+      paint();
+    }
+    requestAnimationFrame(frame);
+  }
+  layout();
+  x = pos[0];
+  draw();
   setState(reel);
-  requestAnimationFrame(() => go(0, false));
+  requestAnimationFrame(frame);
 
   // ---- What it notices: real message formats and what the app makes of them ----
   const messages = [
