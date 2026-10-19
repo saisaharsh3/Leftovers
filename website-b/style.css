@@ -201,7 +201,7 @@ main > section { scroll-margin-top: 64px; max-width: 1160px; margin: 0 auto; pad
 .phone-wrap { position: relative; }
 .phone-stage {
   position: sticky; top: calc(50vh - min(320px, 36vw)); margin-left: auto; width: min(300px, 26vw);
-  transform-style: preserve-3d; will-change: transform;
+  will-change: transform;
 }
 .phone {
   position: relative; width: 100%; aspect-ratio: 540 / 1200; border-radius: 44px; overflow: hidden; isolation: isolate;
@@ -214,7 +214,7 @@ main > section { scroll-margin-top: 64px; max-width: 1160px; margin: 0 auto; pad
   transform: translateX(var(--sheen, 0%)); mix-blend-mode: screen;
 }
 .t-strip { position: absolute; inset: 0; }
-.t-shot { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; will-change: transform; backface-visibility: hidden; }
+.t-shot { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; will-change: transform, opacity; visibility: hidden; }
 /* A coloured glow behind the phone, in the colour of the screen showing. */
 .t-halo {
   position: absolute; inset: 8% -18%; z-index: -1; border-radius: 50%; background: var(--halo, var(--iris));
@@ -225,14 +225,16 @@ main > section { scroll-margin-top: 64px; max-width: 1160px; margin: 0 auto; pad
   position: absolute; display: flex; align-items: center; gap: 10px; white-space: nowrap;
   padding: 10px 16px 10px 10px; border-radius: 18px; background: var(--material); box-shadow: var(--shadow-l), inset 0 0 0 1px var(--line);
   backdrop-filter: blur(18px) saturate(170%); -webkit-backdrop-filter: blur(18px) saturate(170%);
-  opacity: 0; will-change: transform, opacity;
+  opacity: 0; visibility: hidden; will-change: transform, opacity;
 }
 .t-chip i { width: 30px; height: 30px; border-radius: 10px; background: var(--chip, var(--iris)); flex: none; display: grid; place-items: center; box-shadow: inset 0 0 0 1px rgba(255,255,255,.25); }
 .t-chip svg { width: 17px; height: 17px; fill: none; stroke: #0b0b0f; stroke-opacity: .82; stroke-width: 2.1; stroke-linecap: round; stroke-linejoin: round; }
 .t-chip b { display: block; font-size: .98rem; letter-spacing: -0.01em; }
 .t-chip small { display: block; color: var(--text-2); font-size: .8rem; letter-spacing: .005em; }
 .t-chip.L { right: calc(100% - 26px); }
-.t-chip.R { left: calc(100% - 34px); }
+/* The one on the right overlaps the phone and only just leaves it, so it never runs into the words beside it. */
+.t-chip.R { right: -26px; }
+@media (max-width: 1180px) { .t-chip.L { right: calc(100% - 64px); } .t-chip { padding-right: 12px; } .t-chip small { font-size: .74rem; } }
 .steps { list-style: none; margin: 0; padding: 0 0 0 34px; position: relative; }
 /* How far through the tour you are: a line that fills as you scroll. */
 .t-rail { position: absolute; left: 0; top: 36vh; bottom: 36vh; width: 2px; border-radius: 2px; background: var(--surface-2); }

@@ -99,16 +99,23 @@
     const e = clamp((f - 0.3) / 0.4, 0, 1);
     return i + e * e * (3 - 2 * e);
   };
+  // Where each step's middle is on the page, measured once (and again when the layout changes), so scrolling
+  // itself never asks the browser to lay the page out.
+  let centers = [];
   function measure() {
     if (!wide.matches) return;
-    const mid = innerHeight / 2;
-    const c = steps.map((s) => { const r = s.getBoundingClientRect(); return r.top + r.height / 2; });
+    centers = steps.map((s) => { const r = s.getBoundingClientRect(); return r.top + scrollY + r.height / 2; });
+  }
+  // The scroll position read on each frame, straight from the browser: the screens move with the page, never behind it.
+  function follow() {
+    if (!centers.length) return;
+    const mid = scrollY + innerHeight / 2, c = centers;
     let t = 0;
     if (mid <= c[0]) t = 0;
     else if (mid >= c[n - 1]) t = n - 1;
     else for (let i = 0; i < n - 1; i++) if (mid >= c[i] && mid < c[i + 1]) { t = i + (mid - c[i]) / (c[i + 1] - c[i]); break; }
     raw = t;
-    pos.to(rest(t), { response: 0.32, damping: 1 });
+    pos.set(rest(t));
     setActive(Math.round(t));
   }
   function setActive(i) {
@@ -120,7 +127,7 @@
     // The notes for this screen float in one after another; the others drift away.
     groups.forEach((g, gi) => g.forEach((c, k) => {
       clearTimeout(c.timer);
-      if (gi === i) c.timer = setTimeout(() => c.show.to(1, { response: 0.5, damping: 0.78 }), reduceMotion ? 0 : 140 + k * 90);
+      if (gi === i) c.timer = setTimeout(() => c.show.to(1, { response: 0.42, damping: 0.8 }), reduceMotion ? 0 : 50 + k * 70);
       else c.show.to(0, { response: 0.28, damping: 1 });
     }));
   }
@@ -134,26 +141,34 @@
       const r = stage.getBoundingClientRect();
       const dx = clamp((e.clientX - (r.left + r.width / 2)) / innerWidth, -0.6, 0.6);
       const dy = clamp((e.clientY - (r.top + r.height / 2)) / innerHeight, -0.6, 0.6);
-      ry.to(dx * 22, { response: 0.7, damping: 1 });
-      rx.to(-dy * 14, { response: 0.7, damping: 1 });
+      ry.to(dx * 22, { response: 0.34, damping: 1 });
+      rx.to(-dy * 14, { response: 0.34, damping: 1 });
     });
-    tour.addEventListener("pointerleave", () => { rx.to(0, { response: 0.9 }); ry.to(0, { response: 0.9 }); });
+    tour.addEventListener("pointerleave", () => { rx.to(0, { response: 0.6 }); ry.to(0, { response: 0.6 }); });
   }
 
+  let lastP = NaN;
   loop.add((dt) => {
-    let busy = pos.step(dt);
+    if (!wide.matches) return false;
+    follow();
+    let busy = false;
     if (rx.step(dt)) busy = true;
     if (ry.step(dt)) busy = true;
     groups.forEach((g) => g.forEach((c) => { if (c.show.step(dt)) busy = true; }));
-    if (!wide.matches) return busy;
     const p = pos.x;
-    // The screens slide sideways, like switching tabs; the one leaving dims and steps back a little.
-    shots.forEach((img, i) => {
-      const d = i - p, a = Math.min(Math.abs(d), 1);
-      img.style.transform = `translate3d(${d * 100}%, 0, 0) scale(${1 - a * 0.06})`;
-      img.style.filter = a > 0.01 ? `brightness(${1 - a * 0.35})` : "";
-      img.style.visibility = Math.abs(d) < 0.995 ? "visible" : "hidden"; // fully out: not even its edge shows
-    });
+    // The screens slide sideways, like switching tabs; the one leaving fades a little and steps back.
+    // Only the two in view are touched, with transform and opacity, which the graphics chip moves without repainting.
+    if (p !== lastP) {
+      lastP = p;
+      shots.forEach((img, i) => {
+        const d = i - p, a = Math.min(Math.abs(d), 1);
+        const show = Math.abs(d) < 0.995; // fully out: not even its edge shows
+        if (!show) { if (img.style.visibility !== "hidden") img.style.visibility = "hidden"; return; }
+        img.style.visibility = "visible";
+        img.style.transform = `translate3d(${d * 100}%, 0, 0) scale(${1 - a * 0.06})`;
+        img.style.opacity = String(1 - a * 0.4);
+      });
+    }
     stage.style.transform = `perspective(1400px) rotateX(${rx.x}deg) rotateY(${ry.x}deg)`;
     phone.style.setProperty("--sheen", `${-ry.x * 6}%`);
     halo.style.transform = `translate3d(${-ry.x * 2.2}px, ${rx.x * 2.2}px, 0) scale(${1 + Math.abs(raw - Math.round(raw)) * 0.12})`;
@@ -161,16 +176,24 @@
     // Notes sit in front of the phone, so they move further with the lean; arriving, they rise and grow from small.
     groups.forEach((g) => g.forEach((c) => {
       const s = c.show.x, depth = c.spot.depth;
+      // Gone notes are taken out entirely, so their frosted glass isn't worked out behind nothing.
+      const gone = s < 0.01;
+      if (gone !== c.gone) { c.gone = gone; c.el.style.visibility = gone ? "hidden" : "visible"; }
+      if (gone) return;
       c.el.style.opacity = String(clamp(s, 0, 1));
       c.el.style.transform = `translate3d(${ry.x * depth}px, ${-rx.x * depth + (1 - s) * 18}px, 0) scale(${0.86 + 0.14 * s})`;
     }));
     return busy;
   });
 
-  addEventListener("scroll", measure, { passive: true });
-  addEventListener("resize", () => { measure(); loop.wake(); });
-  wide.addEventListener("change", () => { measure(); loop.wake(); });
+  // Scrolling only asks for the next frame; the frame reads where the page is.
+  addEventListener("scroll", () => loop.wake(), { passive: true });
+  const remeasure = () => { measure(); lastP = NaN; loop.wake(); };
+  addEventListener("resize", remeasure);
+  addEventListener("load", remeasure);
+  wide.addEventListener("change", remeasure);
+  new ResizeObserver(remeasure).observe($("#steps"));
   measure();
-  pos.set(rest(raw));
+  follow();
   loop.wake();
 })();
