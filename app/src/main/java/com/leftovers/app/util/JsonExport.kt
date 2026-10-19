@@ -21,7 +21,11 @@ object JsonExport {
         val root = runCatching { JSONTokener(json.trim()).nextValue() }.getOrNull() ?: return null
         val lists = mutableListOf<Pair<String, List<JSONObject>>>()
         collect(root, "", lists)
-        val entries = lists.filter { (_, items) -> looksLikeEntries(items) }.maxByOrNull { it.second.size }?.second ?: return null
+        // The list with the most dated, priced records. Counting those (not the list's length, nor requiring most of
+        // it to be dated) matters for apps that keep planned payments in the same list without a date yet, like Ivy
+        // Wallet: its transactions can be mostly planned ones, and they're still the entries, not its few loan records.
+        val entries = lists.map { (path, items) -> Triple(path, items, datedAndPriced(items)) }
+            .filter { it.third > 0 }.maxByOrNull { it.third }?.second ?: return null
 
         // Lookups for references: "categoryId": "abc" → that category's name, found in a list named after it.
         val named = lists.filter { (_, items) -> items.isNotEmpty() && items.all { it.has("id") } && items.any { o -> nameKeys.any(o::has) } }
@@ -94,13 +98,11 @@ object JsonExport {
         }
     }
 
-    private fun looksLikeEntries(items: List<JSONObject>): Boolean {
-        if (items.size < 1) return false
-        val good = items.count { o ->
+    /** How many of [items] have both a readable date and a readable amount. */
+    private fun datedAndPriced(items: List<JSONObject>): Int =
+        items.count { o ->
             val keys = o.keys().asSequence().toList()
             keys.any { k -> dateKey.matches(norm(k)) && CsvImporter.parseDate(cell(o.opt(k))) != null } &&
                 keys.any { k -> amountKey.matches(norm(k)) && CsvImporter.parseAmount(cell(o.opt(k))) != null }
         }
-        return good * 2 >= items.size
-    }
 }

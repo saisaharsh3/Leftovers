@@ -958,6 +958,15 @@ fun SettingsScreen(
                                 val to = java.time.LocalDate.ofEpochDay(days.max()).friendlyLabel()
                                 if (from == to) "From $from." else "From $from to $to."
                             } else null,
+                            // The totals, so an amount read wrongly shows before anything is added.
+                            if (adding > 0) {
+                                val spent = preview.toAdd.filter { it.type == com.leftovers.app.data.TxType.EXPENSE }.sumOf { it.amountMinor }
+                                val earned = preview.toAdd.filter { it.type == com.leftovers.app.data.TxType.INCOME }.sumOf { it.amountMinor }
+                                listOfNotNull(
+                                    if (spent > 0) "${money.format(spent)} spending" else null,
+                                    if (earned > 0) "${money.format(earned)} income" else null,
+                                ).joinToString(" and ").takeIf { it.isNotEmpty() }?.let { "$it in total." }
+                            } else null,
                             if (preview.duplicates > 0) "${preview.duplicates} already in Leftovers ${if (preview.duplicates == 1) "is" else "are"} skipped." else null,
                             if (preview.noCategory > 0) "${if (preview.noCategory == adding) "They have" else "${preview.noCategory} have"} no category, so ${if (preview.noCategory == 1) "it goes" else "they go"} to Other; change any later." else null,
                             preview.newCategories.takeIf { it.isNotEmpty() }?.let { list ->

@@ -95,4 +95,25 @@ class JsonExportTest {
         assertEquals("Pets", vet.category)
         assertEquals("Chai #snacks #work-friends", p.rows.first { it.amountMinor == 9_000L }.note)
     }
+
+    // Shaped like an Ivy Wallet backup (#21): most transactions are planned payments with only a due date, and a
+    // short list of loan records also has dates and amounts. The transactions are still the entries.
+    @Test fun plannedPaymentsDontHideTheTransactions() {
+        val planned = (1..12).joinToString(",") { """{"type": "EXPENSE", "amount": 499.0, "title": "Netflix", "dueDate": 1792000000000, "id": "p$it"}""" }
+        val json = """
+            {
+              "categories": [{"id": "c1", "name": "Rent"}],
+              "transactions": [
+                {"type": "EXPENSE", "amount": 15000.0, "title": "Rent", "dateTime": 1791100800000, "categoryId": "c1", "id": "t1"},
+                {"type": "INCOME", "amount": 125000.0, "title": "Salary", "dateTime": 1790841600000, "id": "t2"},
+                $planned
+              ],
+              "loanRecords": [{"loanId": "l1", "amount": 30.0, "dateTime": 1791100800000, "id": "r1"}]
+            }
+        """.trimIndent()
+        val p = import(json.toByteArray(Charsets.UTF_16))
+        assertEquals(listOf(1_500_000L, 12_500_000L), p.rows.map { it.amountMinor })
+        assertEquals("Rent", p.rows[0].category)
+        assertEquals(12, p.unreadable) // the planned ones, not yet paid
+    }
 }
