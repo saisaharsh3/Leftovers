@@ -110,6 +110,18 @@
           </li>
         </ol>
       </div>
+      <!-- On phones the same screens are a gallery: swipe through them, or let it play. Built by gallery.js from the steps above. -->
+      <div class="gallery" id="gallery" role="region" aria-roledescription="carousel" aria-label="The app's screens">
+        <div class="g-tabs" id="g-tabs" role="tablist" aria-label="Screens"><span class="g-ind" id="g-ind" aria-hidden="true"></span></div>
+        <div class="g-view" id="g-view"></div>
+        <div class="g-foot">
+          <div class="g-dots" id="g-dots" aria-hidden="true"></div>
+          <button class="round g-play" id="g-play" type="button" aria-label="Pause">
+            <svg class="i-pause" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14M16 5v14"/></svg>
+            <svg class="i-play" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4.5v15l12.5-7.5Z"/></svg>
+          </button>
+        </div>
+      </div>
     </section>
 
     <!-- Insights: scrub the month with a finger; the label follows and reads each day. -->
@@ -276,5 +288,6 @@
 
   <script src="app.js" defer></script>
   <script src="play.js" defer></script>
+  <script src="gallery.js" defer></script>
 </body>
 </html>

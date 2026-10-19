@@ -75,7 +75,7 @@
   const shotUrl = (name) => `assets/${root.dataset.theme === "light" ? "light/" : ""}${name}.jpg`;
   const setTheme = (t) => {
     root.dataset.theme = t;
-    $$(".inline-shot").forEach((img) => { img.src = shotUrl(img.dataset.name); });
+    $$(".inline-shot, .g-shot[src]").forEach((img) => { img.src = shotUrl(img.dataset.name); });
     if (tour.ready) tour.show(tour.current, true);
   };
   $("#theme").addEventListener("click", () => {
