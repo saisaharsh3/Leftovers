@@ -16,6 +16,7 @@
 </head>
 <body>
   <a class="skip" href="#main">Skip to content</a>
+  <div class="aurora" aria-hidden="true"><i></i><i></i><i></i></div>
 
   <header class="bar" id="bar">
     <a class="brand" href="#top"><img src="assets/icon.svg" alt="" width="28" height="28"><span>Leftovers</span></a>
@@ -109,6 +110,70 @@
           </li>
         </ol>
       </div>
+    </section>
+
+    <!-- Insights: scrub the month with a finger; the label follows and reads each day. -->
+    <section class="play-month" id="month" aria-labelledby="month-title">
+      <h2 id="month-title">See where it went</h2>
+      <p class="section-lede">Run your finger along the month, like on the Insights tab. Each day says what it cost and what it went on.</p>
+      <div class="panel chart-panel">
+        <div class="chart-head">
+          <div>
+            <p class="chart-label" id="chart-label">This month so far</p>
+            <p class="chart-value" id="chart-value">₹0</p>
+            <p class="chart-sub" id="chart-sub"></p>
+          </div>
+          <div class="chart-avg"><span>A day on average</span><strong id="chart-avg">₹0</strong></div>
+        </div>
+        <div class="chart" id="chart" tabindex="0" role="slider" aria-label="Day of the month" aria-valuemin="1">
+          <div class="bars" id="bars"></div>
+          <div class="pin" id="pin" aria-hidden="true"></div>
+        </div>
+        <div class="chart-axis" aria-hidden="true"><span>1</span><span id="axis-mid"></span><span id="axis-end"></span></div>
+      </div>
+    </section>
+
+    <!-- Plan: pick something to save for and drag the months. -->
+    <section class="play-goal" id="goal" aria-labelledby="goal-title">
+      <h2 id="goal-title">Save for something</h2>
+      <p class="section-lede">Pick a goal and how soon you want it. Leftovers works out what to put aside each month, and how much of your budget that takes.</p>
+      <div class="panel goal-panel">
+        <div class="goal-ring">
+          <svg viewBox="0 0 120 120" aria-hidden="true">
+            <circle class="ring-bg" cx="60" cy="60" r="52"/>
+            <circle class="ring-fg" id="ring" cx="60" cy="60" r="52"/>
+          </svg>
+          <div class="ring-text"><strong id="ring-pct">0%</strong><span>of your budget</span></div>
+        </div>
+        <div class="goal-controls">
+          <div class="goal-chips" role="radiogroup" aria-label="Saving for" id="goal-chips"></div>
+          <p class="goal-monthly"><strong id="goal-monthly">₹0</strong> a month</p>
+          <p class="goal-sub" id="goal-sub"></p>
+          <div class="months">
+            <div class="months-head"><span>I want it in</span><strong id="months-out">12 months</strong></div>
+            <div class="months-track" id="months" role="slider" tabindex="0" aria-label="Months" aria-valuemin="1" aria-valuemax="24" aria-valuenow="12">
+              <span class="months-fill" id="months-fill"></span>
+              <span class="months-thumb" id="months-thumb"></span>
+            </div>
+            <div class="months-scale" aria-hidden="true"><span>1</span><span>6</span><span>12</span><span>18</span><span>24</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Detection: pick up a message and drop it on the app. -->
+    <section class="play-detect" id="detect" aria-labelledby="detect-title">
+      <h2 id="detect-title">It notices payments, you decide</h2>
+      <p class="section-lede">With detection on, a bank text or payment notification becomes a suggestion you can add with a tap. Drag one onto the app and see.</p>
+      <div class="detect-grid">
+        <ul class="messages" id="messages" aria-label="Messages to try"></ul>
+        <div class="mini-app panel" id="mini-app" aria-live="polite">
+          <div class="mini-head"><img src="assets/icon.svg" alt="" width="22" height="22"><span>Detected payments</span></div>
+          <ul class="mini-list" id="mini-list"><li class="mini-empty" id="mini-empty">Drop a message here</li></ul>
+          <p class="mini-note" id="mini-note"></p>
+        </div>
+      </div>
+      <p class="detect-reset"><button class="text-btn" type="button" id="detect-reset" hidden>Start again</button></p>
     </section>
 
     <!-- Privacy: every way it could read your money starts off, like in the app. -->
@@ -210,5 +275,6 @@
   </section>
 
   <script src="app.js" defer></script>
+  <script src="play.js" defer></script>
 </body>
 </html>

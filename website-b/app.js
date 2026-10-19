@@ -65,6 +65,9 @@
     };
   };
 
+  // The page's other demos (play.js) use the same springs and clock.
+  window.LO = { Spring, loop, project, rubber, tracker, fmt, clamp, buzz, reduceMotion };
+
   // ---- Theme ----
   const root = document.documentElement;
   const saved = (() => { try { return localStorage.getItem("theme"); } catch { return null; } })();

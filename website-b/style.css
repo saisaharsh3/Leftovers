@@ -1,10 +1,16 @@
-/* Leftovers B: calm and light-first, the system font, lime only on the one thing to press.
+/* Leftovers B: the system font over the app's own slow aurora, lime only on the one thing to press.
    Motion is springs driven from script; CSS only holds the resting states. */
 
 :root {
-  --bg: #f2f2f6;
-  --surface: #ffffff;
-  --surface-2: #e8e8ee;
+  --bg: #edeef4;
+  /* Panels are a light material over the aurora; the cards you throw stay solid so they read clearly. */
+  --surface: rgba(255, 255, 255, 0.62);
+  --card: #ffffff;
+  --surface-2: rgba(14, 14, 18, 0.06);
+  --aurora-a: #8c82ff;
+  --aurora-b: #5fd0c4;
+  --aurora-c: #c4e35f;
+  --aurora-alpha: 0.55;
   --text: #0e0e12;
   --text-2: #5b5b66;
   --text-3: #74747f;
@@ -14,7 +20,7 @@
   --iris: #5048e5;
   --positive: #1f9d61;
   --warning: #b07a0c;
-  --material: rgba(242, 242, 246, 0.72);
+  --material: rgba(237, 238, 244, 0.7);
   --material-edge: rgba(255, 255, 255, 0.7);
   --shadow-s: 0 1px 2px rgba(20, 20, 40, 0.06), 0 4px 14px rgba(20, 20, 40, 0.06);
   --shadow-l: 0 2px 6px rgba(20, 20, 40, 0.06), 0 24px 60px -12px rgba(20, 20, 40, 0.22);
@@ -27,9 +33,14 @@
   --r-m: 20px;
 }
 :root[data-theme="dark"] {
-  --bg: #0b0b0f;
-  --surface: #17171d;
-  --surface-2: #22222a;
+  --bg: #09090c;
+  --surface: rgba(30, 30, 40, 0.55);
+  --card: #18181f;
+  --surface-2: rgba(255, 255, 255, 0.08);
+  --aurora-a: #5048e5;
+  --aurora-b: #0e9f9a;
+  --aurora-c: #8bb82b;
+  --aurora-alpha: 0.5;
   --text: #f4f4f6;
   --text-2: #a4a4ae;
   --text-3: #8b8b96;
@@ -37,7 +48,7 @@
   --iris: #8c82ff;
   --positive: #7fd9a8;
   --warning: #f2c46d;
-  --material: rgba(18, 18, 24, 0.66);
+  --material: rgba(9, 9, 12, 0.62);
   --material-edge: rgba(255, 255, 255, 0.08);
   --shadow-s: 0 1px 2px rgba(0, 0, 0, 0.4), 0 6px 18px rgba(0, 0, 0, 0.3);
   --shadow-l: 0 2px 6px rgba(0, 0, 0, 0.5), 0 30px 70px -14px rgba(0, 0, 0, 0.7);
@@ -55,6 +66,24 @@ body {
 /* A thrown card flies past the edge without making the page wider. clip keeps the tour's sticky phone working. */
 main { overflow-x: clip; }
 img { max-width: 100%; height: auto; display: block; }
+
+/* The app's aurora: three soft blobs drifting slowly behind everything. */
+.aurora { position: fixed; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; }
+.aurora i {
+  position: absolute; width: 70vmax; height: 70vmax; border-radius: 50%;
+  filter: blur(80px); opacity: var(--aurora-alpha);
+  animation: drift 38s ease-in-out infinite alternate;
+}
+.aurora i:nth-child(1) { background: radial-gradient(closest-side, var(--aurora-a), transparent); left: -25vmax; top: -30vmax; }
+.aurora i:nth-child(2) { background: radial-gradient(closest-side, var(--aurora-b), transparent); right: -30vmax; top: 10vmax; animation-delay: -12s; opacity: calc(var(--aurora-alpha) * 0.8); }
+.aurora i:nth-child(3) { background: radial-gradient(closest-side, var(--aurora-c), transparent); left: 10vmax; bottom: -45vmax; animation-delay: -24s; opacity: calc(var(--aurora-alpha) * 0.45); }
+@keyframes drift { to { transform: translate3d(6vmax, 4vmax, 0) scale(1.08); } }
+
+/* A material panel over the aurora. */
+.panel {
+  background: var(--surface); border-radius: var(--r-l); box-shadow: var(--shadow-s);
+  backdrop-filter: blur(24px) saturate(160%); -webkit-backdrop-filter: blur(24px) saturate(160%);
+}
 a { color: inherit; }
 p { margin: 0; }
 h1, h2, h3 { margin: 0; text-wrap: balance; }
@@ -88,7 +117,7 @@ h3 { font-size: 1.15rem; line-height: 1.25; letter-spacing: -0.012em; font-weigh
 .round:active { transform: scale(.92); transition-duration: .08s; }
 .round:disabled { opacity: .3; cursor: default; transform: none; }
 .round svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
-.round.big { width: 60px; height: 60px; background: var(--surface); box-shadow: var(--shadow-s); }
+.round.big { width: 60px; height: 60px; background: var(--card); box-shadow: var(--shadow-s); }
 .round.big svg { width: 26px; height: 26px; }
 .round.accent { background: var(--accent); color: var(--on-accent); }
 .text-btn { background: none; border: 0; padding: 4px 2px; font: inherit; font-weight: 600; color: var(--iris); cursor: pointer; text-decoration: none; }
@@ -136,7 +165,7 @@ main > section { scroll-margin-top: 64px; max-width: 1160px; margin: 0 auto; pad
 /* Its own layer, so cards never draw over the sheet or the header. */
 .deck { position: relative; isolation: isolate; width: min(340px, 100%); height: 220px; margin-top: 6px; }
 .card {
-  position: absolute; inset: 0; border-radius: var(--r-l); background: var(--surface); box-shadow: var(--shadow-l);
+  position: absolute; inset: 0; border-radius: var(--r-l); background: var(--card); box-shadow: var(--shadow-l);
   padding: 22px; display: flex; flex-direction: column; justify-content: space-between;
   will-change: transform; touch-action: none; user-select: none; -webkit-user-select: none;
   cursor: grab; transform-origin: 50% 90%;
@@ -182,7 +211,8 @@ main > section { scroll-margin-top: 64px; max-width: 1160px; margin: 0 auto; pad
 /* Privacy */
 .privacy h2 { max-width: 18ch; }
 .section-lede { margin-top: 18px; color: var(--text-2); font-size: 1.15rem; max-width: 52ch; }
-.switches { list-style: none; margin: 40px 0 0; padding: 0; background: var(--surface); border-radius: var(--r-l); box-shadow: var(--shadow-s); }
+.switches { list-style: none; margin: 40px 0 0; padding: 0; background: var(--surface); border-radius: var(--r-l); box-shadow: var(--shadow-s);
+  backdrop-filter: blur(24px) saturate(160%); -webkit-backdrop-filter: blur(24px) saturate(160%); }
 .switches li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 18px; align-items: center; padding: 20px 22px; }
 .switches li + li { border-top: 1px solid var(--line); }
 .sw-text p { margin-top: 4px; color: var(--text-2); font-size: .95rem; max-width: 60ch; transition: color .3s ease; }
@@ -235,11 +265,11 @@ main > section { scroll-margin-top: 64px; max-width: 1160px; margin: 0 auto; pad
   border-radius: 30px 30px 0 0; box-shadow: var(--shadow-l), inset 0 1px 0 var(--material-edge);
   transform: translate(-50%, 100%); will-change: transform;
 }
-.sheet-grab { position: sticky; top: 0; display: grid; grid-template-columns: 40px minmax(0, 1fr) 40px; align-items: center; padding: 22px 0 12px; touch-action: none; cursor: grab; }
+.sheet-grab { position: sticky; top: 0; display: grid; grid-template-columns: 40px minmax(0, 1fr) 40px; align-items: center; padding: 22px 0 12px; touch-action: pan-y; cursor: grab; }
 .sheet-grab h2 { grid-column: 2; text-align: center; font-size: 1.25rem; letter-spacing: -0.015em; }
 .sheet-grab .round { grid-column: 3; width: 34px; height: 34px; }
 .handle { position: absolute; top: 8px; left: 50%; width: 38px; height: 5px; margin-left: -19px; border-radius: 99px; background: var(--text-3); opacity: .5; }
-.ways { list-style: none; margin: 4px 0 0; padding: 0; background: var(--surface); border-radius: var(--r-m); }
+.ways { list-style: none; margin: 4px 0 0; padding: 0; background: var(--card); border-radius: var(--r-m); }
 .ways li { display: flex; align-items: center; gap: 14px; padding: 16px 18px; }
 .ways li + li { border-top: 1px solid var(--line); }
 .ways li > div { flex: 1; min-width: 0; }
@@ -265,12 +295,101 @@ main > section { scroll-margin-top: 64px; max-width: 1160px; margin: 0 auto; pad
 
 @media (prefers-reduced-motion: reduce) {
   body, .screen, .step, .pill, .round { transition: none !important; }
+  .aurora i { animation: none; }
 }
 @media (prefers-reduced-transparency: reduce) {
-  .bar.scrolled, .sheet { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; background: var(--surface); }
+  .bar.scrolled, .sheet, .panel, .switches { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; background: var(--card); }
+  .aurora { display: none; }
 }
 @media (prefers-contrast: more) {
   .pill.quiet, .round, .switch { box-shadow: inset 0 0 0 1.5px var(--text-2); }
   .card, .switches, .ways { box-shadow: 0 0 0 1.5px var(--text-2); }
   .muted, .lede, .section-lede, .hint, .small-print, .step p { color: var(--text); }
+}
+
+/* ---- See where it went: the month as bars to scrub ---- */
+.play-month h2, .play-goal h2, .play-detect h2 { max-width: 18ch; }
+.chart-panel { margin-top: 36px; padding: 26px 26px 20px; }
+.chart-head { display: flex; justify-content: space-between; align-items: end; gap: 20px; flex-wrap: wrap; }
+.chart-label { color: var(--text-2); font-weight: 600; font-size: .95rem; }
+.chart-value { font-size: clamp(2.2rem, 5vw, 3rem); font-weight: 800; letter-spacing: -0.045em; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.chart-sub { color: var(--text-2); font-size: .9rem; min-height: 1.4em; }
+.chart-avg { text-align: right; display: grid; }
+.chart-avg span { color: var(--text-3); font-size: .85rem; letter-spacing: .01em; }
+.chart-avg strong { font-size: 1.3rem; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.chart { position: relative; height: 200px; margin-top: 26px; touch-action: pan-y; cursor: crosshair; user-select: none; -webkit-user-select: none; }
+.bars { position: absolute; inset: 0; display: flex; align-items: end; gap: 3px; }
+.bar-col { flex: 1; height: 100%; display: flex; align-items: end; }
+.bar-col i { display: block; width: 100%; border-radius: 4px 4px 2px 2px; background: var(--text); opacity: .22; transform-origin: bottom; will-change: transform, opacity; }
+.bar-col.future i { background: transparent; border: 1px dashed var(--text-3); opacity: .35; }
+.pin { position: absolute; top: -6px; bottom: 0; width: 2px; margin-left: -1px; background: var(--iris); border-radius: 2px; opacity: 0; pointer-events: none; }
+.chart-axis { display: flex; justify-content: space-between; margin-top: 8px; color: var(--text-3); font-size: .8rem; letter-spacing: .01em; font-variant-numeric: tabular-nums; }
+
+/* ---- Save for something ---- */
+.goal-panel { margin-top: 36px; padding: clamp(24px, 4vw, 40px); display: grid; grid-template-columns: auto minmax(0, 1fr); gap: clamp(24px, 5vw, 56px); align-items: center; }
+.goal-ring { position: relative; width: clamp(170px, 22vw, 230px); aspect-ratio: 1; }
+.goal-ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+.ring-bg { fill: none; stroke: var(--surface-2); stroke-width: 12; }
+.ring-fg { fill: none; stroke: var(--iris); stroke-width: 12; stroke-linecap: round; stroke-dasharray: 326.7; stroke-dashoffset: 326.7; }
+.ring-fg.heavy { stroke: var(--warning); }
+.ring-text { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; }
+.ring-text strong { font-size: clamp(2rem, 4vw, 2.6rem); font-weight: 800; letter-spacing: -0.04em; font-variant-numeric: tabular-nums; }
+.ring-text span { color: var(--text-2); font-size: .85rem; letter-spacing: .01em; }
+.goal-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.goal-chip { border: 0; cursor: pointer; font: inherit; font-weight: 600; font-size: .92rem; padding: 10px 16px; border-radius: 99px; background: var(--surface-2); color: var(--text); transition: transform .18s ease, background-color .2s ease; }
+.goal-chip:active { transform: scale(.94); transition-duration: .08s; }
+.goal-chip[aria-checked="true"] { background: var(--text); color: var(--bg); }
+.goal-monthly { margin-top: 22px; font-size: 1.1rem; color: var(--text-2); }
+.goal-monthly strong { font-size: clamp(2.2rem, 5vw, 3rem); font-weight: 800; letter-spacing: -0.045em; color: var(--text); font-variant-numeric: tabular-nums; }
+.goal-sub { color: var(--text-2); margin-top: 2px; min-height: 1.5em; }
+.months { margin-top: 24px; max-width: 460px; }
+.months-head { display: flex; justify-content: space-between; color: var(--text-2); font-weight: 600; font-size: .95rem; }
+.months-head strong { color: var(--text); font-variant-numeric: tabular-nums; }
+.months-track { position: relative; height: 44px; margin-top: 8px; touch-action: pan-y; cursor: pointer; }
+.months-track::before { content: ""; position: absolute; left: 0; right: 0; top: 50%; height: 8px; margin-top: -4px; border-radius: 99px; background: var(--surface-2); }
+.months-fill { position: absolute; left: 0; top: 50%; height: 8px; margin-top: -4px; border-radius: 99px; background: var(--iris); width: 0; }
+.months-thumb { position: absolute; top: 50%; left: 0; width: 30px; height: 30px; margin: -15px 0 0 -15px; border-radius: 50%; background: var(--card); box-shadow: 0 2px 8px rgba(0, 0, 0, .25), 0 0 0 1px var(--line); will-change: transform; }
+.months-thumb.held { box-shadow: 0 4px 14px rgba(0, 0, 0, .3), 0 0 0 4px color-mix(in srgb, var(--iris) 30%, transparent); }
+.months-scale { display: flex; justify-content: space-between; color: var(--text-3); font-size: .78rem; margin-top: 2px; font-variant-numeric: tabular-nums; }
+
+/* ---- It notices payments: drag a message onto the app ---- */
+.detect-grid { margin-top: 36px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 360px); gap: clamp(24px, 5vw, 64px); align-items: start; }
+.messages { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; }
+.msg {
+  position: relative; background: var(--card); border-radius: 22px; padding: 16px 18px; box-shadow: var(--shadow-s);
+  touch-action: none; cursor: grab; user-select: none; -webkit-user-select: none; will-change: transform; z-index: 1;
+}
+.msg.held { cursor: grabbing; box-shadow: var(--shadow-l), 0 0 0 1px var(--line); z-index: 20; }
+.msg.used { visibility: hidden; }
+.msg-from { font-size: .8rem; font-weight: 700; color: var(--text-3); letter-spacing: .02em; display: flex; justify-content: space-between; gap: 10px; }
+.msg-from button { border: 0; background: none; font: inherit; color: var(--iris); cursor: pointer; padding: 0; font-weight: 650; }
+.msg p { margin-top: 6px; color: var(--text-2); font-size: .92rem; line-height: 1.5; }
+.mini-app { padding: 18px; min-height: 280px; transition: box-shadow .25s ease; position: sticky; top: 90px; }
+.mini-app.ready { box-shadow: var(--shadow-l), 0 0 0 3px color-mix(in srgb, var(--iris) 55%, transparent); }
+.mini-head { display: flex; align-items: center; gap: 10px; font-weight: 650; }
+.mini-head img { border-radius: 6px; }
+.mini-list { list-style: none; margin: 14px 0 0; padding: 0; display: grid; gap: 8px; }
+.mini-empty { border: 1.5px dashed var(--line); border-radius: 18px; padding: 40px 12px; text-align: center; color: var(--text-3); font-size: .9rem; }
+.mini-item { background: var(--card); border-radius: 18px; padding: 12px 14px; display: flex; justify-content: space-between; align-items: center; gap: 10px; box-shadow: var(--shadow-s); }
+.mini-item b { display: block; font-weight: 650; }
+.mini-item small { color: var(--text-2); font-size: .8rem; }
+.mini-item .amt { font-weight: 750; font-variant-numeric: tabular-nums; }
+.mini-item .amt.in { color: var(--positive); }
+.mini-item .add { border: 0; border-radius: 99px; background: var(--text); color: var(--bg); font: inherit; font-weight: 650; font-size: .8rem; padding: 6px 12px; cursor: pointer; }
+.mini-item.added .add { background: var(--surface-2); color: var(--text-2); }
+.mini-note { margin-top: 12px; color: var(--text-2); font-size: .88rem; min-height: 1.3em; }
+.detect-reset { margin-top: 14px; min-height: 30px; }
+
+@media (max-width: 900px) {
+  .goal-panel { grid-template-columns: minmax(0, 1fr); justify-items: center; text-align: center; }
+  .goal-controls { width: 100%; }
+  .goal-chips { justify-content: center; }
+  .months { margin-inline: auto; text-align: left; }
+  .detect-grid { grid-template-columns: minmax(0, 1fr); }
+  .mini-app { position: relative; top: 0; order: -1; }
+}
+@media (max-width: 640px) {
+  .chart-panel { padding: 20px 16px 16px; }
+  .bars { gap: 2px; }
+  .chart-avg { text-align: left; }
 }
