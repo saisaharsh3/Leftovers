@@ -145,7 +145,8 @@ class BackupManager(
                 json = JSONObject(BackupCrypto.decrypt(json, key))
             }
             // "cash-tracker" is the app's previous name; keep accepting those backups.
-            require(json.optString("app") in setOf("leftovers", "cash-tracker")) { "This isn't a Leftovers backup" }
+            // Another app's JSON backup: its entries can still be imported (see StatementFile).
+            if (json.optString("app") !in setOf("leftovers", "cash-tracker")) throw NotABackupException()
 
             fun JSONObject.longOrNull(key: String) = if (isNull(key)) null else getLong(key)
             // Photos saved in the backup, written back to private storage on demand.

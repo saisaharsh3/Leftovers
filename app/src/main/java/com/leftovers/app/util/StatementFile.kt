@@ -12,8 +12,8 @@ import org.xml.sax.helpers.DefaultHandler
 /**
  * Turns a bank statement or another app's export into rows of cells for [CsvImporter.parseTable], whatever it
  * was saved as: CSV or tab-separated text in any common encoding, an Excel workbook (.xlsx, or the older .xls),
- * the HTML table many banks save with an .xls name, or a PDF statement (read by [PdfStatement]). Everything is
- * read on the phone; nothing is sent anywhere.
+ * the HTML table many banks save with an .xls name, a PDF statement (read by [PdfStatement]), or another app's JSON
+ * backup or export, also inside a .zip (read by [JsonExport]). Everything is read on the phone; nothing is sent anywhere.
  */
 object StatementFile {
     sealed interface Result {
@@ -27,16 +27,45 @@ object StatementFile {
     fun read(bytes: ByteArray): Result {
         if (bytes.isEmpty()) return Result.Unsupported("The file is empty.")
         return when {
-            bytes.startsWith(0x50, 0x4B, 0x03, 0x04) -> runCatching { Result.Table(readXlsx(bytes)) }
-                .getOrElse { Result.Unsupported("Couldn't read this Excel file. Try saving it again as .xlsx or .csv.") }
+            bytes.startsWith(0x50, 0x4B, 0x03, 0x04) -> zip(bytes)
             bytes.startsWith(0xD0, 0xCF, 0x11, 0xE0) -> runCatching { Result.Table(readXls(bytes)) }
                 .getOrElse { Result.Unsupported("Couldn't read this Excel file. Try saving it again as .xlsx or .csv.") }
             bytes.startsWith(0x25, 0x50, 0x44, 0x46) -> Result.Pdf(bytes)
             else -> {
                 val text = decodeText(bytes)
-                if (text.trimStart().startsWith("<")) Result.Table(readHtmlTable(text)) else Result.Text(text)
+                val start = text.trimStart()
+                when {
+                    start.startsWith("<") -> Result.Table(readHtmlTable(text))
+                    start.startsWith("{") || start.startsWith("[") -> json(start)
+                    else -> Result.Text(text)
+                }
             }
         }
+    }
+
+    private fun json(text: String): Result = JsonExport.rows(text)?.let { Result.Table(it) }
+        ?: Result.Unsupported("Couldn't find any entries with a date and an amount in this file.")
+
+    /** An Excel workbook, or a backup that's a zip of JSON files. */
+    private fun zip(bytes: ByteArray): Result {
+        val names = runCatching {
+            ZipInputStream(ByteArrayInputStream(bytes)).use { z -> generateSequence { z.nextEntry }.map { it.name }.toList() }
+        }.getOrDefault(emptyList())
+        if (names.any { it.startsWith("xl/") }) {
+            return runCatching { Result.Table(readXlsx(bytes)) }
+                .getOrElse { Result.Unsupported("Couldn't read this Excel file. Try saving it again as .xlsx or .csv.") }
+        }
+        val jsons = mutableListOf<String>()
+        runCatching {
+            ZipInputStream(ByteArrayInputStream(bytes)).use { z ->
+                generateSequence { z.nextEntry }.forEach { e ->
+                    if (!e.isDirectory && e.name.endsWith(".json", ignoreCase = true)) jsons += decodeText(z.readBytes())
+                }
+            }
+        }
+        // The file with the most entries, if there are several.
+        val best = jsons.mapNotNull(JsonExport::rows).maxByOrNull { it.size }
+        return best?.let { Result.Table(it) } ?: Result.Unsupported("Couldn't find any entries in this zip file.")
     }
 
     private fun ByteArray.startsWith(vararg b: Int) = size >= b.size && b.indices.all { this[it] == b[it].toByte() }

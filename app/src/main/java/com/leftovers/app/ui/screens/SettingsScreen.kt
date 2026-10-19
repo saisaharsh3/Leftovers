@@ -643,11 +643,12 @@ fun SettingsScreen(
                             viewModel.export(context) { scope.launch { snackbar.showSnackbar("Nothing to export yet") } }
                         }
                         RowDivider()
-                        NavRow(Lucide.Download, "Import entries", "Statement (PDF, Excel, CSV) or another app") {
+                        NavRow(Lucide.Download, "Import entries", "Statement or another app's backup") {
                             openCsv.launch(
                                 arrayOf(
                                     "text/*", "application/csv", "application/vnd.ms-excel", "application/octet-stream",
                                     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "application/pdf",
+                                    "application/json", "application/zip",
                                 ),
                             )
                         }

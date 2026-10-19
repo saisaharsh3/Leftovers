@@ -5,6 +5,8 @@ All notable changes to Leftovers. Download any version from
 
 ## Unreleased
 
+- Import entries also reads other apps' JSON backups and exports, and backups that are a .zip of JSON. Entries keep
+  their category and account names, whichever app made the file; picking one under Restore offers its entries (#21)
 - Restoring a backup asks whether to keep what's in the app and add the backup's entries, or replace everything.
   Keeping adds only what isn't already here, into the categories, accounts and goals with the same names, and
   leaves your settings as they are

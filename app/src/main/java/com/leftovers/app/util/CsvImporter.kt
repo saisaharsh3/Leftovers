@@ -174,6 +174,13 @@ object CsvImporter {
     internal fun parseDate(raw: String, dayFirst: Boolean = true): LocalDate? {
         val t = raw.trim().trim('"').substringBefore('T').substringBefore(' ').takeIf { it.isNotEmpty() } ?: return null
         runCatching { return LocalDate.parse(t, isoDate) }
+        // Apps' JSON keeps time as milliseconds or seconds since 1970.
+        Regex("""^(\d{13}|\d{10})$""").find(t)?.value?.toLong()?.let { n ->
+            val ms = if (n > 99_999_999_999L) n else n * 1000
+            if (ms in 946_684_800_000L..4_102_444_800_000L) {
+                return java.time.Instant.ofEpochMilli(ms).atZone(java.time.ZoneId.systemDefault()).toLocalDate()
+            }
+        }
         // Spreadsheets keep dates as a day count from 30 December 1899 ("46312" is 17 Oct 2026).
         Regex("""^(\d{5})(\.\d+)?$""").find(t)?.groupValues?.get(1)?.toLong()?.takeIf { it in 20_000..80_000 }?.let {
             return LocalDate.of(1899, 12, 30).plusDays(it)
