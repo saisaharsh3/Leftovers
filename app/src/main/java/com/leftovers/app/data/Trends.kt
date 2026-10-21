@@ -47,9 +47,15 @@ fun spendingTrends(
         val days = (1..lastDay).map { month.atDay(it) }
         val weekend = days.filter { it.dayOfWeek == DayOfWeek.SATURDAY || it.dayOfWeek == DayOfWeek.SUNDAY }.toSet()
         val weekdays = days.size - weekend.size
-        if (weekend.isNotEmpty() && weekdays > 0) {
-            val perWeekend = current.filter { it.date in weekend }.sumOf { it.amountMinor }.toDouble() / weekend.size
-            val perWeekday = current.filter { it.date !in weekend }.sumOf { it.amountMinor }.toDouble() / weekdays
+        // A typical day of each kind (the middle one of the days with spending), not the average: one big bill
+        // like the rent would otherwise make weekdays look many times dearer than they are.
+        val byDay = current.groupBy { it.date }.mapValues { (_, list) -> list.sumOf { it.amountMinor }.toDouble() }
+        val weekendDays = byDay.filterKeys { it in weekend }.values.sorted()
+        val weekdayDays = byDay.filterKeys { it !in weekend && it.dayOfMonth <= lastDay }.values.sorted()
+        fun List<Double>.middle() = if (size % 2 == 1) this[size / 2] else (this[size / 2 - 1] + this[size / 2]) / 2
+        if (weekdays > 0 && weekendDays.size >= 2 && weekdayDays.size >= 3) {
+            val perWeekend = weekendDays.middle()
+            val perWeekday = weekdayDays.middle()
             if (perWeekday > 0 && perWeekend >= perWeekday * 1.5) {
                 trends += Trend("You spend %.1f× more per day on weekends".format(perWeekend / perWeekday), null)
             } else if (perWeekend > 0 && perWeekday >= perWeekend * 1.5) {

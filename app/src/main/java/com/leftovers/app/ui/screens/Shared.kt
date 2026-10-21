@@ -437,6 +437,11 @@ fun MorphCard(
     onReveal: () -> Unit = {},
     content: @Composable ColumnScope.(close: (then: () -> Unit) -> Unit) -> Unit) {
     val c = LocalAppColors.current
+    // While it's open the tab bar steps aside, so its bright add button doesn't glow through the blur.
+    androidx.compose.runtime.DisposableEffect(Unit) {
+        com.leftovers.app.ui.components.Overlays.open++
+        onDispose { com.leftovers.app.ui.components.Overlays.open-- }
+    }
     val blurs = rememberWindowBlur()
     val progress = remember { Animatable(0f) }
     val scope = rememberCoroutineScope()

@@ -164,13 +164,20 @@ fun DailyBars(values: List<Long>, highlight: Int?, modifier: Modifier = Modifier
         val labelH = 18.dp.toPx()
         val chartTop = tipH
         val chartH = size.height - labelH - chartTop
-        val max = (values.maxOrNull() ?: 0L).coerceAtLeast(1L).toFloat()
+        // One very big day (the rent) would flatten every other day to a sliver, so the scale stops at twice the
+        // next biggest day; a bar above that reaches the top with a small break near it, and touching it shows the
+        // real amount.
+        val sorted = values.sortedDescending()
+        val top = sorted.firstOrNull() ?: 0L
+        val next = sorted.getOrElse(1) { 0L }
+        val max = (if (next > 0 && top > next * 2) next * 2 else top).coerceAtLeast(1L).toFloat()
         val slot = size.width / values.size
-        val barW = (slot * 0.56f).coerceAtMost(10.dp.toPx())
+        val barW = (slot * 0.62f).coerceAtMost(12.dp.toPx())
         values.forEachIndexed { i, v ->
             // Bars rise left to right for a subtle wave.
             val local = ((progress.value * values.size * 1.6f) - i * 0.6f).coerceIn(0f, 1f)
-            val h = if (v > 0) (chartH * (v / max) * local).coerceAtLeast(barW) else 2.dp.toPx()
+            val cut = v > max
+            val h = if (v > 0) (chartH * (v.coerceAtMost(max.toLong()) / max) * local).coerceAtLeast(barW) else 2.dp.toPx()
             val x = slot * i + (slot - barW) / 2
             val focus = touched ?: highlight
             val active = focus == null || i == focus
@@ -184,6 +191,11 @@ fun DailyBars(values: List<Long>, highlight: Int?, modifier: Modifier = Modifier
                 )
             }
             drawRoundRect(brush, Offset(x, chartTop + chartH - h), Size(barW, h), CornerRadius(barW / 2, barW / 2))
+            if (cut && local >= 1f) {
+                // The break: a thin gap across the bar, a little below its top.
+                val y = chartTop + chartH - h + 8.dp.toPx()
+                drawRect(c.background, Offset(x - 1f, y), Size(barW + 2f, 2.5.dp.toPx()))
+            }
             val day = i + 1
             if (day == 1 || day % 5 == 0) {
                 val layout = measurer.measure(day.toString(), labelStyle)

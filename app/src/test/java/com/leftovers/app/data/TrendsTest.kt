@@ -35,4 +35,12 @@ class TrendsTest {
         // 25,000 over 10 days → 77,500 over 31 days.
         assertTrue(trends.any { it.startsWith("At this pace you'll spend about ₹775") })
     }
+
+    // One big weekday bill (the rent) doesn't make weekdays look many times dearer than weekends.
+    @Test fun oneBigBillDoesNotSkewWeekdays() {
+        val items = listOf(3, 4, 10, 11).map { tx(500, LocalDate.of(2026, 10, it)) } +
+            (5..9).map { tx(450, LocalDate.of(2026, 10, it)) } + tx(1_800_000, LocalDate.of(2026, 10, 12))
+        val trends = spendingTrends(items, oct, TxType.EXPENSE, fmt, today = LocalDate.of(2026, 10, 13)).map { it.text }
+        assertTrue(trends.none { it.startsWith("Weekdays cost you") || it.startsWith("You spend") })
+    }
 }

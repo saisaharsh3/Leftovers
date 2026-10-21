@@ -531,7 +531,8 @@ fun StatTile(
                 Text(label, style = MaterialTheme.typography.labelMedium, color = c.textSecondary, maxLines = 1)
             }
             Spacer(Modifier.height(10.dp))
-            Text(value, style = MaterialTheme.typography.titleLarge, color = c.textPrimary, maxLines = 1)
+            // Rolls to a new value digit by digit, like the big numbers, so a change is seen happening.
+            RollingText(value, MaterialTheme.typography.titleLarge, c.textPrimary)
             if (footnote != null) {
                 Spacer(Modifier.height(2.dp))
                 Text(footnote, style = MaterialTheme.typography.bodySmall, color = c.textTertiary, maxLines = 1, overflow = TextOverflow.Ellipsis)

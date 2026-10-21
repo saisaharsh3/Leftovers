@@ -1037,6 +1037,9 @@ private fun NavRow(icon: ImageVector, title: String, value: String?, onClick: ()
 @Composable
 private fun ToggleRow(icon: ImageVector, title: String, checked: Boolean, onChange: (Boolean) -> Unit, inset: Boolean = true) {
     val c = LocalAppColors.current
+    val view = androidx.compose.ui.platform.LocalView.current
+    // The switch's own click, felt on the same frame it flips.
+    val flip: (Boolean) -> Unit = { on -> com.leftovers.app.ui.components.Haptics.toggle(view, on); onChange(on) }
     ListRow(
         title,
         modifier = if (inset) Modifier else Modifier.padding(horizontal = (0).dp),
@@ -1044,7 +1047,7 @@ private fun ToggleRow(icon: ImageVector, title: String, checked: Boolean, onChan
         trailing = {
             Switch(
                 checked = checked,
-                onCheckedChange = onChange,
+                onCheckedChange = flip,
                 colors = SwitchDefaults.colors(
                     checkedTrackColor = c.accent,
                     checkedThumbColor = c.onAccent,
@@ -1054,7 +1057,7 @@ private fun ToggleRow(icon: ImageVector, title: String, checked: Boolean, onChan
                 ),
             )
         },
-        onClick = { onChange(!checked) },
+        onClick = { flip(!checked) },
     )
 }
 

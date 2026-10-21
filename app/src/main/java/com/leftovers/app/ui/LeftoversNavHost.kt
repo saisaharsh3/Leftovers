@@ -3,6 +3,18 @@ package com.leftovers.app.ui
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.runtime.rememberCoroutineScope
 import com.leftovers.app.ui.components.LocalUndo
+import com.leftovers.app.ui.components.DragToDismiss
+import com.leftovers.app.ui.components.Haptics
+import com.leftovers.app.ui.components.Overlays
+import com.leftovers.app.ui.components.rememberReduceMotion
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.PagerDefaults
+import androidx.compose.foundation.pager.PagerState
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.ui.platform.LocalView
+import kotlinx.coroutines.launch
 import com.leftovers.app.ui.components.UndoBar
 import com.leftovers.app.ui.components.UndoRequest
 import com.leftovers.app.ui.components.UndoState
@@ -101,6 +113,8 @@ import com.leftovers.app.ui.theme.LocalAppColors
 import kotlinx.coroutines.delay
 
 private object Routes {
+    /** The four tabs, side by side in one pager. */
+    const val TABS = "tabs"
     const val HOME = "home"
     const val ACTIVITY = "activity"
     const val INSIGHTS = "insights"
@@ -151,7 +165,7 @@ private val tabs = listOf(
 private val navTween = tween<IntOffset>(340, easing = FastOutSlowInEasing)
 
 private fun NavBackStackEntry.route() = destination.route.orEmpty()
-private fun NavBackStackEntry.isTab() = route() in Routes.tabs
+private fun NavBackStackEntry.isTab() = route() == Routes.TABS
 private fun NavBackStackEntry.isAdd() = route().startsWith("add") || route().startsWith("edit")
 private fun NavBackStackEntry.isSheet() = route().startsWith("recap")
 
@@ -183,7 +197,17 @@ fun LeftoversNavHost(openAdd: Boolean = false, onOpenAddHandled: () -> Unit = {}
     var activityRequest by remember { mutableStateOf<ActivityRequest?>(null) }
     val appScope = rememberCoroutineScope()
     val undo = remember { UndoState(appScope) }
-    val onTab = currentRoute in Routes.tabs
+    val onTab = currentRoute == Routes.TABS
+    // The tabs sit side by side: a swipe moves them with the finger and a flick carries on to the next one.
+    val pager = rememberPagerState(pageCount = { Routes.tabOrder.size })
+    val reduceMotion = rememberReduceMotion()
+    val view = LocalView.current
+    // Show a tab: back on the tabs first if another screen is open, then the pager moves there.
+    val showTab: (String) -> Unit = { route ->
+        val i = Routes.tabOrder.indexOf(route).coerceAtLeast(0)
+        if (nav.currentDestination?.route != Routes.TABS) nav.popBackStack(Routes.TABS, inclusive = false)
+        appScope.launch { if (reduceMotion) pager.scrollToPage(i) else pager.animateScrollToPage(i) }
+    }
 
     LaunchedEffect(toast) {
         if (toast != null) {
@@ -204,34 +228,13 @@ fun LeftoversNavHost(openAdd: Boolean = false, onOpenAddHandled: () -> Unit = {}
         }
     }
 
-    val swipeThreshold = with(LocalDensity.current) { 72.dp.toPx() }
-
     SharedTransitionLayout(Modifier.fillMaxSize()) {
         CompositionLocalProvider(LocalSharedTransitionScope provides this, LocalUndo provides undo) {
             Box(Modifier.fillMaxSize()) {
                 NavHost(
                     navController = nav,
-                    startDestination = Routes.HOME,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        // Swipe sideways on a tab to move to the next one. Anything inside that handles its own
-                        // sideways drag (swipeable rows, scrolling card rows, the chart) gets it first.
-                        .pointerInput(currentRoute) {
-                            val index = Routes.tabOrder.indexOf(currentRoute)
-                            if (index < 0) return@pointerInput
-                            var dx = 0f
-                            detectHorizontalDragGestures(
-                                onDragStart = { dx = 0f },
-                                onDragEnd = {
-                                    val next = when {
-                                        dx < -swipeThreshold -> index + 1
-                                        dx > swipeThreshold -> index - 1
-                                        else -> index
-                                    }
-                                    if (next != index && next in Routes.tabOrder.indices) nav.switchTab(Routes.tabOrder[next])
-                                },
-                            ) { _, amount -> dx += amount }
-                        },
+                    startDestination = Routes.TABS,
+                    modifier = Modifier.fillMaxSize(),
                     enterTransition = {
                         when {
                             // Add and edit slide up like a sheet: moving a finished layout is cheap and never stretches text.
@@ -269,7 +272,12 @@ fun LeftoversNavHost(openAdd: Boolean = false, onOpenAddHandled: () -> Unit = {}
                         }
                     },
                 ) {
-                    screen(Routes.HOME) {
+                    screen(Routes.TABS) {
+                        // Back from another tab goes to Home first, as it did when each tab was its own screen.
+                        BackHandler(enabled = pager.currentPage != 0) { showTab(Routes.HOME) }
+                        TabsPager(pager) { route ->
+                    when (route) {
+                    Routes.HOME -> {
                         HomeScreen(
                             onOpenBudget = { nav.navigate(Routes.BUDGET) },
                             onOpenActivity = { type, accountId ->
@@ -279,7 +287,7 @@ fun LeftoversNavHost(openAdd: Boolean = false, onOpenAddHandled: () -> Unit = {}
                                     null -> TypeFilter.ALL
                                 }
                                 activityRequest = ActivityRequest(filter, accountId)
-                                nav.switchTab(Routes.ACTIVITY)
+                                showTab(Routes.ACTIVITY)
                             },
                             onOpenSubscriptions = { income -> nav.navigate(Routes.subscriptions(income)) },
                             onOpenGoal = { nav.navigate(Routes.goal(it)) },
@@ -294,10 +302,7 @@ fun LeftoversNavHost(openAdd: Boolean = false, onOpenAddHandled: () -> Unit = {}
                             onOpenSubscription = { r -> nav.navigate(Routes.subscriptions(r.type == TxType.INCOME, r.id)) },
                         )
                     }
-                    screen(Routes.ASSISTANT, listOf(navArgument("ask") { type = NavType.StringType; defaultValue = "" })) { entry ->
-                        AssistantScreen(onBack = back, ask = entry.arguments?.getString("ask").orEmpty())
-                    }
-                    screen(Routes.ACTIVITY) {
+                    Routes.ACTIVITY -> {
                         HistoryScreen(
                             onOpenTransaction = { nav.navigate(Routes.edit(it)) },
                             onAddForDay = { nav.navigate(Routes.add(day = it.toEpochDay())) },
@@ -306,7 +311,7 @@ fun LeftoversNavHost(openAdd: Boolean = false, onOpenAddHandled: () -> Unit = {}
                             onRequestHandled = { activityRequest = null },
                         )
                     }
-                    screen(Routes.INSIGHTS) {
+                    Routes.INSIGHTS -> {
                         StatsScreen(
                             onOpenRecap = { nav.navigate(Routes.recap(it.toString())) },
                             onOpenYear = { nav.navigate(Routes.recap(it.toString())) },
@@ -314,7 +319,7 @@ fun LeftoversNavHost(openAdd: Boolean = false, onOpenAddHandled: () -> Unit = {}
                             onAskAi = { nav.navigate(Routes.assistant(it)) },
                         )
                     }
-                    screen(Routes.PLAN) {
+                    else -> {
                         PlanScreen(
                             onOpenBudget = { nav.navigate(Routes.BUDGET) },
                             onEditPlan = { nav.navigate(Routes.BUDGET_PLAN) },
@@ -324,6 +329,12 @@ fun LeftoversNavHost(openAdd: Boolean = false, onOpenAddHandled: () -> Unit = {}
                             onOpenCategories = { nav.navigate(Routes.CATEGORIES) },
                             onOpenDebts = { nav.navigate(Routes.DEBTS) },
                         )
+                    }
+                    }
+                        }
+                    }
+                    screen(Routes.ASSISTANT, listOf(navArgument("ask") { type = NavType.StringType; defaultValue = "" })) { entry ->
+                        AssistantScreen(onBack = back, ask = entry.arguments?.getString("ask").orEmpty())
                     }
                     screen(Routes.DEBTS) { DebtsScreen(onBack = back) }
                     screen(Routes.DELETED) { DeletedScreen(onBack = back) }
@@ -336,24 +347,30 @@ fun LeftoversNavHost(openAdd: Boolean = false, onOpenAddHandled: () -> Unit = {}
                             navArgument("sms") { type = NavType.LongType; defaultValue = -1L },
                         ),
                     ) {
-                        EditorScreen(
-                            onClose = back,
-                            onSaved = {
-                                toast = it
-                                back()
-                            },
-                            onManageCategories = { nav.navigate(Routes.CATEGORIES) },
-                        )
+                        DragToDismiss(onDismiss = back) {
+                            EditorScreen(
+                                onClose = back,
+                                onSaved = {
+                                    toast = it
+                                    Haptics.confirm(view)
+                                    back()
+                                },
+                                onManageCategories = { nav.navigate(Routes.CATEGORIES) },
+                            )
+                        }
                     }
                     screen(Routes.EDIT, idArg) {
-                        EditorScreen(
-                            onClose = back,
-                            onSaved = {
-                                toast = it
-                                back()
-                            },
-                            onManageCategories = { nav.navigate(Routes.CATEGORIES) },
-                        )
+                        DragToDismiss(onDismiss = back) {
+                            EditorScreen(
+                                onClose = back,
+                                onSaved = {
+                                    toast = it
+                                    Haptics.confirm(view)
+                                    back()
+                                },
+                                onManageCategories = { nav.navigate(Routes.CATEGORIES) },
+                            )
+                        }
                     }
                     screen(Routes.BUDGET) {
                         BudgetsScreen(
@@ -380,7 +397,7 @@ fun LeftoversNavHost(openAdd: Boolean = false, onOpenAddHandled: () -> Unit = {}
                     screen(Routes.GOALS) { GoalsScreen(onBack = back, onOpenGoal = { nav.navigate(Routes.goal(it)) }) }
                     screen(Routes.GOAL, idArg) { GoalDetailScreen(onBack = back) }
                     screen(Routes.ACCOUNTS) { AccountsScreen(onBack = back) }
-                    screen(Routes.RECAP, listOf(navArgument("month") { type = NavType.StringType })) { RecapScreen(onClose = back) }
+                    screen(Routes.RECAP, listOf(navArgument("month") { type = NavType.StringType })) { DragToDismiss(onDismiss = back) { RecapScreen(onClose = back) } }
                     screen(Routes.SETTINGS) {
                         SettingsScreen(
                             onBack = back,
@@ -392,16 +409,25 @@ fun LeftoversNavHost(openAdd: Boolean = false, onOpenAddHandled: () -> Unit = {}
                     screen(Routes.CATEGORIES) { CategoriesScreen(onBack = back) }
                 }
 
+                // Content fades out under the tab bar instead of being cut off beside it.
                 AnimatedVisibility(
-                    visible = currentRoute in Routes.tabs,
+                    visible = onTab,
+                    enter = fadeIn(tween(220)),
+                    exit = fadeOut(tween(160)),
+                    modifier = Modifier.align(Alignment.BottomCenter),
+                ) { DockFade() }
+
+                AnimatedVisibility(
+                    // A pop-up card blurs the screen behind it; the bright add button would glow through, so the bar steps aside.
+                    visible = onTab && Overlays.open == 0,
                     enter = slideInVertically(spring(dampingRatio = 0.8f, stiffness = Spring.StiffnessMediumLow)) { it * 2 } + fadeIn(),
                     exit = slideOutVertically(tween(220)) { it * 2 } + fadeOut(tween(160)),
                     modifier = Modifier.align(Alignment.BottomCenter),
                 ) {
                     CompositionLocalProvider(LocalNavAnimatedScope provides this) {
                         FloatingDock(
-                            current = currentRoute,
-                            onTab = { nav.switchTab(it) },
+                            current = Routes.tabOrder[pager.currentPage],
+                            onTab = { showTab(it) },
                             onAdd = { nav.navigate(Routes.add()) },
                         )
                     }
@@ -441,12 +467,35 @@ fun LeftoversNavHost(openAdd: Boolean = false, onOpenAddHandled: () -> Unit = {}
     }
 }
 
-private fun NavHostController.switchTab(route: String) {
-    navigate(route) {
-        popUpTo(graph.findStartDestination().id) { saveState = true }
-        launchSingleTop = true
-        restoreState = true
-    }
+/**
+ * The four tabs side by side. A swipe moves them with the finger, a flick carries on to the next tab from
+ * the speed it was thrown at, and they settle on a spring. Rows and charts that handle their own sideways drag
+ * (swipe to delete, scrolling card rows) get it first.
+ */
+@Composable
+private fun TabsPager(state: PagerState, content: @Composable (route: String) -> Unit) {
+    HorizontalPager(
+        state = state,
+        modifier = Modifier.fillMaxSize(),
+        key = { Routes.tabOrder[it] },
+        flingBehavior = PagerDefaults.flingBehavior(
+            state = state,
+            snapAnimationSpec = spring(dampingRatio = 1f, stiffness = 420f),
+        ),
+    ) { page -> content(Routes.tabOrder[page]) }
+}
+
+/** A soft fade at the bottom, behind the tab bar, so content scrolling under it dissolves instead of showing in pieces. */
+@Composable
+private fun DockFade() {
+    val c = LocalAppColors.current
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .background(Brush.verticalGradient(listOf(Color.Transparent, c.background.copy(alpha = 0.8f), c.background.copy(alpha = 0.96f))))
+            .navigationBarsPadding()
+            .height(104.dp),
+    )
 }
 
 /** Floating frosted tab bar with the add button in the middle; the active tab shows its name. */

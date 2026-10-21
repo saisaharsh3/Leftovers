@@ -9,14 +9,18 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -120,15 +124,28 @@ fun Glass(
 /** Click handling with a springy press-down scale instead of a ripple. */
 fun Modifier.pressable(onClick: () -> Unit, pressedScale: Float = 0.97f, enabled: Boolean = true): Modifier = composed {
     val interaction = remember { MutableInteractionSource() }
-    val pressed by interaction.collectIsPressedAsState()
+    // Watched straight from the touch, not from the click: inside a scrolling list a click only reports a press
+    // after a short wait, and the press should show the moment the finger lands. If the touch turns into a scroll,
+    // the list takes it and the press lets go.
+    var down by remember { mutableStateOf(false) }
     val scale by animateFloatAsState(
-        if (pressed) pressedScale else 1f,
-        spring(dampingRatio = 0.55f, stiffness = 700f),
+        if (down && enabled) pressedScale else 1f,
+        // In quickly; out settling without a wobble (a bounce belongs to a throw, not a tap).
+        if (down) spring(dampingRatio = 1f, stiffness = 1800f) else spring(dampingRatio = 0.86f, stiffness = 900f),
         label = "pressScale",
     )
     graphicsLayer {
         scaleX = scale
         scaleY = scale
+    }.pointerInput(enabled) {
+        if (!enabled) return@pointerInput
+        awaitEachGesture {
+            awaitFirstDown(requireUnconsumed = false)
+            down = true
+            // The final pass sees whether a scrolling parent took the touch.
+            waitForUpOrCancellation(PointerEventPass.Final)
+            down = false
+        }
     }.clickable(interactionSource = interaction, indication = null, enabled = enabled, onClick = onClick)
 }
 

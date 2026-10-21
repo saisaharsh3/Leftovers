@@ -112,6 +112,7 @@ fun DebtsScreen(onBack: () -> Unit, viewModel: DebtsViewModel = viewModel(factor
     val money = LocalMoney.current
     var editing by remember { mutableStateOf<Debt?>(null) }
     var settling by remember { mutableStateOf<String?>(null) }
+    val view = androidx.compose.ui.platform.LocalView.current
     val owedToYou = balances.filter { it.netMinor > 0 }.sumOf { it.netMinor }
     val youOwe = balances.filter { it.netMinor < 0 }.sumOf { -it.netMinor }
 
@@ -208,6 +209,7 @@ fun DebtsScreen(onBack: () -> Unit, viewModel: DebtsViewModel = viewModel(factor
     balances.firstOrNull { it.person.equals(settling, ignoreCase = true) }?.let { b ->
         SettleSheet(b, accounts, onDismiss = { settling = null }) { amount, account ->
             viewModel.settleUp(b.person, amount, account)
+            com.leftovers.app.ui.components.Haptics.confirm(view)
             settling = null
         }
     }

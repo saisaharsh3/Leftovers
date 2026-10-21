@@ -252,6 +252,7 @@ fun HomeScreen(
     var subscriptionFrom by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
     var editingDebt by remember { mutableStateOf<com.leftovers.app.data.Debt?>(null) }
     var settling by remember { mutableStateOf<String?>(null) }
+    val view = androidx.compose.ui.platform.LocalView.current
     var viewingSubscription by remember { mutableStateOf<Long?>(null) }
     val upcomingBounds = remember { mutableMapOf<Long, androidx.compose.ui.geometry.Rect>() }
     // Tapping the balance opens a card with every account, to switch which one Home shows.
@@ -466,6 +467,7 @@ fun HomeScreen(
     state.owed.firstOrNull { it.person.equals(settling, ignoreCase = true) }?.let { b ->
         SettleSheet(b, state.accounts, onDismiss = { settling = null }) { amount, account ->
             viewModel.settleUp(b.person, amount, account)
+            com.leftovers.app.ui.components.Haptics.confirm(view)
             settling = null
         }
     }
