@@ -64,6 +64,14 @@ android {
             versionNameSuffix = "-dev"
             matchingFallbacks += listOf("release")
         }
+        // A build of the test-ui branch for trying new motion and layout: optimized like Dev, but its own app
+        // ("Leftovers UI test", violet icon), so it installs next to the real app and Leftovers Dev.
+        create("uitest") {
+            initWith(getByName("release"))
+            applicationIdSuffix = ".uitest"
+            versionNameSuffix = "-uitest"
+            matchingFallbacks += listOf("release")
+        }
     }
 
     compileOptions {
@@ -106,6 +114,8 @@ android {
     sourceSets {
         // The Dev build shares the debug build's name and amber icon.
         getByName("dev").res.srcDir("src/debug/res")
+        // The UI test build has its own name and violet icon.
+        getByName("uitest").res.srcDir("src/uitest/res")
         getByName("debug").assets.srcDir("$projectDir/schemas")
     }
 }

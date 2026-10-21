@@ -1,0 +1,4 @@
+<resources>
+    <!-- The UI test build is violet, so it's never mistaken for the real app (lime) or Leftovers Dev (amber). -->
+    <color name="ic_launcher_background">#FF6C5CE7</color>
+</resources>

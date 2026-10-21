@@ -1,0 +1,4 @@
+<resources>
+    <!-- Installs next to the real app and Leftovers Dev, under its own name. -->
+    <string name="app_name">Leftovers UI test</string>
+</resources>
