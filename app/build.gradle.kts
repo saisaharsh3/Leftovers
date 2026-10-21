@@ -64,11 +64,12 @@ android {
             versionNameSuffix = "-dev"
             matchingFallbacks += listOf("release")
         }
-        // A build of the test-ui branch for trying new motion and layout: optimized like Dev, but its own app
-        // ("Leftovers UI test", violet icon), so it installs next to the real app and Leftovers Dev.
+        // A build of the test-ui branch for trying new motion and layout. It installs over Leftovers Dev (same
+        // app, same data, permissions, keys and connections) with its own name and violet icon, so it works exactly
+        // like the Dev build; installing the Dev build again puts the normal one back.
         create("uitest") {
             initWith(getByName("release"))
-            applicationIdSuffix = ".uitest"
+            applicationIdSuffix = ".dev"
             versionNameSuffix = "-uitest"
             matchingFallbacks += listOf("release")
         }
@@ -156,6 +157,9 @@ dependencies {
 
     implementation(libs.haze)
     implementation(libs.haze.blur)
+    // Liquid glass (refraction at the edges) for the tab bar, on Android 13 and newer. Apache-2.0.
+    implementation(libs.kyant.backdrop)
+    implementation(libs.kyant.shapes)
 
     implementation(libs.androidx.glance.appwidget)
     implementation(libs.androidx.glance.material3)

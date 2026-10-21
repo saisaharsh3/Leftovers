@@ -73,6 +73,11 @@ object Haptics {
     fun tick(view: View) = view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
 }
 
+/** How far through the tabs the pager is (0 = Home … 3 = Plan, fractions mid-swipe); the aurora drifts with it. */
+object AuroraShift {
+    var x by androidx.compose.runtime.mutableFloatStateOf(0f)
+}
+
 /** How many pop-up cards are open; the tab bar steps aside while any is, so it doesn't glow through the blur. */
 object Overlays {
     var open by mutableIntStateOf(0)

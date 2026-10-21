@@ -1,5 +1,10 @@
 package com.leftovers.app.ui.components
 
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.drawOutline
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.dropShadow
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
@@ -64,33 +69,53 @@ fun Modifier.frosted(colors: AppColors = LocalAppColors.current, fadeBottom: Boo
 )
 
 /**
- * Soft light behind every screen. It stays still: the frosted bars blur it, so animating it would
- * re-run that blur on every frame even when nothing else moves.
+ * Soft light behind every screen. It holds still, except while the tabs are swiped: then each patch of light
+ * drifts a fraction as far as the pages do, a different fraction each, so the glass cards read as floating
+ * above it. (Moving it re-runs the bars' blur, but only during a swipe, when the content moves anyway.)
  */
 @Composable
 fun AuroraBackground(modifier: Modifier = Modifier) {
     val c = LocalAppColors.current
+    // The shift is read while drawing, so a swipe redraws the light without recomposing anything.
+    Canvas(modifier.fillMaxSize()) { drawAurora(c, AuroraShift.x) }
+}
+
+/** Draws the aurora for [shift] (0 = Home … 3 = Plan); also used for the copy the liquid tab bar bends. */
+fun androidx.compose.ui.graphics.drawscope.DrawScope.drawAurora(c: AppColors, shift: Float) {
+    drawRect(c.background)
+    val w = size.width
+    val h = size.height
     val drift = 0.5f
-    Canvas(
-        modifier
-            .fillMaxSize()
-            .background(c.background),
-    ) {
-        val w = size.width
-        val h = size.height
-        fun blob(color: Color, x: Float, y: Float, radius: Float, alpha: Float) {
-            val center = Offset(x, y)
-            drawCircle(
-                brush = Brush.radialGradient(listOf(color.copy(alpha = alpha), Color.Transparent), center = center, radius = radius),
-                radius = radius,
-                center = center,
-            )
-        }
-        val strength = if (c.isDark) 1f else 2.1f
-        blob(c.auroraA, w * (0.1f + 0.3f * drift), h * (0.06f + 0.05f * drift), w * 1.0f, 0.42f * strength)
-        blob(c.auroraB, w * (1.0f - 0.25f * drift), h * (0.32f + 0.12f * drift), w * 0.85f, 0.24f * strength)
-        blob(c.auroraC, w * (0.2f + 0.35f * drift), h * (0.98f - 0.1f * drift), w * 0.8f, 0.14f * strength)
+    // Centred on the middle of the four tabs, so Home and Plan drift equally far either way.
+    val s = shift - 1.5f
+    fun blob(color: Color, x: Float, y: Float, radius: Float, alpha: Float, depth: Float) {
+        val center = Offset(x - s * w * depth, y)
+        drawCircle(
+            brush = Brush.radialGradient(listOf(color.copy(alpha = alpha), Color.Transparent), center = center, radius = radius),
+            radius = radius,
+            center = center,
+        )
     }
+    val strength = if (c.isDark) 1f else 2.1f
+    blob(c.auroraA, w * (0.1f + 0.3f * drift), h * (0.06f + 0.05f * drift), w * 1.0f, 0.42f * strength, 0.16f)
+    blob(c.auroraB, w * (1.0f - 0.25f * drift), h * (0.32f + 0.12f * drift), w * 0.85f, 0.24f * strength, 0.26f)
+    blob(c.auroraC, w * (0.2f + 0.35f * drift), h * (0.98f - 0.1f * drift), w * 0.8f, 0.14f * strength, 0.1f)
+}
+
+/** Fine grey grain, tiled over glass so dark gradients don't band and the surface reads as frosted. */
+private val grain: androidx.compose.ui.graphics.ImageBitmap by lazy {
+    val n = 96
+    val random = java.util.Random(7)
+    val pixels = IntArray(n * n) {
+        val v = random.nextInt(256)
+        (0xFF shl 24) or (v shl 16) or (v shl 8) or v
+    }
+    android.graphics.Bitmap.createBitmap(pixels, n, n, android.graphics.Bitmap.Config.ARGB_8888).asImageBitmap()
+}
+private val grainBrush by lazy {
+    androidx.compose.ui.graphics.ShaderBrush(
+        androidx.compose.ui.graphics.ImageShader(grain, androidx.compose.ui.graphics.TileMode.Repeated, androidx.compose.ui.graphics.TileMode.Repeated),
+    )
 }
 
 fun glassBorder(c: AppColors) = Brush.verticalGradient(listOf(c.borderTop, c.borderBottom))
@@ -111,18 +136,65 @@ fun Glass(
     content: @Composable BoxScope.() -> Unit,
 ) {
     val c = LocalAppColors.current
+    val fill = tint ?: if (strong) c.glassStrong else c.glass
+    // Glass effects on: real glass touches. Off (solid cards): the plain card it was.
+    val glassy = fill.alpha < 0.9f
+    // The glass brightens under the finger, as if light hit it, and dims back as it lets go.
+    var lit by remember { mutableStateOf(false) }
+    val light by animateFloatAsState(
+        if (lit) 1f else 0f,
+        if (lit) spring(dampingRatio = 1f, stiffness = 1600f) else spring(dampingRatio = 1f, stiffness = 380f),
+        label = "glassLight",
+    )
     Box(
         modifier
-            .then(if (onClick != null) Modifier.pressable(onClick) else Modifier)
+            .then(if (onClick != null) Modifier.pressable(onClick, onPressedChange = { lit = it }) else Modifier)
+            // Bigger, more important cards are thicker glass: a soft shadow lifts them off the background.
+            .then(
+                if (strong && glassy) Modifier.dropShadow(
+                    shape,
+                    androidx.compose.ui.graphics.shadow.Shadow(
+                        radius = 30.dp,
+                        offset = androidx.compose.ui.unit.DpOffset(0.dp, 12.dp),
+                        color = Color.Black.copy(alpha = if (c.isDark) 0.24f else 0.07f),
+                    ),
+                ) else Modifier,
+            )
             .clip(shape)
-            .background(glassFill(tint ?: if (strong) c.glassStrong else c.glass))
-            .border(1.dp, glassBorder(c), shape),
+            .background(glassFill(fill))
+            .then(
+                if (glassy) Modifier.drawBehind {
+                    drawRect(grainBrush, alpha = if (c.isDark) 0.035f else 0.03f)
+                    // A little shade gathers along the bottom, like the far edge of a pane.
+                    drawRect(Brush.verticalGradient(0.68f to Color.Transparent, 1f to Color.Black.copy(alpha = if (c.isDark) 0.14f else 0.035f)))
+                } else Modifier,
+            )
+            .border(1.dp, glassBorder(c), shape)
+            .then(
+                if (glassy) Modifier.drawWithContent {
+                    drawContent()
+                    // The rim: light catching the top edge, just inside it, fading down the sides.
+                    val outline = shape.createOutline(size, layoutDirection, this)
+                    drawOutline(
+                        outline,
+                        Brush.verticalGradient(0f to Color.White.copy(alpha = if (c.isDark) 0.22f else 0.9f), 0.2f to Color.Transparent, endY = size.height),
+                        style = androidx.compose.ui.graphics.drawscope.Stroke(2.dp.toPx()),
+                    )
+                    if (light > 0f) drawRect(Color.White.copy(alpha = (if (c.isDark) 0.06f else 0.2f) * light))
+                } else Modifier,
+            ),
         content = content,
     )
 }
 
 /** Click handling with a springy press-down scale instead of a ripple. */
-fun Modifier.pressable(onClick: () -> Unit, pressedScale: Float = 0.97f, enabled: Boolean = true): Modifier = composed {
+fun Modifier.pressable(
+    onClick: () -> Unit,
+    pressedScale: Float = 0.97f,
+    enabled: Boolean = true,
+    /** Told when the finger lands and lifts, for things that light up while pressed. */
+    onPressedChange: ((Boolean) -> Unit)? = null,
+): Modifier = composed {
     val interaction = remember { MutableInteractionSource() }
     // Watched straight from the touch, not from the click: inside a scrolling list a click only reports a press
     // after a short wait, and the press should show the moment the finger lands. If the touch turns into a scroll,
@@ -142,9 +214,11 @@ fun Modifier.pressable(onClick: () -> Unit, pressedScale: Float = 0.97f, enabled
         awaitEachGesture {
             awaitFirstDown(requireUnconsumed = false)
             down = true
+            onPressedChange?.invoke(true)
             // The final pass sees whether a scrolling parent took the touch.
             waitForUpOrCancellation(PointerEventPass.Final)
             down = false
+            onPressedChange?.invoke(false)
         }
     }.clickable(interactionSource = interaction, indication = null, enabled = enabled, onClick = onClick)
 }
