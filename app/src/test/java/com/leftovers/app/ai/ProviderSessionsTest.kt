@@ -251,6 +251,44 @@ class ProviderSessionsTest {
 
     // ---------- Errors and model lists ----------
 
+    // #22: a 403 isn't a wrong key, and the service's own reason is shown, from JSON or from an HTML error page.
+    @Test fun refusedRequestsSayWhy() = runBlocking {
+        reply("""{"error":{"message":"The model `openai/gpt-oss-120b` is blocked at the organization level."}}""", 403)
+        try {
+            chatSession(config(AiProvider.GROQ), "s", tools).sendUser("hi")
+            fail()
+        } catch (e: AiException) {
+            assertEquals("Not allowed: The model `openai/gpt-oss-120b` is blocked at the organization level.", e.message)
+        }
+        reply("<html><head><style>p{}</style></head><body><h1>Access denied</h1><p>Error 1020</p></body></html>", 403)
+        try {
+            chatSession(config(AiProvider.GROQ), "s", tools).sendUser("hi")
+            fail()
+        } catch (e: AiException) {
+            assertEquals("Not allowed: Access denied Error 1020", e.message)
+        }
+        reply("""{"error":{"message":"Invalid API Key"}}""", 401)
+        try {
+            chatSession(config(AiProvider.GROQ), "s", tools).sendUser("hi")
+            fail()
+        } catch (e: AiException) {
+            assertEquals("The API key was rejected: Invalid API Key. Check it in Settings → AI assistant.", e.message)
+        }
+    }
+
+    // The Settings test sends one short message without the tools, and some services reject an empty tools list.
+    @Test fun connectionTestSendsNoTools() = runBlocking {
+        reply("""{"choices":[{"message":{"content":"OK"},"finish_reason":"stop"}]}""")
+        testConnection(config(AiProvider.GROQ))
+        assertTrue(!sent.single().body!!.has("tools"))
+        reply("""{"content":[{"type":"text","text":"OK"}],"stop_reason":"end_turn"}""")
+        testConnection(config(AiProvider.CLAUDE))
+        assertTrue(!sent.last().body!!.has("tools"))
+        reply("""{"candidates":[{"content":{"parts":[{"text":"OK"}]},"finishReason":"STOP"}]}""")
+        testConnection(config(AiProvider.GEMINI))
+        assertTrue(!sent.last().body!!.has("tools"))
+    }
+
     @Test fun badKeyAndNoNetworkGiveClearMessages() = runBlocking {
         reply("""{"error":{"message":"invalid x-api-key"}}""", 401)
         try {

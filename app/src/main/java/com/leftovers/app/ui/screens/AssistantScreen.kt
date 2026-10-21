@@ -83,6 +83,7 @@ import com.leftovers.app.ai.ToolOutcome
 import com.leftovers.app.ai.chatSession
 import com.leftovers.app.ai.listModels
 import com.leftovers.app.ai.requireHttps
+import com.leftovers.app.ai.testConnection
 import com.leftovers.app.ui.AppViewModelProvider
 import com.leftovers.app.ui.components.Chip
 import com.leftovers.app.ui.components.Glass
@@ -746,6 +747,9 @@ fun AssistantSetupSheet(onDismiss: () -> Unit, viewModel: AssistantSetupViewMode
     var loaded by remember { mutableStateOf<List<String>>(emptyList()) }
     var loading by remember { mutableStateOf(false) }
     var loadError by remember { mutableStateOf<String?>(null) }
+    var testing by remember { mutableStateOf(false) }
+    // The last test's outcome: whether it worked, and what to say.
+    var tested by remember { mutableStateOf<Pair<Boolean, String>?>(null) }
     val scope = androidx.compose.runtime.rememberCoroutineScope()
     val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
 
@@ -762,6 +766,31 @@ fun AssistantSetupSheet(onDismiss: () -> Unit, viewModel: AssistantSetupViewMode
                         Text("Connected to ${current.provider.label}", style = MaterialTheme.typography.titleSmall, color = c.textPrimary)
                         Text(current.model, style = MaterialTheme.typography.bodySmall, color = c.textSecondary)
                         Spacer(Modifier.height(12.dp))
+                        // Sends one short message, so the key, the model and the network are checked together.
+                        SecondaryButton(if (testing) "Testing…" else "Test connection", {
+                            if (!testing) {
+                                testing = true
+                                tested = null
+                                scope.launch {
+                                    tested = try {
+                                        val ms = testConnection(current)
+                                        true to "Working. ${current.model} answered in ${String.format(java.util.Locale.ROOT, "%.1f", ms / 1000.0)} s."
+                                    } catch (e: CancellationException) {
+                                        throw e
+                                    } catch (e: Exception) {
+                                        // Already in that setting, so not "check it in Settings".
+                                        false to (e.message?.removeSuffix(" Check it in Settings → AI assistant.") ?: "The test failed.")
+                                    } finally {
+                                        testing = false
+                                    }
+                                }
+                            }
+                        }, Modifier.fillMaxWidth())
+                        tested?.let { (ok, text) ->
+                            Spacer(Modifier.height(8.dp))
+                            Text(text, style = MaterialTheme.typography.bodySmall, color = if (ok) c.positive else c.negative)
+                        }
+                        Spacer(Modifier.height(8.dp))
                         SecondaryButton("Disconnect and delete key", {
                             viewModel.settings.disconnect()
                             key = ""

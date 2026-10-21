@@ -93,8 +93,8 @@ private class ClaudeSession(private val config: AssistantConfig, private val sys
             .put("model", config.model)
             .put("max_tokens", 16000)
             .put("system", system)
-            .put("tools", toolsJson)
             .put("messages", messages)
+        if (toolsJson.length() > 0) body.put("tools", toolsJson)
         val headers = mutableMapOf("x-api-key" to config.apiKey, "anthropic-version" to "2023-06-01")
         val effort = if (config.thorough) "high" else "low"
         // Haiku takes neither effort nor fallbacks; the current Opus and Sonnet take both.
@@ -157,7 +157,8 @@ private class OpenAiSession(private val config: AssistantConfig, system: String,
     }
 
     private suspend fun call(): ModelTurn {
-        val body = JSONObject().put("model", config.model).put("messages", messages).put("tools", toolsJson)
+        val body = JSONObject().put("model", config.model).put("messages", messages)
+        if (toolsJson.length() > 0) body.put("tools", toolsJson)
         // Only OpenAI's own reasoning models take this; other compatible servers vary, so leave it off there.
         if (useReasoning && config.provider == AiProvider.OPENAI) body.put("reasoning_effort", if (config.thorough) "high" else "low")
         val res = try {
@@ -192,6 +193,7 @@ private class OpenAiSession(private val config: AssistantConfig, system: String,
 private class GeminiSession(private val config: AssistantConfig, private val system: String, tools: List<ToolSpec>) : ChatSession {
     private val contents = JSONArray()
     private var useThinkingLevel = !config.model.startsWith("gemini-2")
+    private val hasTools = tools.isNotEmpty()
     private val toolsJson = JSONArray().put(
         JSONObject().put("functionDeclarations", JSONArray(tools.map { t ->
             JSONObject().put("name", t.name).put("description", t.description).put("parameters", t.geminiSchema())
@@ -221,7 +223,7 @@ private class GeminiSession(private val config: AssistantConfig, private val sys
         val body = JSONObject()
             .put("systemInstruction", JSONObject().put("parts", JSONArray().put(JSONObject().put("text", system))))
             .put("contents", contents)
-            .put("tools", toolsJson)
+        if (hasTools) body.put("tools", toolsJson)
         if (useThinkingLevel) {
             body.put("generationConfig", JSONObject().put("thinkingConfig", JSONObject().put("thinkingLevel", if (config.thorough) "high" else "low")))
         }
@@ -282,6 +284,36 @@ private suspend fun postJson(
 
 private class RetryableException(message: String) : Exception(message)
 
+/**
+ * What a refused request means, with the service's own reason when it gave one. 401 is a key it doesn't accept;
+ * 403 is a key it accepts but won't let do this (a model your account or organisation can't use, or a network or
+ * region the service blocks), so it shouldn't be called a wrong key.
+ */
+private fun refusal(code: Int, detail: String?): String? = when (code) {
+    401 -> "The API key was rejected${detail?.let { ": $it" } ?: ""}. Check it in Settings → AI assistant."
+    403 -> detail?.let { "Not allowed: $it" }
+        ?: "The service refused this request (403). The key may not have access to this model, or the service may not be available on your network."
+    else -> null
+}
+
+/** A short readable reason from an error page that isn't JSON (some services answer with HTML or plain text). */
+private fun plainText(body: String): String? = body
+    .replace(Regex("""(?is)<(script|style)[^>]*>.*?</\1>"""), " ")
+    .replace(Regex("""<[^>]+>"""), " ")
+    .replace(Regex("""\s+"""), " ").trim()
+    .takeIf { it.isNotEmpty() && !it.startsWith("{") }
+    ?.take(160)
+
+/**
+ * One short message to the chosen model, the way a chat starts, so the key, the model and the network are all
+ * checked at once. Returns how long the answer took, in milliseconds; throws [AiException] with the reason if not.
+ */
+suspend fun testConnection(config: AssistantConfig): Long {
+    val start = System.nanoTime()
+    chatSession(config, "This is a connection test. Reply with the single word OK.", emptyList()).sendUser("Test")
+    return (System.nanoTime() - start) / 1_000_000
+}
+
 /** One HTTP exchange. Swapped for a fake in tests so every provider's format can be checked without keys. */
 fun interface HttpTransport {
     /** Throws [java.io.IOException] when the server can't be reached. */
@@ -324,8 +356,8 @@ private suspend fun getJson(url: String, headers: Map<String, String>): JSONObje
     }
     val json = runCatching { JSONObject(reply.body) }.getOrNull()
     if (reply.code !in 200..299) {
-        val detail = json?.optJSONObject("error")?.optString("message")?.takeIf { it.isNotBlank() }
-        throw AiException(if (reply.code == 401 || reply.code == 403) "The API key was rejected." else detail ?: "Couldn't load models (${reply.code})", reply.code)
+        val detail = json?.optJSONObject("error")?.optString("message")?.takeIf { it.isNotBlank() } ?: plainText(reply.body)
+        throw AiException(refusal(reply.code, detail) ?: detail ?: "Couldn't load models (${reply.code})", reply.code)
     }
     return json ?: throw AiException("Couldn't read the model list")
 }
@@ -344,12 +376,12 @@ private suspend fun postOnce(
     val code = reply.code
     val json = runCatching { JSONObject(reply.body) }.getOrNull()
     if (code !in 200..299) {
-        val detail = json?.let(errorMessage)?.takeIf { it.isNotBlank() }
+        val detail = json?.let(errorMessage)?.takeIf { it.isNotBlank() } ?: plainText(reply.body)
         if (code in 500..599) throw RetryableException(detail?.let { "The AI service is busy: $it" } ?: "The AI service is having trouble right now. Try again in a moment.")
         throw AiException(
             status = code,
             message = when (code) {
-                401, 403 -> "The API key was rejected. Check it in Settings → AI assistant."
+                401, 403 -> refusal(code, detail)!!
                 404 -> "Model not found${detail?.let { ": $it" } ?: ""}. Check the model name in Settings."
                 429 -> "Too many requests or out of credit${detail?.let { ": $it" } ?: ""}"
                 else -> detail ?: "Request failed ($code)"
