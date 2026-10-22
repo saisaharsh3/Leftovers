@@ -237,15 +237,21 @@ fun Modifier.pressable(
 /** Fades and lifts an item into place the first time it appears, staggered by [index]. */
 fun Modifier.appear(index: Int = 0): Modifier = composed {
     var shown by rememberSaveable { mutableStateOf(false) }
-    val progress by animateFloatAsState(
-        targetValue = if (shown) 1f else 0f,
-        animationSpec = tween(380, delayMillis = 30 * index.coerceIn(0, 8), easing = FastOutSlowInEasing),
-        label = "appear",
-    )
-    LaunchedEffect(Unit) { shown = true }
+    val progress = remember { androidx.compose.animation.core.Animatable(if (shown) 1f else 0f) }
+    LaunchedEffect(Unit) {
+        if (shown) return@LaunchedEffect
+        kotlinx.coroutines.delay(35L * index.coerceIn(0, 8))
+        // Rises on a spring that overshoots a touch, so each section lands rather than slides.
+        progress.animateTo(1f, spring(dampingRatio = 0.7f, stiffness = 240f))
+        shown = true
+    }
     // Starts half visible, not invisible: a tab opened for the first time never looks empty while it settles.
     graphicsLayer {
-        alpha = 0.5f + 0.5f * progress
-        translationY = (1f - progress) * 18.dp.toPx()
+        val p = progress.value
+        alpha = (0.5f + 0.5f * p).coerceIn(0f, 1f)
+        translationY = (1f - p) * 22.dp.toPx()
+        val k = 0.97f + 0.03f * p
+        scaleX = k
+        scaleY = k
     }
 }

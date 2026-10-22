@@ -565,9 +565,15 @@ fun HomeScreen(
                             .appear(2)
                             .trackScreenBounds { balanceBounds = it }
                             .graphicsLayer { alpha = if (balanceHidden) 0f else 1f },
-                        onClick = { balanceFrom = balanceBounds; balanceOpen = true; balanceHidden = true },
                     ) {
-                        Row(Modifier.padding(18.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Column {
+                        Row(
+                            Modifier
+                                .fillMaxWidth()
+                                .pressable({ balanceFrom = balanceBounds; balanceOpen = true; balanceHidden = true }, pressedScale = 0.98f)
+                                .padding(18.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
                             IconTile(Lucide.Wallet, c.textPrimary, size = 44.dp)
                             Spacer(Modifier.width(14.dp))
                             Column(Modifier.weight(1f)) {
@@ -592,6 +598,10 @@ fun HomeScreen(
                                 Spacer(Modifier.width(6.dp))
                             }
                             Icon(Lucide.ChevronRight, contentDescription = null, tint = c.textTertiary, modifier = Modifier.size(18.dp))
+                        }
+                        // The month's money out and in, under the balance it changes.
+                        Box(Modifier.padding(horizontal = 18.dp).fillMaxWidth().height(1.dp).background(c.borderTop.copy(alpha = c.borderTop.alpha * 0.6f)))
+                        MonthSplit(state, onOpenActivity)
                         }
                     }
                 }
@@ -638,7 +648,8 @@ fun HomeScreen(
                 }
             }
 
-            item {
+            // Without a balance to show, the month's money out and in keep their own row.
+            if (state.balance == null) item {
                 Row(
                     Modifier
                         .padding(top = 12.dp)
@@ -721,13 +732,46 @@ private fun greeting(): String = when (LocalTime.now().hour) {
     else -> "Good night"
 }
 
+/** Spent and income this month, side by side; each opens Activity filtered to it. */
+@Composable
+private fun MonthSplit(state: HomeUiState, onOpenActivity: (TxType?, Long?) -> Unit) {
+    val c = LocalAppColors.current
+    val money = LocalMoney.current
+    val wide = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp >= 400
+    // The rolling numbers can't be measured ahead, so the divider has a set height rather than matching the row.
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        SplitHalf(if (wide) "Spent this month" else "Spent", money.formatWhole(state.monthSpent), Lucide.ArrowUpRight, c.negative, Modifier.weight(1f)) {
+            onOpenActivity(TxType.EXPENSE, state.selectedAccount?.id)
+        }
+        Box(Modifier.width(1.dp).height(40.dp).background(c.borderTop.copy(alpha = c.borderTop.alpha * 0.6f)))
+        SplitHalf("Income", money.formatWhole(state.monthIncome), Lucide.ArrowDownLeft, c.positive, Modifier.weight(1f)) {
+            onOpenActivity(TxType.INCOME, state.selectedAccount?.id)
+        }
+    }
+}
+
+@Composable
+private fun SplitHalf(label: String, value: String, icon: androidx.compose.ui.graphics.vector.ImageVector, tint: androidx.compose.ui.graphics.Color, modifier: Modifier, onClick: () -> Unit) {
+    val c = LocalAppColors.current
+    Column(modifier.pressable(onClick, pressedScale = 0.96f).padding(horizontal = 18.dp, vertical = 14.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(16.dp))
+            Spacer(Modifier.width(6.dp))
+            Text(label, style = MaterialTheme.typography.labelMedium, color = c.textSecondary, maxLines = 1)
+        }
+        Spacer(Modifier.height(6.dp))
+        RollingText(value, MaterialTheme.typography.titleLarge, c.textPrimary)
+    }
+}
+
 @Composable
 private fun TodayCard(state: HomeUiState, onClick: () -> Unit, modifier: Modifier = Modifier) {
     val c = LocalAppColors.current
     val money = LocalMoney.current
     val budget = state.today
-    Glass(modifier.sharedContainer("budget").fillMaxWidth(), strong = true, shape = RoundedCornerShape(32.dp), onClick = onClick) {
-        Column(Modifier.padding(24.dp)) {
+    // The one number that matters most sits large on the light itself, not in a card, so nothing competes with it.
+    Box(modifier.sharedContainer("budget").fillMaxWidth().pressable(onClick, pressedScale = 0.98f)) {
+        Column(Modifier.padding(horizontal = 6.dp, vertical = 8.dp)) {
             val over = budget != null && budget.leftToday < 0
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
@@ -742,13 +786,13 @@ private fun TodayCard(state: HomeUiState, onClick: () -> Unit, modifier: Modifie
                 )
                 Icon(Lucide.ChevronRight, contentDescription = null, tint = c.textTertiary, modifier = Modifier.size(18.dp))
             }
-            Spacer(Modifier.height(6.dp))
+            Spacer(Modifier.height(2.dp))
             RollingText(
                 text = money.formatWhole(if (budget == null) state.spentToday else abs(budget.leftToday)),
-                style = MaterialTheme.typography.displayMedium,
+                style = MaterialTheme.typography.displayLarge,
                 color = if (over) c.negative else c.textPrimary,
             )
-            Spacer(Modifier.height(18.dp))
+            Spacer(Modifier.height(14.dp))
             if (budget != null) {
                 ProgressLine(budget.usedFraction)
                 Spacer(Modifier.height(10.dp))
