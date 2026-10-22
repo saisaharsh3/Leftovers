@@ -110,6 +110,7 @@ fun RoundButton(
         shape = CircleShape,
         tint = container,
         onClick = if (enabled) onClick else null,
+        control = true,
     ) {
         Icon(
             icon,
@@ -155,7 +156,7 @@ fun PrimaryButton(
 @Composable
 fun SecondaryButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier, icon: ImageVector? = null) {
     val c = LocalAppColors.current
-    Glass(modifier.height(56.dp), shape = CircleShape, strong = true, onClick = onClick) {
+    Glass(modifier.height(56.dp), shape = CircleShape, strong = true, onClick = onClick, control = true) {
         Row(Modifier.align(Alignment.Center), verticalAlignment = Alignment.CenterVertically) {
             if (icon != null) {
                 Icon(icon, contentDescription = null, tint = c.textPrimary, modifier = Modifier.size(20.dp))

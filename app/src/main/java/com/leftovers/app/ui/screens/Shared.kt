@@ -476,7 +476,7 @@ fun MorphCard(
         val radius = with(LocalDensity.current) { 24.dp.roundToPx() }
         LaunchedEffect(window) {
             if (window == null) {
-                progress.animateTo(1f, tween(400, easing = MorphGrow))
+                progress.animateTo(1f, spring(dampingRatio = 0.72f, stiffness = 260f))
                 return@LaunchedEffect
             }
             // The window fills the screen before anything moves, so the card's end place doesn't shift mid-way.
@@ -484,7 +484,7 @@ fun MorphCard(
             window.setWindowAnimations(0)
             window.setDimAmount(0f)
             repeat(2) { androidx.compose.runtime.withFrameNanos { } }
-            launch { progress.animateTo(1f, tween(400, easing = MorphGrow)) }
+            launch { progress.animateTo(1f, spring(dampingRatio = 0.72f, stiffness = 260f)) }
             // The blur starts with the card's first frame, so the screen never blurs with no card on it.
             snapshotFlow { progress.value }.first { it > 0f }
             if (blurs) window.addFlags(WindowManager.LayoutParams.FLAG_BLUR_BEHIND)

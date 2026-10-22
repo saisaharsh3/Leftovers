@@ -26,6 +26,7 @@ import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.ui.platform.LocalView
 import kotlinx.coroutines.launch
+import androidx.compose.ui.graphics.graphicsLayer
 import com.leftovers.app.ui.components.UndoBar
 import com.leftovers.app.ui.components.UndoRequest
 import com.leftovers.app.ui.components.UndoState
@@ -259,8 +260,9 @@ fun LeftoversNavHost(openAdd: Boolean = false, onOpenAddHandled: () -> Unit = {}
                     enterTransition = {
                         when {
                             // Add and edit slide up like a sheet: moving a finished layout is cheap and never stretches text.
-                            targetState.isAdd() -> slideInVertically(tween(320, easing = FastOutSlowInEasing)) { it / 5 } + fadeIn(tween(220))
-                            targetState.isSheet() -> slideInVertically(tween(420, easing = FastOutSlowInEasing)) { it } + fadeIn(tween(200))
+                            // Add and edit rise like a sheet and overshoot a touch before settling.
+                            targetState.isAdd() -> slideInVertically(spring(dampingRatio = 0.74f, stiffness = 340f)) { it / 3 } + fadeIn(tween(180))
+                            targetState.isSheet() -> slideInVertically(spring(dampingRatio = 0.8f, stiffness = 300f)) { it } + fadeIn(tween(200))
                             // Both tabs slide together and the new one fades in straight away, so there's never a blank
                             // moment. The old one fades out quicker, so the two barely show at once.
                             targetState.isTab() && initialState.isTab() ->
@@ -579,6 +581,16 @@ private fun DockItem(tab: Tab, selected: Boolean, compact: Boolean, onClick: () 
     val c = LocalAppColors.current
     val bg by animateColorAsState(if (selected) (if (c.isDark) Color.White.copy(alpha = 0.12f) else Color.Black.copy(alpha = 0.06f)) else Color.Transparent, label = "dockBg")
     val tint by animateColorAsState(if (selected) c.textPrimary else c.textTertiary, label = "dockTint")
+    // Chosen, the icon pops: a quick squash and a springy bounce back.
+    val pop = remember { androidx.compose.animation.core.Animatable(1f) }
+    var seen by remember { mutableStateOf(selected) }
+    LaunchedEffect(selected) {
+        if (selected && !seen) {
+            pop.snapTo(0.8f)
+            pop.animateTo(1f, spring(dampingRatio = 0.42f, stiffness = 520f))
+        }
+        seen = selected
+    }
     Row(
         Modifier
             .height(54.dp)
@@ -588,7 +600,7 @@ private fun DockItem(tab: Tab, selected: Boolean, compact: Boolean, onClick: () 
             .padding(horizontal = if (compact) 13.dp else 15.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(tab.icon, contentDescription = tab.label, tint = tint, modifier = Modifier.size(22.dp))
+        Icon(tab.icon, contentDescription = tab.label, tint = tint, modifier = Modifier.size(22.dp).graphicsLayer { scaleX = pop.value; scaleY = pop.value })
         AnimatedVisibility(
             visible = selected && !compact,
             enter = expandHorizontally(spring(dampingRatio = 0.8f, stiffness = Spring.StiffnessMediumLow)) + fadeIn(),

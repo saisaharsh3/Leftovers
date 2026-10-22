@@ -107,6 +107,7 @@ class MainActivity : FragmentActivity() {
                 val showLock = s.appLock && locked
                 // Liquid glass bends the aurora, so the aurora is recorded for it while it's drawn.
                 val auroraBackdrop = com.kyant.backdrop.backdrops.rememberLayerBackdrop()
+                val reduceMotion = com.leftovers.app.ui.components.rememberReduceMotion()
                 val liquid = s.glassEffects && s.liquidGlass && android.os.Build.VERSION.SDK_INT >= 33
                 LeftoversTheme(darkTheme = dark, dynamicColor = s.dynamicColor, glassEffects = s.glassEffects, pureBlack = s.pureBlack) {
                     CompositionLocalProvider(
@@ -117,6 +118,9 @@ class MainActivity : FragmentActivity() {
                             com.leftovers.app.data.TimeFormat.PHONE -> android.text.format.DateFormat.is24HourFormat(this@MainActivity)
                         },
                         LocalHazeState provides hazeState,
+                        // Lists and pagers bounce at their ends, like iOS (with animations off, the phone's own effect).
+                        androidx.compose.foundation.LocalOverscrollFactory provides
+                            if (reduceMotion) androidx.compose.foundation.LocalOverscrollFactory.current else com.leftovers.app.ui.components.BounceOverscrollFactory(),
                         com.leftovers.app.ui.components.LocalAuroraBackdrop provides if (liquid) auroraBackdrop else null,
                         LocalContentColor provides LocalAppColors.current.textPrimary,
                     ) {

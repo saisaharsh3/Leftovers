@@ -136,6 +136,8 @@ fun Glass(
     strong: Boolean = false,
     tint: Color? = null,
     onClick: (() -> Unit)? = null,
+    /** A control (button) rather than content: drawn as liquid glass when that's on. Cards stay frosted. */
+    control: Boolean = false,
     content: @Composable BoxScope.() -> Unit,
 ) {
     val c = LocalAppColors.current
@@ -143,7 +145,7 @@ fun Glass(
     // Glass effects on: real glass touches. Off (solid cards): the plain card it was.
     val glassy = fill.alpha < 0.9f
     // Liquid glass bends the light behind it and brings its own rim and shadow; otherwise the frosted touches below.
-    val liquid = glassy && liquidGlass()
+    val liquid = control && glassy && liquidGlass()
     // The glass brightens under the finger, as if light hit it, and dims back as it lets go.
     var lit by remember { mutableStateOf(false) }
     val light by animateFloatAsState(
@@ -156,7 +158,7 @@ fun Glass(
             .then(if (onClick != null) Modifier.pressable(onClick, onPressedChange = { lit = it }) else Modifier)
             // Bigger, more important cards are thicker glass: a soft shadow lifts them off the background.
             .then(
-                if (liquid) Modifier.liquid(shape, glassFillColor(fill), lift = strong)
+                if (liquid) Modifier.liquid(shape, glassFillColor(fill))
                 else if (strong && glassy) Modifier.dropShadow(
                     shape,
                     androidx.compose.ui.graphics.shadow.Shadow(
@@ -211,8 +213,8 @@ fun Modifier.pressable(
     var down by remember { mutableStateOf(false) }
     val scale by animateFloatAsState(
         if (down && enabled) pressedScale else 1f,
-        // In quickly; out settling without a wobble (a bounce belongs to a throw, not a tap).
-        if (down) spring(dampingRatio = 1f, stiffness = 1800f) else spring(dampingRatio = 0.86f, stiffness = 900f),
+        // In quickly; out with a small springy bounce.
+        if (down) spring(dampingRatio = 1f, stiffness = 1800f) else spring(dampingRatio = 0.6f, stiffness = 700f),
         label = "pressScale",
     )
     graphicsLayer {
