@@ -219,7 +219,7 @@ fun LeftoversNavHost(openAdd: Boolean = false, onOpenAddHandled: () -> Unit = {}
     }
     val colors = LocalAppColors.current
     // Liquid glass needs Android 13 (it bends the picture behind it with a GPU shader) and glass effects turned on.
-    val liquid = android.os.Build.VERSION.SDK_INT >= 33 && colors.glass.alpha < 0.9f
+    val liquid = com.leftovers.app.ui.components.liquidGlass()
     // What the liquid tab bar bends: the aurora and the screen above it, recorded apart from what's shown.
     val onDrawBackdrop = remember(colors) { { scope: androidx.compose.ui.graphics.drawscope.ContentDrawScope -> scope.drawAurora(colors, AuroraShift.x); scope.drawContent() } }
     val backdrop = rememberLayerBackdrop(onDraw = onDrawBackdrop)

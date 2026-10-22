@@ -120,6 +120,9 @@ private val grainBrush by lazy {
 
 fun glassBorder(c: AppColors) = Brush.verticalGradient(listOf(c.borderTop, c.borderBottom))
 
+/** The tint liquid glass lays over what it bends: a little lighter than a frosted card's, as the glass does the rest. */
+internal fun glassFillColor(fill: Color): Color = fill.copy(alpha = fill.alpha * 0.8f)
+
 /** A see-through fill catches light at the top, like a pane of glass, in both themes; solid fills stay flat. */
 internal fun glassFill(fill: Color): Brush =
     if (fill.alpha >= 0.9f) androidx.compose.ui.graphics.SolidColor(fill)
@@ -139,6 +142,8 @@ fun Glass(
     val fill = tint ?: if (strong) c.glassStrong else c.glass
     // Glass effects on: real glass touches. Off (solid cards): the plain card it was.
     val glassy = fill.alpha < 0.9f
+    // Liquid glass bends the light behind it and brings its own rim and shadow; otherwise the frosted touches below.
+    val liquid = glassy && liquidGlass()
     // The glass brightens under the finger, as if light hit it, and dims back as it lets go.
     var lit by remember { mutableStateOf(false) }
     val light by animateFloatAsState(
@@ -151,7 +156,8 @@ fun Glass(
             .then(if (onClick != null) Modifier.pressable(onClick, onPressedChange = { lit = it }) else Modifier)
             // Bigger, more important cards are thicker glass: a soft shadow lifts them off the background.
             .then(
-                if (strong && glassy) Modifier.dropShadow(
+                if (liquid) Modifier.liquid(shape, glassFillColor(fill), lift = strong)
+                else if (strong && glassy) Modifier.dropShadow(
                     shape,
                     androidx.compose.ui.graphics.shadow.Shadow(
                         radius = 30.dp,
@@ -161,17 +167,20 @@ fun Glass(
                 ) else Modifier,
             )
             .clip(shape)
-            .background(glassFill(fill))
+            .then(if (liquid) Modifier else Modifier.background(glassFill(fill)))
             .then(
-                if (glassy) Modifier.drawBehind {
+                if (glassy && !liquid) Modifier.drawBehind {
                     drawRect(grainBrush, alpha = if (c.isDark) 0.035f else 0.03f)
                     // A little shade gathers along the bottom, like the far edge of a pane.
                     drawRect(Brush.verticalGradient(0.68f to Color.Transparent, 1f to Color.Black.copy(alpha = if (c.isDark) 0.14f else 0.035f)))
                 } else Modifier,
             )
-            .border(1.dp, glassBorder(c), shape)
+            .then(if (liquid) Modifier else Modifier.border(1.dp, glassBorder(c), shape))
             .then(
-                if (glassy) Modifier.drawWithContent {
+                if (liquid) Modifier.drawWithContent {
+                    drawContent()
+                    if (light > 0f) drawRect(Color.White.copy(alpha = (if (c.isDark) 0.06f else 0.2f) * light))
+                } else if (glassy) Modifier.drawWithContent {
                     drawContent()
                     // The rim: light catching the top edge, just inside it, fading down the sides.
                     val outline = shape.createOutline(size, layoutDirection, this)

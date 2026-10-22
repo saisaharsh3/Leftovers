@@ -35,6 +35,7 @@ import androidx.lifecycle.lifecycleScope
 import com.leftovers.app.data.ThemeMode
 import com.leftovers.app.ui.LeftoversNavHost
 import com.leftovers.app.ui.components.AuroraBackground
+import com.kyant.backdrop.backdrops.layerBackdrop
 import com.leftovers.app.ui.components.LocalHazeState
 import com.leftovers.app.ui.screens.LockScreen
 import com.leftovers.app.ui.screens.WelcomeScreen
@@ -104,6 +105,9 @@ class MainActivity : FragmentActivity() {
                 val money = remember(s.currencyCode) { Money(s.currencyCode) }
                 val hazeState = rememberHazeState()
                 val showLock = s.appLock && locked
+                // Liquid glass bends the aurora, so the aurora is recorded for it while it's drawn.
+                val auroraBackdrop = com.kyant.backdrop.backdrops.rememberLayerBackdrop()
+                val liquid = s.glassEffects && s.liquidGlass && android.os.Build.VERSION.SDK_INT >= 33
                 LeftoversTheme(darkTheme = dark, dynamicColor = s.dynamicColor, glassEffects = s.glassEffects, pureBlack = s.pureBlack) {
                     CompositionLocalProvider(
                         LocalMoney provides money,
@@ -113,11 +117,16 @@ class MainActivity : FragmentActivity() {
                             com.leftovers.app.data.TimeFormat.PHONE -> android.text.format.DateFormat.is24HourFormat(this@MainActivity)
                         },
                         LocalHazeState provides hazeState,
+                        com.leftovers.app.ui.components.LocalAuroraBackdrop provides if (liquid) auroraBackdrop else null,
                         LocalContentColor provides LocalAppColors.current.textPrimary,
                     ) {
                         Box(Modifier.fillMaxSize()) {
                             // The aurora is a blur source so frosted bars pick up its colour.
-                            AuroraBackground(Modifier.hazeSource(hazeState, zIndex = 0f))
+                            AuroraBackground(
+                                Modifier
+                                    .hazeSource(hazeState, zIndex = 0f)
+                                    .then(if (liquid) Modifier.layerBackdrop(auroraBackdrop) else Modifier),
+                            )
                             when {
                                 !s.onboarded -> WelcomeScreen(defaultCurrency = s.currencyCode) { code ->
                                     scope.launch { container.settings.completeOnboarding(code) }

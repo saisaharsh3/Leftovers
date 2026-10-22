@@ -260,12 +260,14 @@ fun <T> SegmentedToggle(
     modifier: Modifier = Modifier,
 ) {
     val c = LocalAppColors.current
+    val liquid = liquidGlass() && c.glass.alpha < 0.9f
     BoxWithConstraints(
         modifier
             .height(44.dp)
-            .clip(CircleShape)
-            .background(c.glass)
-            .border(1.dp, glassBorder(c), CircleShape)
+            .then(
+                if (liquid) Modifier.liquid(CircleShape, c.glass, refraction = 10.dp)
+                else Modifier.clip(CircleShape).background(c.glass).border(1.dp, glassBorder(c), CircleShape),
+            )
             .padding(4.dp),
     ) {
         val segment = maxWidth / options.size
@@ -276,9 +278,11 @@ fun <T> SegmentedToggle(
                 .offset { IntOffset(offset.roundToPx(), 0) }
                 .width(segment)
                 .fillMaxHeight()
-                .clip(CircleShape)
-                .background(if (c.isDark) Color.White.copy(alpha = 0.14f) else Color.White)
-                .border(1.dp, glassBorder(c), CircleShape),
+                // Liquid: the thumb is a drop of glass that bends the light as it slides.
+                .then(
+                    if (liquid) Modifier.liquid(CircleShape, if (c.isDark) Color.White.copy(alpha = 0.12f) else Color.White.copy(alpha = 0.55f), refraction = 8.dp)
+                    else Modifier.clip(CircleShape).background(if (c.isDark) Color.White.copy(alpha = 0.14f) else Color.White).border(1.dp, glassBorder(c), CircleShape),
+                ),
         )
         Row(Modifier.fillMaxSize()) {
             options.forEach { option ->
@@ -311,15 +315,18 @@ fun Chip(
     selected: Boolean = false,
 ) {
     val c = LocalAppColors.current
-    val bg by animateColorAsState(if (selected) c.accent else c.glass, label = "chipBg")
+    val liquid = liquidGlass() && c.glass.alpha < 0.9f
+    // A selected chip is solid accent; others are glass (liquid, when it's on).
+    val bg by animateColorAsState(if (selected) c.accent else if (liquid) Color.Transparent else c.glass, label = "chipBg")
     val fg by animateColorAsState(if (selected) c.onAccent else c.textPrimary, label = "chipFg")
     Row(
         modifier
             .height(42.dp)
             .pressable(onClick, pressedScale = 0.95f)
+            .then(if (liquid && !selected) Modifier.liquid(CircleShape, c.glass, refraction = 9.dp) else Modifier)
             .clip(CircleShape)
             .background(bg)
-            .border(1.dp, if (selected) Brush.verticalGradient(listOf(Color.Transparent, Color.Transparent)) else glassBorder(c), CircleShape)
+            .border(1.dp, if (selected || liquid) Brush.verticalGradient(listOf(Color.Transparent, Color.Transparent)) else glassBorder(c), CircleShape)
             .padding(horizontal = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {

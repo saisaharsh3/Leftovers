@@ -132,6 +132,8 @@ private fun Key(
         label = "keyGlow",
     )
     val shape = RoundedCornerShape(22.dp)
+    // Plain keys are liquid glass when it's on; a pressed key glows through it. Coloured keys (Add) stay solid.
+    val liquid = fill == null && liquidGlass() && c.glass.alpha < 0.9f
     Box(
         modifier
             .height(height)
@@ -139,9 +141,10 @@ private fun Key(
                 scaleX = scale
                 scaleY = scale
             }
+            .then(if (liquid) Modifier.liquid(shape, glow, refraction = 12.dp) else Modifier)
             .clip(shape)
-            .background(if (fill != null && !pressed) fill else glow)
-            .then(if (bordered) Modifier.border(1.dp, glassBorder(c), shape) else Modifier)
+            .then(if (liquid) Modifier else Modifier.background(if (fill != null && !pressed) fill else glow))
+            .then(if (bordered && !liquid) Modifier.border(1.dp, glassBorder(c), shape) else Modifier)
             .combinedClickable(
                 interactionSource = interaction,
                 indication = null,

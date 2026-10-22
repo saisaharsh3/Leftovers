@@ -254,6 +254,10 @@ class SettingsViewModel(
         viewModelScope.launch { settingsRepository.setGlassEffects(enabled) }
     }
 
+    fun setLiquidGlass(enabled: Boolean) {
+        viewModelScope.launch { settingsRepository.setLiquidGlass(enabled) }
+    }
+
     fun setPureBlack(enabled: Boolean) {
         viewModelScope.launch { settingsRepository.setPureBlack(enabled) }
     }
@@ -508,6 +512,10 @@ fun SettingsScreen(
                         }
                         // Off: solid bars, cards, dialogs and sheets, with no blur (also a little easier on the battery).
                         ToggleRow(Lucide.Droplet, "Glass effects", s.glassEffects, viewModel::setGlassEffects, inset = false)
+                        // Bending glass needs Android 13's GPU effects; off keeps the frosted glass (lighter on older phones).
+                        if (s.glassEffects && Build.VERSION.SDK_INT >= 33) {
+                            ToggleRow(Lucide.Sparkles, "Liquid glass", s.liquidGlass, viewModel::setLiquidGlass, inset = false)
+                        }
                         // Only means something with the dark theme, so it's hidden when the app is always light.
                         if (s.themeMode != ThemeMode.LIGHT) {
                             ToggleRow(Lucide.Moon, "Pure black (AMOLED)", s.pureBlack, viewModel::setPureBlack, inset = false)
