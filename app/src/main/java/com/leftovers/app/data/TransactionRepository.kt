@@ -29,6 +29,9 @@ class TransactionRepository(
     /** New entries in bulk, like a CSV import. */
     suspend fun addTransactions(transactions: List<Transaction>) = transactionDao.upsertAll(transactions)
 
+    /** Takes an entry back at once, with no copy in Deleted entries: for undoing a mis-tap straight away. */
+    suspend fun removeTransaction(transaction: Transaction) = transactionDao.delete(transaction)
+
     /** Deletes an entry, keeping a copy in Deleted entries (with its receipt photo) so it can be restored. */
     suspend fun deleteTransaction(transaction: Transaction) {
         deletedDao.upsert(DeletedTransaction.from(transaction))

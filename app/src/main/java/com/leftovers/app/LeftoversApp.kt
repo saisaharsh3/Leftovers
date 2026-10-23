@@ -108,6 +108,7 @@ class AppContainer(private val context: Context) {
                     delay(600)
                     runCatching { SafeToSpendWidget().updateAll(context) }
                     runCatching { MonthBudgetWidget().updateAll(context) }
+                    runCatching { com.leftovers.app.widget.QuickAddWidget().updateAll(context) }
                 }
         }
         // Clear deleted entries older than the user's chosen keep period.
