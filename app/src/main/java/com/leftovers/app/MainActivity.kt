@@ -127,6 +127,34 @@ class MainActivity : FragmentActivity() {
                                     onOpenAddHandled = { openAddRequest = false },
                                 )
                             }
+                            // After a crash: offer to report it. Nothing leaves the phone unless the user sends it.
+                            var crash by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf(com.leftovers.app.util.CrashReports.pending(this@MainActivity)) }
+                            crash?.let { report ->
+                                val done = { com.leftovers.app.util.CrashReports.clear(this@MainActivity); crash = null }
+                                com.leftovers.app.ui.screens.GlassAlertDialog(
+                                    onDismissRequest = done,
+                                    title = { androidx.compose.material3.Text("Leftovers closed unexpectedly") },
+                                    text = {
+                                        androidx.compose.material3.Text(
+                                            "A short report would help fix it. It has the app and Android version, the phone model and the error, " +
+                                                "and nothing from your entries. You see it before anything is sent.",
+                                        )
+                                    },
+                                    confirmButton = {
+                                        androidx.compose.material3.TextButton(onClick = { com.leftovers.app.util.CrashReports.openIssue(this@MainActivity, report); done() }) {
+                                            androidx.compose.material3.Text("Report on GitHub")
+                                        }
+                                    },
+                                    dismissButton = {
+                                        androidx.compose.foundation.layout.Row {
+                                            androidx.compose.material3.TextButton(onClick = { com.leftovers.app.util.CrashReports.share(this@MainActivity, report); done() }) {
+                                                androidx.compose.material3.Text("Share")
+                                            }
+                                            androidx.compose.material3.TextButton(onClick = done) { androidx.compose.material3.Text("Not now") }
+                                        }
+                                    },
+                                )
+                            }
                             AnimatedVisibility(showLock, enter = fadeIn(), exit = fadeOut()) {
                                 val kind by container.passcode.kind.collectAsStateWithLifecycle()
                                 val code = kind

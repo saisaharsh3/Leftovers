@@ -1,0 +1,57 @@
+name: Reproducible build
+
+# F-Droid rebuilds every release from the source and ships the signed APK from GitHub only if its own build
+# matches it byte for byte (apart from the signature). This does the same check on a fresh machine after each
+# release, so a change that breaks it shows up here, before F-Droid tries. It can also be run by hand for any tag.
+on:
+  workflow_run:
+    workflows: [Release]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to check, like v1.8.0"
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  compare:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    env:
+      TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.event.workflow_run.head_branch }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ env.TAG }}
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 21
+
+      # No cache: a cold build, as F-Droid's is.
+      - uses: gradle/actions/setup-gradle@v6
+        with:
+          cache-disabled: true
+
+      - name: Build the release again, unsigned
+        run: ./gradlew assembleRelease --stacktrace
+
+      - name: Download the published APK
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release download "$TAG" -p "leftovers-$TAG.apk"
+
+      - name: Compare, the way F-Droid does
+        run: |
+          pipx install apksigcopier
+          export PATH="$PATH:$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)"
+          if apksigcopier compare --unsigned "leftovers-$TAG.apk" app/build/outputs/apk/release/app-release-unsigned.apk; then
+            echo "A clean rebuild of $TAG matches the released APK, so F-Droid's check will pass."
+          else
+            echo "::error::A clean rebuild of $TAG doesn't match the released APK, so F-Droid won't publish it. Compare the two APKs' contents to find what differs."
+            exit 1
+          fi

@@ -39,6 +39,8 @@ class LeftoversApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        // A crash leaves a short report the app offers to send next time; nothing is sent by itself.
+        com.leftovers.app.util.CrashReports.install(this)
         container = AppContainer(this)
         container.budgetAlerts.createChannel()
         Reminders.createChannel(this)
