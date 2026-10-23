@@ -3,8 +3,19 @@
 All notable changes to Leftovers. Download any version from
 [Releases](https://github.com/saisaharsh3/Leftovers/releases).
 
-## Unreleased
+## 1.8.0
 
+- The tab bar is liquid glass on Android 13 and newer: what's behind it bends at its rounded edges, with a bright
+  rim. With Glass effects off, or on older phones, it's the frosted bar as before
+- Importing another app's backup keeps each entry's title and description (joined into its note) and its tags (as
+  #tags), and makes any category it had that Leftovers doesn't, with a fitting icon, instead of putting the entries
+  under Other. The import screen says which categories are new and shows the spending and income totals before
+  anything is added (#21)
+- Ivy Wallet backups import their transactions even when most of them are planned payments (#21)
+- The AI assistant says why a request was refused, in the service's own words, and tells a wrong key apart from a
+  key that isn't allowed to do something. Settings → AI assistant has a Test connection button that sends one
+  short message and says whether it worked (#22)
+- Settings rows always show their title in full; a long value beside it shortens itself instead
 - Import entries also reads other apps' JSON backups and exports, and backups that are a .zip of JSON. Entries keep
   their category and account names, whichever app made the file; picking one under Restore offers its entries (#21)
 - Restoring a backup asks whether to keep what's in the app and add the backup's entries, or replace everything.

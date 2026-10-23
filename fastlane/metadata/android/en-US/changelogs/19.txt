@@ -1,0 +1,7 @@
+- Import bank statements as PDF, Excel, CSV or HTML, and other apps' backups (JSON or .zip), with their notes, tags and categories
+- Pay back part of what you owe or are owed; lent and borrowed money moves your account balance
+- Savings goals can have a shop link to check the price
+- Restore can keep your data and add a backup's entries
+- Tap entries, balances and subscriptions for a quick card
+- More Indian banks recognised
+- Liquid glass tab bar on Android 13+

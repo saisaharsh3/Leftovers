@@ -23,8 +23,8 @@ android {
         applicationId = "com.leftovers.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 18
-        versionName = "1.7.1"
+        versionCode = 19
+        versionName = "1.8.0"
     }
 
     signingConfigs {
@@ -146,6 +146,9 @@ dependencies {
 
     implementation(libs.haze)
     implementation(libs.haze.blur)
+    // Liquid glass (the picture behind bends at the edges) for the tab bar, on Android 13 and newer. Apache-2.0.
+    implementation(libs.kyant.backdrop)
+    implementation(libs.kyant.shapes)
 
     implementation(libs.androidx.glance.appwidget)
     implementation(libs.androidx.glance.material3)

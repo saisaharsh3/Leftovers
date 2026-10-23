@@ -3,6 +3,15 @@ package com.leftovers.app.ui
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.runtime.rememberCoroutineScope
 import com.leftovers.app.ui.components.LocalUndo
+import com.leftovers.app.ui.components.drawAurora
+import com.kyant.backdrop.backdrops.LayerBackdrop
+import com.kyant.backdrop.backdrops.layerBackdrop
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
+import com.kyant.backdrop.drawBackdrop
+import com.kyant.backdrop.effects.blur
+import com.kyant.backdrop.effects.lens
+import com.kyant.backdrop.effects.vibrancy
+import com.kyant.shapes.Capsule
 import com.leftovers.app.ui.components.UndoBar
 import com.leftovers.app.ui.components.UndoRequest
 import com.leftovers.app.ui.components.UndoState
@@ -184,6 +193,13 @@ fun LeftoversNavHost(openAdd: Boolean = false, onOpenAddHandled: () -> Unit = {}
     val appScope = rememberCoroutineScope()
     val undo = remember { UndoState(appScope) }
     val onTab = currentRoute in Routes.tabs
+    val colors = LocalAppColors.current
+    // The tab bar is liquid glass on Android 13 and newer (it bends the picture behind it with a GPU shader),
+    // while glass effects are on; otherwise it's the frosted bar.
+    val liquid = android.os.Build.VERSION.SDK_INT >= 33 && colors.glass.alpha < 0.9f
+    // What the tab bar bends: the aurora and the screen above it, recorded apart from what's shown.
+    val onDrawBackdrop = remember(colors) { { scope: androidx.compose.ui.graphics.drawscope.ContentDrawScope -> scope.drawAurora(colors); scope.drawContent() } }
+    val backdrop = rememberLayerBackdrop(onDraw = onDrawBackdrop)
 
     LaunchedEffect(toast) {
         if (toast != null) {
@@ -214,6 +230,7 @@ fun LeftoversNavHost(openAdd: Boolean = false, onOpenAddHandled: () -> Unit = {}
                     startDestination = Routes.HOME,
                     modifier = Modifier
                         .fillMaxSize()
+                        .then(if (liquid) Modifier.layerBackdrop(backdrop) else Modifier)
                         // Swipe sideways on a tab to move to the next one. Anything inside that handles its own
                         // sideways drag (swipeable rows, scrolling card rows, the chart) gets it first.
                         .pointerInput(currentRoute) {
@@ -400,6 +417,7 @@ fun LeftoversNavHost(openAdd: Boolean = false, onOpenAddHandled: () -> Unit = {}
                 ) {
                     CompositionLocalProvider(LocalNavAnimatedScope provides this) {
                         FloatingDock(
+                            backdrop = if (liquid) backdrop else null,
                             current = currentRoute,
                             onTab = { nav.switchTab(it) },
                             onAdd = { nav.navigate(Routes.add()) },
@@ -451,7 +469,7 @@ private fun NavHostController.switchTab(route: String) {
 
 /** Floating frosted tab bar with the add button in the middle; the active tab shows its name. */
 @Composable
-private fun FloatingDock(current: String?, onTab: (String) -> Unit, onAdd: () -> Unit) {
+private fun FloatingDock(backdrop: LayerBackdrop?, current: String?, onTab: (String) -> Unit, onAdd: () -> Unit) {
     val c = LocalAppColors.current
     // On narrow phones the selected tab's name is dropped and items sit closer, so every tab fits.
     val compact = LocalConfiguration.current.screenWidthDp < 400
@@ -459,12 +477,30 @@ private fun FloatingDock(current: String?, onTab: (String) -> Unit, onAdd: () ->
         Modifier
             .navigationBarsPadding()
             .padding(bottom = 14.dp)
-            .clip(CircleShape)
-            // Light mode: a lighter tint than the headers, so the bar is glass like the cards, not milky white.
-            .frosted(if (c.isDark) c else c.copy(barTint = Color.White.copy(alpha = 0.18f)))
-            // A soft top-lit sheen, so the bar reads as glass in both themes.
-            .background(Brush.verticalGradient(listOf(c.glassStrong, c.glass.copy(alpha = c.glass.alpha * 0.4f))))
-            .border(1.dp, glassBorder(c), CircleShape)
+            .then(
+                if (backdrop != null) {
+                    // Liquid glass: what's behind bends at the bar's rounded edges, a little colour splits at the
+                    // rim, and a bright edge catches the light.
+                    Modifier.drawBackdrop(
+                        backdrop = backdrop,
+                        shape = { Capsule() },
+                        effects = {
+                            vibrancy()
+                            blur(6.dp.toPx())
+                            lens(18.dp.toPx(), 36.dp.toPx(), chromaticAberration = true)
+                        },
+                        onDrawSurface = { drawRect(if (c.isDark) Color(0xFF0E0E13).copy(alpha = 0.28f) else Color.White.copy(alpha = 0.32f)) },
+                    )
+                } else {
+                    Modifier
+                        .clip(CircleShape)
+                        // Light mode: a lighter tint than the headers, so the bar is glass like the cards, not milky white.
+                        .frosted(if (c.isDark) c else c.copy(barTint = Color.White.copy(alpha = 0.18f)))
+                        // A soft top-lit sheen, so the bar reads as glass in both themes.
+                        .background(Brush.verticalGradient(listOf(c.glassStrong, c.glass.copy(alpha = c.glass.alpha * 0.4f))))
+                        .border(1.dp, glassBorder(c), CircleShape)
+                },
+            )
             .padding(6.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(2.dp),

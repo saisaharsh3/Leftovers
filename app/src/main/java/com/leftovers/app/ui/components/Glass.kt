@@ -66,27 +66,27 @@ fun Modifier.frosted(colors: AppColors = LocalAppColors.current, fadeBottom: Boo
 @Composable
 fun AuroraBackground(modifier: Modifier = Modifier) {
     val c = LocalAppColors.current
+    Canvas(modifier.fillMaxSize()) { drawAurora(c) }
+}
+
+/** Draws the aurora; also used for the copy of the screen the liquid tab bar bends. */
+fun androidx.compose.ui.graphics.drawscope.DrawScope.drawAurora(c: AppColors) {
+    drawRect(c.background)
+    val w = size.width
+    val h = size.height
     val drift = 0.5f
-    Canvas(
-        modifier
-            .fillMaxSize()
-            .background(c.background),
-    ) {
-        val w = size.width
-        val h = size.height
-        fun blob(color: Color, x: Float, y: Float, radius: Float, alpha: Float) {
-            val center = Offset(x, y)
-            drawCircle(
-                brush = Brush.radialGradient(listOf(color.copy(alpha = alpha), Color.Transparent), center = center, radius = radius),
-                radius = radius,
-                center = center,
-            )
-        }
-        val strength = if (c.isDark) 1f else 2.1f
-        blob(c.auroraA, w * (0.1f + 0.3f * drift), h * (0.06f + 0.05f * drift), w * 1.0f, 0.42f * strength)
-        blob(c.auroraB, w * (1.0f - 0.25f * drift), h * (0.32f + 0.12f * drift), w * 0.85f, 0.24f * strength)
-        blob(c.auroraC, w * (0.2f + 0.35f * drift), h * (0.98f - 0.1f * drift), w * 0.8f, 0.14f * strength)
+    fun blob(color: Color, x: Float, y: Float, radius: Float, alpha: Float) {
+        val center = Offset(x, y)
+        drawCircle(
+            brush = Brush.radialGradient(listOf(color.copy(alpha = alpha), Color.Transparent), center = center, radius = radius),
+            radius = radius,
+            center = center,
+        )
     }
+    val strength = if (c.isDark) 1f else 2.1f
+    blob(c.auroraA, w * (0.1f + 0.3f * drift), h * (0.06f + 0.05f * drift), w * 1.0f, 0.42f * strength)
+    blob(c.auroraB, w * (1.0f - 0.25f * drift), h * (0.32f + 0.12f * drift), w * 0.85f, 0.24f * strength)
+    blob(c.auroraC, w * (0.2f + 0.35f * drift), h * (0.98f - 0.1f * drift), w * 0.8f, 0.14f * strength)
 }
 
 fun glassBorder(c: AppColors) = Brush.verticalGradient(listOf(c.borderTop, c.borderBottom))

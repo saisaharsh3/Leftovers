@@ -18,6 +18,7 @@ today, plan for the things you want, and ask an AI about your money if you'd lik
 
 ![Activity calendar, lent or borrowed, Money owed and the AI assistant](https://raw.githubusercontent.com/saisaharsh3/Leftovers/main/docs/screenshots/row2.png)
 
+<a href="https://f-droid.org/packages/com.leftovers.app/"><img src="https://fdroid.gitlab.io/artwork/badge/get-it-on.png" height="60" alt="Get it on F-Droid"></a>&nbsp;
 <a href="https://github.com/saisaharsh3/Leftovers/releases/latest"><img src="https://raw.githubusercontent.com/saisaharsh3/Leftovers/main/docs/badge-download.png" height="40" alt="Download the APK"></a>&nbsp;
 <a href="https://apps.obtainium.imranr.dev/redirect?r=obtainium://add/https://github.com/saisaharsh3/Leftovers"><img src="https://raw.githubusercontent.com/saisaharsh3/Leftovers/main/docs/badge-obtainium.png" height="40" alt="Get it on Obtainium"></a>
 
@@ -171,6 +172,12 @@ What you send is handled under the chosen provider's privacy policy (DeepSeek st
 OpenRouter passes requests on to the model's own provider).
 
 ## Install
+
+**F-Droid:** Leftovers is [on F-Droid](https://f-droid.org/packages/com.leftovers.app/). Install it from the F-Droid
+app and updates arrive there. F-Droid ships the same signed APK as the GitHub releases, so you can switch between
+the two without losing data.
+
+**From GitHub:**
 
 1. Open the [latest release](https://github.com/saisaharsh3/Leftovers/releases/latest) on your phone and download `leftovers-<version>.apk`.
 2. Open the file. If Android asks, allow your browser or file manager to **install unknown apps**.
