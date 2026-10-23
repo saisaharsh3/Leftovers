@@ -461,6 +461,13 @@ fun HomeScreen(
                         // One entry opens right here; several are easier to see on Money owed.
                         close { if (b.entries.size == 1) editingDebt = b.entries[0] else onOpenDebts() }
                     }, Modifier.weight(1f))
+                    // Someone who owes you can be reminded, in a message you send from WhatsApp, SMS or any app.
+                    if (b.netMinor > 0) {
+                        val context = androidx.compose.ui.platform.LocalContext.current
+                        RoundButton(Lucide.Bell, "Remind ${b.person}", {
+                            com.leftovers.app.util.DebtReminder.share(context, com.leftovers.app.util.DebtReminder.message(b, money::format), b.person)
+                        }, size = 56.dp)
+                    }
                     PrimaryButton("Pay back", { close { settling = b.person } }, Modifier.weight(1.4f), icon = Lucide.Check)
                 }
             }

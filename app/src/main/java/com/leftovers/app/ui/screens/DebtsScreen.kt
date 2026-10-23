@@ -175,6 +175,12 @@ fun DebtsScreen(onBack: () -> Unit, viewModel: DebtsViewModel = viewModel(factor
                                     color = if (b.netMinor > 0) c.positive else c.textSecondary,
                                 )
                             }
+                            // Someone who owes you can be reminded, in a message you send from WhatsApp, SMS or any app.
+                            if (b.netMinor > 0) {
+                                val context = androidx.compose.ui.platform.LocalContext.current
+                                Chip("Remind", { com.leftovers.app.util.DebtReminder.share(context, com.leftovers.app.util.DebtReminder.message(b, money::format), b.person) }, icon = Lucide.Bell)
+                                Spacer(Modifier.padding(start = 8.dp))
+                            }
                             Chip("Pay back", { settling = b.person }, icon = Lucide.Check)
                         }
                         b.entries.forEach { d ->
