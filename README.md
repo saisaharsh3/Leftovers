@@ -8,6 +8,8 @@
 A fast, private expense tracker for Android. Log a spend in two taps, see what's safe to spend
 today, plan for the things you want, and ask an AI about your money if you'd like to.
 
+**[saisaharsh3.github.io/Leftovers](https://saisaharsh3.github.io/Leftovers/)**
+
 [![Build](https://github.com/saisaharsh3/Leftovers/actions/workflows/build.yml/badge.svg)](https://github.com/saisaharsh3/Leftovers/actions/workflows/build.yml)
 [![Download](https://img.shields.io/badge/Download-latest%20APK-CDF46F?logo=android&logoColor=black)](https://github.com/saisaharsh3/Leftovers/releases/latest)
 ![Android 8.0+](https://img.shields.io/badge/Android-8.0%2B-3DDC84?logo=android&logoColor=white)
@@ -46,12 +48,14 @@ Most budget apps want an account, show ads, or send your spending to a server. L
 - Add forgotten spending for any past day from a date strip or calendar
 - Split one bill across several categories
 - Monthly or yearly statement as a PDF, made on the phone
-- Detects payments from FamApp, Google Pay, PhonePe, Paytm, BHIM and CRED notifications (optional)
+- Detects payments from FamApp, Google Pay, PhonePe, Paytm, BHIM and CRED notifications, or any app you choose,
+  including your bank's own app, each into the account you pick (optional)
 - Split a bill with friends, equally or by amount: your share is your expense, and what each person owes goes to Money owed
 - Spending abroad? Log it in the local currency at your own rate; the original amount stays visible
 - Search every entry by note, category or amount; filter by account, category or #tag
 - Add #tags to notes (*"Dinner #goa"*) to group entries across categories and months, with a total
-- Tap an entry to edit or delete it. Deleted entries can be restored later from Settings
+- Tap an entry, the balance or a subscription for a quick card that grows out of it: the details, with Edit,
+  Delete (with Undo), Pause or switching account right there. Deleted entries can be restored later from Settings
 
 **Budgets that make sense day to day**
 - Monthly budget, or a yearly one split evenly, by smart rollover, or custom per month
@@ -65,12 +69,14 @@ Most budget apps want an account, show ads, or send your spending to a server. L
   day, with a reminder the morning before a bill; longer cycles count as their monthly share in totals
 - Skip a single payment without stopping the subscription
 - Spots repeating expenses that look like a subscription and offers to add them
-- Savings goals that say how much to put aside each month and whether you're on track
+- Savings goals that say how much to put aside each month and whether you're on track. Add a shop link (Amazon,
+  Flipkart or any shop) and **Check price** reads its current price when you tap it, to compare with your target
 - Accounts (cash, bank, UPI, cards) with live balances, transfers, a breakdown of how each balance adds up,
   and a one-step move of every entry to another account (with undo)
 - Total balance across accounts on Home, with where it's heading by the end of the month; switch it to one
   account (like a wallet) to see just that account's balance, spending and income
-- Money owed: what you lent or borrowed and from whom, settled with a tap and kept out of your budget
+- Money owed: what you lent or borrowed and from whom, kept out of your budget. It moves the account the money
+  went from or into while it's open, and can be paid back in full or a bit at a time
 
 **Insights**
 - Daily bar chart you can touch to read any day
@@ -87,12 +93,16 @@ Most budget apps want an account, show ads, or send your spending to a server. L
 - On the add screen, attach a bill photo and tap **Fill in from this photo**: amount, date, category and note are filled in for you to check
 - **Ask AI about this month** on Insights: what changed against last month and your budget, and what to do about it
 - Knows about Money owed and tags too: *"Who owes me money?"*, *"I lent Arjun 500"*, *"How much did #goa cost?"*
+- **Test connection** in its settings checks your key and model, and any refusal says why, in the service's words
 - Every change it proposes waits for you to tap **Apply**. See [AI assistant](#ai-assistant) below.
 
 **Extras**
 - Home-screen widgets: *Safe to spend today* (with one-tap add) and *Left this month*, plus an *Add expense* Quick Settings tile
 - Evening reminder, app lock with the phone's lock (fingerprint, face, screen lock) or its own PIN or password, locking as soon as you leave or after 30 s or 5 min
-- Import from a bank statement or another app (CSV), skipping anything already logged
+- Import a bank statement as CSV, Excel (.xlsx, .xls or a bank's HTML ".xls") or PDF, password-protected ones
+  included, or another app's backup (JSON, or a .zip of it), with its notes, tags and categories. Anything already
+  logged is skipped, and the totals show before anything is added
+- Restore a backup over everything, or keep what's in the app and add only the backup's new entries
 - Backup and restore to a file or Google Drive (photos included if you like), daily, weekly or monthly automatic
   backups to a folder you choose, CSV export
 - Optional backup password: backups are encrypted (AES-256) and need it to restore
@@ -100,8 +110,8 @@ Most budget apps want an account, show ads, or send your spending to a server. L
   including money coming in as income.
   Add your own keywords for banks it misses, and test any message to see what it would suggest. One payment never shows up twice, even when it arrives by both SMS and email
 - Swipe sideways to move between Home, Activity, Insights and Plan
-- Frosted glass design in dark and light mode (or solid surfaces with *Glass effects* off), spring animations
-  and high-refresh-rate support
+- Frosted glass design in dark and light mode (or solid surfaces with *Glass effects* off), a liquid glass tab
+  bar on Android 13 and newer, spring animations and high-refresh-rate support
 
 ## Privacy
 
@@ -261,7 +271,8 @@ app/src/main/java/com/leftovers/app/
 
 - **Bank SMS detection** uses the `RECEIVE_SMS` permission, which Google Play restricts to default SMS
   apps and a few exceptions. It works for direct APK installs; remove it before publishing to Play.
-- The `INTERNET` permission is used only by the AI assistant and email detection, after you connect them.
+- The `INTERNET` permission is used only by the AI assistant and email detection, after you connect them, and by
+  **Check price** on a savings goal, which fetches that one shop page when you tap it.
 
 ## Get involved
 

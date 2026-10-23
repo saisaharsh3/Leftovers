@@ -1,416 +1,439 @@
-// Leftovers website: the live safe-to-spend demo, the screens gallery, the detection examples, the assistant card,
-// and What's new and the latest version, read from GitHub so the page never needs editing for a release.
+// Leftovers B. Everything that moves is a spring solved from its current position and speed, so a finger can take
+// over at any moment, a throw keeps its speed, and nothing jumps. One requestAnimationFrame clock drives them all.
 (() => {
   "use strict";
   const $ = (s, el = document) => el.querySelector(s);
   const $$ = (s, el = document) => [...el.querySelectorAll(s)];
+  const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
   const rupees = new Intl.NumberFormat("en-IN", { maximumFractionDigits: 0 });
   const fmt = (n) => (n < 0 ? "−₹" : "₹") + rupees.format(Math.abs(Math.round(n)));
-  const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const buzz = (ms) => { try { if (matchMedia("(pointer: coarse)").matches) navigator.vibrate?.(ms); } catch {} };
 
-  // The header becomes a material only once something scrolls under it.
-  const top = document.querySelector(".top");
-  const onScroll = () => top.classList.toggle("scrolled", scrollY > 4);
+  // ---- Springs ----
+  // response: seconds to get there; damping: 1 settles without overshoot, below 1 overshoots (only after a throw).
+  class Spring {
+    constructor(value = 0) { this.x = value; this.v = 0; this.target = value; this.response = 0.4; this.damping = 1; this.active = false; }
+    to(target, { response = 0.4, damping = 1, velocity = this.v } = {}) {
+      this.target = target; this.response = response; this.damping = damping; this.v = velocity; this.active = true;
+      if (reduceMotion) { this.x = target; this.v = 0; this.active = false; }
+      loop.wake();
+    }
+    set(value) { this.x = value; this.target = value; this.v = 0; this.active = false; }
+    step(dt) {
+      if (!this.active) return false;
+      const w = (2 * Math.PI) / this.response, z = this.damping, c1 = this.x - this.target;
+      if (z >= 1) {
+        const c2 = this.v + w * c1, e = Math.exp(-w * dt);
+        this.x = this.target + (c1 + c2 * dt) * e;
+        this.v = (c2 - w * (c1 + c2 * dt)) * e;
+      } else {
+        const wd = w * Math.sqrt(1 - z * z), c2 = (this.v + z * w * c1) / wd, e = Math.exp(-z * w * dt);
+        const cos = Math.cos(wd * dt), sin = Math.sin(wd * dt);
+        this.x = this.target + e * (c1 * cos + c2 * sin);
+        this.v = e * ((c2 * wd - z * w * c1) * cos - (c1 * wd + z * w * c2) * sin);
+      }
+      if (Math.abs(this.x - this.target) < 0.05 && Math.abs(this.v) < 0.5) { this.x = this.target; this.v = 0; this.active = false; }
+      return true;
+    }
+  }
+  const loop = {
+    jobs: new Set(), running: false, last: 0,
+    add(fn) { this.jobs.add(fn); this.wake(); },
+    wake() { if (!this.running) { this.running = true; this.last = 0; requestAnimationFrame((t) => this.frame(t)); } },
+    frame(t) {
+      const dt = this.last ? Math.min(0.05, (t - this.last) / 1000) : 1 / 60;
+      this.last = t;
+      let busy = false;
+      this.jobs.forEach((fn) => { if (fn(dt)) busy = true; });
+      if (busy) requestAnimationFrame((n) => this.frame(n)); else this.running = false;
+    },
+  };
+  // Where a throw would come to rest (the projection Apple uses for scrolling).
+  const project = (v, d = 0.998) => ((v / 1000) * d) / (1 - d);
+  const rubber = (over, dim, c = 0.55) => (over * dim * c) / (dim + c * Math.abs(over));
+  // Speed from the last ~100 ms of pointer moves.
+  const tracker = () => {
+    const h = [];
+    return {
+      add(e) { h.push({ t: e.timeStamp, x: e.clientX, y: e.clientY }); while (h.length > 2 && e.timeStamp - h[0].t > 100) h.shift(); },
+      speed() {
+        if (h.length < 2) return { x: 0, y: 0 };
+        const a = h[0], b = h[h.length - 1], dt = (b.t - a.t) / 1000 || 1;
+        return { x: (b.x - a.x) / dt, y: (b.y - a.y) / dt };
+      },
+    };
+  };
+
+  // The page's other demos (play.js) use the same springs and clock.
+  window.LO = { Spring, loop, project, rubber, tracker, fmt, clamp, buzz, reduceMotion };
+
+  // ---- Theme ----
+  const root = document.documentElement;
+  const saved = (() => { try { return localStorage.getItem("theme"); } catch { return null; } })();
+  const light = matchMedia("(prefers-color-scheme: light)");
+  const shotUrl = (name) => `assets/${root.dataset.theme === "light" ? "light/" : ""}${name}.jpg`;
+  const setTheme = (t) => {
+    root.dataset.theme = t;
+    $$(".inline-shot, .g-shot[src], .t-shot[src]").forEach((img) => { img.src = shotUrl(img.dataset.name); });
+  };
+  $("#theme").addEventListener("click", () => {
+    const next = root.dataset.theme === "light" ? "dark" : "light";
+    setTheme(next);
+    try { localStorage.setItem("theme", next); } catch {}
+  });
+  light.addEventListener("change", (e) => { if (!saved) setTheme(e.matches ? "light" : "dark"); });
+
+  // ---- Header ----
+  const bar = $("#bar");
+  const onScroll = () => bar.classList.toggle("scrolled", scrollY > 4);
   addEventListener("scroll", onScroll, { passive: true });
   onScroll();
 
-  // Theme: follow the phone or computer, unless switched here.
-  const root = document.documentElement;
-  const saved = (() => { try { return localStorage.getItem("theme"); } catch { return null; } })();
-  const prefersLight = matchMedia("(prefers-color-scheme: light)");
-  // The app's screens are shown in the same theme as the page. When the theme changes they cross-fade: each one
-  // fades out, the other theme's picture loads behind it, and it fades back in, so the page never flashes.
-  let themed = false;
-  const applyTheme = (t) => {
-    root.dataset.theme = t;
-    document.querySelectorAll("img.shot").forEach((img) => {
-      const url = `assets/${t === "light" ? "light/" : ""}${img.dataset.name}.jpg`;
-      if (!themed || reduceMotion) { img.src = url; return; }
-      img.style.opacity = "0";
-      const next = new Image();
-      next.src = url;
-      const show = () => { img.src = url; requestAnimationFrame(() => { img.style.opacity = ""; }); };
-      // Swap only once the fade-out has finished and the new picture is ready.
-      const ready = (next.decode ? next.decode() : Promise.resolve()).catch(() => {});
-      Promise.all([ready, new Promise((r) => setTimeout(r, 230))]).then(show);
-    });
-    themed = true;
-  };
-  applyTheme(saved || (prefersLight.matches ? "light" : "dark"));
-  prefersLight.addEventListener("change", (e) => { if (!saved) applyTheme(e.matches ? "light" : "dark"); });
-  $("#theme").addEventListener("click", () => {
-    const next = root.dataset.theme === "light" ? "dark" : "light";
-    applyTheme(next);
-    try { localStorage.setItem("theme", next); } catch {}
-  });
-
-  // ---- The demo: the same sum as the app's Home ----
+  // ---- Today: the same sum as the app's Home ----
   const now = new Date();
   const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-  const day = now.getDate();
-  const daysLeft = daysInMonth - day + 1; // today counts
-  const hour = now.getHours();
-  $("#greeting").textContent = (hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening") +
-    ", " + now.toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" });
-  $("#month-name").textContent = now.toLocaleDateString("en-IN", { month: "long", year: "numeric" });
+  const daysLeft = daysInMonth - now.getDate() + 1;
+  const budget = 50000, bills = 19048;
+  const spentBefore = Math.round(((budget - bills) * ((now.getDate() - 1) / daysInMonth) * 0.92) / 10) * 10;
+  const allowance = Math.max(0, (budget - spentBefore - bills) / daysLeft);
+  $("#days").textContent = daysLeft === 1 ? "Last day of the month" : `${daysLeft} days left`;
 
-  const bills = [
-    { name: "Rent", amount: 18000, on: true },
-    { name: "Netflix", amount: 649, on: true },
-    { name: "Mobile plan", amount: 399, on: true },
-    { name: "Gym", amount: 1500, on: false },
-  ];
-  const state = { budget: 50000, spends: [] };
-  // What a careful spender has already used before today: a bit under the even pace.
-  const spentBefore = () => Math.max(0, Math.round((state.budget - 20548) * ((day - 1) / daysInMonth) * 0.9 / 10) * 10);
-
-  const billsEl = $("#bills");
-  bills.forEach((b, i) => {
-    const chip = document.createElement("button");
-    chip.type = "button";
-    chip.className = "chip";
-    chip.textContent = `${b.name} ${fmt(b.amount)}`;
-    chip.setAttribute("aria-pressed", String(b.on));
-    chip.addEventListener("click", () => {
-      b.on = !b.on;
-      chip.setAttribute("aria-pressed", String(b.on));
-      render();
-    });
-    billsEl.append(chip);
-  });
-
-  // Odometer: each digit is a reel of 0–9 that slides to its number.
-  const safeEl = $("#safe");
-  function setOdometer(value) {
-    const text = fmt(value);
-    const cells = [...text];
-    // Rebuild only when the shape (separators, length) changes; otherwise just move the reels.
-    const shape = cells.map((c) => (/\d/.test(c) ? "d" : c)).join("");
-    if (safeEl.dataset.shape !== shape) {
-      safeEl.dataset.shape = shape;
-      safeEl.innerHTML = "";
-      cells.forEach((c) => {
-        if (/\d/.test(c)) {
-          const col = document.createElement("span");
-          col.className = "col";
-          const reel = document.createElement("span");
-          reel.className = "reel";
-          for (let d = 0; d <= 9; d++) { const s = document.createElement("span"); s.textContent = d; reel.append(s); }
-          col.append(reel);
-          safeEl.append(col);
-        } else {
-          const s = document.createElement("span");
-          s.className = "sym";
-          s.textContent = c;
-          safeEl.append(s);
-        }
-      });
-    }
-    const reels = $$(".reel", safeEl);
-    const digits = cells.filter((c) => /\d/.test(c));
-    // Each digit is 1.05em tall (see .odometer .reel span); the first draw lands without rolling.
-    const place = () => reels.forEach((r, i) => { r.style.transform = `translateY(${-Number(digits[i]) * 1.05}em)`; });
-    if (!safeEl.dataset.ready) {
-      reels.forEach((r) => { r.style.transition = "none"; });
-      place();
-      void safeEl.offsetWidth;
-      reels.forEach((r) => { r.style.transition = ""; });
-      safeEl.dataset.ready = "1";
-    } else {
-      requestAnimationFrame(place);
-    }
-    safeEl.setAttribute("aria-label", `Safe to spend today: ${text.replace("−", "minus ")}`);
-  }
-
-  function render() {
-    const billsDue = bills.filter((b) => b.on).reduce((s, b) => s + b.amount, 0);
-    const before = spentBefore();
-    const allowance = Math.max(0, (state.budget - before - billsDue) / daysLeft);
-    const spentToday = state.spends.reduce((s, x) => s + x.amount, 0);
-    const safe = allowance - spentToday;
-    setOdometer(safe);
+  const safeEl = $("#safe"), meter = $("#meter"), spentEl = $("#spent");
+  const shown = new Spring(allowance);   // the number counts toward the new value
+  let spentToday = 0;
+  function drawToday() {
+    const safe = shown.x;
+    safeEl.textContent = fmt(safe);
     safeEl.classList.toggle("over", safe < 0);
-    const fill = $("#bar-fill");
-    fill.style.width = allowance > 0 ? Math.min(100, (spentToday / allowance) * 100) + "%" : "100%";
-    fill.classList.toggle("over", safe < 0);
-    $("#spent-today").textContent = `${fmt(spentToday)} of ${fmt(allowance)}`;
-    $("#days-left").textContent = daysLeft === 1 ? "Last day of the month" : `${daysLeft} days left`;
-    $("#budget-out").textContent = fmt(state.budget);
-    $("#sum").innerHTML =
-      `${fmt(state.budget)} budget, minus <b>${fmt(before)}</b> already spent and <b>${fmt(billsDue)}</b> in bills still due, ` +
-      `spread over ${daysLeft} ${daysLeft === 1 ? "day" : "days"} is <b>${fmt(allowance)}</b> a day.` +
-      (spentToday ? ` After today's <b>${fmt(spentToday)}</b>, ${safe < 0 ? `you're <b>${fmt(-safe)}</b> over` : `<b>${fmt(safe)}</b> is left`}.` : "");
-
-    const log = $("#log");
-    log.innerHTML = "";
-    state.spends.slice(-3).reverse().forEach((s) => {
-      const li = document.createElement("li");
-      li.innerHTML = `<span>${s.note}<small>${s.time}</small></span><span>${fmt(-s.amount)}</span>`;
-      log.append(li);
-    });
-    $("#log-empty").hidden = state.spends.length > 0;
-    $("#undo").hidden = state.spends.length === 0;
+    const used = allowance - safe;
+    meter.style.width = `${clamp(allowance ? (used / allowance) * 100 : 100, 0, 100)}%`;
+    meter.classList.toggle("over", safe < 0);
   }
-
-  $$("[data-spend]").forEach((chip) => chip.addEventListener("click", () => {
-    const t = new Date();
-    state.spends.push({ amount: Number(chip.dataset.spend), note: chip.dataset.note, time: t.toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" }) });
-    if (state.spends.length > 6) state.spends.shift();
-    render();
-  }));
-  $("#undo").addEventListener("click", () => { state.spends.pop(); render(); });
-  $("#budget").addEventListener("input", (e) => { state.budget = Number(e.target.value); render(); });
-  render();
-
-  // ---- Screens: a highlights reel you can grab ----
-  // The rail is moved by hand or by a spring, never by native scrolling, so it follows the finger 1:1, keeps a
-  // flick's speed when let go, and can be caught mid-way. The spring is solved exactly each frame from the current
-  // position and speed, so anything (a drag, a dot, the timer) can take over at any moment without a jump.
-  const viewport = $("#track");
-  const rail = $("#rail");
-  const slides = $$(".slide", rail);
-  slides.forEach((s) => s.querySelectorAll("img").forEach((img) => { img.draggable = false; }));
-  const dotsEl = $("#dots");
-  const play = $("#play");
-  const SLIDE_MS = 5000;
-  let current = -1;
-  let reel = reduceMotion ? "paused" : "playing"; // playing, paused or ended
-  let inView = false;
-
-  let x = 0, v = 0;            // the rail's offset (px) and speed (px/s)
-  let target = null;           // where the spring is headed, or null when at rest or held
-  let zeta = 1;                // 1: no overshoot; below 1 only after a flick
-  const RESPONSE = 0.42;       // seconds: how quickly the spring gets there
-  let pos = [];                // the offset that centres each slide
-  let step = 1;
-
-  function layout() {
-    const vw = viewport.clientWidth;
-    pos = slides.map((s) => vw / 2 - (s.offsetLeft + s.offsetWidth / 2));
-    step = slides.length > 1 ? Math.abs(pos[1] - pos[0]) : 1;
+  function setSpent(total) {
+    spentToday = total;
+    spentEl.textContent = `${fmt(total)} spent of ${fmt(allowance)}`;
+    safeEl.setAttribute("aria-label", `Safe to spend today: ${fmt(allowance - total).replace("−", "minus ")}`);
+    shown.to(allowance - total, { response: 0.55 });
   }
-  const nearestTo = (value) => pos.reduce((best, p, k) => (Math.abs(p - value) < Math.abs(pos[best] - value) ? k : best), 0);
+  loop.add((dt) => { const moving = shown.step(dt); drawToday(); return moving; });
+  setSpent(0);
 
-  function springTo(k, velocity, damping) {
-    if (reduceMotion) { x = pos[k]; v = 0; target = null; draw(); return; }
-    target = pos[k]; v = velocity; zeta = damping;
-  }
-  function stepSpring(dt) {
-    const w = (2 * Math.PI) / RESPONSE;
-    const c1 = x - target;
-    if (zeta >= 1) {
-      const c2 = v + w * c1, e = Math.exp(-w * dt);
-      x = target + (c1 + c2 * dt) * e;
-      v = (c2 - w * (c1 + c2 * dt)) * e;
-    } else {
-      const wd = w * Math.sqrt(1 - zeta * zeta), c2 = (v + zeta * w * c1) / wd, e = Math.exp(-zeta * w * dt);
-      const cos = Math.cos(wd * dt), sin = Math.sin(wd * dt);
-      x = target + e * (c1 * cos + c2 * sin);
-      v = e * ((c2 * wd - zeta * w * c1) * cos - (c1 * wd + zeta * w * c2) * sin);
-    }
-    if (Math.abs(x - target) < 0.25 && Math.abs(v) < 4) { x = target; v = 0; target = null; }
-  }
-
-  function draw() {
-    rail.style.transform = `translate3d(${x}px, 0, 0)`;
-    slides.forEach((s, k) => s.style.setProperty("--d", Math.min(1, Math.abs(x - pos[k]) / step).toFixed(3)));
-    const k = nearestTo(x);
-    if (k !== current) mark(k);
-  }
-
-  const dots = slides.map((slide, i) => {
-    const b = document.createElement("button");
-    b.type = "button";
-    b.className = "dot";
-    b.setAttribute("aria-label", `Show ${slide.querySelector("h3").textContent}`);
-    b.innerHTML = '<span class="fill"></span>';
-    b.addEventListener("click", () => { go(i); if (reel === "ended") setState("playing"); else restartTimer(); });
-    dotsEl.append(b);
-    return b;
-  });
-  function mark(i) {
-    current = i;
-    slides.forEach((s, k) => { s.classList.toggle("current", k === i); s.setAttribute("aria-hidden", String(k !== i)); });
-    dots.forEach((d, k) => { d.classList.toggle("active", k === i); d.toggleAttribute("aria-current", k === i); });
-    restartTimer();
-  }
-  function go(i) { springTo(Math.max(0, Math.min(slides.length - 1, i)), v, 1); }
-
-  // The active dot fills over SLIDE_MS while it plays on screen; then the next slide comes in.
-  let elapsed = 0;
-  function restartTimer() { elapsed = 0; paint(); }
-  function paint() {
-    dots.forEach((d, k) => {
-      d.firstChild.style.width = k !== current ? "0%" : reel === "playing" ? `${Math.min(100, (elapsed / SLIDE_MS) * 100)}%` : "100%";
-    });
-  }
-  function setState(next) {
-    reel = next;
-    play.dataset.state = next;
-    play.setAttribute("aria-label", next === "playing" ? "Pause" : next === "ended" ? "Play again" : "Play");
-    restartTimer();
-  }
-  play.addEventListener("click", () => {
-    if (reel === "playing") setState("paused");
-    else if (reel === "ended") { go(0); setState("playing"); }
-    else setState("playing");
-  });
-  const userStop = () => { if (reel === "playing") setState("paused"); };
-
-  // ---- Dragging: 1:1 with the finger, softly resisting past the ends ----
-  const rubber = (over, dim) => (over * dim * 0.55) / (dim + 0.55 * Math.abs(over));
-  const bounded = (raw) => {
-    const max = pos[0], min = pos[pos.length - 1], dim = viewport.clientWidth;
-    if (raw > max) return max + rubber(raw - max, dim);
-    if (raw < min) return min - rubber(min - raw, dim);
-    return raw;
+  // ---- The deck ----
+  const icons = {
+    coffee: '<path d="M10 2v2M14 2v2M16 8a1 1 0 0 1 1 1v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1h14a4 4 0 1 1 0 8h-1"/>',
+    train: '<rect x="4" y="3" width="16" height="16" rx="2"/><path d="M4 11h16M12 3v8m-4 8-2 3m10-3 2 3"/><path d="M8 15h.01M16 15h.01"/>',
+    food: '<path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2M7 2v20M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7"/>',
+    cart: '<circle cx="8" cy="21" r="1"/><circle cx="19" cy="21" r="1"/><path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12"/>',
+    film: '<path d="M20.2 6 3 11l-.9-2.4c-.3-1.1.3-2.2 1.3-2.5l13.5-4c1.1-.3 2.2.3 2.5 1.3Z"/><path d="m6.2 5.3 3.1 3.9M12.4 3.4l3.1 4M3 11h18v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/>',
+    car: '<path d="M10 2h4M8 18v2M16 18v2M4 9l2-5h12l2 5"/><rect x="2" y="9" width="20" height="9" rx="2"/><path d="M6 13h.01M18 13h.01"/>',
   };
-  // Where a flick would carry it, as scrolling decelerates (the projection Apple uses, d = 0.998).
-  const project = (velocity, d = 0.998) => ((velocity / 1000) * d) / (1 - d);
-
-  let drag = null;
-  viewport.addEventListener("pointerdown", (e) => {
-    if (e.button !== 0 || pos.length === 0) return;
-    // Grabbing a moving reel stops it right where it is.
-    target = null; v = 0;
-    drag = { id: e.pointerId, x0: e.clientX, y0: e.clientY, start: x, axis: null, hist: [{ t: e.timeStamp, x: e.clientX }] };
-    userStop();
-  });
-  viewport.addEventListener("pointermove", (e) => {
-    if (!drag || e.pointerId !== drag.id) return;
-    const dx = e.clientX - drag.x0, dy = e.clientY - drag.y0;
-    if (!drag.axis) {
-      if (Math.hypot(dx, dy) < 8) return;
-      drag.axis = Math.abs(dx) > Math.abs(dy) ? "x" : "y";
-      if (drag.axis === "y") { drag = null; springTo(nearestTo(x), 0, 1); return; }
-      viewport.setPointerCapture(e.pointerId);
-      viewport.classList.add("dragging");
-      drag.x0 = e.clientX; drag.start = x;
-    }
-    x = bounded(drag.start + (e.clientX - drag.x0));
-    drag.hist.push({ t: e.timeStamp, x: e.clientX });
-    while (drag.hist.length > 2 && e.timeStamp - drag.hist[0].t > 100) drag.hist.shift();
-    draw();
-  });
-  const release = (e) => {
-    if (!drag || e.pointerId !== drag.id) return;
-    const d = drag;
-    drag = null;
-    viewport.classList.remove("dragging");
-    if (d.axis !== "x") {
-      // A tap on a neighbouring slide brings it in.
-      const k = slides.indexOf(e.target.closest(".slide"));
-      if (e.type === "pointerup" && k >= 0 && k !== current) go(k); else springTo(nearestTo(x), 0, 1);
-      return;
-    }
-    const a = d.hist[0], b = d.hist[d.hist.length - 1];
-    const speed = b.t > a.t ? ((b.x - a.x) / (b.t - a.t)) * 1000 : 0;
-    // Choose the slide from where the flick is going, not where the finger let go, at most two away.
-    let k = nearestTo(x + project(speed));
-    k = Math.max(current - 2, Math.min(current + 2, k));
-    springTo(k, speed, Math.abs(speed) > 600 ? 0.82 : 1);
-  };
-  viewport.addEventListener("pointerup", release);
-  viewport.addEventListener("pointercancel", release);
-
-  // Trackpads swipe sideways with the wheel: move with it, then settle on the nearest slide.
-  let wheelEnd;
-  viewport.addEventListener("wheel", (e) => {
-    if (Math.abs(e.deltaX) <= Math.abs(e.deltaY)) return;
-    e.preventDefault();
-    userStop();
-    target = null; v = 0;
-    x = bounded(x - e.deltaX);
-    draw();
-    clearTimeout(wheelEnd);
-    wheelEnd = setTimeout(() => springTo(nearestTo(x), 0, 1), 140);
-  }, { passive: false });
-
-  viewport.addEventListener("keydown", (e) => {
-    const dir = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : 0;
-    if (!dir) return;
-    e.preventDefault();
-    userStop();
-    go(current + dir);
-  });
-
-  // Only plays while it's on screen.
-  new IntersectionObserver(([entry]) => { inView = entry.isIntersecting; restartTimer(); }, { threshold: 0.5 }).observe(viewport);
-  // Phones resize the page as the address bar shows and hides; only a real change of width re-lays it out.
-  let lastWidth = innerWidth;
-  addEventListener("resize", () => {
-    if (innerWidth === lastWidth) return;
-    lastWidth = innerWidth;
-    layout();
-    if (!drag) { target = null; v = 0; x = pos[current]; draw(); }
-  });
-
-  // One clock for the spring and the timer.
-  let last = 0;
-  function frame(t) {
-    const dt = last ? Math.min(0.05, (t - last) / 1000) : 0;
-    last = t;
-    if (target !== null && dt > 0) { stepSpring(dt); draw(); }
-    if (reel === "playing" && inView && !document.hidden && !drag) {
-      elapsed += dt * 1000;
-      if (elapsed >= SLIDE_MS) {
-        if (current < slides.length - 1) { const next = current + 1; go(next); mark(next); }
-        else setState("ended");
-      }
-      paint();
-    }
-    requestAnimationFrame(frame);
-  }
-  layout();
-  x = pos[0];
-  draw();
-  setState(reel);
-  requestAnimationFrame(frame);
-
-  // ---- What it notices: real message formats and what the app makes of them ----
-  const messages = [
-    { from: "AD-HDFCBK", text: "Sent Rs.250.00 From HDFC Bank A/C *1234 To SWIGGY On 07/10/26 Ref 612345678901 Not You? Call 18002586161",
-      who: "Swiggy", amount: 250, sub: "Suggested for HDFC Bank, from the card digits 1234" },
-    { from: "Google Pay", text: "₹120 paid to Third Wave Coffee. UPI transaction ID 612345678902.",
-      who: "Third Wave Coffee", amount: 120, sub: "From a payment app notification, into the account you picked for it" },
-    { from: "AD-KOTAKB", text: "Your A/c XX1234 is credited with INR 75,000.00 on 01-10-2026 by NEFT from ACME TECH PVT LTD. Avl Bal INR 87000.00",
-      who: "Acme Tech Pvt Ltd", amount: 75000, income: true, sub: "Suggested as income" },
-    { from: "AD-ICICIB", text: "123456 is your OTP for a transaction of Rs 500.00 at SWIGGY. Do not share it with anyone.",
-      skip: true },
+  const spends = [
+    { name: "Coffee", cat: "Food & Dining", amount: 120, icon: "coffee", tint: "#c2410c" },
+    { name: "Metro", cat: "Transport", amount: 40, icon: "train", tint: "#2563eb" },
+    { name: "Lunch", cat: "Food & Dining", amount: 250, icon: "food", tint: "#c2410c" },
+    { name: "Groceries", cat: "Groceries", amount: 1200, icon: "cart", tint: "#15803d" },
+    { name: "Movie", cat: "Entertainment", amount: 450, icon: "film", tint: "#7c3aed" },
+    { name: "Auto home", cat: "Transport", amount: 90, icon: "car", tint: "#2563eb" },
   ];
-  const tabs = $$('[role="tab"]');
-  function showMessage(i) {
-    const m = messages[i];
-    tabs.forEach((t, k) => { t.setAttribute("aria-selected", String(k === i)); t.tabIndex = k === i ? 0 : -1; });
-    $("#msg-from").textContent = m.from;
-    $("#msg-text").textContent = m.text;
-    const s = $("#suggestion");
-    s.style.animation = "none"; void s.offsetWidth; s.style.animation = "";
-    s.innerHTML = m.skip
-      ? `<div class="s-skip"><strong>Skipped</strong>A one-time password isn't a payment, so nothing is suggested.</div>`
-      : `<div class="s-top"><span class="s-who">${m.who}</span><span class="s-amt ${m.income ? "in" : ""}">${m.income ? "+" : ""}${fmt(m.amount)}</span></div>` +
-        `<div class="s-sub">${m.sub}. Tap to add it, or dismiss.</div>`;
-  }
-  tabs.forEach((t, i) => {
-    t.addEventListener("click", () => showMessage(i));
-    t.addEventListener("keydown", (e) => {
-      const d = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : 0;
-      if (d) { e.preventDefault(); const n = (i + d + tabs.length) % tabs.length; tabs[n].focus(); showMessage(n); }
-    });
+  const deck = $("#deck");
+  const cards = spends.map((s) => {
+    const el = document.createElement("div");
+    el.className = "card";
+    el.setAttribute("role", "group");
+    el.setAttribute("aria-label", `${s.name}, ${s.cat}, ${fmt(s.amount)}`);
+    el.innerHTML = `
+      <span class="stamp yes">Spend</span><span class="stamp no">Skip</span>
+      <div class="c-top"><span class="c-icon" style="background:${s.tint}1f;color:${s.tint}"><svg viewBox="0 0 24 24" aria-hidden="true">${icons[s.icon]}</svg></span>
+      <div><div class="c-name">${s.name}</div><div class="c-cat">${s.cat}</div></div></div>
+      <div class="c-amount">${fmt(s.amount)}</div>`;
+    return { el, data: s, x: new Spring(0), y: new Spring(0), out: 0 };
   });
-  showMessage(0);
+  const endCard = document.createElement("div");
+  endCard.className = "card end";
+  endCard.innerHTML = `<div class="c-name">That's today</div><p id="end-text"></p><button class="pill quiet small" type="button" id="again">Start again</button>`;
+  deck.append(endCard, ...cards.slice().reverse().map((c) => c.el));
+  let top = 0;
+  const history = [];
 
-  // ---- The assistant's change card ----
-  const change = $("#change");
-  const settle = (text) => {
-    change.classList.add("done");
-    const r = document.createElement("div");
-    r.className = "result";
-    r.textContent = text;
-    change.append(r);
+  const width = () => deck.clientWidth || 320;
+  function layoutDeck() {
+    const w = width();
+    const lead = cards[top];
+    // How far the top card has gone toward leaving: the next card grows into its place as it does.
+    const p = lead ? clamp(Math.abs(lead.x.x) / (w * 0.6), 0, 1) : 0;
+    cards.forEach((c, i) => {
+      const d = i - top;
+      const el = c.el;
+      if (d < 0) {
+        el.style.transform = `translate3d(${c.x.x}px, ${c.y.x}px, 0) rotate(${(c.x.x / w) * 14}deg)`;
+        const gone = Math.abs(c.x.x) > w * 1.6;
+        el.style.opacity = gone ? "0" : "1";
+        el.style.visibility = gone && !c.x.active ? "hidden" : "";
+        el.style.pointerEvents = "none";
+        return;
+      }
+      el.style.visibility = "";
+      if (d === 0) {
+        const r = (c.x.x / w) * 14;
+        el.style.transform = `translate3d(${c.x.x}px, ${c.y.x}px, 0) rotate(${r}deg)`;
+        el.style.opacity = "1";
+        el.style.zIndex = String(100);
+        el.style.pointerEvents = "auto";
+        $(".stamp.yes", el).style.opacity = clamp(c.x.x / (w * 0.35), 0, 1);
+        $(".stamp.no", el).style.opacity = clamp(-c.x.x / (w * 0.35), 0, 1);
+        return;
+      }
+      const depth = d - p;
+      el.style.transform = `translate3d(0, ${clamp(depth, 0, 2) * 12}px, 0) scale(${1 - clamp(depth, 0, 2) * 0.05})`;
+      el.style.opacity = d > 2 ? "0" : "1";
+      el.style.zIndex = String(100 - d);
+      el.style.pointerEvents = "none";
+      $$(".stamp", el).forEach((s) => { s.style.opacity = "0"; });
+    });
+    const done = top >= cards.length;
+    endCard.style.zIndex = "1";
+    endCard.style.opacity = done || top >= cards.length - 2 ? "1" : "0";
+    $("#skip").disabled = done; $("#spend").disabled = done;
+    $("#hint").textContent = done ? "" : "Flick a card right to spend it, left to skip it.";
+    $("#undo").hidden = history.length === 0;
+  }
+  loop.add((dt) => {
+    let busy = false;
+    cards.forEach((c) => { if (c.x.step(dt)) busy = true; if (c.y.step(dt)) busy = true; });
+    // A thrown card is committed once it's well clear of the deck.
+    layoutDeck();
+    return busy;
+  });
+
+  function decide(card, dir, vx = 0, vy = 0) {
+    const w = width();
+    const momentum = Math.abs(vx) > 300;
+    card.out = dir;
+    card.x.to(dir * (w * 1.9 + 120), { response: 0.45, damping: 1, velocity: vx || dir * 1400 });
+    card.y.to(card.y.x + project(vy, 0.99) * 0.4, { response: 0.45, damping: 1, velocity: vy });
+    history.push({ index: top, dir });
+    top += 1;
+    if (dir > 0) setSpent(spentToday + card.data.amount);
+    buzz(momentum ? 12 : 8);
+    if (top >= cards.length) {
+      const left = allowance - spentToday;
+      $("#end-text").textContent = left >= 0
+        ? `${fmt(left)} left for today, with ${fmt(spentToday)} spent.`
+        : `${fmt(-left)} over today. Leftovers spreads that over the rest of the month.`;
+    }
+    layoutDeck();
+  }
+
+  // Dragging the top card: it stays under the finger where it was grabbed, in both directions at once.
+  let hold = null;
+  deck.addEventListener("pointerdown", (e) => {
+    const lead = cards[top];
+    if (!lead || !lead.el.contains(e.target) || e.button !== 0) return;
+    lead.el.setPointerCapture(e.pointerId);
+    lead.el.classList.add("held");
+    // Catch it where it is, even if it was springing back.
+    hold = { id: e.pointerId, card: lead, x0: e.clientX - lead.x.x, y0: e.clientY - lead.y.x, sx: e.clientX, sy: e.clientY, track: tracker() };
+    lead.x.set(lead.x.x); lead.y.set(lead.y.x);
+    hold.track.add(e);
+  });
+  deck.addEventListener("pointermove", (e) => {
+    if (!hold || e.pointerId !== hold.id) return;
+    const w = width();
+    hold.track.add(e);
+    hold.card.x.set(e.clientX - hold.x0);
+    // Up and down it follows, but resists: it's mostly meant to go sideways.
+    hold.card.y.set(rubber(e.clientY - hold.y0, w * 0.6));
+    layoutDeck();
+  });
+  // Sideways belongs to the card; once a drag is clearly sideways the page doesn't scroll under it.
+  deck.addEventListener("touchmove", (e) => {
+    if (!hold || !e.touches[0]) return;
+    const t = e.touches[0];
+    if (Math.abs(t.clientX - hold.sx) > Math.abs(t.clientY - hold.sy)) e.preventDefault();
+  }, { passive: false });
+  const letGo = (e) => {
+    if (!hold || e.pointerId !== hold.id) return;
+    const { card, track } = hold;
+    hold = null;
+    card.el.classList.remove("held");
+    const v = track.speed(), w = width();
+    // Decide from where the throw is going, not where the finger let go.
+    const landing = card.x.x + project(v.x);
+    if (Math.abs(landing) > w * 0.5 && Math.sign(landing) === Math.sign(v.x || landing)) {
+      decide(card, Math.sign(landing), v.x, v.y);
+    } else {
+      // Not far enough: it comes home, with a little give because it was moving.
+      const springy = Math.hypot(v.x, v.y) > 200;
+      card.x.to(0, { response: 0.42, damping: springy ? 0.78 : 1, velocity: v.x });
+      card.y.to(0, { response: 0.42, damping: springy ? 0.78 : 1, velocity: v.y });
+    }
   };
-  $("#confirm").addEventListener("click", () => settle("Added ₹250 for Coffee today"));
-  $("#not-now").addEventListener("click", () => settle("Nothing was changed"));
+  deck.addEventListener("pointerup", letGo);
+  deck.addEventListener("pointercancel", letGo);
+
+  $("#spend").addEventListener("click", () => { if (cards[top]) decide(cards[top], 1); });
+  $("#skip").addEventListener("click", () => { if (cards[top]) decide(cards[top], -1); });
+  $("#undo").addEventListener("click", () => {
+    const last = history.pop();
+    if (!last) return;
+    top = last.index;
+    const card = cards[top];
+    if (last.dir > 0) setSpent(spentToday - card.data.amount);
+    // It comes back from the side it left by.
+    card.x.to(0, { response: 0.5, damping: 0.85, velocity: -last.dir * 900 });
+    card.y.to(0, { response: 0.5, damping: 1 });
+    layoutDeck();
+  });
+  deck.addEventListener("click", (e) => {
+    if (!e.target.closest("#again")) return;
+    history.length = 0; top = 0;
+    cards.forEach((c, i) => { c.x.set(i % 2 ? -width() * 2 : width() * 2); c.y.set(0); c.x.to(0, { response: 0.5 + i * 0.04, damping: 1 }); });
+    setSpent(0);
+    layoutDeck();
+  });
+  addEventListener("keydown", (e) => {
+    if (!deck.closest(".today-demo").contains(document.activeElement)) return;
+    if (e.key === "ArrowRight" && cards[top]) { e.preventDefault(); decide(cards[top], 1); }
+    if (e.key === "ArrowLeft" && cards[top]) { e.preventDefault(); decide(cards[top], -1); }
+  });
+  layoutDeck();
+
+  // The tour lives in tour.js (wide screens) and gallery.js (phones).
+  setTheme(saved || (light.matches ? "light" : "dark"));
+
+  // ---- Privacy switches: tap, or drag the thumb; letting go, the direction of the flick decides ----
+  $$(".switches li").forEach((row) => {
+    const sw = $(".switch", row), thumb = $(".thumb", sw), text = $(".sw-text p", row);
+    const fill = document.createElement("span");
+    fill.className = "track-fill";
+    sw.prepend(fill);
+    const travel = () => sw.clientWidth - thumb.clientWidth - 6;
+    const pos = new Spring(0); // 0 off, 1 on
+    let on = false;
+    const draw = () => {
+      thumb.style.transform = `translate3d(${pos.x * travel()}px, 0, 0)`;
+      fill.style.opacity = clamp(pos.x, 0, 1);
+    };
+    const set = (value, velocity = 0) => {
+      const changed = value !== on;
+      on = value;
+      sw.setAttribute("aria-checked", String(on));
+      row.classList.toggle("on", on);
+      text.textContent = on ? text.dataset.on : text.dataset.off;
+      pos.to(on ? 1 : 0, { response: 0.32, damping: Math.abs(velocity) > 3 ? 0.8 : 1, velocity });
+      if (changed) buzz(10);
+    };
+    loop.add((dt) => { const m = pos.step(dt); draw(); return m; });
+    text.textContent = text.dataset.off;
+
+    let g = null;
+    sw.addEventListener("pointerdown", (e) => {
+      sw.setPointerCapture(e.pointerId);
+      g = { id: e.pointerId, x0: e.clientX, start: pos.x, moved: false, track: tracker() };
+      g.track.add(e);
+      pos.set(pos.x);
+      // Pressed: the thumb widens a little, straight away.
+      thumb.style.width = `${thumb.clientWidth + 6}px`;
+    });
+    sw.addEventListener("pointermove", (e) => {
+      if (!g || e.pointerId !== g.id) return;
+      const dx = e.clientX - g.x0;
+      if (Math.abs(dx) > 4) g.moved = true;
+      g.track.add(e);
+      const raw = g.start + dx / travel();
+      pos.set(raw < 0 ? -rubber(-raw, 1, 0.3) : raw > 1 ? 1 + rubber(raw - 1, 1, 0.3) : raw);
+      draw();
+    });
+    const up = (e) => {
+      if (!g || e.pointerId !== g.id) return;
+      const moved = g.moved, v = g.track.speed().x / travel();
+      g = null;
+      thumb.style.width = "";
+      if (!moved) { set(!on); return; }
+      // The flick's direction wins; a slow drag lands on the nearer side.
+      const value = Math.abs(v) > 1.5 ? v > 0 : pos.x > 0.5;
+      set(value, v);
+    };
+    sw.addEventListener("pointerup", up);
+    sw.addEventListener("pointercancel", up);
+    sw.addEventListener("click", (e) => { if (e.detail === 0) set(!on); }); // keyboard
+    draw();
+  });
+
+  // ---- The Get Leftovers sheet ----
+  const sheet = $("#sheet"), scrim = $("#scrim"), grab = $("#sheet-grab");
+  const sheetY = new Spring(1); // 0 open, 1 closed (as a share of its height)
+  let sheetOpen = false, opener = null;
+  const sheetH = () => sheet.offsetHeight || 400;
+  function drawSheet() {
+    const y = sheetY.x;
+    sheet.style.transform = `translate(-50%, ${y * 100}%)`;
+    scrim.style.opacity = clamp(1 - y, 0, 1);
+    if (!sheetOpen && !sheetY.active && y >= 0.999) { sheet.hidden = true; scrim.hidden = true; }
+  }
+  loop.add((dt) => { const m = sheetY.step(dt); drawSheet(); return m; });
+  function openSheet(from) {
+    opener = from || document.activeElement;
+    sheet.hidden = false; scrim.hidden = false;
+    sheetOpen = true;
+    sheetY.to(0, { response: 0.36, damping: 1 });
+    requestAnimationFrame(() => $("a, button", sheet.querySelector(".ways"))?.focus({ preventScroll: true }));
+  }
+  function closeSheet(velocity = 0, damping = 1) {
+    sheetOpen = false;
+    sheetY.to(1, { response: 0.34, damping, velocity });
+    opener?.focus?.({ preventScroll: true });
+  }
+  $$("[data-open-sheet]").forEach((b) => b.addEventListener("click", () => openSheet(b)));
+  $("#sheet-close").addEventListener("click", () => closeSheet());
+  scrim.addEventListener("click", () => closeSheet());
+  addEventListener("keydown", (e) => { if (e.key === "Escape" && sheetOpen) closeSheet(); });
+  // Keep the keyboard inside the sheet while it's open.
+  sheet.addEventListener("keydown", (e) => {
+    if (e.key !== "Tab") return;
+    const f = $$("a, button", sheet).filter((x) => !x.disabled && x.offsetParent);
+    if (e.shiftKey && document.activeElement === f[0]) { e.preventDefault(); f[f.length - 1].focus(); }
+    else if (!e.shiftKey && document.activeElement === f[f.length - 1]) { e.preventDefault(); f[0].focus(); }
+  });
+  let sg = null;
+  grab.addEventListener("pointerdown", (e) => {
+    if (e.target.closest("button")) return;
+    grab.setPointerCapture(e.pointerId);
+    sg = { id: e.pointerId, y0: e.clientY, start: sheetY.x, track: tracker() };
+    sg.track.add(e);
+    sheetY.set(sheetY.x);
+  });
+  grab.addEventListener("pointermove", (e) => {
+    if (!sg || e.pointerId !== sg.id) return;
+    sg.track.add(e);
+    const h = sheetH();
+    const raw = sg.start + (e.clientY - sg.y0) / h;
+    // Pulling up past open, it resists.
+    sheetY.set(raw < 0 ? -rubber(-raw * h, h, 0.4) / h : raw);
+    drawSheet();
+  });
+  const sheetUp = (e) => {
+    if (!sg || e.pointerId !== sg.id) return;
+    const h = sheetH(), v = sg.track.speed().y;
+    sg = null;
+    const landing = sheetY.x + project(v) / h;
+    if (landing > 0.5) closeSheet(v / h, Math.abs(v) > 500 ? 0.9 : 1);
+    else sheetY.to(0, { response: 0.32, damping: Math.abs(v) > 300 ? 0.8 : 1, velocity: v / h });
+  };
+  grab.addEventListener("pointerup", sheetUp);
+  grab.addEventListener("pointercancel", sheetUp);
+
+  // The Dev build in Obtainium: a one-tap setup that follows the "Dev build" release and its APK.
+  const devSettings = {
+    includePrereleases: true, fallbackToOlderReleases: false, filterReleaseTitlesByRegEx: "^Dev build",
+    filterReleaseNotesByRegEx: "", verifyLatestTag: false, useLatestAssetDateAsReleaseDate: true, releaseTitleAsVersion: false,
+    trackOnly: false, versionExtractionRegEx: "", matchGroupToUse: "", versionDetection: false, releaseDateAsVersion: true,
+    apkFilterRegEx: "leftovers-dev\\.apk", invertAPKFilter: false, autoApkFilterByArch: true, appName: "Leftovers Dev",
+  };
+  const devApp = { id: "com.leftovers.app.dev", url: "https://github.com/saisaharsh3/Leftovers", author: "saisaharsh3", name: "Leftovers Dev", preferredApkIndex: 0, additionalSettings: JSON.stringify(devSettings) };
+  const deep = "obtainium://app/" + encodeURIComponent(JSON.stringify(devApp));
+  $("#dev-obtainium").href = "https://apps.obtainium.imranr.dev/redirect?r=" + encodeURIComponent(deep);
 
   // ---- Latest version and What's new, from GitHub ----
   const repo = "saisaharsh3/Leftovers";
@@ -419,15 +442,14 @@
     .then((rel) => {
       const version = (rel.tag_name || "").replace(/^v/, "");
       const apk = (rel.assets || []).find((a) => a.name.endsWith(".apk"));
-      if (apk) { $("#apk").href = apk.browser_download_url; $("#apk2").href = apk.browser_download_url; }
+      if (apk) $("#apk").href = apk.browser_download_url;
       const date = rel.published_at ? new Date(rel.published_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "";
       if (version) {
         $("#version-line").textContent = `Version ${version}${date ? `, released ${date}` : ""}. Free and open source. Android 8.0 or newer.`;
-        $("#apk2").textContent = `Download ${version}`;
+        $("#apk").textContent = `Download ${version}`;
       }
     })
     .catch(() => {});
-
   const inline = (s) => s
     .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
     .replace(/`([^`]+)`/g, "<code>$1</code>")
@@ -435,20 +457,19 @@
     .replace(/\*([^*]+)\*/g, "<em>$1</em>")
     .replace(/\[([^\]]+)\]\((https?:[^)\s]+)\)/g, '<a href="$2">$1</a>')
     .replace(/\(#(\d+)\)/g, `(<a href="https://github.com/${repo}/issues/$1">#$1</a>)`);
-
   fetch(`https://raw.githubusercontent.com/${repo}/main/CHANGELOG.md`)
     .then((r) => (r.ok ? r.text() : Promise.reject()))
     .then((md) => {
       const sections = [];
-      let current = null;
+      let cur = null;
       for (const line of md.split("\n")) {
         const head = line.match(/^## (.+)$/);
-        if (head) { current = { title: head[1].trim(), items: [] }; sections.push(current); continue; }
-        if (!current) continue;
-        if (/^- /.test(line)) current.items.push(line.slice(2).trim());
-        else if (/^\s{2,}\S/.test(line) && current.items.length) current.items[current.items.length - 1] += " " + line.trim();
+        if (head) { cur = { title: head[1].trim(), items: [] }; sections.push(cur); continue; }
+        if (!cur) continue;
+        if (/^- /.test(line)) cur.items.push(line.slice(2).trim());
+        else if (/^\s{2,}\S/.test(line) && cur.items.length) cur.items[cur.items.length - 1] += " " + line.trim();
       }
-      const released = sections.filter((s) => /^\d/.test(s.title) && s.items.length).slice(0, 5);
+      const released = sections.filter((s) => /^\d/.test(s.title) && s.items.length).slice(0, 4);
       if (!released.length) throw new Error();
       const box = $("#changelog");
       box.innerHTML = "";

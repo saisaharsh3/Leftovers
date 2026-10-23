@@ -3,269 +3,252 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>Leftovers — know what's left</title>
-  <meta name="description" content="A fast, private expense tracker for Android. See what's safe to spend today, log a spend in two taps, and keep your money data on your phone.">
-  <meta name="theme-color" content="#09090C" media="(prefers-color-scheme: dark)">
-  <meta name="theme-color" content="#EDEEF4" media="(prefers-color-scheme: light)">
-  <meta property="og:title" content="Leftovers — know what's left">
-  <meta property="og:description" content="A fast, private expense tracker for Android. No account, no ads, open source.">
+  <title>Leftovers: know what's left</title>
+  <meta name="description" content="An expense tracker for Android that tells you what's safe to spend today. No account, no ads, and your data stays on your phone.">
+  <meta name="theme-color" content="#0b0b0f" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#f2f2f6" media="(prefers-color-scheme: light)">
+  <meta property="og:title" content="Leftovers: know what's left">
+  <meta property="og:description" content="An expense tracker for Android. No account, no ads, open source.">
   <meta property="og:image" content="https://saisaharsh3.github.io/Leftovers/assets/social-preview.png">
-  <meta property="og:url" content="https://saisaharsh3.github.io/Leftovers/">
   <meta name="twitter:card" content="summary_large_image">
   <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
-  <link rel="preload" href="assets/manrope.ttf" as="font" type="font/ttf" crossorigin>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <a class="skip" href="#main">Skip to content</a>
   <div class="aurora" aria-hidden="true"><i></i><i></i><i></i></div>
 
-  <header class="top">
-    <a class="brand" href="#top" aria-label="Leftovers home">
-      <img src="assets/icon.svg" alt="" width="32" height="32">
-      <span>Leftovers</span>
-    </a>
+  <header class="bar" id="bar">
+    <a class="brand" href="#top"><img src="assets/icon.svg" alt="" width="28" height="28"><span>Leftovers</span></a>
     <nav aria-label="Sections">
-      <a href="#screens">Screens</a>
-      <a href="#private">Privacy</a>
+      <a href="#tour">Tour</a>
+      <a href="#privacy">Privacy</a>
       <a href="#new">What's new</a>
     </nav>
-    <div class="top-actions">
-      <button class="icon-btn" id="theme" type="button" aria-label="Switch between light and dark">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9 7 7 0 0 1-9-9Z"/></svg>
-      </button>
-      <a class="btn small" href="#get">Get the app</a>
-    </div>
+    <button class="round" id="theme" type="button" aria-label="Switch between light and dark">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9 7 7 0 0 1-9-9Z"/></svg>
+    </button>
+    <button class="pill primary small" type="button" data-open-sheet>Get Leftovers</button>
   </header>
 
   <main id="main">
-    <!-- The hero is the app's own Home number, live: tap spends and watch it move. -->
+    <!-- Hero: today's spends as cards to flick. Right logs it, left skips it, and today's number follows. -->
     <section class="hero" id="top">
       <div class="hero-copy">
         <h1>Know what's left.</h1>
-        <p class="lede">Leftovers is an expense tracker for Android that answers one question first: how much can you spend today? It works it out from your budget, what you've spent and the bills still to come, and keeps all of it on your phone.</p>
-        <div class="ctas">
-          <a class="btn primary" id="apk" href="https://github.com/saisaharsh3/Leftovers/releases/latest">Download for Android</a>
-          <a class="btn ghost" href="#get">Other ways to install</a>
+        <p class="lede">Leftovers is an expense tracker for Android that answers one question first: how much can you spend today? Your budget, what you've spent and the bills still to come, worked out on your phone and kept there.</p>
+        <div class="actions">
+          <button class="pill primary" type="button" data-open-sheet>Get Leftovers</button>
+          <a class="pill quiet" href="#tour">Take the tour</a>
         </div>
-        <p class="fine" id="version-line">Free and open source. Android 8.0 or newer.</p>
+        <p class="small-print" id="version-line">Free and open source. Android 8.0 or newer.</p>
       </div>
 
-      <div class="demo" aria-label="Try the safe-to-spend number">
-        <div class="phone glass strong">
-          <div class="phone-head">
-            <span id="greeting">Good evening</span>
-            <strong id="month-name">October</strong>
-          </div>
-          <div class="today glass">
-            <div class="today-label">Safe to spend today</div>
-            <div class="odometer" id="safe" aria-live="polite" aria-atomic="true"></div>
-            <div class="bar" role="presentation"><span id="bar-fill"></span></div>
-            <div class="today-foot">
-              <span id="spent-today">₹0 of ₹0</span>
-              <span id="days-left">0 days left</span>
-            </div>
-          </div>
-          <div class="log-area">
-            <ul class="log" id="log" aria-label="Spent today"></ul>
-            <p class="log-empty" id="log-empty">Nothing spent today yet. Tap a spend below.</p>
-          </div>
+      <div class="today-demo" aria-label="Try it: today's spends">
+        <div class="today">
+          <p class="today-label">Safe to spend today</p>
+          <p class="today-number" id="safe" aria-live="polite">₹0</p>
+          <div class="meter" role="presentation"><span id="meter"></span></div>
+          <p class="today-foot"><span id="spent">₹0 spent of ₹0</span><span id="days"></span></p>
         </div>
 
-        <div class="controls">
-          <div class="control">
-            <div class="control-head">
-              <label for="budget">Your monthly budget</label>
-              <output id="budget-out" for="budget">₹50,000</output>
-            </div>
-            <input type="range" id="budget" min="10000" max="150000" step="1000" value="50000">
-          </div>
+        <div class="deck" id="deck" aria-label="Today's spends"></div>
 
-          <div class="control">
-            <div class="control-head"><span id="spend-label">Log a spend</span><button class="link" id="undo" type="button" hidden>Undo</button></div>
-            <div class="chips" role="group" aria-labelledby="spend-label">
-              <button type="button" class="chip" data-spend="120" data-note="Coffee">Coffee ₹120</button>
-              <button type="button" class="chip" data-spend="40" data-note="Metro">Metro ₹40</button>
-              <button type="button" class="chip" data-spend="250" data-note="Lunch">Lunch ₹250</button>
-              <button type="button" class="chip" data-spend="1200" data-note="Groceries">Groceries ₹1,200</button>
-            </div>
-          </div>
+        <div class="deck-controls">
+          <button class="round big" type="button" id="skip" aria-label="Skip this spend">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+          </button>
+          <p class="hint" id="hint">Flick a card right to spend it, left to skip it.</p>
+          <button class="round big accent" type="button" id="spend" aria-label="Spend this">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+          </button>
+        </div>
+        <p class="undo-row"><button class="text-btn" type="button" id="undo" hidden>Undo</button></p>
+      </div>
+    </section>
 
-          <div class="control">
-            <div class="control-head"><span id="bills-label">Bills still due this month</span></div>
-            <div class="chips" role="group" aria-labelledby="bills-label" id="bills"></div>
+    <!-- Tour: the phone stays put while the tabs scroll past it. -->
+    <section class="tour" id="tour" aria-labelledby="tour-title">
+      <h2 id="tour-title">Everything in four tabs and a few taps</h2>
+      <div class="tour-grid">
+        <div class="phone-wrap" aria-hidden="true">
+          <!-- The phone tilts toward the pointer; the screens slide with the scroll; notes about each screen float around it. -->
+          <div class="phone-stage" id="stage">
+            <div class="t-halo" id="halo"></div>
+            <div class="phone" id="phone"><div class="t-strip" id="strip"></div></div>
+            <div class="t-callouts" id="callouts"></div>
           </div>
-
-          <p class="sum" id="sum"></p>
+        </div>
+        <ol class="steps" id="steps">
+          <li class="t-rail" aria-hidden="true"><i id="rail"></i></li>
+          <li class="step" data-shot="home">
+            <h3>Home</h3>
+            <p>Today's number first, then your balance across accounts, payments it spotted for you, and the bills coming up.</p>
+            <img class="inline-shot" data-name="home" alt="The Home tab" width="540" height="1200" loading="lazy">
+          </li>
+          <li class="step" data-shot="add">
+            <h3>Add</h3>
+            <p>The keypad opens first. Two taps and it's logged, on today or any day you forgot. Split it with friends or across categories.</p>
+            <img class="inline-shot" data-name="add" alt="Adding an expense with the keypad" width="540" height="1200" loading="lazy">
+          </li>
+          <li class="step" data-shot="insights">
+            <h3>Insights</h3>
+            <p>Touch any day's bar to read it, see where the month is heading, and what changed since last month.</p>
+            <img class="inline-shot" data-name="insights" alt="The Insights tab" width="540" height="1200" loading="lazy">
+          </li>
+          <li class="step" data-shot="plan">
+            <h3>Plan</h3>
+            <p>Your budget, the subscriptions it already knows, and how much to put aside each month for something you want.</p>
+            <img class="inline-shot" data-name="plan" alt="The Plan tab" width="540" height="1200" loading="lazy">
+          </li>
+          <li class="step" data-shot="calendar">
+            <h3>Activity</h3>
+            <p>Every day's spending on a calendar. Search by note, amount, account, category or #tag.</p>
+            <img class="inline-shot" data-name="calendar" alt="The Activity calendar" width="540" height="1200" loading="lazy">
+          </li>
+          <li class="step" data-shot="money-owed">
+            <h3>Money owed</h3>
+            <p>Who owes you and whom you owe, kept out of your budget, and paid back in full or a bit at a time.</p>
+            <img class="inline-shot" data-name="money-owed" alt="Money owed" width="540" height="1200" loading="lazy">
+          </li>
+        </ol>
+      </div>
+      <!-- On phones the same screens are a gallery: swipe through them, or let it play. Built by gallery.js from the steps above. -->
+      <div class="gallery" id="gallery" role="region" aria-roledescription="carousel" aria-label="The app's screens">
+        <div class="g-tabs" id="g-tabs" role="tablist" aria-label="Screens"><span class="g-ind" id="g-ind" aria-hidden="true"></span></div>
+        <div class="g-view" id="g-view"></div>
+        <div class="g-foot">
+          <div class="g-dots" id="g-dots" aria-hidden="true"></div>
+          <button class="round g-play" id="g-play" type="button" aria-label="Pause">
+            <svg class="i-pause" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14M16 5v14"/></svg>
+            <svg class="i-play" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4.5v15l12.5-7.5Z"/></svg>
+          </button>
         </div>
       </div>
     </section>
 
-    <section class="screens" id="screens" aria-labelledby="screens-title" aria-roledescription="carousel">
-      <div class="section-head">
-        <h2 id="screens-title">Take a look around</h2>
-      </div>
-      <div class="viewport" id="track" tabindex="0" aria-label="Screens from the app. Drag, or use the arrow keys.">
-      <ol class="rail" id="rail">
-        <li class="slide" id="slide-0" aria-roledescription="slide" aria-label="1 of 9: Home">
-          <div class="slide-card glass">
-            <div class="slide-copy"><h3>Home</h3><p>Today's number first, then your balance across accounts, payments spotted for you and the bills coming up.</p></div>
-            <img class="shot" data-name="home" src="assets/home.jpg" alt="Home: safe to spend today, total balance, spending, income and upcoming bills" loading="eager" width="540" height="1200">
+    <!-- Insights: scrub the month with a finger; the label follows and reads each day. -->
+    <section class="play-month" id="month" aria-labelledby="month-title">
+      <h2 id="month-title">See where it went</h2>
+      <p class="section-lede">Run your finger along the month, like on the Insights tab. Each day says what it cost and what it went on.</p>
+      <div class="panel chart-panel">
+        <div class="chart-head">
+          <div>
+            <p class="chart-label" id="chart-label">This month so far</p>
+            <p class="chart-value" id="chart-value">₹0</p>
+            <p class="chart-sub" id="chart-sub"></p>
           </div>
-        </li>
-        <li class="slide" id="slide-1" aria-roledescription="slide" aria-label="2 of 9: Add">
-          <div class="slide-card glass">
-            <div class="slide-copy"><h3>Add</h3><p>The keypad opens first. Two taps and a spend is logged, on any day you forgot.</p></div>
-            <img class="shot" data-name="add" src="assets/add.jpg" alt="Add: a keypad with categories and a date strip" loading="eager" width="540" height="1200">
-          </div>
-        </li>
-        <li class="slide" id="slide-2" aria-roledescription="slide" aria-label="3 of 9: Insights">
-          <div class="slide-card glass">
-            <div class="slide-copy"><h3>Insights</h3><p>Touch any day's bar, see where the month is heading and what changed since last month.</p></div>
-            <img class="shot" data-name="insights" src="assets/insights.jpg" alt="Insights: daily spending bars and comparison with last month" loading="lazy" width="540" height="1200">
-          </div>
-        </li>
-        <li class="slide" id="slide-3" aria-roledescription="slide" aria-label="4 of 9: Plan">
-          <div class="slide-card glass">
-            <div class="slide-copy"><h3>Plan</h3><p>Your budget, the subscriptions it already knows about, and what to save each month for a goal.</p></div>
-            <img class="shot" data-name="plan" src="assets/plan.jpg" alt="Plan: budget gauge, subscriptions and savings goals" loading="lazy" width="540" height="1200">
-          </div>
-        </li>
-        <li class="slide" id="slide-4" aria-roledescription="slide" aria-label="5 of 9: Activity">
-          <div class="slide-card glass">
-            <div class="slide-copy"><h3>Activity</h3><p>A calendar of every day's spending. Tap a day to see it, or to add something you forgot.</p></div>
-            <img class="shot" data-name="calendar" src="assets/calendar.jpg" alt="Activity calendar showing each day's spending" loading="lazy" width="540" height="1200">
-          </div>
-        </li>
-        <li class="slide" id="slide-5" aria-roledescription="slide" aria-label="6 of 9: Search and filters">
-          <div class="slide-card glass">
-            <div class="slide-copy"><h3>Search and filters</h3><p>Find anything by note, amount, account, category or #tag, with a total for what you found.</p></div>
-            <img class="shot" data-name="filters" src="assets/filters.jpg" alt="Filters for account, category and tags" loading="lazy" width="540" height="1200">
-          </div>
-        </li>
-        <li class="slide" id="slide-6" aria-roledescription="slide" aria-label="7 of 9: Split a bill">
-          <div class="slide-card glass">
-            <div class="slide-copy"><h3>Split a bill</h3><p>Your share is your spending. What each friend owes goes to Money owed, from the account you paid with.</p></div>
-            <img class="shot" data-name="lent-borrowed" src="assets/lent-borrowed.jpg" alt="Lent or borrowed: an amount split between friends" loading="lazy" width="540" height="1200">
-          </div>
-        </li>
-        <li class="slide" id="slide-7" aria-roledescription="slide" aria-label="8 of 9: Money owed">
-          <div class="slide-card glass">
-            <div class="slide-copy"><h3>Money owed</h3><p>Who owes you and whom you owe, paid back in full or a bit at a time.</p></div>
-            <img class="shot" data-name="money-owed" src="assets/money-owed.jpg" alt="Money owed: balances per person with Pay back" loading="lazy" width="540" height="1200">
-          </div>
-        </li>
-        <li class="slide" id="slide-8" aria-roledescription="slide" aria-label="9 of 9: Assistant">
-          <div class="slide-card glass">
-            <div class="slide-copy"><h3>Assistant</h3><p>Optional. Ask about your money or tell it what to log, with your own AI key. Nothing changes until you confirm.</p></div>
-            <img class="shot" data-name="assistant" src="assets/assistant.jpg" alt="The AI assistant" loading="lazy" width="540" height="1200">
-          </div>
-        </li>
-      </ol>
-      </div>
-      <div class="player">
-        <div class="dots" id="dots" role="group" aria-label="Choose a screen"></div>
-        <button class="icon-btn play" id="play" type="button" aria-label="Pause">
-          <svg class="i-pause" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5v14M15 5v14"/></svg>
-          <svg class="i-play" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l11-6.5z"/></svg>
-          <svg class="i-replay" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>
-        </button>
+          <div class="chart-avg"><span>A day on average</span><strong id="chart-avg">₹0</strong></div>
+        </div>
+        <div class="chart" id="chart" tabindex="0" role="slider" aria-label="Day of the month" aria-valuemin="1">
+          <div class="bars" id="bars"></div>
+          <div class="pin" id="pin" aria-hidden="true"></div>
+        </div>
+        <div class="chart-axis" aria-hidden="true"><span>1</span><span id="axis-mid"></span><span id="axis-end"></span></div>
       </div>
     </section>
 
-    <section class="notice" aria-labelledby="notice-title">
-      <div class="notice-copy">
-        <h2 id="notice-title">It notices payments, you decide</h2>
-        <p>Turn on detection and Leftovers reads bank texts, payment app notifications or bank emails on your phone, and suggests the entry. Nothing is logged until you tap it, and one-time passwords and payment requests are ignored.</p>
-        <div class="tabs" role="tablist" aria-label="Example messages">
-          <button role="tab" type="button" aria-selected="true" data-msg="0">Bank SMS</button>
-          <button role="tab" type="button" aria-selected="false" data-msg="1">Payment app</button>
-          <button role="tab" type="button" aria-selected="false" data-msg="2">Salary</button>
-          <button role="tab" type="button" aria-selected="false" data-msg="3">An OTP</button>
+    <!-- Plan: pick something to save for and drag the months. -->
+    <section class="play-goal" id="goal" aria-labelledby="goal-title">
+      <h2 id="goal-title">Save for something</h2>
+      <p class="section-lede">Pick a goal and how soon you want it. Leftovers works out what to put aside each month, and how much of your budget that takes.</p>
+      <div class="panel goal-panel">
+        <div class="goal-ring">
+          <svg viewBox="0 0 120 120" aria-hidden="true">
+            <circle class="ring-bg" cx="60" cy="60" r="52"/>
+            <circle class="ring-fg" id="ring" cx="60" cy="60" r="52"/>
+          </svg>
+          <div class="ring-text"><strong id="ring-pct">0%</strong><span>of your budget</span></div>
         </div>
-      </div>
-      <div class="notice-demo" role="tabpanel" aria-live="polite">
-        <div class="message glass">
-          <div class="message-from" id="msg-from">AD-HDFCBK</div>
-          <p id="msg-text"></p>
-        </div>
-        <svg class="flow" viewBox="0 0 24 48" aria-hidden="true"><path d="M12 2v40m-7-7 7 7 7-7"/></svg>
-        <div class="suggestion glass strong" id="suggestion"></div>
-      </div>
-    </section>
-
-    <section class="private" id="private" aria-labelledby="private-title">
-      <h2 id="private-title">Your money stays on your phone</h2>
-      <div class="private-grid">
-        <dl>
-          <div><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/><path d="m3 3 18 18"/></svg><dt>No account</dt><dd>Open it and start. There's nothing to sign up for.</dd></div>
-          <div><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m5.7 5.7 12.6 12.6"/></svg><dt>No ads, no analytics</dt><dd>The app doesn't report what you do to anyone.</dd></div>
-          <div><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h.01"/><path d="M8.5 16.4a5 5 0 0 1 7 0"/><path d="M5 12.9a10 10 0 0 1 5.2-2.7"/><path d="M19 12.9a10 10 0 0 0-2.1-1.6"/><path d="m2 2 20 20"/></svg><dt>No network unless you ask</dt><dd>It goes online only for things you turn on: the AI assistant, bank email alerts, or checking a product's price.</dd></div>
-          <div><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><dt>Locked and encrypted</dt><dd>App lock with your fingerprint or a PIN, encrypted backups, and API keys kept in the phone's keystore.</dd></div>
-          <div><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m16 18 6-6-6-6"/><path d="m8 6-6 6 6 6"/></svg><dt>Open source</dt><dd>Every line is on GitHub under the MIT licence, and releases are built in the open.</dd></div>
-        </dl>
-        <div class="chat glass" aria-label="Example of the AI assistant">
-          <div class="bubble me">Add 250 for coffee today</div>
-          <div class="change" id="change">
-            <div class="change-top"><span>Add an expense</span><strong>₹250</strong></div>
-            <div class="change-sub">Coffee, Food &amp; Dining, today</div>
-            <div class="change-actions">
-              <button type="button" class="btn tiny ghost" id="not-now">Not now</button>
-              <button type="button" class="btn tiny primary" id="confirm">Confirm</button>
+        <div class="goal-controls">
+          <div class="goal-chips" role="radiogroup" aria-label="Saving for" id="goal-chips"></div>
+          <p class="goal-monthly"><strong id="goal-monthly">₹0</strong> a month</p>
+          <p class="goal-sub" id="goal-sub"></p>
+          <div class="months">
+            <div class="months-head"><span>I want it in</span><strong id="months-out">12 months</strong></div>
+            <div class="months-track" id="months" role="slider" tabindex="0" aria-label="Months" aria-valuemin="1" aria-valuemax="24" aria-valuenow="12">
+              <span class="months-fill" id="months-fill"></span>
+              <span class="months-thumb" id="months-thumb"></span>
             </div>
+            <div class="months-scale" aria-hidden="true"><span>1</span><span>6</span><span>12</span><span>18</span><span>24</span></div>
           </div>
-          <p class="chat-note">The assistant is optional. It proposes changes; nothing happens until you confirm.</p>
         </div>
       </div>
+    </section>
+
+    <!-- Detection: pick up a message and drop it on the app. -->
+    <section class="play-detect" id="detect" aria-labelledby="detect-title">
+      <h2 id="detect-title">It notices payments, you decide</h2>
+      <p class="section-lede">With detection on, a bank text or payment notification becomes a suggestion you can add with a tap. Drag one onto the app and see.</p>
+      <div class="detect-grid">
+        <ul class="messages" id="messages" aria-label="Messages to try"></ul>
+        <div class="mini-app panel" id="mini-app" aria-live="polite">
+          <div class="mini-head"><img src="assets/icon.svg" alt="" width="22" height="22"><span>Detected payments</span></div>
+          <ul class="mini-list" id="mini-list"><li class="mini-empty" id="mini-empty">Drop a message here</li></ul>
+          <p class="mini-note" id="mini-note"></p>
+        </div>
+      </div>
+      <p class="detect-reset"><button class="text-btn" type="button" id="detect-reset" hidden>Start again</button></p>
+    </section>
+
+    <!-- Privacy: every way it could read your money starts off, like in the app. -->
+    <section class="privacy" id="privacy" aria-labelledby="privacy-title">
+      <h2 id="privacy-title">Nothing reads your money until you say so</h2>
+      <p class="section-lede">Everything that could look at your messages or talk to the internet starts off. Turn one on to see what it does.</p>
+      <ul class="switches" id="switches">
+        <li>
+          <div class="sw-text">
+            <h3>Bank texts</h3>
+            <p data-off="Your messages aren't read." data-on="Bank texts are read on your phone, and a payment becomes a suggestion you tap to add. One-time passwords are ignored."></p>
+          </div>
+          <button class="switch" type="button" role="switch" aria-checked="false" aria-label="Bank texts"><span class="thumb"></span></button>
+        </li>
+        <li>
+          <div class="sw-text">
+            <h3>Payment app notifications</h3>
+            <p data-off="Notifications aren't read." data-on="Only the payment apps you pick are read, and each payment goes into the account you chose for that app."></p>
+          </div>
+          <button class="switch" type="button" role="switch" aria-checked="false" aria-label="Payment app notifications"><span class="thumb"></span></button>
+        </li>
+        <li>
+          <div class="sw-text">
+            <h3>Bank emails</h3>
+            <p data-off="Your inbox isn't opened." data-on="It signs in with an app password, opens only alerts from banks and payment apps, and keeps just the amount, payee and date."></p>
+          </div>
+          <button class="switch" type="button" role="switch" aria-checked="false" aria-label="Bank emails"><span class="thumb"></span></button>
+        </li>
+        <li>
+          <div class="sw-text">
+            <h3>AI assistant</h3>
+            <p data-off="Nothing is sent to an AI." data-on="It uses the AI you connect with your own key, sees only what each question needs, and changes nothing until you confirm."></p>
+          </div>
+          <button class="switch" type="button" role="switch" aria-checked="false" aria-label="AI assistant"><span class="thumb"></span></button>
+        </li>
+      </ul>
+      <dl class="facts">
+        <div><dt>No account</dt><dd>Open it and start.</dd></div>
+        <div><dt>No ads or analytics</dt><dd>It doesn't report what you do.</dd></div>
+        <div><dt>Locked and encrypted</dt><dd>App lock and encrypted backups.</dd></div>
+        <div><dt>Open source</dt><dd>MIT licence, built in the open.</dd></div>
+      </dl>
     </section>
 
     <section class="new" id="new" aria-labelledby="new-title">
-      <div class="section-head">
+      <div class="new-head">
         <h2 id="new-title">What's new</h2>
-        <a class="link" href="https://github.com/saisaharsh3/Leftovers/blob/main/CHANGELOG.md">Full changelog</a>
+        <a class="text-btn" href="https://github.com/saisaharsh3/Leftovers/blob/main/CHANGELOG.md">Full changelog</a>
       </div>
-      <div id="changelog" class="changelog">
-        <p class="muted">Loading the latest changes…</p>
-      </div>
+      <div id="changelog" class="changelog"><p class="muted">Loading the latest changes…</p></div>
     </section>
 
-    <section class="get" id="get" aria-labelledby="get-title">
-      <h2 id="get-title">Get Leftovers</h2>
-      <ul class="ways">
-        <li class="glass">
-          <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h16v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/><path d="M8 9V7a4 4 0 0 1 8 0v2"/></svg>
-          <h3>F-Droid</h3>
-          <p id="fdroid-text">On F-Droid: install it from the F-Droid app, and updates arrive there.</p>
-          <a class="btn ghost" href="https://f-droid.org/packages/com.leftovers.app/">Open on F-Droid</a>
-        </li>
-        <li class="glass">
-          <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg>
-          <h3>Obtainium</h3>
-          <p>Installs from GitHub and keeps the app up to date for you.</p>
-          <a class="btn ghost" href="https://apps.obtainium.imranr.dev/redirect?r=obtainium://add/https://github.com/saisaharsh3/Leftovers">Add to Obtainium</a>
-        </li>
-        <li class="glass">
-          <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
-          <h3>APK from GitHub</h3>
-          <p id="apk-text">Download the signed APK and open it. Updates install over the top and keep your data.</p>
-          <a class="btn primary" id="apk2" href="https://github.com/saisaharsh3/Leftovers/releases/latest">Download the APK</a>
-        </li>
-        <li class="glass">
-          <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 2v7.5L4.5 19a2 2 0 0 0 1.7 3h11.6a2 2 0 0 0 1.7-3L14 9.5V2"/><path d="M8.5 2h7"/></svg>
-          <h3>Dev build</h3>
-          <p>The newest changes, built on every update. It installs next to the real app, with its own data.</p>
-          <div class="pair">
-            <a class="btn ghost" href="https://github.com/saisaharsh3/Leftovers/releases/tag/dev-build">Get the Dev build</a>
-            <a class="link" href="https://apps.obtainium.imranr.dev/redirect?r=obtainium%3A%2F%2Fapp%2F%257B%2522id%2522%253A%2522com.leftovers.app.dev%2522%252C%2522url%2522%253A%2522https%253A%252F%252Fgithub.com%252Fsaisaharsh3%252FLeftovers%2522%252C%2522author%2522%253A%2522saisaharsh3%2522%252C%2522name%2522%253A%2522Leftovers%2520Dev%2522%252C%2522preferredApkIndex%2522%253A0%252C%2522additionalSettings%2522%253A%2522%257B%255C%2522includePrereleases%255C%2522%253A%2520true%252C%2520%255C%2522fallbackToOlderReleases%255C%2522%253A%2520false%252C%2520%255C%2522filterReleaseTitlesByRegEx%255C%2522%253A%2520%255C%2522%255EDev%2520build%255C%2522%252C%2520%255C%2522filterReleaseNotesByRegEx%255C%2522%253A%2520%255C%2522%255C%2522%252C%2520%255C%2522verifyLatestTag%255C%2522%253A%2520false%252C%2520%255C%2522useLatestAssetDateAsReleaseDate%255C%2522%253A%2520true%252C%2520%255C%2522releaseTitleAsVersion%255C%2522%253A%2520false%252C%2520%255C%2522trackOnly%255C%2522%253A%2520false%252C%2520%255C%2522versionExtractionRegEx%255C%2522%253A%2520%255C%2522%255C%2522%252C%2520%255C%2522matchGroupToUse%255C%2522%253A%2520%255C%2522%255C%2522%252C%2520%255C%2522versionDetection%255C%2522%253A%2520false%252C%2520%255C%2522releaseDateAsVersion%255C%2522%253A%2520true%252C%2520%255C%2522apkFilterRegEx%255C%2522%253A%2520%255C%2522leftovers-dev%255C%255C%255C%255C.apk%255C%2522%252C%2520%255C%2522invertAPKFilter%255C%2522%253A%2520false%252C%2520%255C%2522autoApkFilterByArch%255C%2522%253A%2520true%252C%2520%255C%2522appName%255C%2522%253A%2520%255C%2522Leftovers%2520Dev%255C%2522%257D%2522%257D">Or follow it in Obtainium</a>
-          </div>
-        </li>
-      </ul>
+    <section class="closing">
+      <h2>Ready when you are.</h2>
+      <button class="pill primary" type="button" data-open-sheet>Get Leftovers</button>
     </section>
   </main>
 
   <footer class="foot">
-    <img src="assets/icon.svg" alt="" width="28" height="28">
-    <p>Leftovers is made by C. Sai Saharsh and released under the MIT licence.</p>
+    <p>Made by C. Sai Saharsh, released under the MIT licence.</p>
     <nav aria-label="Project">
       <a href="https://github.com/saisaharsh3/Leftovers">Source code</a>
       <a href="https://github.com/saisaharsh3/Leftovers/issues/new/choose">Report a problem</a>
@@ -273,6 +256,43 @@
     </nav>
   </footer>
 
+  <!-- Get Leftovers: a sheet that rises from the bottom, follows the finger, and is flicked away. -->
+  <div class="scrim" id="scrim" hidden></div>
+  <section class="sheet" id="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-title" hidden>
+    <div class="sheet-grab" id="sheet-grab">
+      <span class="handle" aria-hidden="true"></span>
+      <h2 id="sheet-title">Get Leftovers</h2>
+      <button class="round" type="button" id="sheet-close" aria-label="Close">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <ul class="ways">
+      <li>
+        <div><h3>F-Droid</h3><p id="fdroid-text">Install it from the F-Droid app, and updates arrive there. It's the same signed APK as on GitHub.</p></div>
+        <a class="pill primary small" href="https://f-droid.org/packages/com.leftovers.app/">Open</a>
+      </li>
+      <li>
+        <div><h3>APK from GitHub</h3><p id="apk-text">The signed APK. Updates install over the top and keep your data.</p></div>
+        <a class="pill quiet small" id="apk" href="https://github.com/saisaharsh3/Leftovers/releases/latest">Download</a>
+      </li>
+      <li>
+        <div><h3>Obtainium</h3><p>Installs from GitHub and keeps it up to date.</p></div>
+        <a class="pill quiet small" href="https://apps.obtainium.imranr.dev/redirect?r=obtainium://add/https://github.com/saisaharsh3/Leftovers">Add</a>
+      </li>
+      <li>
+        <div><h3>Dev build</h3><p>The newest changes first. It installs next to the real app with its own data.</p></div>
+        <span class="pair">
+          <a class="pill quiet small" href="https://github.com/saisaharsh3/Leftovers/releases/tag/dev-build">Get</a>
+          <a class="pill quiet small" id="dev-obtainium" href="#">In Obtainium</a>
+        </span>
+      </li>
+    </ul>
+  </section>
+
   <script src="app.js" defer></script>
+  <script src="play.js" defer></script>
+  <script src="gallery.js" defer></script>
+  <script src="tour.js" defer></script>
+  <script src="fx.js" defer></script>
 </body>
 </html>

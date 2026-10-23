@@ -1,5 +1,5 @@
 # Publishes the website (website/) to GitHub Pages at https://saisaharsh3.github.io/Leftovers/
-# whenever main changes it. Screenshots, the icon and the font are copied in from where the app keeps them.
+# whenever main changes it. Screenshots and the icon are copied in from where the app keeps them.
 name: Website
 
 on:
@@ -37,7 +37,6 @@ jobs:
           cp docs/screenshots/*.jpg docs/icon.svg docs/social-preview.png _site/assets/
           # The same screens in the light theme, shown when the page is light.
           mkdir -p _site/assets/light && cp docs/screenshots/light/*.jpg _site/assets/light/
-          cp app/src/main/res/font/manrope.ttf _site/assets/
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
