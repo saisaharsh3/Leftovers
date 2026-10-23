@@ -343,6 +343,13 @@ class EditorViewModel(
                     ?: fromSms?.let { d -> accountRepository.accounts.first().firstOrNull { it.matchesDigits(d) }?.id }
                 accountId = matched ?: s.homeAccountId?.takeIf { it in known } ?: s.defaultAccountId
             }
+            // A detected payment to somewhere filed before opens under the same category again.
+            if (smsId > 0 && categoryId == null && note.isNotBlank()) {
+                val past = repository.getAllTransactions().map { com.leftovers.app.util.MerchantMemory.Past(it.note, it.type, it.categoryId, it.epochDay, it.createdAt) }
+                com.leftovers.app.util.MerchantMemory.categoryFor(note, type, past)?.let { remembered ->
+                    if (categoryId == null) categoryId = remembered
+                }
+            }
         }
     }
 
