@@ -1,5 +1,6 @@
 package com.leftovers.app.ui.screens
 
+import com.leftovers.app.ui.components.toggleHaptic
 import com.leftovers.app.ui.components.pressable
 import androidx.compose.foundation.layout.Box
 import com.leftovers.app.ui.components.SecondaryButton
@@ -1037,6 +1038,7 @@ private fun NavRow(icon: ImageVector, title: String, value: String?, onClick: ()
 @Composable
 private fun ToggleRow(icon: ImageVector, title: String, checked: Boolean, onChange: (Boolean) -> Unit, inset: Boolean = true) {
     val c = LocalAppColors.current
+    val flip = toggleHaptic(onChange)
     ListRow(
         title,
         modifier = if (inset) Modifier else Modifier.padding(horizontal = (0).dp),
@@ -1044,7 +1046,7 @@ private fun ToggleRow(icon: ImageVector, title: String, checked: Boolean, onChan
         trailing = {
             Switch(
                 checked = checked,
-                onCheckedChange = onChange,
+                onCheckedChange = flip,
                 colors = SwitchDefaults.colors(
                     checkedTrackColor = c.accent,
                     checkedThumbColor = c.onAccent,
@@ -1054,7 +1056,7 @@ private fun ToggleRow(icon: ImageVector, title: String, checked: Boolean, onChan
                 ),
             )
         },
-        onClick = { onChange(!checked) },
+        onClick = { flip(!checked) },
     )
 }
 
@@ -1246,7 +1248,7 @@ private fun PaymentAppsSheet(onDismiss: () -> Unit) {
                             }
                             Switch(
                                 checked = app.read,
-                                onCheckedChange = { container.paymentApps.setRead(app.pkg, it) },
+                                onCheckedChange = toggleHaptic({ container.paymentApps.setRead(app.pkg, it) }),
                                 colors = SwitchDefaults.colors(checkedTrackColor = c.accent, checkedThumbColor = c.onAccent),
                             )
                         }

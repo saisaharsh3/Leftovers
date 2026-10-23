@@ -1,5 +1,6 @@
 package com.leftovers.app.ui.screens
 
+import com.leftovers.app.ui.components.toggleHaptic
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -574,16 +575,17 @@ private fun StatementSheet(start: YearMonth, onDismiss: () -> Unit, onMake: (mon
 @Composable
 private fun StatementSwitch(title: String, subtitle: String, checked: Boolean, onChange: (Boolean) -> Unit) {
     val c = LocalAppColors.current
+    val flip = toggleHaptic(onChange)
     com.leftovers.app.ui.components.ListRow(
         title,
         subtitle = subtitle,
         trailing = {
             androidx.compose.material3.Switch(
                 checked = checked,
-                onCheckedChange = onChange,
+                onCheckedChange = flip,
                 colors = androidx.compose.material3.SwitchDefaults.colors(checkedTrackColor = c.accent, checkedThumbColor = c.onAccent),
             )
         },
-        modifier = Modifier.pressable({ onChange(!checked) }, pressedScale = 0.99f),
+        modifier = Modifier.pressable({ flip(!checked) }, pressedScale = 0.99f),
     )
 }

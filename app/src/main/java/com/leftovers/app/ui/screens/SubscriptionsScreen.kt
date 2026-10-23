@@ -1,5 +1,6 @@
 package com.leftovers.app.ui.screens
 
+import com.leftovers.app.ui.components.toggleHaptic
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.style.TextOverflow
 import com.leftovers.app.ui.components.SecondaryButton
@@ -576,7 +577,7 @@ private fun RecurringRow(item: RecurringItem, onClick: () -> Unit, onToggle: (Bo
         Spacer(Modifier.width(10.dp))
         Switch(
             checked = item.active,
-            onCheckedChange = onToggle,
+            onCheckedChange = toggleHaptic(onToggle),
             colors = SwitchDefaults.colors(
                 checkedTrackColor = c.accent,
                 checkedThumbColor = c.onAccent,
@@ -732,7 +733,7 @@ private fun RecurringEditor(
                         }
                         Switch(
                             checked = chargeThisMonth,
-                            onCheckedChange = { chargeThisMonth = it },
+                            onCheckedChange = toggleHaptic({ chargeThisMonth = it }),
                             colors = SwitchDefaults.colors(checkedTrackColor = c.accent, checkedThumbColor = c.onAccent),
                         )
                     }
@@ -752,7 +753,7 @@ private fun RecurringEditor(
                         }
                         Switch(
                             checked = skipNext,
-                            onCheckedChange = { skipNext = it },
+                            onCheckedChange = toggleHaptic({ skipNext = it }),
                             colors = SwitchDefaults.colors(checkedTrackColor = c.accent, checkedThumbColor = c.onAccent),
                         )
                     }

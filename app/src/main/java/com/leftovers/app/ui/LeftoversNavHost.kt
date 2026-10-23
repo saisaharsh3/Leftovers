@@ -1,5 +1,6 @@
 package com.leftovers.app.ui
 
+import com.leftovers.app.ui.components.Haptics
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.runtime.rememberCoroutineScope
 import com.leftovers.app.ui.components.LocalUndo
@@ -193,6 +194,7 @@ fun LeftoversNavHost(openAdd: Boolean = false, onOpenAddHandled: () -> Unit = {}
     val appScope = rememberCoroutineScope()
     val undo = remember { UndoState(appScope) }
     val onTab = currentRoute in Routes.tabs
+    val view = androidx.compose.ui.platform.LocalView.current
     val colors = LocalAppColors.current
     // The tab bar is liquid glass on Android 13 and newer (it bends the picture behind it with a GPU shader),
     // while glass effects are on; otherwise it's the frosted bar.
@@ -357,6 +359,7 @@ fun LeftoversNavHost(openAdd: Boolean = false, onOpenAddHandled: () -> Unit = {}
                             onClose = back,
                             onSaved = {
                                 toast = it
+                                Haptics.confirm(view)
                                 back()
                             },
                             onManageCategories = { nav.navigate(Routes.CATEGORIES) },
@@ -367,6 +370,7 @@ fun LeftoversNavHost(openAdd: Boolean = false, onOpenAddHandled: () -> Unit = {}
                             onClose = back,
                             onSaved = {
                                 toast = it
+                                Haptics.confirm(view)
                                 back()
                             },
                             onManageCategories = { nav.navigate(Routes.CATEGORIES) },
@@ -439,7 +443,7 @@ fun LeftoversNavHost(openAdd: Boolean = false, onOpenAddHandled: () -> Unit = {}
                         .padding(start = 16.dp, end = 16.dp, bottom = undoLift),
                 ) {
                     lastUndo?.let { request ->
-                        UndoBar(request, onUndo = { undo.undo(request) }, onDismiss = { undo.dismiss(request) })
+                        UndoBar(request, onUndo = { Haptics.tick(view); undo.undo(request) }, onDismiss = { undo.dismiss(request) })
                     }
                 }
 

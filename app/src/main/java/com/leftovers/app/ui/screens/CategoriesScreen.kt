@@ -1,5 +1,6 @@
 package com.leftovers.app.ui.screens
 
+import com.leftovers.app.ui.components.toggleHaptic
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -135,7 +136,7 @@ fun CategoriesScreen(
                                         if (cat.type == TxType.INCOME) {
                                             Switch(
                                                 checked = cat.addsToBudget,
-                                                onCheckedChange = { viewModel.save(cat.copy(addsToBudget = it)) },
+                                                onCheckedChange = toggleHaptic({ viewModel.save(cat.copy(addsToBudget = it)) }),
                                                 colors = SwitchDefaults.colors(
                                                     checkedTrackColor = c.accent,
                                                     checkedThumbColor = c.onAccent,

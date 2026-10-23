@@ -1,5 +1,7 @@
 package com.leftovers.app.ui.screens
 
+import com.leftovers.app.ui.components.Haptics
+import com.leftovers.app.ui.components.toggleHaptic
 import androidx.compose.foundation.gestures.transformable
 import kotlin.math.abs
 import androidx.compose.ui.platform.LocalDensity
@@ -1287,7 +1289,7 @@ fun EditorScreen(
                             )
                             Switch(
                                 checked = stopRepeating,
-                                onCheckedChange = { stopRepeating = it },
+                                onCheckedChange = toggleHaptic({ stopRepeating = it }),
                                 colors = SwitchDefaults.colors(checkedTrackColor = c.accent, checkedThumbColor = c.onAccent),
                             )
                         }
@@ -1297,6 +1299,7 @@ fun EditorScreen(
             confirmButton = {
                 TextButton(onClick = {
                     confirmDelete = false
+                    Haptics.confirm(view)
                     viewModel.delete(linked?.takeIf { stopRepeating }, onClose)
                 }) { Text("Delete", color = c.negative) }
             },

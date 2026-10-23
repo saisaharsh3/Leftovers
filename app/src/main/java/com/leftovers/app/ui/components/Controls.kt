@@ -260,6 +260,7 @@ fun <T> SegmentedToggle(
     modifier: Modifier = Modifier,
 ) {
     val c = LocalAppColors.current
+    val view = androidx.compose.ui.platform.LocalView.current
     BoxWithConstraints(
         modifier
             .height(44.dp)
@@ -290,7 +291,7 @@ fun <T> SegmentedToggle(
                     Modifier
                         .weight(1f)
                         .fillMaxHeight()
-                        .pressable({ onSelect(option) }, pressedScale = 0.94f),
+                        .pressable({ if (option != selected) Haptics.select(view); onSelect(option) }, pressedScale = 0.94f),
                     contentAlignment = Alignment.Center,
                 ) {
                     Text(label(option), style = MaterialTheme.typography.labelLarge, color = color, maxLines = 1)
@@ -311,12 +312,13 @@ fun Chip(
     selected: Boolean = false,
 ) {
     val c = LocalAppColors.current
+    val view = androidx.compose.ui.platform.LocalView.current
     val bg by animateColorAsState(if (selected) c.accent else c.glass, label = "chipBg")
     val fg by animateColorAsState(if (selected) c.onAccent else c.textPrimary, label = "chipFg")
     Row(
         modifier
             .height(42.dp)
-            .pressable(onClick, pressedScale = 0.95f)
+            .pressable({ Haptics.select(view); onClick() }, pressedScale = 0.95f)
             .clip(CircleShape)
             .background(bg)
             .border(1.dp, if (selected) Brush.verticalGradient(listOf(Color.Transparent, Color.Transparent)) else glassBorder(c), CircleShape)

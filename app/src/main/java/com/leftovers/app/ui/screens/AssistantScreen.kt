@@ -1,5 +1,6 @@
 package com.leftovers.app.ui.screens
 
+import com.leftovers.app.ui.components.toggleHaptic
 import androidx.activity.compose.LocalActivity
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -961,7 +962,7 @@ private fun PrivacyToggle(title: String, detail: String, checked: Boolean, onCha
         Spacer(Modifier.width(12.dp))
         Switch(
             checked = checked,
-            onCheckedChange = onChange,
+            onCheckedChange = toggleHaptic(onChange),
             colors = SwitchDefaults.colors(
                 checkedTrackColor = c.accent,
                 checkedThumbColor = c.onAccent,
