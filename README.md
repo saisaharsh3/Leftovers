@@ -35,7 +35,7 @@ Most budget apps want an account, show ads, or send your spending to a server. L
 - **It answers the question you actually have:** *how much can I spend today?* What's left this month,
   minus bills still due, spread over the days remaining.
 - **Private by design:** no sign-up, no ads, no analytics. Your data never leaves the phone unless you
-  choose to connect an AI or an email account.
+  choose to connect an AI or an email account, or sync with your own devices.
 - **Fast to use:** the keypad opens first, so a spend is logged in two taps. Bank SMS and email alerts can
   suggest entries for you, in any currency.
 - **Free and open source** (MIT), with signed releases built in the open by GitHub Actions.
@@ -76,7 +76,8 @@ Most budget apps want an account, show ads, or send your spending to a server. L
 - Total balance across accounts on Home, with where it's heading by the end of the month; switch it to one
   account (like a wallet) to see just that account's balance, spending and income
 - Money owed: what you lent or borrowed and from whom, kept out of your budget. It moves the account the money
-  went from or into while it's open, and can be paid back in full or a bit at a time
+  went from or into while it's open, and can be paid back in full or a bit at a time. **Remind** sends someone
+  who owes you a friendly message through WhatsApp, SMS or any app
 
 **Insights**
 - Daily bar chart you can touch to read any day
@@ -97,7 +98,12 @@ Most budget apps want an account, show ads, or send your spending to a server. L
 - Every change it proposes waits for you to tap **Apply**. See [AI assistant](#ai-assistant) below.
 
 **Extras**
-- Home-screen widgets: *Safe to spend today* (with one-tap add) and *Left this month*, plus an *Add expense* Quick Settings tile
+- Home-screen widgets: *Safe to spend today* (with one-tap add), *Left this month*, and *Quick add*, which logs
+  ₹50, ₹100, ₹200 or ₹500 in one tap (with Undo) without opening the app and shows what you've spent today;
+  tap its category to switch. Plus an *Add expense* Quick Settings tile
+- **Sync between your devices**, with no account: through a folder that Syncthing or Nextcloud's app keeps the
+  same on each phone, or your own WebDAV server (Nextcloud, ownCloud). Entries deleted or changed on one phone are
+  removed on the others, and the files are encrypted with your backup password
 - Evening reminder, app lock with the phone's lock (fingerprint, face, screen lock) or its own PIN or password, locking as soon as you leave or after 30 s or 5 min
 - Import a bank statement as CSV, Excel (.xlsx, .xls or a bank's HTML ".xls") or PDF, password-protected ones
   included, or another app's backup (JSON, or a .zip of it), with its notes, tags and categories. Anything already
@@ -108,15 +114,19 @@ Most budget apps want an account, show ads, or send your spending to a server. L
 - Optional backup password: backups are encrypted (AES-256) and need it to restore
 - Optional payment detection from bank SMS and from bank email alerts, suggesting entries for you to confirm,
   including money coming in as income.
-  Add your own keywords for banks it misses, and test any message to see what it would suggest. One payment never shows up twice, even when it arrives by both SMS and email
+  Add your own keywords for banks it misses, and test any message to see what it would suggest. One payment never shows up twice, even when it arrives by both SMS and email.
+  A payment to a place you've logged before opens under the category you used last time
 - Swipe sideways to move between Home, Activity, Insights and Plan
 - Frosted glass design in dark and light mode (or solid surfaces with *Glass effects* off), a liquid glass tab
-  bar on Android 13 and newer, spring animations and high-refresh-rate support
+  bar on Android 13 and newer, spring animations, haptic feedback and high-refresh-rate support
+- If the app ever closes unexpectedly, it offers to report it on GitHub or by email. You see the report (versions,
+  phone model and the error, nothing from your entries) before anything is sent
 
 ## Privacy
 
 Everything stays on your device. There are no accounts, ads or analytics, and the app makes no
-network calls unless you connect the optional AI assistant or an email account.
+network calls unless you connect the optional AI assistant or an email account, sync with your own WebDAV
+server, or tap Check price on a goal.
 
 - The app is excluded from Android's automatic cloud backup, so backups go only where you save them.
 - With app lock on, screenshots are blocked and the app is hidden in the recent-apps preview. An app PIN or password is
@@ -131,6 +141,10 @@ network calls unless you connect the optional AI assistant or an email account.
   password are encrypted with an Android Keystore key, never backed up, and deleted when you disconnect.
 - With a backup password, backup files are encrypted. The password is kept encrypted with an Android Keystore key
   and is never written into a backup; if it's forgotten, those backups can't be opened.
+- Sync between devices is off by default. Each phone keeps a full copy of its data in the folder or on the
+  server you choose, encrypted when you set a backup password (use the same one on each phone). A WebDAV
+  password is encrypted with an Android Keystore key and never backed up.
+- Crash reports are never sent by themselves: after a crash the app asks, and you read the report first.
 - Network access is HTTPS-only and trusts only the system's certificate authorities.
 
 ## AI assistant
@@ -253,7 +267,8 @@ git push origin v1.2.0
 
 - Kotlin, Jetpack Compose, Material 3
 - Room (SQLite) with versioned migrations, DataStore for settings
-- WorkManager (reminders, bill alerts, automatic backups), Glance (widgets), Biometric (app lock)
+- WorkManager (reminders, bill alerts, automatic backups, sync), Glance (widgets), Biometric (app lock)
+- [OkHttp](https://square.github.io/okhttp/) for WebDAV sync, which needs requests Android's built-in client can't send
 - AI providers called over plain HTTPS with `org.json`, so no extra SDKs ship in the app
 - [Haze](https://github.com/chrisbanes/haze) for frosted-glass blur
 - [Lucide](https://lucide.dev) icons and the [Manrope](https://github.com/davelab6/manrope) typeface

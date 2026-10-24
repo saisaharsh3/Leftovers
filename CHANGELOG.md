@@ -3,6 +3,25 @@
 All notable changes to Leftovers. Download any version from
 [Releases](https://github.com/saisaharsh3/Leftovers/releases).
 
+## Unreleased
+
+- Sync between your devices, with no account: Settings → Sync. Use a folder that Syncthing or Nextcloud's app keeps
+  the same on each phone, or your own WebDAV server (Nextcloud, ownCloud and others). Each phone merges in the
+  others' entries when the app opens, every few hours and on Sync now; entries deleted or changed on one phone are
+  removed on the others (into Deleted entries, so they can be brought back). Files are encrypted with your backup
+  password
+- Quick add widget: log ₹50, ₹100, ₹200 or ₹500 in one tap from the home screen, with Undo. It shows what you've
+  spent today, switches category with a tap, and fits its size: a taller widget gets bigger buttons and an
+  Other amount button
+- Money owed: Remind sends someone who owes you a friendly message through WhatsApp, SMS or any app
+- A detected payment to a place you've logged before opens under the category you used last time
+- Haptic feedback: switches click as they flip, choosing a segment or chip ticks, and saving, deleting, paying back
+  and Undo confirm
+- If the app closes unexpectedly, it offers to report it on GitHub or by email on the next launch. You see the
+  report first, and nothing from your entries is in it
+- Settings showed an old version number (1.6.0) at the bottom; it shows the real one now
+- Each release is rebuilt from scratch and compared with the published APK, the way F-Droid checks it
+
 ## 1.8.0
 
 - The tab bar is liquid glass on Android 13 and newer: what's behind it bends at its rounded edges, with a bright
