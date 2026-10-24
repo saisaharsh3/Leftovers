@@ -30,6 +30,8 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.async
 import kotlinx.coroutines.withContext
 import java.time.LocalDate
 
@@ -157,6 +159,32 @@ class AppContainer(private val context: Context) {
                 .distinctUntilChanged()
                 .collect { (enabled, minutes) -> Reminders.schedule(context, enabled, minutes) }
         }
+    }
+
+    /**
+     * Home's pull to refresh: every check that can run on demand (subscriptions that have come due, the email
+     * account if one is connected, Sync between devices if it's on), and a few words on what it found.
+     */
+    suspend fun refreshNow(): String = coroutineScope {
+        val email = async {
+            if (emailAccount.connection.value == null) null else com.leftovers.app.util.EmailChecker.check(context)
+        }
+        val sync = async { com.leftovers.app.util.DeviceSync.runIfOn(context) }
+        syncRecurring()
+        val parts = buildList {
+            email.await()?.fold(
+                { found -> if (found > 0) add("$found new ${if (found == 1) "payment" else "payments"} from email") },
+                { add("Couldn't check email") },
+            )
+            sync.await()?.fold(
+                { o ->
+                    val changed = o.added + o.removed
+                    if (changed > 0) add("$changed ${if (changed == 1) "change" else "changes"} from your other phones")
+                },
+                { add("Couldn't sync") },
+            )
+        }
+        parts.joinToString(" · ").ifEmpty { "Up to date" }
     }
 
     /** Logs subscriptions/recurring income that have come due, then checks budgets. */

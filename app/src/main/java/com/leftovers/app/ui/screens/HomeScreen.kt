@@ -497,6 +497,42 @@ fun HomeScreen(
         )
     }
 
+    // Pull down to run every check now (email, subscriptions due, sync) and reload.
+    val appContext = androidx.compose.ui.platform.LocalContext.current.applicationContext
+    val refreshScope = androidx.compose.runtime.rememberCoroutineScope()
+    var refreshing by remember { mutableStateOf(false) }
+    var refreshNote by remember { mutableStateOf<String?>(null) }
+    androidx.compose.runtime.LaunchedEffect(refreshNote) {
+        if (refreshNote != null) {
+            kotlinx.coroutines.delay(2200)
+            refreshNote = null
+        }
+    }
+    val pull = androidx.compose.material3.pulltorefresh.rememberPullToRefreshState()
+    @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+    androidx.compose.material3.pulltorefresh.PullToRefreshBox(
+        isRefreshing = refreshing,
+        onRefresh = {
+            refreshing = true
+            refreshScope.launch {
+                val note = (appContext as com.leftovers.app.LeftoversApp).container.refreshNow()
+                refreshing = false
+                refreshNote = note
+                Haptics.tick(view)
+            }
+        },
+        state = pull,
+        modifier = Modifier.fillMaxSize(),
+        indicator = {
+            androidx.compose.material3.pulltorefresh.PullToRefreshDefaults.Indicator(
+                state = pull,
+                isRefreshing = refreshing,
+                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                color = c.accent,
+                modifier = Modifier.align(Alignment.TopCenter).statusBarsPadding(),
+            )
+        },
+    ) {
     Box(Modifier.fillMaxSize()) {
         LazyColumn(
             Modifier
@@ -728,6 +764,25 @@ fun HomeScreen(
                 .windowInsetsTopHeight(WindowInsets.statusBars)
                 .background(Brush.verticalGradient(listOf(c.background.copy(alpha = 0.85f), Color.Transparent))),
         )
+        // What the pull found, for a moment.
+        androidx.compose.animation.AnimatedVisibility(
+            refreshNote != null,
+            modifier = Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(top = 8.dp),
+            enter = androidx.compose.animation.fadeIn() + androidx.compose.animation.scaleIn(initialScale = 0.9f),
+            exit = androidx.compose.animation.fadeOut(),
+        ) {
+            Text(
+                refreshNote.orEmpty(),
+                style = MaterialTheme.typography.labelLarge,
+                color = c.textPrimary,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(50))
+                    .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                    .border(1.dp, c.borderTop, RoundedCornerShape(50))
+                    .padding(horizontal = 16.dp, vertical = 9.dp),
+            )
+        }
+    }
     }
 }
 
