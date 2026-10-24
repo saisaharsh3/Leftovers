@@ -117,6 +117,7 @@ Most budget apps want an account, show ads, or send your spending to a server. L
   Add your own keywords for banks it misses, and test any message to see what it would suggest. One payment never shows up twice, even when it arrives by both SMS and email.
   A payment to a place you've logged before opens under the category you used last time
 - Swipe sideways to move between Home, Activity, Insights and Plan
+- Pull down on Home to check for new payment emails, log subscriptions that are due and sync right away
 - Frosted glass design in dark and light mode (or solid surfaces with *Glass effects* off), a liquid glass tab
   bar on Android 13 and newer, spring animations, haptic feedback and high-refresh-rate support
 - If the app ever closes unexpectedly, it offers to report it on GitHub or by email. You see the report (versions,
