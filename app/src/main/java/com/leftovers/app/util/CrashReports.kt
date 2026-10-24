@@ -10,9 +10,10 @@ import java.io.File
  * Crash reports the user chooses to send, with no service and nothing sent by itself. When the app crashes,
  * a short report (app and Android version, phone model, the error) is written to the app's private files.
  * On the next launch the app asks whether to report it on GitHub (a pre-filled new issue the user reads and
- * submits), share it through any app, or let it go. Nothing from the user's entries is in it.
+ * submits), email it, or let it go. Nothing from the user's entries is in it.
  */
 object CrashReports {
+    private const val EMAIL = "saisaharsh3@gmail.com"
     private fun file(context: Context) = File(context.filesDir, "last-crash.txt")
 
     /** Catches crashes to keep a report, then lets Android handle them as before ("app keeps stopping"). */
@@ -52,6 +53,17 @@ object CrashReports {
 
     fun openIssue(context: Context, report: String) {
         context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(issueUrl(report))).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    }
+
+    /** An email to the developer with the report in it, in the user's email app; they send it themselves. */
+    fun email(context: Context, report: String) {
+        val mail = Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:"))
+            .putExtra(Intent.EXTRA_EMAIL, arrayOf(EMAIL))
+            .putExtra(Intent.EXTRA_SUBJECT, "Leftovers crash report")
+            .putExtra(Intent.EXTRA_TEXT, "What were you doing when it closed?\n\n\n" + report)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        // No email app: any app the user picks instead.
+        runCatching { context.startActivity(mail) }.onFailure { share(context, report) }
     }
 
     fun share(context: Context, report: String) {

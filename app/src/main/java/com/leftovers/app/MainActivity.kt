@@ -147,8 +147,8 @@ class MainActivity : FragmentActivity() {
                                     },
                                     dismissButton = {
                                         androidx.compose.foundation.layout.Row {
-                                            androidx.compose.material3.TextButton(onClick = { com.leftovers.app.util.CrashReports.share(this@MainActivity, report); done() }) {
-                                                androidx.compose.material3.Text("Share")
+                                            androidx.compose.material3.TextButton(onClick = { com.leftovers.app.util.CrashReports.email(this@MainActivity, report); done() }) {
+                                                androidx.compose.material3.Text("Email")
                                             }
                                             androidx.compose.material3.TextButton(onClick = done) { androidx.compose.material3.Text("Not now") }
                                         }
