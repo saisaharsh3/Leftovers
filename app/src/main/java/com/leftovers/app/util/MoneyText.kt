@@ -12,7 +12,7 @@ object MoneyText {
         "rs.", "rs", "inr", "₹", "us\$", "usd", "\$", "eur", "€", "gbp", "£", "aed", "sar", "qar", "kwd", "bhd", "omr",
         "sgd", "s\$", "aud", "a\$", "cad", "c\$", "nzd", "hkd", "jpy", "cny", "rmb", "¥", "krw", "₩", "myr", "rm",
         "php", "₱", "thb", "฿", "idr", "rp", "vnd", "₫", "bdt", "৳", "pkr", "lkr", "npr", "₨", "kes", "ksh", "ngn",
-        "₦", "zar", "brl", "r\$", "mxn", "chf", "₺", "rub", "₽", "egp", "ghs", "₵", "uah", "₴", "pln", "zł",
+        "₦", "zar", "brl", "r\$", "mxn", "chf", "₺", "rub", "₽", "egp", "dzd", "دج", "د.ج", "ghs", "₵", "uah", "₴", "pln", "zł",
         "czk", "kč", "sek", "nok", "dkk", "kr",
     ).sortedByDescending { it.length }
 

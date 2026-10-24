@@ -26,6 +26,12 @@ class MoneyTextTest {
         assertEquals(123_456L, MoneyText.find("£1,234.56 charged"))
     }
 
+    @Test fun algerianDinar() {
+        assertEquals(12_500L, MoneyText.find("DZD 125.00 paid"))
+        assertEquals(12_500L, MoneyText.find("125,00 DZD paid"))
+        assertEquals(12_500L, MoneyText.find("125,00 د.ج paid"))
+    }
+
     @Test fun wordsThatLookLikeCodesAreNotAmounts() {
         assertNull(MoneyText.find("Please confirm 30 items"))
         assertNull(MoneyText.find("Account XX1234 updated"))

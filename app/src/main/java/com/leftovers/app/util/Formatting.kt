@@ -103,7 +103,7 @@ data class CurrencyOption(val code: String, val name: String, val symbol: String
 private val popularCurrencyCodes = listOf(
     "INR", "USD", "EUR", "GBP", "AED", "SAR", "SGD", "AUD", "CAD", "JPY", "CNY", "CHF",
     "NZD", "HKD", "MYR", "THB", "IDR", "PHP", "VND", "KRW", "PKR", "BDT", "LKR", "NPR",
-    "ZAR", "NGN", "KES", "EGP", "BRL", "MXN", "TRY", "RUB", "SEK", "NOK", "DKK", "PLN",
+    "ZAR", "NGN", "KES", "EGP", "DZD", "BRL", "MXN", "TRY", "RUB", "SEK", "NOK", "DKK", "PLN",
     "QAR", "KWD", "OMR", "BHD",
 )
 
