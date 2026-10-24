@@ -3,8 +3,10 @@
 All notable changes to Leftovers. Download any version from
 [Releases](https://github.com/saisaharsh3/Leftovers/releases).
 
-## Unreleased
+## 1.8.1
 
+- Pull down on Home to check for new payment emails, log subscriptions that have come due and sync with your
+  other phones right away; it says what it found
 - Pop-up cards (an entry, the balance, Money owed, subscriptions) are liquid glass like the tab bar on Android 13
   and newer, bending the screen behind them at their edges
 - Home leads with Safe to spend today, large and on the background instead of in a card, and the total balance

@@ -1,0 +1,8 @@
+- Sync between your phones with no account: a Syncthing or Nextcloud folder, or your own WebDAV server
+- Quick add widget: log a spend in one tap, with Undo
+- Remind someone who owes you, by WhatsApp, SMS or any app
+- Detected payments remember the category you used last time
+- Liquid glass pop-ups and a new Home layout
+- Pull down on Home to check for new payments now
+- Haptic feedback
+- Report a crash on GitHub or by email, if you choose
