@@ -441,10 +441,10 @@ fun MorphCard(
     onReveal: () -> Unit = {},
     content: @Composable ColumnScope.(close: (then: () -> Unit) -> Unit) -> Unit) {
     val c = LocalAppColors.current
-    // Liquid glass, like the tab bar: the card bends the screen behind it, so that screen stays sharp (dimmed,
-    // not blurred) for the bend to show. Otherwise frosted glass over the blurred screen.
+    // Liquid glass, like the tab bar: the card bends the screen behind it, which is blurred only lightly so the
+    // bend still shows. Otherwise frosted glass over a more blurred screen.
     val liquid = com.leftovers.app.ui.components.LocalScreenBackdrop.current
-    val blurs = rememberWindowBlur() && liquid == null
+    val blurs = rememberWindowBlur()
     val progress = remember { Animatable(0f) }
     val scope = rememberCoroutineScope()
     var target by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
@@ -475,7 +475,7 @@ fun MorphCard(
     ) {
         // The window behind blurs and dims with the card, so it never arrives late.
         val window = (LocalView.current.parent as? DialogWindowProvider)?.window
-        val radius = with(LocalDensity.current) { 24.dp.roundToPx() }
+        val radius = with(LocalDensity.current) { (if (liquid != null) 10.dp else 24.dp).roundToPx() }
         LaunchedEffect(window) {
             if (window == null) {
                 progress.animateTo(1f, tween(400, easing = MorphGrow))
@@ -499,7 +499,7 @@ fun MorphCard(
             Modifier
                 .fillMaxSize()
                 // Read while drawing, not composing, so the fade doesn't rebuild the card every frame.
-                .drawBehind { drawRect(c.background.copy(alpha = (if (blurs) 0.28f else if (liquid != null) 0.45f else 0.6f) * progress.value.coerceIn(0f, 1f))) }
+                .drawBehind { drawRect(c.background.copy(alpha = (if (blurs) 0.28f else 0.6f) * progress.value.coerceIn(0f, 1f))) }
                 .pointerInput(Unit) { detectTapGestures { close() } },
             contentAlignment = Alignment.Center,
         ) {
