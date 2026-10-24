@@ -5,6 +5,8 @@ All notable changes to Leftovers. Download any version from
 
 ## Unreleased
 
+- Home leads with Safe to spend today, large and on the background instead of in a card, and the total balance
+  card holds the month's spending and income under it
 - Sync between your devices, with no account: Settings → Sync. Use a folder that Syncthing or Nextcloud's app keeps
   the same on each phone, or your own WebDAV server (Nextcloud, ownCloud and others). Each phone merges in the
   others' entries when the app opens, every few hours and on Sync now; entries deleted or changed on one phone are
