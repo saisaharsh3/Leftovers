@@ -78,6 +78,8 @@ import com.leftovers.app.ui.components.SegmentedToggle
 import com.leftovers.app.ui.icons.Lucide
 import com.leftovers.app.ui.theme.LocalAppColors
 import com.leftovers.app.util.AutoBackup
+import com.leftovers.app.util.DeviceSync
+import com.leftovers.app.util.WebDavPlace
 import com.leftovers.app.util.BackupManager
 import com.leftovers.app.util.friendlyLabel
 import com.leftovers.app.util.CsvExporter
@@ -313,6 +315,48 @@ class SettingsViewModel(
         }
     }
 
+    /** Remembers [tree] as the folder shared with the user's other phones, and syncs straight away. */
+    fun enableSync(context: Context, tree: Uri, onResult: (String) -> Unit) {
+        viewModelScope.launch {
+            settingsRepository.setSyncServer(null, null)
+            settingsRepository.setSyncDir(tree.toString())
+            syncNow(context, onResult)
+        }
+    }
+
+    fun syncNow(context: Context, onResult: (String) -> Unit) {
+        viewModelScope.launch {
+            val result = DeviceSync.runIfOn(context) ?: return@launch
+            result.fold({ onResult(DeviceSync.describe(it)) }, { onResult("Couldn't sync: ${WebDavPlace.problem(it)}") })
+        }
+    }
+
+    /** Tries the server first, and keeps it only when a sync works; [onResult] gets null on success, or what went wrong. */
+    fun enableServerSync(context: Context, url: String, user: String, password: String, onResult: (String?) -> Unit) {
+        viewModelScope.launch {
+            val place = runCatching { WebDavPlace(url, user, password) }.getOrElse { onResult(it.message); return@launch }
+            DeviceSync.runNow(context, place).fold(
+                { outcome ->
+                    (context.applicationContext as com.leftovers.app.LeftoversApp).container.syncLogin.set(password)
+                    settingsRepository.setSyncDir(null)
+                    settingsRepository.setSyncServer(url.trim().trimEnd('/'), user)
+                    onResult(null)
+                    android.widget.Toast.makeText(context, DeviceSync.describe(outcome), android.widget.Toast.LENGTH_LONG).show()
+                },
+                { onResult(WebDavPlace.problem(it)) },
+            )
+        }
+    }
+
+    fun disableSync(context: Context, dir: String?) {
+        viewModelScope.launch {
+            settingsRepository.setSyncDir(null)
+            settingsRepository.setSyncServer(null, null)
+            (context.applicationContext as com.leftovers.app.LeftoversApp).container.syncLogin.set(null)
+            dir?.let { runCatching { context.contentResolver.releasePersistableUriPermission(Uri.parse(it), Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION) } }
+        }
+    }
+
     fun disableAutoBackup(context: Context, dir: String?) {
         viewModelScope.launch {
             settingsRepository.setAutoBackupDir(null)
@@ -426,6 +470,8 @@ fun SettingsScreen(
     // Whether the restore being done keeps what's already in the app (true) or replaces it.
     var restoreKeeps by remember { mutableStateOf(true) }
     var setPassword by rememberSaveable { mutableStateOf(false) }
+    var chooseSync by rememberSaveable { mutableStateOf(false) }
+    var syncServerForm by rememberSaveable { mutableStateOf(false) }
     val passwordSet by viewModel.backupPasswordSet.collectAsStateWithLifecycle()
     fun toast(text: String) = scope.launch { snackbar.showSnackbar(text) }
 
@@ -442,6 +488,14 @@ fun SettingsScreen(
                 context.contentResolver.takePersistableUriPermission(tree, Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
             }
             viewModel.enableAutoBackup(context, tree) { toast(it) }
+        }
+    }
+    val pickSyncFolder = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { tree ->
+        if (tree != null) {
+            runCatching {
+                context.contentResolver.takePersistableUriPermission(tree, Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+            }
+            viewModel.enableSync(context, tree) { toast(it) }
         }
     }
     val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
@@ -722,6 +776,46 @@ fun SettingsScreen(
                 }
             }
 
+            item { SectionHeader("Sync") }
+            item {
+                Glass(Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(vertical = 6.dp)) {
+                        val syncOn = s.syncDir != null || s.syncServer != null
+                        ToggleRow(Lucide.Smartphone, "Sync between devices", syncOn, { on ->
+                            if (on) chooseSync = true else viewModel.disableSync(context, s.syncDir)
+                        })
+                        if (syncOn) {
+                            RowDivider()
+                            NavRow(
+                                if (s.syncServer != null) Lucide.Globe else Lucide.Folder,
+                                if (s.syncServer != null) "Server" else "Folder",
+                                s.syncServer?.removePrefix("https://")?.substringBefore('/') ?: "Chosen folder",
+                            ) { chooseSync = true }
+                            RowDivider()
+                            NavRow(
+                                Lucide.Repeat,
+                                "Sync now",
+                                if (s.syncLast > 0) {
+                                    val at = java.time.Instant.ofEpochMilli(s.syncLast).atZone(java.time.ZoneId.systemDefault())
+                                    "${at.toLocalDate().friendlyLabel()}, ${at.format(java.time.format.DateTimeFormatter.ofPattern("h:mm a"))}"
+                                } else "Not synced yet",
+                            ) { viewModel.syncNow(context) { toast(it) } }
+                        }
+                    }
+                }
+                Text(
+                    if (s.syncDir == null && s.syncServer == null) {
+                        "Keep your phones in step with no account: use a folder that Syncthing or Nextcloud's app keeps the same on each phone, or your own WebDAV server, and choose the same one on every phone."
+                    } else {
+                        "Each phone keeps its data there and merges in the others' when the app opens and every few hours. Entries deleted or changed on one phone are removed on the others; Money owed, goals and subscriptions are only added." +
+                            if (passwordSet) " Files are encrypted with your backup password; use the same one on every phone." else " Set a backup password to keep these files encrypted."
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = c.textTertiary,
+                    modifier = Modifier.padding(start = 8.dp, end = 8.dp, top = 8.dp),
+                )
+            }
+
             item {
                 Row(
                     Modifier
@@ -732,7 +826,9 @@ fun SettingsScreen(
                 ) {
                     Icon(Lucide.Lock, contentDescription = null, tint = c.textTertiary, modifier = Modifier.size(14.dp))
                     Spacer(Modifier.width(6.dp))
-                    Text("Stored only on this device · Leftovers 1.6.0", style = MaterialTheme.typography.bodySmall, color = c.textTertiary, textAlign = TextAlign.Center)
+                    val version = remember { runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull().orEmpty().removeSuffix("-dev") }
+                    val where = if (s.syncDir != null || s.syncServer != null) "Stored on your devices only" else "Stored only on this device"
+                    Text("$where · Leftovers $version", style = MaterialTheme.typography.bodySmall, color = c.textTertiary, textAlign = TextAlign.Center)
                 }
             }
             item {
@@ -865,6 +961,74 @@ fun SettingsScreen(
                 },
                 dismissButton = { TextButton(onClick = { lockedRestore = null }) { Text("Cancel", color = c.textSecondary) } },
             )
+        }
+
+        if (chooseSync) {
+            GlassAlertDialog(
+                onDismissRequest = { chooseSync = false },
+                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                shape = RoundedCornerShape(30.dp),
+                title = { Text("Sync through") },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        ListRow("A folder", subtitle = "Syncthing, Nextcloud app, any synced folder", leading = { IconTile(Lucide.Folder, c.textPrimary, size = 38.dp) }) {
+                            chooseSync = false
+                            pickSyncFolder.launch(null)
+                        }
+                        ListRow("My WebDAV server", subtitle = "Nextcloud, ownCloud, any WebDAV", leading = { IconTile(Lucide.Globe, c.textPrimary, size = 38.dp) }) {
+                            chooseSync = false
+                            syncServerForm = true
+                        }
+                    }
+                },
+                confirmButton = {},
+                dismissButton = { TextButton(onClick = { chooseSync = false }) { Text("Cancel", color = c.textSecondary) } },
+            )
+        }
+
+        if (syncServerForm) {
+            var url by rememberSaveable { mutableStateOf(s.syncServer ?: "https://") }
+            var user by rememberSaveable { mutableStateOf(s.syncUser.orEmpty()) }
+            var pass by remember { mutableStateOf("") }
+            var busy by remember { mutableStateOf(false) }
+            var error by remember { mutableStateOf<String?>(null) }
+            val ok = url.length > "https://".length && user.isNotBlank() && pass.isNotEmpty() && !busy
+            GlassSheet({ if (!busy) syncServerForm = false }) {
+                Column(
+                    Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp),
+                ) {
+                    Text("WebDAV server", style = MaterialTheme.typography.headlineSmall, color = c.textPrimary)
+                    GlassTextField(url, { url = it.trim(); error = null }, placeholder = "https://", label = "Folder address", keyboardType = KeyboardType.Uri)
+                    Text(
+                        "For Nextcloud: https://your-server/remote.php/dav/files/your-name/Leftovers",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = c.textTertiary,
+                        modifier = Modifier.padding(start = 6.dp),
+                    )
+                    GlassTextField(user, { user = it.trim(); error = null }, placeholder = "Your user name", label = "User name", keyboardType = KeyboardType.Email)
+                    GlassTextField(pass, { pass = it; error = null }, placeholder = "Password", label = "Password", password = true)
+                    Text(
+                        "With Nextcloud, make an app password in Settings › Security, so this phone can be signed out on its own. It's kept encrypted on this phone.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = c.textTertiary,
+                        modifier = Modifier.padding(start = 6.dp),
+                    )
+                    error?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = c.negative, modifier = Modifier.padding(start = 6.dp)) }
+                    PrimaryButton(
+                        if (busy) "Connecting…" else "Connect",
+                        {
+                            busy = true
+                            viewModel.enableServerSync(context, url, user.trim(), pass) { problem ->
+                                busy = false
+                                if (problem == null) syncServerForm = false else error = problem
+                            }
+                        },
+                        Modifier.fillMaxWidth(),
+                        enabled = ok,
+                    )
+                }
+            }
         }
 
         if (setPassword) {

@@ -69,6 +69,15 @@ data class AppSettings(
     val autoBackupKeep: Int = 4,
     /** Put receipt and Money owed photos inside backups (bigger files). */
     val backupPhotos: Boolean = false,
+    /** Folder (document tree uri) shared with the user's other phones for Sync between devices; null when off. */
+    val syncDir: String? = null,
+    /** The user's WebDAV folder (https) for Sync between devices, instead of [syncDir]; null when not used. */
+    val syncServer: String? = null,
+    val syncUser: String? = null,
+    /** This phone's name in the sync folder, made once. */
+    val syncDevice: String? = null,
+    /** When the last sync finished (epoch millis), 0 if never. */
+    val syncLast: Long = 0,
 )
 
 class SettingsRepository(context: Context) {
@@ -116,6 +125,11 @@ class SettingsRepository(context: Context) {
             backupPhotos = p[BACKUP_PHOTOS] ?: false,
             autoBackupDays = p[AUTO_BACKUP_DAYS] ?: 7,
             autoBackupKeep = p[AUTO_BACKUP_KEEP] ?: 4,
+            syncDir = p[SYNC_DIR],
+            syncServer = p[SYNC_SERVER],
+            syncUser = p[SYNC_USER],
+            syncDevice = p[SYNC_DEVICE],
+            syncLast = p[SYNC_LAST] ?: 0L,
         )
     }.sharedLive()
 
@@ -186,6 +200,26 @@ class SettingsRepository(context: Context) {
     suspend fun setHomeAccount(id: Long?) = store.edit { if (id == null) it.remove(HOME_ACCOUNT) else it[HOME_ACCOUNT] = id }
     suspend fun setAutoBackupDays(days: Int) = store.edit { it[AUTO_BACKUP_DAYS] = days }
     suspend fun setAutoBackupKeep(count: Int) = store.edit { it[AUTO_BACKUP_KEEP] = count }
+    suspend fun setSyncDir(dir: String?) = store.edit { if (dir == null) it.remove(SYNC_DIR) else it[SYNC_DIR] = dir }
+    suspend fun setSyncServer(url: String?, user: String?) = store.edit {
+        if (url == null) it.remove(SYNC_SERVER) else it[SYNC_SERVER] = url
+        if (user == null) it.remove(SYNC_USER) else it[SYNC_USER] = user
+    }
+    suspend fun setSyncDone(at: Long) = store.edit { it[SYNC_LAST] = at }
+
+    /** This phone's name in the sync folder, like "pixel-7-k3f9q2", made the first time it's needed. */
+    suspend fun syncDevice(): String {
+        var name = ""
+        store.edit { p ->
+            name = p[SYNC_DEVICE] ?: run {
+                val model = android.os.Build.MODEL.lowercase().replace(Regex("[^a-z0-9]+"), "-").trim('-').take(20).ifEmpty { "phone" }
+                val tag = (1..6).map { "abcdefghijkmnpqrstuvwxyz23456789".random() }.joinToString("")
+                "$model-$tag"
+            }
+            p[SYNC_DEVICE] = name
+        }
+        return name
+    }
     suspend fun setBackupPhotos(enabled: Boolean) = store.edit { it[BACKUP_PHOTOS] = enabled }
     suspend fun setDetectionKeywords(words: Set<String>) = store.edit { it[DETECTION_KEYWORDS] = words }
     suspend fun setDeletedKeepDays(days: Int) = store.edit { it[DELETED_KEEP_DAYS] = days }
@@ -236,6 +270,11 @@ class SettingsRepository(context: Context) {
         val BACKUP_PHOTOS = booleanPreferencesKey("backup_photos")
         val AUTO_BACKUP_DAYS = intPreferencesKey("auto_backup_days")
         val AUTO_BACKUP_KEEP = intPreferencesKey("auto_backup_keep")
+        val SYNC_DIR = stringPreferencesKey("sync_dir")
+        val SYNC_DEVICE = stringPreferencesKey("sync_device")
+        val SYNC_SERVER = stringPreferencesKey("sync_server")
+        val SYNC_USER = stringPreferencesKey("sync_user")
+        val SYNC_LAST = longPreferencesKey("sync_last")
         val DEFAULT_ACCOUNT = longPreferencesKey("default_account")
         val REMINDER = booleanPreferencesKey("reminder")
         val REMINDER_TIME = intPreferencesKey("reminder_time")

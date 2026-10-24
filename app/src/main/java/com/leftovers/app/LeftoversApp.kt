@@ -60,10 +60,14 @@ class AppContainer(private val context: Context) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     val settings = SettingsRepository(context)
-    val repository = TransactionRepository(database.transactionDao(), database.categoryDao(), database.recurringDao(), database.deletedDao())
+    /** Entries deleted or changed here, which Sync between devices removes on the other phones. */
+    val syncRemoved = com.leftovers.app.util.SyncRemoved(java.io.File(context.filesDir, "sync-removed.json"))
+    val repository = TransactionRepository(database.transactionDao(), database.categoryDao(), database.recurringDao(), database.deletedDao(), syncRemoved)
     val planning = PlanningRepository(database)
     val accounts = AccountRepository(database.accountDao(), database.transferDao(), database.transactionDao(), database.debtDao())
     val sms = SmsRepository(database.smsDao(), database.transactionDao())
+    /** The WebDAV server's password, for Sync between devices. */
+    val syncLogin = com.leftovers.app.util.SyncLogin(context)
     val backup = BackupManager(context, database, settings, com.leftovers.app.util.BackupPassword(context))
     /** App lock's own PIN or password, when it doesn't use the phone's screen lock. */
     val passcode = com.leftovers.app.util.AppPasscode(context)
@@ -129,6 +133,16 @@ class AppContainer(private val context: Context) {
             settings.settings.map { (it.autoBackupDir != null) to it.autoBackupDays }
                 .distinctUntilChanged()
                 .collect { (on, days) -> AutoBackup.schedule(context, on, days) }
+        }
+        // Sync between devices: every few hours, and once each time the app starts.
+        scope.launch {
+            delay(STARTUP_QUIET_MS)
+            settings.settings.map { it.syncDir != null || it.syncServer != null }
+                .distinctUntilChanged()
+                .collect { on ->
+                    com.leftovers.app.util.DeviceSync.schedule(context, on)
+                    if (on) com.leftovers.app.util.DeviceSync.runIfOn(context)
+                }
         }
         scope.launch {
             delay(STARTUP_QUIET_MS)

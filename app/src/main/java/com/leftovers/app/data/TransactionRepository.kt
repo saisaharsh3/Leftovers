@@ -1,6 +1,7 @@
 package com.leftovers.app.data
 
 import com.leftovers.app.util.ReceiptStore
+import com.leftovers.app.util.SyncRemoved
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import java.util.concurrent.TimeUnit
@@ -11,6 +12,8 @@ class TransactionRepository(
     private val categoryDao: CategoryDao,
     private val recurringDao: RecurringDao,
     private val deletedDao: DeletedDao,
+    /** Entries deleted or changed here, for Sync between devices; null in tests. */
+    private val removed: SyncRemoved? = null,
 ) {
     val categories: Flow<List<Category>> = categoryDao.observeAll()
     val allTransactions: Flow<List<TransactionItem>> = transactionDao.observeAll().sharedLive()
@@ -22,6 +25,11 @@ class TransactionRepository(
     suspend fun getTransaction(id: Long): Transaction? = transactionDao.getById(id)
     /** Saves an entry. One coming back (Undo) is taken out of Deleted entries. */
     suspend fun saveTransaction(transaction: Transaction) {
+        if (transaction.id != 0L && removed != null) {
+            // An edit that changes the day, amount, kind or note replaces the old entry on synced phones.
+            transactionDao.getById(transaction.id)?.takeUnless { it.sameEntry(transaction) }?.let(removed::add)
+        }
+        removed?.forget(transaction)
         transactionDao.upsert(transaction)
         if (transaction.id != 0L) deletedDao.delete(listOf(transaction.id))
     }
@@ -30,11 +38,15 @@ class TransactionRepository(
     suspend fun addTransactions(transactions: List<Transaction>) = transactionDao.upsertAll(transactions)
 
     /** Takes an entry back at once, with no copy in Deleted entries: for undoing a mis-tap straight away. */
-    suspend fun removeTransaction(transaction: Transaction) = transactionDao.delete(transaction)
+    suspend fun removeTransaction(transaction: Transaction) {
+        removed?.add(transaction)
+        transactionDao.delete(transaction)
+    }
 
     /** Deletes an entry, keeping a copy in Deleted entries (with its receipt photo) so it can be restored. */
     suspend fun deleteTransaction(transaction: Transaction) {
         deletedDao.upsert(DeletedTransaction.from(transaction))
+        removed?.add(transaction)
         transactionDao.delete(transaction)
     }
 
@@ -52,6 +64,7 @@ class TransactionRepository(
                 (sameType.firstOrNull { it.name.equals("Other", ignoreCase = true) } ?: sameType.firstOrNull() ?: return@forEach).id
             }
             transactionDao.upsert(e.toTransaction().copy(categoryId = categoryId))
+            removed?.forget(e.toTransaction())
         }
         deletedDao.delete(entries.map { it.id })
     }
@@ -90,5 +103,9 @@ class TransactionRepository(
         deleteForever(deletedDao.getAll().map { it.id })
         transactionDao.deleteAll()
         categoryDao.clearBudgets()
+        removed?.clear()
     }
+
+    private fun Transaction.sameEntry(other: Transaction) =
+        epochDay == other.epochDay && amountMinor == other.amountMinor && type == other.type && SyncRemoved.key(note) == SyncRemoved.key(other.note)
 }

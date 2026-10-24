@@ -9,6 +9,7 @@ import com.leftovers.app.data.BackupDao
 import com.leftovers.app.data.BudgetPlan
 import com.leftovers.app.data.Category
 import com.leftovers.app.data.Debt
+import com.leftovers.app.data.DeletedTransaction
 import com.leftovers.app.data.photosToPath
 import com.leftovers.app.data.Goal
 import com.leftovers.app.data.GoalDeposit
@@ -40,7 +41,17 @@ class BackupManager(
         const val MAX_PHOTO_BYTES = 40L * 1024 * 1024
     }
 
-    suspend fun export(target: Uri): Result<Int> = withContext(Dispatchers.IO) {
+    /** [removed]: for Sync between devices, the entries this phone deleted or changed, so the others remove them too. */
+    suspend fun export(target: Uri, removed: List<SyncRemoved.Removed> = emptyList()): Result<Int> =
+        exportBytes(removed).mapCatching { (bytes, count) ->
+            withContext(Dispatchers.IO) {
+                context.contentResolver.openOutputStream(target, "wt")?.use { it.write(bytes) } ?: error("Couldn't open the file")
+            }
+            count
+        }
+
+    /** The backup file's contents, and how many entries are in it. */
+    suspend fun exportBytes(removed: List<SyncRemoved.Removed> = emptyList()): Result<Pair<ByteArray, Int>> = withContext(Dispatchers.IO) {
         runCatching {
             val transactions = dao.transactions()
             val s = settings.settings.first()
@@ -116,26 +127,45 @@ class BackupManager(
                         .put("receipts", JSONArray(d.photos.map { photoRef(it) }.filter { it != JSONObject.NULL }))
                 }))
                 if (photos.length() > 0) put("photos", photos)
+                if (removed.isNotEmpty()) put("removed", SyncRemoved.encode(removed))
             }
             val text = password.get()?.let { BackupCrypto.encrypt(json.toString(), it).toString(2) } ?: json.toString(2)
-            context.contentResolver.openOutputStream(target, "wt")?.use { it.write(text.toByteArray()) }
-                ?: error("Couldn't open the file")
-            transactions.size
+            text.toByteArray() to transactions.size
         }
     }
 
     /** What a restore did: entries brought in, and (keeping what's here) how many were already in the app. */
-    data class Restored(val entries: Int, val alreadyHere: Int = 0)
+    data class Restored(val entries: Int, val alreadyHere: Int = 0, val removed: Int = 0)
 
     /**
      * Replaces all data with the backup's contents, or with [keep], adds the backup's data to what's already here
      * (see [BackupMerge]) and leaves the settings as they are. A protected backup is opened with [typedPassword],
      * or else the saved backup password; without the right one it fails with [BackupPasswordException].
      */
-    suspend fun import(source: Uri, typedPassword: String? = null, keep: Boolean = false): Result<Restored> = withContext(Dispatchers.IO) {
+    /**
+     * With [sync] (another phone's sync file, always kept), entries that phone deleted or changed are removed here
+     * too (into Deleted entries, so they can be brought back), and entries deleted here, listed in [mine], aren't added back.
+     */
+    suspend fun import(
+        source: Uri,
+        typedPassword: String? = null,
+        keep: Boolean = false,
+        sync: Boolean = false,
+        mine: List<SyncRemoved.Removed> = emptyList(),
+    ): Result<Restored> = withContext(Dispatchers.IO) {
+        runCatching { context.contentResolver.openInputStream(source)?.use { it.readBytes() } ?: error("Couldn't open the file") }
+            .fold({ importBytes(it, typedPassword, keep, sync, mine) }, { Result.failure(it) })
+    }
+
+    /** [import], from a backup file's contents. */
+    suspend fun importBytes(
+        bytes: ByteArray,
+        typedPassword: String? = null,
+        keep: Boolean = false,
+        sync: Boolean = false,
+        mine: List<SyncRemoved.Removed> = emptyList(),
+    ): Result<Restored> = withContext(Dispatchers.IO) {
         runCatching {
-            val bytes = context.contentResolver.openInputStream(source)?.use { it.readBytes() }
-                ?: error("Couldn't open the file")
             // A spreadsheet or another app's export picked here by mistake: say so, rather than a JSON error.
             val text = StatementFile.decodeText(bytes).trimStart()
             if (!text.startsWith("{")) throw NotABackupException()
@@ -210,12 +240,28 @@ class BackupManager(
                 )
             }
 
-            if (keep) {
+            if (keep || sync) {
+                // Newest removal of each entry: only entries made before it count as that entry.
+                fun latest(list: List<SyncRemoved.Removed>): Map<List<Any>, Long> = list.groupBy { listOf<Any>(it.day, it.amount, it.type, SyncRemoved.key(it.note)) }
+                    .mapValues { (_, same) -> same.maxOf { it.at } }
+                fun Map<List<Any>, Long>.has(t: Transaction) =
+                    get(listOf<Any>(t.epochDay, t.amountMinor, t.type, SyncRemoved.key(t.note)))?.let { t.createdAt <= it } == true
+                val theirList = if (sync) SyncRemoved.decode(json.optJSONArray("removed")) else emptyList()
+                val theirs = latest(theirList)
+                val gone = latest(theirList + if (sync) mine else emptyList())
+                var removedHere = 0
                 val plan = database.withTransaction {
+                    if (theirs.isNotEmpty()) {
+                        val drop = dao.transactions().filter { theirs.has(it) }
+                        val at = System.currentTimeMillis()
+                        drop.forEach { dao.insertDeleted(DeletedTransaction.from(it, at)) }
+                        dao.deleteTransactions(drop)
+                        removedHere = drop.size
+                    }
                     val existing = BackupMerge.Data(
                         dao.categories(), dao.accounts(), dao.transactions(), dao.transfers(), dao.recurring(), dao.goals(), dao.deposits(), dao.debts(),
                     )
-                    val plan = BackupMerge.plan(existing, BackupMerge.Data(categories, accounts, transactions, transfers, recurring, goals, deposits, debts), dao.deletedIds())
+                    val plan = BackupMerge.plan(existing, BackupMerge.Data(categories, accounts, transactions.filterNot { gone.has(it) }, transfers, recurring, goals, deposits, debts), dao.deletedIds())
                     with(plan.add) {
                         dao.insertCategories(this.categories)
                         dao.insertAccounts(this.accounts)
@@ -231,7 +277,7 @@ class BackupManager(
                 // Photos of entries that were already here were written out for nothing.
                 val used = (plan.add.transactions.mapNotNull { it.receiptPath } + plan.add.debts.flatMap { it.photos }).toSet()
                 restoredPhotos.values.filter { it !in used }.forEach(ReceiptStore::delete)
-                return@runCatching Restored(plan.add.transactions.size, plan.skipped)
+                return@runCatching Restored(plan.add.transactions.size, plan.skipped, removedHere)
             }
 
             database.withTransaction {

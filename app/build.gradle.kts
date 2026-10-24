@@ -119,6 +119,9 @@ dependencies {
     testImplementation(libs.junit)
     // Real org.json for unit tests (the Android stub only throws on the JVM).
     testImplementation(libs.org.json)
+    // A local HTTPS server for testing the WebDAV sync.
+    testImplementation(libs.okhttp.mockwebserver)
+    testImplementation(libs.okhttp.tls)
     testImplementation(libs.robolectric)
     testImplementation(libs.androidx.test.core)
     testImplementation(libs.androidx.room.testing)
@@ -151,6 +154,8 @@ dependencies {
     implementation(libs.kyant.shapes)
 
     implementation(libs.androidx.glance.appwidget)
+    // WebDAV for Sync between devices (Nextcloud, ownCloud...): needs PROPFIND, which HttpURLConnection can't send.
+    implementation(libs.okhttp)
     implementation(libs.androidx.glance.material3)
     implementation(libs.androidx.work.runtime)
     implementation(libs.androidx.biometric)

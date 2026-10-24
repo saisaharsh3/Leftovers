@@ -26,3 +26,18 @@ class BackupPassword(context: Context) {
         const val KEY = "password"
     }
 }
+
+/** The password for the user's WebDAV server, for Sync between devices; stored encrypted, like [BackupPassword]. */
+class SyncLogin(context: Context) {
+    private val prefs = context.getSharedPreferences("sync", Context.MODE_PRIVATE)
+
+    fun get(): String? = prefs.getString(KEY, null)?.let(KeyVault::decrypt)
+
+    fun set(password: String?) {
+        if (password.isNullOrEmpty()) prefs.edit().remove(KEY).apply() else prefs.edit().putString(KEY, KeyVault.encrypt(password)).apply()
+    }
+
+    private companion object {
+        const val KEY = "server_password"
+    }
+}

@@ -324,4 +324,8 @@ interface BackupDao {
     @androidx.room.Insert suspend fun insertAccounts(items: List<Account>)
     @androidx.room.Insert suspend fun insertTransfers(items: List<Transfer>)
     @androidx.room.Insert suspend fun insertDebts(items: List<Debt>)
+
+    /** Sync between devices: entries another phone removed go to Deleted entries here. */
+    @androidx.room.Insert(onConflict = androidx.room.OnConflictStrategy.REPLACE) suspend fun insertDeleted(item: DeletedTransaction)
+    @androidx.room.Delete suspend fun deleteTransactions(items: List<Transaction>)
 }
