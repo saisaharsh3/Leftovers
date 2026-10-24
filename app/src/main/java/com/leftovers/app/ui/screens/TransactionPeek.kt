@@ -72,7 +72,6 @@ class TransactionPeek {
     fun show(item: TransactionItem) {
         from = bounds[item.id]
         open = item
-        hidden = item.id
     }
 }
 
@@ -108,6 +107,7 @@ fun TransactionPeekCard(
         from = peek.from,
         onDismiss = { peek.open = null; peek.hidden = null },
         onReveal = { peek.hidden = null },
+        onShown = { peek.hidden = item.id },
     ) { close ->
         photo?.let { ReceiptViewer(it, onDismiss = { photo = null }) }
         Row(verticalAlignment = Alignment.CenterVertically) {

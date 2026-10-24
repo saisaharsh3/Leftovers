@@ -192,6 +192,7 @@ fun SubscriptionsScreen(
             accountName = accounts.firstOrNull { it.id == item.accountId }?.name,
             onDismiss = { viewing = null; hiddenRow = null },
             onReveal = { hiddenRow = null },
+            onShown = { hiddenRow = viewing },
             onEdit = {
                 viewing = null
                 editing = item.toRecurring()
@@ -336,7 +337,7 @@ fun SubscriptionsScreen(
                             val visible = if (showAll) shown else shown.take(5)
                             visible.forEachIndexed { i, item ->
                                 if (i > 0) RowDivider()
-                                RecurringRow(item, onClick = { viewingFrom = rowBounds[item.id]; viewing = item.id; hiddenRow = item.id }, onToggle = { viewModel.setActive(item, it) }, onBounds = { rowBounds[item.id] = it }, hidden = hiddenRow == item.id)
+                                RecurringRow(item, onClick = { viewingFrom = rowBounds[item.id]; viewing = item.id }, onToggle = { viewModel.setActive(item, it) }, onBounds = { rowBounds[item.id] = it }, hidden = hiddenRow == item.id)
                             }
                             if (shown.size > 5) {
                                 RowDivider()
@@ -879,6 +880,7 @@ internal fun SubscriptionCard(
     onSetActive: (Boolean) -> Unit,
     from: androidx.compose.ui.geometry.Rect? = null,
     onReveal: () -> Unit = {},
+    onShown: () -> Unit = {},
 ) {
     val c = LocalAppColors.current
     val money = LocalMoney.current
@@ -894,7 +896,7 @@ internal fun SubscriptionCard(
         else -> "Monthly"
     }
     val started = YearMonth.parse(item.startMonth).let { "${it.month.getDisplayName(java.time.format.TextStyle.SHORT, java.util.Locale.getDefault())} ${it.year}" }
-    MorphCard(from = from, onDismiss = onDismiss, onReveal = onReveal) { close ->
+    MorphCard(from = from, onDismiss = onDismiss, onReveal = onReveal, onShown = onShown) { close ->
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     CategoryIcon(item.categoryEmoji, item.categoryColor, size = 52.dp)
                     Spacer(Modifier.width(14.dp))

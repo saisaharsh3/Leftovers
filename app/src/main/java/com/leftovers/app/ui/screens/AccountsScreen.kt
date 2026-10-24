@@ -253,7 +253,7 @@ fun AccountsScreen(
                                         color = if (a.balanceMinor < 0) c.negative else c.textPrimary,
                                     )
                                 },
-                                onClick = { viewingFrom = rowBounds[a.id]; viewing = a.id; hidden = a.id },
+                                onClick = { viewingFrom = rowBounds[a.id]; viewing = a.id },
                             )
                         }
                     }
@@ -294,7 +294,7 @@ fun AccountsScreen(
         val debts by viewModel.debts.collectAsStateWithLifecycle()
         val b = viewModel.breakdown(a.toAccount(), all, transfers, debts)
         val latest = all.filter { it.accountId == a.id }.sortedWith(compareByDescending<TransactionItem> { it.epochDay }.thenByDescending { it.createdAt }).take(4)
-        MorphCard(from = viewingFrom, onDismiss = { viewing = null; hidden = null }, onReveal = { hidden = null }) { close ->
+        MorphCard(from = viewingFrom, onDismiss = { viewing = null; hidden = null }, onReveal = { hidden = null }, onShown = { hidden = viewing }) { close ->
             Row(verticalAlignment = Alignment.CenterVertically) {
                 CategoryIcon(a.icon, a.color, size = 52.dp)
                 Spacer(Modifier.width(14.dp))

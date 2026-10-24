@@ -263,7 +263,7 @@ fun HomeScreen(
     var balanceBounds by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
     if (balanceOpen) state.balance?.let { balance ->
         val selected = state.selectedAccount
-        MorphCard(from = balanceFrom, onDismiss = { balanceOpen = false; balanceHidden = false }, onReveal = { balanceHidden = false }) { close ->
+        MorphCard(from = balanceFrom, onDismiss = { balanceOpen = false; balanceHidden = false }, onReveal = { balanceHidden = false }, onShown = { balanceHidden = true }) { close ->
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (selected != null) CategoryIcon(selected.icon, selected.color, size = 52.dp) else IconTile(Lucide.Wallet, c.textPrimary, size = 52.dp)
                 Spacer(Modifier.width(14.dp))
@@ -337,6 +337,7 @@ fun HomeScreen(
             accountName = state.accounts.firstOrNull { it.id == r.accountId }?.name,
             onDismiss = { viewingSubscription = null; hiddenSubscription = null },
             onReveal = { hiddenSubscription = null },
+            onShown = { hiddenSubscription = r.id },
             onEdit = {
                 viewingSubscription = null
                 onOpenSubscription(r)
@@ -359,7 +360,7 @@ fun HomeScreen(
             if (borrowed > 0) "Borrowed ${money.format(borrowed)}" else null,
             if (paidBack > 0) "Paid back ${money.format(paidBack)}" else null,
         )
-        MorphCard(from = owedFrom, onDismiss = { owedOpen = null; owedHidden = null }, onReveal = { owedHidden = null }) { close ->
+        MorphCard(from = owedFrom, onDismiss = { owedOpen = null; owedHidden = null }, onReveal = { owedHidden = null }, onShown = { owedHidden = owedOpen }) { close ->
                     // Who, and since when.
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Box(
@@ -578,7 +579,7 @@ fun HomeScreen(
                         Row(
                             Modifier
                                 .fillMaxWidth()
-                                .pressable({ balanceFrom = balanceBounds; balanceOpen = true; balanceHidden = true }, pressedScale = 0.98f)
+                                .pressable({ balanceFrom = balanceBounds; balanceOpen = true }, pressedScale = 0.98f)
                                 .padding(18.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
@@ -687,14 +688,14 @@ fun HomeScreen(
                 item { SectionHeader("Upcoming", Modifier.appear(3), action = "Manage", onAction = { onOpenSubscriptions(false) }) }
                 item {
                     CardStrip(state.upcoming, key = { it.id }, modifier = Modifier.appear(3)) { r, size ->
-                        UpcomingCard(r, size ?: Modifier.width(156.dp), hidden = hiddenSubscription == r.id, onBounds = { upcomingBounds[r.id] = it }) { subscriptionFrom = upcomingBounds[r.id]; viewingSubscription = r.id; hiddenSubscription = r.id }
+                        UpcomingCard(r, size ?: Modifier.width(156.dp), hidden = hiddenSubscription == r.id, onBounds = { upcomingBounds[r.id] = it }) { subscriptionFrom = upcomingBounds[r.id]; viewingSubscription = r.id }
                     }
                 }
             }
 
             if (state.owed.isNotEmpty()) {
                 item { SectionHeader("Money owed", Modifier.appear(3), action = "See all", onAction = onOpenDebts) }
-                item { OwedSummary(state.owed, Modifier.appear(3), open = owedHidden, onOpen = { person, at -> owedFrom = at; owedOpen = person; owedHidden = person }, onSeeAll = onOpenDebts) }
+                item { OwedSummary(state.owed, Modifier.appear(3), open = owedHidden, onOpen = { person, at -> owedFrom = at; owedOpen = person }, onSeeAll = onOpenDebts) }
             }
 
             if (state.goals.isNotEmpty()) {

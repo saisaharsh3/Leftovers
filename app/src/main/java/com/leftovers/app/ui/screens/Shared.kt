@@ -439,6 +439,8 @@ fun MorphCard(
     from: androidx.compose.ui.geometry.Rect?,
     onDismiss: () -> Unit,
     onReveal: () -> Unit = {},
+    /** The card's first frame is on screen: the tapped card can step aside now, so it never leaves a gap first. */
+    onShown: () -> Unit = {},
     content: @Composable ColumnScope.(close: (then: () -> Unit) -> Unit) -> Unit) {
     val c = LocalAppColors.current
     // Liquid glass, like the tab bar: the card bends the screen behind it, which is blurred only lightly so the
@@ -478,6 +480,7 @@ fun MorphCard(
         val radius = with(LocalDensity.current) { (if (liquid != null) 10.dp else 24.dp).roundToPx() }
         LaunchedEffect(window) {
             if (window == null) {
+                onShown()
                 progress.animateTo(1f, tween(400, easing = MorphGrow))
                 return@LaunchedEffect
             }
@@ -489,6 +492,7 @@ fun MorphCard(
             launch { progress.animateTo(1f, tween(400, easing = MorphGrow)) }
             // The blur starts with the card's first frame, so the screen never blurs with no card on it.
             snapshotFlow { progress.value }.first { it > 0f }
+            onShown()
             if (blurs) window.addFlags(WindowManager.LayoutParams.FLAG_BLUR_BEHIND)
             // Set once: changing the window's blur each frame makes the system redo the window every frame.
             if (blurs && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
