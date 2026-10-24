@@ -1,6 +1,10 @@
 package com.leftovers.app.ui.screens
 
 import kotlinx.coroutines.flow.first
+import com.kyant.backdrop.drawBackdrop
+import com.kyant.backdrop.effects.blur
+import com.kyant.backdrop.effects.lens
+import com.kyant.backdrop.effects.vibrancy
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.animation.core.spring
@@ -437,7 +441,10 @@ fun MorphCard(
     onReveal: () -> Unit = {},
     content: @Composable ColumnScope.(close: (then: () -> Unit) -> Unit) -> Unit) {
     val c = LocalAppColors.current
-    val blurs = rememberWindowBlur()
+    // Liquid glass, like the tab bar: the card bends the screen behind it, so that screen stays sharp (dimmed,
+    // not blurred) for the bend to show. Otherwise frosted glass over the blurred screen.
+    val liquid = com.leftovers.app.ui.components.LocalScreenBackdrop.current
+    val blurs = rememberWindowBlur() && liquid == null
     val progress = remember { Animatable(0f) }
     val scope = rememberCoroutineScope()
     var target by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
@@ -492,7 +499,7 @@ fun MorphCard(
             Modifier
                 .fillMaxSize()
                 // Read while drawing, not composing, so the fade doesn't rebuild the card every frame.
-                .drawBehind { drawRect(c.background.copy(alpha = (if (blurs) 0.28f else 0.6f) * progress.value.coerceIn(0f, 1f))) }
+                .drawBehind { drawRect(c.background.copy(alpha = (if (blurs) 0.28f else if (liquid != null) 0.45f else 0.6f) * progress.value.coerceIn(0f, 1f))) }
                 .pointerInput(Unit) { detectTapGestures { close() } },
             contentAlignment = Alignment.Center,
         ) {
@@ -531,9 +538,27 @@ fun MorphCard(
                         shape = glassShape
                         clip = true
                     }
-                    // The same glass as the cards on screen, over the blurred screen behind.
-                    .background(com.leftovers.app.ui.components.glassFill(c.glassStrong), glassShape)
-                    .border(1.dp, com.leftovers.app.ui.components.glassBorder(c), glassShape)
+                    .then(
+                        if (liquid != null) {
+                            // What's behind bends at the card's rounded edges, a little colour splits at the rim,
+                            // and it's tinted enough for its text to read over any screen.
+                            Modifier.drawBackdrop(
+                                backdrop = liquid,
+                                shape = { com.kyant.shapes.RoundedRectangle(30.dp) },
+                                effects = {
+                                    vibrancy()
+                                    blur(10.dp.toPx())
+                                    lens(22.dp.toPx(), 44.dp.toPx(), chromaticAberration = true)
+                                },
+                                onDrawSurface = { drawRect(if (c.isDark) androidx.compose.ui.graphics.Color(0xFF0E0E13).copy(alpha = 0.42f) else androidx.compose.ui.graphics.Color.White.copy(alpha = 0.45f)) },
+                            )
+                        } else {
+                            // The same glass as the cards on screen, over the blurred screen behind.
+                            Modifier
+                                .background(com.leftovers.app.ui.components.glassFill(c.glassStrong), glassShape)
+                                .border(1.dp, com.leftovers.app.ui.components.glassBorder(c), glassShape)
+                        },
+                    )
                     // Taps on the card stay on the card.
                     .pointerInput(Unit) { detectTapGestures { } }
                     .padding(22.dp),

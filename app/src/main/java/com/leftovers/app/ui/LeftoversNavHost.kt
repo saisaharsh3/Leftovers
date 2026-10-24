@@ -225,7 +225,11 @@ fun LeftoversNavHost(openAdd: Boolean = false, onOpenAddHandled: () -> Unit = {}
     val swipeThreshold = with(LocalDensity.current) { 72.dp.toPx() }
 
     SharedTransitionLayout(Modifier.fillMaxSize()) {
-        CompositionLocalProvider(LocalSharedTransitionScope provides this, LocalUndo provides undo) {
+        CompositionLocalProvider(
+            LocalSharedTransitionScope provides this,
+            LocalUndo provides undo,
+            com.leftovers.app.ui.components.LocalScreenBackdrop provides if (liquid) backdrop else null,
+        ) {
             Box(Modifier.fillMaxSize()) {
                 NavHost(
                     navController = nav,

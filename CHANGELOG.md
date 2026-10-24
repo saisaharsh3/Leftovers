@@ -5,6 +5,8 @@ All notable changes to Leftovers. Download any version from
 
 ## Unreleased
 
+- Pop-up cards (an entry, the balance, Money owed, subscriptions) are liquid glass like the tab bar on Android 13
+  and newer, bending the screen behind them at their edges
 - Home leads with Safe to spend today, large and on the background instead of in a card, and the total balance
   card holds the month's spending and income under it
 - Sync between your devices, with no account: Settings → Sync. Use a folder that Syncthing or Nextcloud's app keeps
