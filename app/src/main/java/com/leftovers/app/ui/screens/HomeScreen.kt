@@ -836,11 +836,14 @@ private fun TodayCard(state: HomeUiState, onClick: () -> Unit, modifier: Modifie
     // The one number that matters most sits large on the background itself, not in a card, so nothing competes with it.
     Box(modifier.sharedContainer("budget").fillMaxWidth().pressable(onClick, pressedScale = 0.98f)) {
         Column(Modifier.padding(horizontal = 6.dp, vertical = 8.dp)) {
-            val over = budget != null && budget.leftToday < 0
+            // The month's budget already used up: say so, and by how much, instead of "₹0 of ₹0".
+            val usedUp = budget != null && budget.monthUsedUp
+            val over = budget != null && (usedUp || budget.leftToday < 0)
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     when {
                         budget == null -> "Spent today"
+                        usedUp -> "Over this month's budget"
                         over -> "Over today's budget"
                         else -> "Safe to spend today"
                     },
@@ -852,7 +855,13 @@ private fun TodayCard(state: HomeUiState, onClick: () -> Unit, modifier: Modifie
             }
             Spacer(Modifier.height(2.dp))
             RollingText(
-                text = money.formatWhole(if (budget == null) state.spentToday else abs(budget.leftToday)),
+                text = money.formatWhole(
+                    when {
+                        budget == null -> state.spentToday
+                        usedUp -> abs(budget.monthLeft)
+                        else -> abs(budget.leftToday)
+                    },
+                ),
                 style = MaterialTheme.typography.displayLarge,
                 color = if (over) c.negative else c.textPrimary,
             )
@@ -862,7 +871,8 @@ private fun TodayCard(state: HomeUiState, onClick: () -> Unit, modifier: Modifie
                 Spacer(Modifier.height(10.dp))
                 Row {
                     Text(
-                        "${money.formatWhole(state.spentToday)} of ${money.formatWhole(budget.dailyLimit)}",
+                        if (usedUp) "${money.formatWhole(budget.monthlyBudget - budget.monthLeft)} of ${money.formatWhole(budget.monthlyBudget)} this month"
+                        else "${money.formatWhole(state.spentToday)} of ${money.formatWhole(budget.dailyLimit)}",
                         style = MaterialTheme.typography.bodySmall,
                         color = c.textSecondary,
                         modifier = Modifier.weight(1f),
