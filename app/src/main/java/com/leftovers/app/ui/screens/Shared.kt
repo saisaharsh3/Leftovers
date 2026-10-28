@@ -288,7 +288,8 @@ fun GlassAlertDialog(
         title = title,
         text = text,
         shape = glassShape,
-        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = if (blurs) 0.62f else 1f),
+        // Nearly solid even with the screen blurred: some phones say they blur but don't, and text must stay readable.
+        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = if (blurs) 0.9f else 1f),
         tonalElevation = 0.dp,
         modifier = modifier
             .appearWith(appear)
@@ -319,7 +320,8 @@ fun GlassDatePickerDialog(
     val c = LocalAppColors.current
     val glassShape = RoundedCornerShape(30.dp)
     val blurs = rememberWindowBlur()
-    val container = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = if (blurs) 0.7f else 1f)
+    // Solid: the year list is drawn over the days, which would show through a see-through calendar.
+    val container = MaterialTheme.colorScheme.surfaceContainerHigh
     val appear = remember { Animatable(if (blurs) 0f else 1f) }
     DatePickerDialog(
         onDismissRequest = onDismissRequest,
@@ -384,7 +386,8 @@ fun GlassSheet(onDismiss: () -> Unit, content: @Composable () -> Unit) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        containerColor = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = if (blurs) 0.84f else 1f),
+        // Nearly solid: on phones that say they blur but don't, the screen behind would show through the form.
+        containerColor = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = if (blurs) 0.96f else 1f),
         shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp),
         scrimColor = c.background.copy(alpha = if (blurs) 0.3f else 0.6f),
         // Only the top edge gets the glass highlight. A full border follows the sheet's measured size,

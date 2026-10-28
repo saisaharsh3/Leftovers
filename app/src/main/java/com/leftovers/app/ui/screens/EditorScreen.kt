@@ -1211,7 +1211,8 @@ fun EditorScreen(
                         Text(if (viewModel.repeatMonthly) "Which day does it repeat from?" else "Which day was it?", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(start = 24.dp, top = 20.dp))
                     }
                 },
-                colors = DatePickerDefaults.colors(containerColor = Color.Transparent),
+                // The dialog's own colour, not see-through: the year list is drawn over the days in this colour.
+                colors = DatePickerDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
             )
         }
     }
