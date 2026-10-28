@@ -471,39 +471,14 @@ fun MorphCard(
             then()
         }
     }
-    androidx.compose.ui.window.Dialog(
-        onDismissRequest = { close() },
-        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
-    ) {
-        // The window behind blurs and dims with the card, so it never arrives late.
-        val window = (LocalView.current.parent as? DialogWindowProvider)?.window
-        val radius = with(LocalDensity.current) { (if (liquid != null) 10.dp else 24.dp).roundToPx() }
-        LaunchedEffect(window) {
-            if (window == null) {
-                onShown()
-                progress.animateTo(1f, tween(400, easing = MorphGrow))
-                return@LaunchedEffect
-            }
-            // The window fills the screen before anything moves, so the card's end place doesn't shift mid-way.
-            window.setLayout(WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.MATCH_PARENT)
-            window.setWindowAnimations(0)
-            window.setDimAmount(0f)
-            repeat(2) { androidx.compose.runtime.withFrameNanos { } }
-            launch { progress.animateTo(1f, tween(400, easing = MorphGrow)) }
-            // The blur starts with the card's first frame, so the screen never blurs with no card on it.
-            snapshotFlow { progress.value }.first { it > 0f }
-            onShown()
-            if (blurs) window.addFlags(WindowManager.LayoutParams.FLAG_BLUR_BEHIND)
-            // Set once: changing the window's blur each frame makes the system redo the window every frame.
-            if (blurs && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                window.attributes = window.attributes.apply { blurBehindRadius = radius }
-            }
-        }
+    /** [dim]: the pop-up dims what's behind it itself (in its own window). */
+    @Composable
+    fun MorphBody(dim: Boolean = true) {
         Box(
             Modifier
                 .fillMaxSize()
                 // Read while drawing, not composing, so the fade doesn't rebuild the card every frame.
-                .drawBehind { drawRect(c.background.copy(alpha = (if (blurs) 0.28f else 0.6f) * progress.value.coerceIn(0f, 1f))) }
+                .drawBehind { if (dim) drawRect(c.background.copy(alpha = (if (blurs) 0.28f else 0.6f) * progress.value.coerceIn(0f, 1f))) }
                 .pointerInput(Unit) { detectTapGestures { close() } },
             contentAlignment = Alignment.Center,
         ) {
@@ -551,10 +526,11 @@ fun MorphCard(
                                 shape = { com.kyant.shapes.RoundedRectangle(30.dp) },
                                 effects = {
                                     vibrancy()
-                                    blur(10.dp.toPx())
+                                    // Frosted inside, so icons and switches behind never show through the text.
+                                    blur(28.dp.toPx())
                                     lens(22.dp.toPx(), 44.dp.toPx(), chromaticAberration = true)
                                 },
-                                onDrawSurface = { drawRect(if (c.isDark) androidx.compose.ui.graphics.Color(0xFF0E0E13).copy(alpha = 0.42f) else androidx.compose.ui.graphics.Color.White.copy(alpha = 0.45f)) },
+                                onDrawSurface = { drawRect(if (c.isDark) androidx.compose.ui.graphics.Color(0xFF14141B).copy(alpha = 0.62f) else androidx.compose.ui.graphics.Color.White.copy(alpha = 0.62f)) },
                             )
                         } else {
                             // The same glass as the cards on screen, over the blurred screen behind.
@@ -572,6 +548,76 @@ fun MorphCard(
                 content { then -> close(then) }
             }
         }
+    }
+    val layer = com.leftovers.app.ui.components.LocalPopupLayer.current
+    if (layer != null) {
+        // Drawn on the app's own screen: the screen behind is softened with the same glass as the tab bar.
+        val locals = androidx.compose.runtime.currentCompositionLocalContext
+        val key = remember { Any() }
+        LaunchedEffect(Unit) {
+            launch { progress.animateTo(1f, tween(400, easing = MorphGrow)) }
+            // The tapped card steps aside once the pop-up has drawn its first frame over it.
+            snapshotFlow { progress.value }.first { it > 0.05f }
+            onShown()
+        }
+        val card: @Composable () -> Unit = {
+            androidx.compose.runtime.CompositionLocalProvider(locals) {
+                Box(Modifier.fillMaxSize()) {
+                    // What's behind: blurred lightly (liquid glass phones) and dimmed, fading in with the card.
+                    Box(
+                        Modifier
+                            .fillMaxSize()
+                            .graphicsLayer { alpha = progress.value.coerceIn(0f, 1f) }
+                            .then(
+                                if (liquid != null) {
+                                    Modifier.drawBackdrop(
+                                        backdrop = liquid,
+                                        shape = { androidx.compose.ui.graphics.RectangleShape },
+                                        effects = { blur(10.dp.toPx()) },
+                                        onDrawSurface = { drawRect(c.background.copy(alpha = 0.32f)) },
+                                    )
+                                } else {
+                                    Modifier.background(c.background.copy(alpha = 0.6f))
+                                },
+                            ),
+                    )
+                    MorphBody(dim = false)
+                }
+            }
+        }
+        androidx.compose.runtime.SideEffect { layer.show(key, card) }
+        androidx.compose.runtime.DisposableEffect(key) { onDispose { layer.hide(key) } }
+        return
+    }
+    androidx.compose.ui.window.Dialog(
+        onDismissRequest = { close() },
+        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
+    ) {
+        // The window behind blurs and dims with the card, so it never arrives late.
+        val window = (LocalView.current.parent as? DialogWindowProvider)?.window
+        val radius = with(LocalDensity.current) { (if (liquid != null) 10.dp else 24.dp).roundToPx() }
+        LaunchedEffect(window) {
+            if (window == null) {
+                onShown()
+                progress.animateTo(1f, tween(400, easing = MorphGrow))
+                return@LaunchedEffect
+            }
+            // The window fills the screen before anything moves, so the card's end place doesn't shift mid-way.
+            window.setLayout(WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.MATCH_PARENT)
+            window.setWindowAnimations(0)
+            window.setDimAmount(0f)
+            repeat(2) { androidx.compose.runtime.withFrameNanos { } }
+            launch { progress.animateTo(1f, tween(400, easing = MorphGrow)) }
+            // The blur starts with the card's first frame, so the screen never blurs with no card on it.
+            snapshotFlow { progress.value }.first { it > 0f }
+            onShown()
+            if (blurs) window.addFlags(WindowManager.LayoutParams.FLAG_BLUR_BEHIND)
+            // Set once: changing the window's blur each frame makes the system redo the window every frame.
+            if (blurs && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                window.attributes = window.attributes.apply { blurBehindRadius = radius }
+            }
+        }
+        MorphBody()
     }
 }
 

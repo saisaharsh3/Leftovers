@@ -202,6 +202,7 @@ fun LeftoversNavHost(openAdd: Boolean = false, onOpenAddHandled: () -> Unit = {}
     // What the tab bar bends: the aurora and the screen above it, recorded apart from what's shown.
     val onDrawBackdrop = remember(colors) { { scope: androidx.compose.ui.graphics.drawscope.ContentDrawScope -> scope.drawAurora(colors); scope.drawContent() } }
     val backdrop = rememberLayerBackdrop(onDraw = onDrawBackdrop)
+    val popups = remember { com.leftovers.app.ui.components.PopupLayer() }
 
     LaunchedEffect(toast) {
         if (toast != null) {
@@ -229,6 +230,7 @@ fun LeftoversNavHost(openAdd: Boolean = false, onOpenAddHandled: () -> Unit = {}
             LocalSharedTransitionScope provides this,
             LocalUndo provides undo,
             com.leftovers.app.ui.components.LocalScreenBackdrop provides if (liquid) backdrop else null,
+            com.leftovers.app.ui.components.LocalPopupLayer provides popups,
         ) {
             Box(Modifier.fillMaxSize()) {
                 NavHost(
@@ -462,6 +464,9 @@ fun LeftoversNavHost(openAdd: Boolean = false, onOpenAddHandled: () -> Unit = {}
                 ) {
                     Toast(toast.orEmpty())
                 }
+
+                // Pop-up cards, above the tab bar and everything else.
+                popups.Content()
             }
         }
     }
