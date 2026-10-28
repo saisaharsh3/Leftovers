@@ -107,11 +107,19 @@ private val popularCurrencyCodes = listOf(
     "QAR", "KWD", "OMR", "BHD",
 )
 
+/** The popular currencies first, then every other one the phone knows (Ghana cedi, Kenyan shilling...), by name. */
 val currencyOptions: List<CurrencyOption> by lazy {
-    popularCurrencyCodes.mapNotNull { code ->
-        runCatching {
-            val c = Currency.getInstance(code)
-            CurrencyOption(code, c.getDisplayName(Locale.getDefault()), Money(code).symbol)
-        }.getOrNull()
-    }
+    fun option(code: String) = runCatching {
+        val c = Currency.getInstance(code)
+        CurrencyOption(code, c.getDisplayName(Locale.getDefault()), Money(code).symbol)
+    }.getOrNull()
+    // Old and fund codes (like XAU, gold) aren't money anyone spends; real currencies have a name that isn't the code.
+    val rest = Currency.getAvailableCurrencies()
+        .map { it.currencyCode }
+        .filter { it !in popularCurrencyCodes && !it.startsWith("X") }
+        .mapNotNull(::option)
+        // Retired currencies are named with their years, like "Ghanaian Cedi (1979–2007)".
+        .filter { it.name != it.code && !Regex("""\(\d{4}""").containsMatchIn(it.name) }
+        .sortedBy { it.name }
+    popularCurrencyCodes.mapNotNull(::option) + rest
 }
