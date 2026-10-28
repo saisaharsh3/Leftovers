@@ -3,7 +3,7 @@
 All notable changes to Leftovers. Download any version from
 [Releases](https://github.com/saisaharsh3/Leftovers/releases).
 
-## Unreleased
+## 1.8.2
 
 - Pop-ups open on the app's own screen instead of in a window of their own. On some phones the app under such a
   window stopped redrawing until the next touch, so a tapped card stayed behind its pop-up, vanished after it

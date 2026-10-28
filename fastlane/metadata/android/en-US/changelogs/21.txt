@@ -1,0 +1,8 @@
+- Fixes cards that stayed behind a pop-up, vanished after it closed, or showed numbers only after a touch
+- Over budget for the month now says so, instead of "₹0 of ₹0"
+- Readable sheets and a fixed year picker
+- Extra income adding to the budget is now a switch, off by default
+- Every currency, and accounts in their own currency
+- Activity: By month or All time
+- Tags apart from notes
+- Optional new-version notification
