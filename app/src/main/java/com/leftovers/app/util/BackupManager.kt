@@ -81,6 +81,7 @@ class BackupManager(
                     put("split", s.plan.split.name)
                     put("custom", BudgetPlan.encodeCustom(s.plan.custom))
                     put("carryMode", s.plan.carry.name)
+                    put("extraIncome", s.plan.extraIncome)
                     put("carryChoices", BudgetPlan.encodeChoices(s.plan.carryChoices))
                     s.plan.carryFrom?.let { put("carryFrom", it.toString()) }
                 })
@@ -313,6 +314,7 @@ class BackupManager(
                         split = com.leftovers.app.data.YearSplit.valueOf(s.getString("split")),
                         custom = BudgetPlan.decodeCustom(s.optString("custom")),
                         carry = com.leftovers.app.data.CarryMode.entries.firstOrNull { it.name == s.optString("carryMode") } ?: com.leftovers.app.data.CarryMode.ASK,
+                        extraIncome = s.optBoolean("extraIncome", false),
                         carryChoices = BudgetPlan.decodeChoices(s.optString("carryChoices")),
                         carryFrom = s.optString("carryFrom").takeIf { it.isNotEmpty() }?.let { runCatching { java.time.YearMonth.parse(it) }.getOrNull() },
                     ),

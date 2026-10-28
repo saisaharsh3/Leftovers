@@ -94,6 +94,7 @@ class BudgetPlanViewModel(
     /** Custom per-month amounts as typed, keyed by month number. */
     val customText = mutableStateMapOf<Int, String>()
     var carry by mutableStateOf(CarryMode.ASK)
+    var extraIncome by mutableStateOf(false)
     private var carryFrom: YearMonth? = null
     private var carryChoices: Map<YearMonth, Boolean> = emptyMap()
 
@@ -110,6 +111,7 @@ class BudgetPlanViewModel(
             split = plan.split
             plan.custom.forEach { (m, v) -> customText[m] = AmountInput.fromMinor(v) }
             carry = plan.carry
+            extraIncome = plan.extraIncome
             carryFrom = plan.carryFrom
             carryChoices = plan.carryChoices
             loaded = true
@@ -125,6 +127,7 @@ class BudgetPlanViewModel(
         carry = carry,
         carryFrom = carryFrom,
         carryChoices = carryChoices,
+        extraIncome = extraIncome,
     )
 
     fun fillEvenly() {
@@ -262,6 +265,35 @@ fun BudgetPlanScreen(
                             Spacer(Modifier.height(12.dp))
                             SegmentedToggle(CarryMode.entries, viewModel.carry, { it.label }, { viewModel.carry = it }, Modifier.fillMaxWidth())
                         }
+                    }
+                }
+            }
+
+            item {
+                Glass(Modifier.fillMaxWidth()) {
+                    Row(Modifier.padding(18.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text("Extra income adds to the budget", style = MaterialTheme.typography.titleSmall, color = c.textPrimary)
+                            Spacer(Modifier.height(2.dp))
+                            Text(
+                                if (viewModel.extraIncome) "Gifts, bonuses and other income in categories that add to the budget raise that month's budget. Choose which in Categories."
+                                else "Your budget stays the amount you set, whatever comes in. Extra income is left for saving.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = c.textSecondary,
+                            )
+                        }
+                        Spacer(Modifier.width(12.dp))
+                        androidx.compose.material3.Switch(
+                            checked = viewModel.extraIncome,
+                            onCheckedChange = com.leftovers.app.ui.components.toggleHaptic({ viewModel.extraIncome = it }),
+                            colors = androidx.compose.material3.SwitchDefaults.colors(
+                                checkedTrackColor = c.accent,
+                                checkedThumbColor = c.onAccent,
+                                uncheckedTrackColor = c.glass,
+                                uncheckedBorderColor = c.borderTop,
+                                uncheckedThumbColor = c.textSecondary,
+                            ),
+                        )
                     }
                 }
             }

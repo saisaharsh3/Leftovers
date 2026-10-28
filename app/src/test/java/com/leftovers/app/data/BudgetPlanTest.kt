@@ -43,8 +43,17 @@ class BudgetPlanTest {
             tx(TxType.EXPENSE, 11_000, sep),
             tx(TxType.INCOME, 500, oct, addsToBudget = true),
         )
-        assertEquals(12_000, plan.copy(carryFrom = sep).budgetFor(sep, items))
-        assertEquals(MonthBudget(10_000, 500, 1_000), plan.copy(carryFrom = sep).breakdownFor(oct, items))
+        assertEquals(12_000, plan.copy(carryFrom = sep, extraIncome = true).budgetFor(sep, items))
+        assertEquals(MonthBudget(10_000, 500, 1_000), plan.copy(carryFrom = sep, extraIncome = true).breakdownFor(oct, items))
+    }
+
+    @Test fun extraIncomeLeavesTheBudgetAloneWhenOff() {
+        val items = listOf(
+            tx(TxType.INCOME, 2_000, sep, addsToBudget = true),
+            tx(TxType.EXPENSE, 9_000, sep),
+        )
+        assertEquals(10_000, plan.copy(carryFrom = sep).budgetFor(sep, items))
+        assertEquals(MonthBudget(10_000, 0, 1_000), plan.copy(carryFrom = sep, carry = CarryMode.ALWAYS).breakdownFor(oct, items))
     }
 
     @Test fun nothingCarriesBeforeStartOrWhenOff() {
