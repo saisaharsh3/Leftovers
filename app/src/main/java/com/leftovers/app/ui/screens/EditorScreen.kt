@@ -284,6 +284,22 @@ class EditorViewModel(
         rateText = if (code == null) "" else rate
     }
 
+    /**
+     * Picks the account this goes to. Moving to an account in its own currency switches the amount to that
+     * currency, at its rate; moving away from one switches back, unless another currency was picked by hand.
+     */
+    fun chooseAccount(id: Long?) {
+        val before = accounts.value.firstOrNull { it.id == accountId }?.currency
+        accountId = id
+        val code = accounts.value.firstOrNull { it.id == id }?.currency
+        viewModelScope.launch {
+            when {
+                code != null && foreignCurrency != code -> useForeign(code, lastRate(code))
+                code == null && before != null && foreignCurrency == before -> useForeign(null, "")
+            }
+        }
+    }
+
     /** The rate last used for [code], to start the rate box with. */
     suspend fun lastRate(code: String): String = settings.settings.first().foreignRates[code].orEmpty()
     val othersOwe: Long get() = people.sumOf { shareOf(it) }
@@ -342,6 +358,10 @@ class EditorViewModel(
                 val matched = (if (smsId > 0) sms.accountIdFor(smsId)?.takeIf { it in known } else null)
                     ?: fromSms?.let { d -> accountRepository.accounts.first().firstOrNull { it.matchesDigits(d) }?.id }
                 accountId = matched ?: s.homeAccountId?.takeIf { it in known } ?: s.defaultAccountId
+                // An account in its own currency opens the amount in that currency, at its rate (#30).
+                accountRepository.accounts.first().firstOrNull { it.id == accountId }?.currency?.let { code ->
+                    if (foreignCurrency == null) useForeign(code, lastRate(code))
+                }
             }
             // A detected payment to somewhere filed before opens under the same category again.
             if (smsId > 0 && categoryId == null && note.isNotBlank()) {
@@ -888,7 +908,7 @@ fun EditorScreen(
                     )
                 } else {
                 if (accounts.size > 1) {
-                    AccountPicker(accounts, viewModel.accountId) { viewModel.accountId = it }
+                    AccountPicker(accounts, viewModel.accountId) { viewModel.chooseAccount(it) }
                 }
                 if (!viewModel.isEditing) {
                     val repeating = viewModel.repeatMonthly

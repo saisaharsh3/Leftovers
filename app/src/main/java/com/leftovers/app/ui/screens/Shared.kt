@@ -212,13 +212,13 @@ fun GlassTextField(
 }
 
 @Composable
-fun MoneyField(value: String, onValueChange: (String) -> Unit, modifier: Modifier = Modifier, label: String? = null, large: Boolean = false, focusRequester: FocusRequester? = null) {
+fun MoneyField(value: String, onValueChange: (String) -> Unit, modifier: Modifier = Modifier, label: String? = null, large: Boolean = false, focusRequester: FocusRequester? = null, symbol: String? = null) {
     GlassTextField(
         value = value,
         onValueChange = { raw -> AmountInput.sanitize(raw)?.let(onValueChange) },
         placeholder = "0",
         label = label,
-        prefix = LocalMoney.current.symbol,
+        prefix = symbol ?: LocalMoney.current.symbol,
         keyboardType = KeyboardType.Decimal,
         textStyle = if (large) MaterialTheme.typography.headlineMedium else MaterialTheme.typography.titleLarge,
         modifier = modifier,

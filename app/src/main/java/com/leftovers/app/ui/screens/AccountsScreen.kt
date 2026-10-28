@@ -139,11 +139,19 @@ class AccountsViewModel(
         repository.accounts.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
     val transfers: StateFlow<List<Transfer>> =
         repository.transfers.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+    /** The app's currency and the rates set for others, for accounts in their own currency. */
+    val appCurrency: StateFlow<String> =
+        settings.settings.map { it.currencyCode }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), "INR")
+    val rates: StateFlow<Map<String, String>> =
+        settings.settings.map { it.foreignRates }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
+
     val defaultAccountId: StateFlow<Long> =
         settings.settings.map { it.defaultAccountId }.flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 1L)
 
-    fun save(account: Account, makeDefault: Boolean) {
+    fun save(account: Account, makeDefault: Boolean, rate: String? = null) {
         viewModelScope.launch {
+            val code = account.currency
+            if (code != null && !rate.isNullOrBlank()) settings.setForeignRate(code, rate)
             val newId = repository.saveAccount(account)
             val id = if (account.id == 0L) newId else account.id
             if (makeDefault && id > 0) settings.setDefaultAccount(id)
@@ -248,9 +256,9 @@ fun AccountsScreen(
                                 leading = { CategoryIcon(a.icon, a.color, size = 42.dp) },
                                 trailing = {
                                     Text(
-                                        money.format(a.balanceMinor),
+                                        a.shownBalance(money),
                                         style = MaterialTheme.typography.titleSmall,
-                                        color = if (a.balanceMinor < 0) c.negative else c.textPrimary,
+                                        color = if (a.shownNegative) c.negative else c.textPrimary,
                                     )
                                 },
                                 onClick = { viewingFrom = rowBounds[a.id]; viewing = a.id },
@@ -316,7 +324,10 @@ fun AccountsScreen(
                     .padding(horizontal = 18.dp, vertical = 16.dp),
             ) {
                 Text("Balance", style = MaterialTheme.typography.labelLarge, color = c.textSecondary)
-                Text(money.format(a.balanceMinor), style = MaterialTheme.typography.displaySmall, color = if (a.balanceMinor < 0) c.negative else c.textPrimary)
+                Text(a.shownBalance(money), style = MaterialTheme.typography.displaySmall, color = if (a.shownNegative) c.negative else c.textPrimary)
+                if (a.currency != null) {
+                    Text("About ${money.formatWhole(a.balanceMinor)} in ${a.currency} converted", style = MaterialTheme.typography.bodySmall, color = c.textSecondary)
+                }
                 Text(
                     "In ${money.formatWhole(b.income + b.transfersIn + b.borrowed)} · Out ${money.formatWhole(b.spent + b.transfersOut + b.lent)}",
                     style = MaterialTheme.typography.bodySmall,
@@ -360,8 +371,10 @@ fun AccountsScreen(
             breakdown = if (account.id != 0L) viewModel.breakdown(account, all, transfers, debts) else null,
             isDefault = account.id == defaultId,
             onDismiss = { editing = null },
-            onSave = { a, makeDefault ->
-                viewModel.save(a, makeDefault)
+            appCurrency = viewModel.appCurrency.collectAsStateWithLifecycle().value,
+            rates = viewModel.rates.collectAsStateWithLifecycle().value,
+            onSave = { a, makeDefault, rate ->
+                viewModel.save(a, makeDefault, rate)
                 editing = null
             },
             onMoveEntries = if (account.id != 0L && accounts.size >= 2) {
@@ -429,8 +442,10 @@ private fun AccountEditor(
     initial: Account,
     breakdown: BalanceBreakdown?,
     isDefault: Boolean,
+    appCurrency: String,
+    rates: Map<String, String>,
     onDismiss: () -> Unit,
-    onSave: (Account, Boolean) -> Unit,
+    onSave: (Account, Boolean, String?) -> Unit,
     onMoveEntries: (() -> Unit)?,
     onDelete: (() -> Unit)?,
 ) {
@@ -438,10 +453,22 @@ private fun AccountEditor(
     var name by rememberSaveable { mutableStateOf(initial.name) }
     var icon by rememberSaveable { mutableStateOf(initial.icon) }
     var color by rememberSaveable { mutableStateOf(initial.color) }
-    var opening by rememberSaveable { mutableStateOf(if (initial.openingMinor != 0L) AmountInput.fromMinor(initial.openingMinor) else "") }
+    // An account in its own currency is opened, entered and shown in it (#30).
+    var currency by rememberSaveable { mutableStateOf(initial.currency) }
+    var rate by rememberSaveable { mutableStateOf(initial.currency?.let { rates[it] }.orEmpty()) }
+    var pickCurrency by rememberSaveable { mutableStateOf(false) }
+    val startOpening = if (initial.currency != null) initial.openingNative ?: 0L else initial.openingMinor
+    var opening by rememberSaveable { mutableStateOf(if (startOpening != 0L) AmountInput.fromMinor(startOpening) else "") }
     var makeDefault by rememberSaveable { mutableStateOf(isDefault) }
     var digits by rememberSaveable { mutableStateOf(initial.smsDigits.orEmpty()) }
 
+    if (pickCurrency) {
+        CurrencyPickerSheet(currency ?: appCurrency, onDismiss = { pickCurrency = false }) { code ->
+            currency = code.takeIf { it != appCurrency }
+            if (currency != null && rate.isBlank()) rate = rates[code].orEmpty()
+            pickCurrency = false
+        }
+    }
     GlassSheet(onDismiss) {
         Column(
             Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 16.dp),
@@ -453,7 +480,35 @@ private fun AccountEditor(
                 Text(if (initial.id == 0L) "New account" else "Edit account", style = MaterialTheme.typography.headlineSmall, color = c.textPrimary)
             }
             GlassTextField(name, { name = it.take(24) }, placeholder = "e.g. HDFC, GPay, Credit card", label = "Name")
-            MoneyField(opening, { opening = it }, label = "Current balance when you start tracking")
+            ListRow(
+                "Currency",
+                subtitle = currency?.let { code -> com.leftovers.app.util.currencyOptions.firstOrNull { it.code == code }?.let { "${it.name} (${it.code})" } ?: code }
+                    ?: "Same as the app ($appCurrency)",
+                leading = { com.leftovers.app.ui.components.IconTile(Lucide.Coins, c.textPrimary, size = 38.dp) },
+                trailing = { Icon(Lucide.ChevronRight, contentDescription = null, tint = c.textTertiary, modifier = Modifier.size(18.dp)) },
+                onClick = { pickCurrency = true },
+            )
+            if (currency != null) {
+                GlassTextField(
+                    rate,
+                    { v -> rate = v.filter { it.isDigit() || it == '.' }.take(12) },
+                    placeholder = "e.g. 83.2",
+                    label = "1 $currency in ${com.leftovers.app.util.Money(appCurrency).symbol}",
+                    keyboardType = androidx.compose.ui.text.input.KeyboardType.Decimal,
+                )
+                Text(
+                    "Entries in this account are entered and shown in $currency. Totals, budgets and charts count them in $appCurrency at this rate.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = c.textTertiary,
+                    modifier = Modifier.padding(start = 6.dp),
+                )
+            }
+            MoneyField(
+                opening,
+                { opening = it },
+                label = "Current balance when you start tracking",
+                symbol = currency?.let { com.leftovers.app.util.Money(it).symbol },
+            )
             GlassTextField(
                 digits,
                 { v -> digits = v.filter(Char::isDigit).take(4) },
@@ -494,7 +549,19 @@ private fun AccountEditor(
             )
             PrimaryButton(
                 "Save",
-                { onSave(initial.copy(name = name.trim(), icon = icon, color = color, openingMinor = AmountInput.toMinor(opening) ?: 0L, smsDigits = digits.ifBlank { null }), makeDefault) },
+                {
+                    val typed = AmountInput.toMinor(opening) ?: 0L
+                    onSave(
+                        initial.copy(
+                            name = name.trim(), icon = icon, color = color, smsDigits = digits.ifBlank { null },
+                            currency = currency,
+                            openingNative = if (currency != null) typed else null,
+                            openingMinor = if (currency != null) com.leftovers.app.data.toAppCurrency(typed, rate) else typed,
+                        ),
+                        makeDefault,
+                        rate.takeIf { currency != null },
+                    )
+                },
                 Modifier.fillMaxWidth(),
                 enabled = name.isNotBlank(),
             )

@@ -19,6 +19,13 @@ data class Account(
     val createdAt: Long = System.currentTimeMillis(),
     /** Last digits of the bank account or card, so payments spotted in SMS land in this account. */
     val smsDigits: String? = null,
+    /**
+     * The account's own currency, when it isn't the app's (a USD card, a wallet in euros); null for the app's.
+     * Its entries are entered and shown in it; totals and budgets count them converted, at the account's rate (#30).
+     */
+    val currency: String? = null,
+    /** With [currency]: the opening balance in that currency ([openingMinor] holds it converted). */
+    val openingNative: Long? = null,
 )
 
 data class AccountWithBalance(
@@ -30,8 +37,22 @@ data class AccountWithBalance(
     val createdAt: Long,
     val smsDigits: String?,
     val balanceMinor: Long,
+    val currency: String? = null,
+    val openingNative: Long? = null,
+    /** With [currency]: the balance in that currency, which is what the account shows. */
+    val nativeMinor: Long? = null,
 ) {
-    fun toAccount() = Account(id, name, icon, color, openingMinor, createdAt, smsDigits)
+    fun toAccount() = Account(id, name, icon, color, openingMinor, createdAt, smsDigits, currency, openingNative)
+
+    /** The balance as this account shows it: in its own currency when it has one, else in the app's. */
+    fun shownBalance(appMoney: com.leftovers.app.util.Money, whole: Boolean = false): String {
+        val money = currency?.let { com.leftovers.app.util.Money(it) } ?: appMoney
+        val amount = if (currency != null) nativeMinor ?: 0L else balanceMinor
+        return if (whole) money.formatWhole(amount) else money.format(amount)
+    }
+
+    /** Whether the shown balance is below zero. */
+    val shownNegative: Boolean get() = (if (currency != null) nativeMinor ?: 0L else balanceMinor) < 0
 
     /** True when a message naming account or card digits [digits] belongs to this account. */
     fun matchesDigits(digits: String?): Boolean {

@@ -162,6 +162,25 @@ interface AccountDao {
     )
     fun observeWithBalance(): Flow<List<AccountWithBalance>>
 
+    /**
+     * For accounts with their own currency: what was entered in that currency ([NativeParts.inCurrency]), and
+     * the rest (older entries, transfers, money owed), which is in the app's currency and still needs converting.
+     */
+    @Query(
+        """
+        SELECT a.id AS accountId,
+            COALESCE((SELECT SUM(CASE WHEN t.type = 'INCOME' THEN t.foreignMinor ELSE -t.foreignMinor END)
+                      FROM transactions t WHERE t.accountId = a.id AND t.foreignCurrency = a.currency), 0) AS inCurrency,
+            COALESCE((SELECT SUM(CASE WHEN t.type = 'INCOME' THEN t.amountMinor ELSE -t.amountMinor END)
+                      FROM transactions t WHERE t.accountId = a.id AND (t.foreignCurrency IS NULL OR t.foreignCurrency <> a.currency)), 0)
+            + COALESCE((SELECT SUM(amountMinor) FROM transfers WHERE toAccountId = a.id), 0)
+            - COALESCE((SELECT SUM(amountMinor) FROM transfers WHERE fromAccountId = a.id), 0)
+            - COALESCE((SELECT SUM(amountMinor) FROM debts WHERE accountId = a.id), 0) AS inAppCurrency
+        FROM accounts a WHERE a.currency IS NOT NULL
+        """,
+    )
+    fun observeNativeParts(): Flow<List<NativeParts>>
+
     @Query("SELECT * FROM accounts ORDER BY id")
     suspend fun getAll(): List<Account>
 

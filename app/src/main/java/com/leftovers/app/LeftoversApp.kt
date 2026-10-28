@@ -66,7 +66,10 @@ class AppContainer(private val context: Context) {
     val syncRemoved = com.leftovers.app.util.SyncRemoved(java.io.File(context.filesDir, "sync-removed.json"))
     val repository = TransactionRepository(database.transactionDao(), database.categoryDao(), database.recurringDao(), database.deletedDao(), syncRemoved)
     val planning = PlanningRepository(database)
-    val accounts = AccountRepository(database.accountDao(), database.transferDao(), database.transactionDao(), database.debtDao())
+    val accounts = AccountRepository(
+        database.accountDao(), database.transferDao(), database.transactionDao(), database.debtDao(),
+        settings.settings.map { it.foreignRates }.distinctUntilChanged(),
+    )
     val sms = SmsRepository(database.smsDao(), database.transactionDao())
     /** The WebDAV server's password, for Sync between devices. */
     val syncLogin = com.leftovers.app.util.SyncLogin(context)

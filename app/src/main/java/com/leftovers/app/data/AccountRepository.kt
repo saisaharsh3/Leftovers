@@ -1,14 +1,24 @@
 package com.leftovers.app.data
 
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 
 class AccountRepository(
     private val accountDao: AccountDao,
     private val transferDao: TransferDao,
     private val transactionDao: TransactionDao,
     private val debtDao: DebtDao,
+    /** The rates set for other currencies (code to "one unit in the app's currency"), for accounts with their own. */
+    rates: Flow<Map<String, String>> = kotlinx.coroutines.flow.flowOf(emptyMap()),
 ) {
-    val accounts: Flow<List<AccountWithBalance>> = accountDao.observeWithBalance()
+    val accounts: Flow<List<AccountWithBalance>> =
+        combine(accountDao.observeWithBalance(), accountDao.observeNativeParts(), rates) { list, parts, rateMap ->
+            val byId = parts.associateBy { it.accountId }
+            list.map { a ->
+                val code = a.currency ?: return@map a
+                a.copy(nativeMinor = nativeBalance(a.openingNative, byId[a.id], rateMap[code]))
+            }
+        }
     val transfers: Flow<List<Transfer>> = transferDao.observeAll()
 
     suspend fun saveAccount(account: Account): Long = accountDao.upsert(account)

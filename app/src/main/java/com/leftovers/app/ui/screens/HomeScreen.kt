@@ -285,7 +285,8 @@ fun HomeScreen(
                     .padding(horizontal = 18.dp, vertical = 16.dp),
             ) {
                 Text("Balance", style = MaterialTheme.typography.labelLarge, color = c.textSecondary)
-                Text(money.format(balance), style = MaterialTheme.typography.displaySmall, color = if (balance < 0) c.negative else c.textPrimary)
+                val own = state.selectedAccount?.takeIf { it.currency != null }
+                Text(own?.shownBalance(money) ?: money.format(balance), style = MaterialTheme.typography.displaySmall, color = if (own?.shownNegative ?: (balance < 0)) c.negative else c.textPrimary)
                 state.forecast?.let { f ->
                     val end = state.month.atEndOfMonth().format(java.time.format.DateTimeFormatter.ofPattern("d MMM"))
                     Text(
@@ -313,7 +314,11 @@ fun HomeScreen(
                             Spacer(Modifier.width(14.dp))
                             Text(a?.name ?: "All accounts", style = MaterialTheme.typography.bodyMedium, color = c.textPrimary, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
                             val amount = a?.balanceMinor ?: state.accounts.sumOf { it.balanceMinor }
-                            Text(money.formatWhole(amount), style = MaterialTheme.typography.titleSmall, color = if (amount < 0) c.negative else c.textPrimary)
+                            Text(
+                                a?.shownBalance(money, whole = true) ?: money.formatWhole(amount),
+                                style = MaterialTheme.typography.titleSmall,
+                                color = if (a?.shownNegative ?: (amount < 0)) c.negative else c.textPrimary,
+                            )
                             Box(Modifier.width(28.dp), contentAlignment = Alignment.CenterEnd) {
                                 if (a?.id == selected?.id) Icon(Lucide.Check, contentDescription = "Showing", tint = c.accent, modifier = Modifier.size(18.dp))
                             }
@@ -623,7 +628,12 @@ fun HomeScreen(
                             Spacer(Modifier.width(14.dp))
                             Column(Modifier.weight(1f)) {
                                 Text(state.selectedAccount?.name ?: "Total balance", style = MaterialTheme.typography.labelLarge, color = c.textSecondary)
-                                RollingText(money.formatWhole(balance), MaterialTheme.typography.headlineSmall, if (balance < 0) c.negative else c.textPrimary)
+                                val shown = state.selectedAccount?.takeIf { it.currency != null }
+                                RollingText(
+                                    shown?.shownBalance(money, whole = true) ?: money.formatWhole(balance),
+                                    MaterialTheme.typography.headlineSmall,
+                                    if (shown?.shownNegative ?: (balance < 0)) c.negative else c.textPrimary,
+                                )
                                 state.forecast?.let { f ->
                                     val end = state.month.atEndOfMonth().format(java.time.format.DateTimeFormatter.ofPattern("d MMM"))
                                     Text(
