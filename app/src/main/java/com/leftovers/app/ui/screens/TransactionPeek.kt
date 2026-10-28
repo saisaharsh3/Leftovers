@@ -115,18 +115,32 @@ fun TransactionPeekCard(
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f)) {
                 Text(
-                    item.note.ifBlank { item.categoryName },
+                    com.leftovers.app.data.noteText(item.note).ifBlank { item.categoryName },
                     style = MaterialTheme.typography.titleLarge,
                     color = c.textPrimary,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(
-                    listOfNotNull(item.categoryName.takeIf { item.note.isNotBlank() }, account?.name?.takeIf { accounts.size > 1 }).joinToString(" · ")
+                    listOfNotNull(item.categoryName.takeIf { com.leftovers.app.data.noteText(item.note).isNotBlank() }, account?.name?.takeIf { accounts.size > 1 }).joinToString(" · ")
                         .ifBlank { if (income) "Income" else "Expense" },
                     style = MaterialTheme.typography.bodySmall,
                     color = c.textSecondary,
                 )
+            }
+        }
+        // Its tags, apart from the note.
+        val tags = com.leftovers.app.data.hashtags(item.note)
+        if (tags.isNotEmpty()) {
+            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                tags.forEach { tag ->
+                    Text(
+                        "#$tag",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = c.textSecondary,
+                        modifier = Modifier.clip(RoundedCornerShape(50)).background(c.glass).border(1.dp, c.borderBottom, RoundedCornerShape(50)).padding(horizontal = 12.dp, vertical = 6.dp),
+                    )
+                }
             }
         }
         // The amount, on its own panel, with when it happened.

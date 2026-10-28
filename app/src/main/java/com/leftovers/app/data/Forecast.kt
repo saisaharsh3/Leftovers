@@ -71,6 +71,16 @@ private val tagPattern = Regex("""(?<![\p{L}\p{N}_#&])#((?=[\p{N}_-]*\p{L})[\p{L
 fun hashtags(note: String): List<String> =
     tagPattern.findAll(note).map { it.groupValues[1].trimEnd('-', '_').lowercase() }.filter { it.isNotEmpty() }.distinct().toList()
 
+/**
+ * The note without its #tags, to show apart from them (#31). Tags are still stored in the note, so backups,
+ * search, sync and older versions keep working: "Dinner #goa" is the words "Dinner" and the tag "goa".
+ */
+fun noteText(note: String): String = tagPattern.replace(note, "").replace(Regex(" {2,}"), " ").trim()
+
+/** A note's words and tags, stored together: "Dinner #goa #friends". */
+fun withTags(text: String, tags: List<String>): String =
+    (listOf(text.trim()) + tags.distinct().map { "#$it" }).filter { it.isNotEmpty() }.joinToString(" ")
+
 /** Every tag used in [items], most used first. */
 fun List<TransactionItem>.allTags(): List<String> =
     flatMap { hashtags(it.note) }.groupingBy { it }.eachCount().entries.sortedByDescending { it.value }.map { it.key }

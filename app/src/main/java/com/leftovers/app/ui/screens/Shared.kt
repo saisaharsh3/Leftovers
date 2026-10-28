@@ -94,11 +94,15 @@ fun TransactionItem.timeLabel(): String =
 fun TransactionRow(item: TransactionItem, onClick: () -> Unit, subtitle: String = item.timeLabel(), modifier: Modifier = Modifier) {
     val money = LocalMoney.current
     val c = LocalAppColors.current
-    val hasNote = item.note.isNotBlank()
+    // The note's words as the title; its tags after the category, on their own.
+    val text = com.leftovers.app.data.noteText(item.note)
+    val tags = com.leftovers.app.data.hashtags(item.note)
+    val hasNote = text.isNotBlank()
     ListRow(
-        title = if (hasNote) item.note else item.categoryName,
+        title = if (hasNote) text else item.categoryName,
         modifier = modifier,
-        subtitle = if (hasNote) "${item.categoryName} · $subtitle" else subtitle,
+        subtitle = listOfNotNull(item.categoryName.takeIf { hasNote }, subtitle, tags.takeIf { it.isNotEmpty() }?.joinToString(" ") { "#$it" })
+            .joinToString(" · "),
         leading = { CategoryIcon(item.categoryEmoji, item.categoryColor, size = 42.dp) },
         trailing = {
             Column(horizontalAlignment = Alignment.End) {

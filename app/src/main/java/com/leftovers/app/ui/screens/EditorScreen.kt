@@ -1218,9 +1218,17 @@ fun EditorScreen(
     }
 
     if (showNote) {
-        // The cursor starts at the end of the note, and tags are suggested for the word it's in.
+        // The note's words, and its tags apart from them (#31). They're saved together, as "Dinner #goa".
+        val startText = remember { com.leftovers.app.data.noteText(viewModel.note) }
         var draft by rememberSaveable(stateSaver = androidx.compose.ui.text.input.TextFieldValue.Saver) {
-            mutableStateOf(androidx.compose.ui.text.input.TextFieldValue(viewModel.note, androidx.compose.ui.text.TextRange(viewModel.note.length)))
+            mutableStateOf(androidx.compose.ui.text.input.TextFieldValue(startText, androidx.compose.ui.text.TextRange(startText.length)))
+        }
+        var tags by rememberSaveable { mutableStateOf(com.leftovers.app.data.hashtags(viewModel.note)) }
+        var tagDraft by rememberSaveable { mutableStateOf("") }
+        fun addTag(raw: String) {
+            val tag = raw.trim().trimStart('#').lowercase().filter { it.isLetterOrDigit() || it == '_' || it == '-' }
+            if (tag.any { it.isLetter() } && tag !in tags) tags = tags + tag
+            tagDraft = ""
         }
         val focus = remember { FocusRequester() }
         LaunchedEffect(Unit) { focus.requestFocus() }
@@ -1234,38 +1242,42 @@ fun EditorScreen(
                     GlassTextField(
                         draft,
                         { next -> if (next.text.length <= 120) draft = next },
-                        placeholder = "e.g. Lunch with friends #goa",
+                        placeholder = "e.g. Lunch with friends",
                         focusRequester = focus,
                     )
-                    // While a #tag is being typed (the word the cursor is in), offer tags used before that start the same way.
-                    val cursor = draft.selection.end.coerceIn(0, draft.text.length)
-                    val typing = Regex("""(?<![\p{L}\p{N}_])#([\p{L}\p{N}_-]*)$""").find(draft.text.substring(0, cursor))
-                        ?.takeIf { cursor == draft.text.length || !draft.text[cursor].let { ch -> ch.isLetterOrDigit() || ch == '_' || ch == '-' } }
+                    Text("Tags", style = MaterialTheme.typography.labelMedium, color = c.textSecondary, modifier = Modifier.padding(start = 6.dp, top = 4.dp))
+                    if (tags.isNotEmpty()) {
+                        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            tags.forEach { tag -> Chip("#$tag", { tags = tags - tag }, icon = Lucide.X, selected = true) }
+                        }
+                    }
+                    GlassTextField(
+                        tagDraft,
+                        { next ->
+                            // A space or comma at the end finishes what's typed (one tag, or several typed quickly).
+                            if (next.endsWith(' ') || next.endsWith(',')) next.split(' ', ',').forEach { if (it.isNotBlank()) addTag(it) }
+                            else tagDraft = next.take(60)
+                        },
+                        placeholder = "Add a tag, like trip or work",
+                        prefix = "#",
+                    )
+                    // Tags used before: the ones starting like what's typed, or the most used.
                     val usedTags = remember(history) { history.allTags() }
-                    val matches = typing?.let { m ->
-                        val start = m.groupValues[1].lowercase()
-                        usedTags.filter { it.startsWith(start) && it != start }.take(6)
-                    }.orEmpty()
+                    val typed = tagDraft.trim().trimStart('#').lowercase()
+                    val matches = usedTags.filter { it !in tags && it.startsWith(typed) && it != typed }.take(6)
                     if (matches.isNotEmpty()) {
                         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            matches.forEach { tag ->
-                                Chip("#$tag", {
-                                    // Replace what's typed of the tag, keep the rest of the note, and put the cursor after it.
-                                    val m = typing!!
-                                    val before = draft.text.substring(0, m.range.first)
-                                    val after = draft.text.substring(cursor).trimStart()
-                                    val inserted = "#$tag "
-                                    val text = (before + inserted + after).take(120)
-                                    draft = androidx.compose.ui.text.input.TextFieldValue(text, androidx.compose.ui.text.TextRange((before + inserted).length.coerceAtMost(text.length)))
-                                })
-                            }
+                            matches.forEach { tag -> Chip("#$tag", { addTag(tag) }, icon = Lucide.Plus) }
                         }
                     }
                 }
             },
             confirmButton = {
                 TextButton(onClick = {
-                    viewModel.note = draft.text.trim()
+                    // A #tag typed in the note itself still counts as a tag.
+                    val words = com.leftovers.app.data.noteText(draft.text)
+                    val all = tags + com.leftovers.app.data.hashtags(draft.text) + listOfNotNull(tagDraft.trim().trimStart('#').lowercase().takeIf { t -> t.any { it.isLetter() } })
+                    viewModel.note = com.leftovers.app.data.withTags(words, all).take(160)
                     showNote = false
                 }) { Text("Done", color = c.textPrimary) }
             },
