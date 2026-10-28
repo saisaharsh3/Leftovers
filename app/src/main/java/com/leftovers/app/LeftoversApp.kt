@@ -47,6 +47,7 @@ class LeftoversApp : Application() {
         container.budgetAlerts.createChannel()
         Reminders.createChannel(this)
         BillReminders.createChannel(this)
+        com.leftovers.app.util.UpdateCheck.createChannel(this)
         container.start()
     }
 }
@@ -138,6 +139,12 @@ class AppContainer(private val context: Context) {
             settings.settings.map { (it.autoBackupDir != null) to it.autoBackupDays }
                 .distinctUntilChanged()
                 .collect { (on, days) -> AutoBackup.schedule(context, on, days) }
+        }
+        scope.launch {
+            delay(STARTUP_QUIET_MS)
+            settings.settings.map { it.updateCheck }
+                .distinctUntilChanged()
+                .collect { com.leftovers.app.util.UpdateCheck.schedule(context, it) }
         }
         // Sync between devices: every few hours, and once each time the app starts.
         scope.launch {

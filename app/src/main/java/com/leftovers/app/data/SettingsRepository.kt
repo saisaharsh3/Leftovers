@@ -78,6 +78,10 @@ data class AppSettings(
     val syncDevice: String? = null,
     /** When the last sync finished (epoch millis), 0 if never. */
     val syncLast: Long = 0,
+    /** Tell the user when a newer version is out (asks GitHub weekly); off unless turned on. */
+    val updateCheck: Boolean = false,
+    /** The newest version already told about, so each is told once. */
+    val updateNotified: String? = null,
 )
 
 class SettingsRepository(context: Context) {
@@ -131,6 +135,8 @@ class SettingsRepository(context: Context) {
             syncUser = p[SYNC_USER],
             syncDevice = p[SYNC_DEVICE],
             syncLast = p[SYNC_LAST] ?: 0L,
+            updateCheck = p[UPDATE_CHECK] ?: false,
+            updateNotified = p[UPDATE_NOTIFIED],
         )
     }.sharedLive()
 
@@ -208,6 +214,8 @@ class SettingsRepository(context: Context) {
         if (user == null) it.remove(SYNC_USER) else it[SYNC_USER] = user
     }
     suspend fun setSyncDone(at: Long) = store.edit { it[SYNC_LAST] = at }
+    suspend fun setUpdateCheck(enabled: Boolean) = store.edit { it[UPDATE_CHECK] = enabled }
+    suspend fun setUpdateNotified(version: String) = store.edit { it[UPDATE_NOTIFIED] = version }
 
     /** This phone's name in the sync folder, like "pixel-7-k3f9q2", made the first time it's needed. */
     suspend fun syncDevice(): String {
@@ -278,6 +286,8 @@ class SettingsRepository(context: Context) {
         val SYNC_SERVER = stringPreferencesKey("sync_server")
         val SYNC_USER = stringPreferencesKey("sync_user")
         val SYNC_LAST = longPreferencesKey("sync_last")
+        val UPDATE_CHECK = booleanPreferencesKey("update_check")
+        val UPDATE_NOTIFIED = stringPreferencesKey("update_notified")
         val DEFAULT_ACCOUNT = longPreferencesKey("default_account")
         val REMINDER = booleanPreferencesKey("reminder")
         val REMINDER_TIME = intPreferencesKey("reminder_time")

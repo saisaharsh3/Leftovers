@@ -348,6 +348,27 @@ class SettingsViewModel(
         }
     }
 
+    fun setUpdateCheck(enabled: Boolean) {
+        viewModelScope.launch { settingsRepository.setUpdateCheck(enabled) }
+    }
+
+    /** Asks GitHub now; [onResult] says what it found. */
+    fun checkForUpdate(context: Context, onResult: (String) -> Unit) {
+        viewModelScope.launch {
+            com.leftovers.app.util.UpdateCheck.latest().fold(
+                { release ->
+                    if (com.leftovers.app.util.UpdateCheck.isNewer(release.version, com.leftovers.app.util.UpdateCheck.installed(context))) {
+                        onResult("Leftovers ${release.version} is out")
+                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(release.url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                    } else {
+                        onResult("You have the latest version")
+                    }
+                },
+                { onResult("Couldn't check: ${WebDavPlace.problem(it)}") },
+            )
+        }
+    }
+
     fun disableSync(context: Context, dir: String?) {
         viewModelScope.launch {
             settingsRepository.setSyncDir(null)
@@ -839,6 +860,14 @@ fun SettingsScreen(
                         NavRow(Lucide.MessageCircle, "Report a problem or suggest an idea", "GitHub") {
                             uriHandler.openUri("https://github.com/saisaharsh3/Leftovers/issues/new/choose")
                         }
+                        RowDivider()
+                        // Off unless turned on: F-Droid and Obtainium already update the app.
+                        ToggleRow(Lucide.Bell, "Tell me about new versions", s.updateCheck, { on ->
+                            viewModel.setUpdateCheck(on)
+                            if (on && android.os.Build.VERSION.SDK_INT >= 33) notificationPermission.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                        })
+                        RowDivider()
+                        NavRow(Lucide.Download, "Check for a new version", null) { viewModel.checkForUpdate(context) { toast(it) } }
                     }
                 }
             }
