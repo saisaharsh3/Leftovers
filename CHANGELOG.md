@@ -3,6 +3,25 @@
 All notable changes to Leftovers. Download any version from
 [Releases](https://github.com/saisaharsh3/Leftovers/releases).
 
+## Unreleased
+
+- Pop-ups open on the app's own screen instead of in a window of their own. On some phones the app under such a
+  window stopped redrawing until the next touch, so a tapped card stayed behind its pop-up, vanished after it
+  closed, or showed an account's numbers only after a touch (#27)
+- "Safe to spend ₹0 · ₹0 of ₹0" once the month's budget is used up now says "Over this month's budget" and by how
+  much, on Home and in the widget
+- Sheets and dialogs are nearly solid, so their text is readable on phones that don't blur behind them, and the
+  date picker's year list no longer shows the days through it (#27)
+- Extra income adds to the budget is now a switch in the budget plan, off unless you turn it on, so side income
+  can go to savings (#26). Turn it on to keep the old behaviour; the per-category switches still choose which income
+- Every currency can be chosen, the Ghana cedi among them (#28)
+- Activity: By month or All time, to see an account's whole history at once (#29)
+- An account can have its own currency: its entries are entered and shown in it, and totals, budgets and charts
+  count them converted at the rate you set for the account (#30)
+- Tags have their own row in the note box, with suggestions, and show beside the note instead of inside it (#31)
+- Settings → Tell me about new versions (off unless turned on) and Check for a new version
+- The glass of pop-ups is frostier inside, so what's behind doesn't show through their text
+
 ## 1.8.1
 
 - Pull down on Home to check for new payment emails, log subscriptions that have come due and sync with your

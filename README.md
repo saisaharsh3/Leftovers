@@ -52,15 +52,17 @@ Most budget apps want an account, show ads, or send your spending to a server. L
   including your bank's own app, each into the account you pick (optional)
 - Split a bill with friends, equally or by amount: your share is your expense, and what each person owes goes to Money owed
 - Spending abroad? Log it in the local currency at your own rate; the original amount stays visible
-- Search every entry by note, category or amount; filter by account, category or #tag
-- Add #tags to notes (*"Dinner #goa"*) to group entries across categories and months, with a total
+- Search every entry by note, category or amount; filter by account, category or #tag; see one month or all time
+- Tag entries (*#goa*, *#work*) to group them across categories and months, with a total; tags have their own
+  row in the note box and show beside the note
 - Tap an entry, the balance or a subscription for a quick card that grows out of it: the details, with Edit,
   Delete (with Undo), Pause or switching account right there. Deleted entries can be restored later from Settings
 
 **Budgets that make sense day to day**
 - Monthly budget, or a yearly one split evenly, by smart rollover, or custom per month
 - *Safe to spend today*: what's left, minus bills still due, spread over the remaining days
-- Gifts, bonuses and other extra income add to that month's budget (switch per income category)
+- Choose whether gifts, bonuses and other extra income add to that month's budget (off unless you turn it on;
+  then per income category)
 - When a month ends, choose whether what's left carries into the next month, or set it to always or never
 - Per-category limits with alerts at 80% and 100%
 
@@ -72,7 +74,8 @@ Most budget apps want an account, show ads, or send your spending to a server. L
 - Savings goals that say how much to put aside each month and whether you're on track. Add a shop link (Amazon,
   Flipkart or any shop) and **Check price** reads its current price when you tap it, to compare with your target
 - Accounts (cash, bank, UPI, cards) with live balances, transfers, a breakdown of how each balance adds up,
-  and a one-step move of every entry to another account (with undo)
+  and a one-step move of every entry to another account (with undo). An account can have its own currency:
+  its entries are entered and shown in it, and totals count them at the rate you set
 - Total balance across accounts on Home, with where it's heading by the end of the month; switch it to one
   account (like a wallet) to see just that account's balance, spending and income
 - Money owed: what you lent or borrowed and from whom, kept out of your budget. It moves the account the money
@@ -127,7 +130,8 @@ Most budget apps want an account, show ads, or send your spending to a server. L
 
 Everything stays on your device. There are no accounts, ads or analytics, and the app makes no
 network calls unless you connect the optional AI assistant or an email account, sync with your own WebDAV
-server, or tap Check price on a goal.
+server, tap Check price on a goal, or turn on *Tell me about new versions* (one weekly request to GitHub for
+the latest version number).
 
 - The app is excluded from Android's automatic cloud backup, so backups go only where you save them.
 - With app lock on, screenshots are blocked and the app is hidden in the recent-apps preview. An app PIN or password is
