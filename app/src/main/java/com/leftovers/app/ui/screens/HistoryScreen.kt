@@ -120,7 +120,8 @@ enum class TypeFilter(val label: String) { ALL("All"), EXPENSE("Spent"), INCOME(
 data class DayGroup(val date: LocalDate, val items: List<TransactionItem>)
 
 /** Narrows the list to one account, one category and/or one #tag. A tag looks across all months. */
-data class ActivityFilters(val accountId: Long? = null, val categoryId: Long? = null, val tag: String? = null) {
+/** [allTime]: every entry instead of one month's (#29); it isn't a filter, so it doesn't make the list "filtered". */
+data class ActivityFilters(val accountId: Long? = null, val categoryId: Long? = null, val tag: String? = null, val allTime: Boolean = false) {
     val active get() = accountId != null || categoryId != null || tag != null
 }
 
@@ -183,6 +184,8 @@ class HistoryViewModel(
                 }
             } else if (fl.tag != null) {
                 all.filter { fl.tag in hashtags(it.note) }
+            } else if (fl.allTime) {
+                all
             } else {
                 monthItems
             }
@@ -294,10 +297,22 @@ fun HistoryScreen(
                 if (searchOpen) {
                     GlassTextField(state.query, viewModel::setQuery, placeholder = "Search notes, #tags, categories or amounts")
                 } else if (state.filters.tag == null || mode == ActivityView.CALENDAR) {
-                    MonthSwitcher(state.month, {
-                        viewModel.setMonth(it)
-                        selectedDay = (if (it == YearMonth.now()) LocalDate.now() else it.atDay(1)).toEpochDay()
-                    })
+                    // One month at a time, or everything (on the list; the calendar is always one month).
+                    if (mode == ActivityView.LIST) {
+                        SegmentedToggle(
+                            listOf(false, true),
+                            state.filters.allTime,
+                            { if (it) "All time" else "By month" },
+                            { viewModel.setFilters(state.filters.copy(allTime = it)) },
+                            Modifier.fillMaxWidth().padding(bottom = if (state.filters.allTime) 0.dp else 10.dp),
+                        )
+                    }
+                    if (!state.filters.allTime || mode == ActivityView.CALENDAR) {
+                        MonthSwitcher(state.month, {
+                            viewModel.setMonth(it)
+                            selectedDay = (if (it == YearMonth.now()) LocalDate.now() else it.atDay(1)).toEpochDay()
+                        })
+                    }
                 }
                 if (state.filters.active && mode == ActivityView.LIST) {
                     ActiveFilters(state, onChange = viewModel::setFilters, modifier = Modifier.padding(top = if (searchOpen || state.filters.tag == null) 10.dp else 0.dp))
@@ -334,6 +349,7 @@ fun HistoryScreen(
                             when {
                                 state.query.isNotBlank() -> "$what in results"
                                 state.filters.tag != null -> "$what on #${state.filters.tag} · all time"
+                                state.filters.allTime -> "$what · all time" + if (state.filters.active) " · filtered" else ""
                                 state.filters.active -> "$what this month · filtered"
                                 else -> "$what this month"
                             },
@@ -370,7 +386,8 @@ fun HistoryScreen(
                     if (state.query.isNotBlank() || state.filters.active) {
                         EmptyState(Lucide.Search, "No matches", if (state.filters.active) "Nothing matches these filters." else "Try a different word.")
                     } else {
-                        EmptyState(Lucide.ReceiptText, "No entries this month", "Switch to the calendar view to add something you forgot.")
+                        if (state.filters.allTime) EmptyState(Lucide.ReceiptText, "No entries yet", "Tap the + button below to add your first one.")
+                        else EmptyState(Lucide.ReceiptText, "No entries this month", "Switch to the calendar view to add something you forgot.")
                     }
                 }
             }
