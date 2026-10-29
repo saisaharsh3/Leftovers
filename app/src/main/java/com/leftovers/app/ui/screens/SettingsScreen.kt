@@ -1453,6 +1453,12 @@ private fun PaymentAppsSheet(onDismiss: () -> Unit) {
                                     Text("Sent you a notification lately", style = MaterialTheme.typography.bodySmall, color = c.textTertiary)
                                 }
                             }
+                            // An app that isn't read can be taken off the list (#17).
+                            if (!app.read) {
+                                androidx.compose.material3.IconButton(onClick = { container.paymentApps.hide(app.pkg) }) {
+                                    Icon(Lucide.X, contentDescription = "Hide ${app.name}", tint = c.textTertiary, modifier = Modifier.size(18.dp))
+                                }
+                            }
                             Switch(
                                 checked = app.read,
                                 onCheckedChange = toggleHaptic({ container.paymentApps.setRead(app.pkg, it) }),
@@ -1461,6 +1467,15 @@ private fun PaymentAppsSheet(onDismiss: () -> Unit) {
                         }
                     }
                 }
+            }
+            val hiddenCount by container.paymentApps.hiddenCount.collectAsStateWithLifecycle()
+            if (hiddenCount > 0) {
+                Text(
+                    "Show $hiddenCount hidden ${if (hiddenCount == 1) "app" else "apps"}",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = c.accent,
+                    modifier = Modifier.pressable({ container.paymentApps.showHidden() }).padding(vertical = 4.dp, horizontal = 6.dp),
+                )
             }
             Text(
                 "With no account chosen, the message's last digits or bank name pick it, like bank SMS.",

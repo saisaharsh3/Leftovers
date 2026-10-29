@@ -48,8 +48,13 @@ class PaymentAppPrefs(context: Context) {
 
     private val prefs = context.getSharedPreferences("payment_apps", Context.MODE_PRIVATE)
     private val _apps = MutableStateFlow(load())
-    /** The built-in apps, then apps picked by the user, then other apps that notified recently. */
+    /** Apps switched on first, then the rest: built-in ones, then others that notified recently. Hidden apps are left out. */
     val apps: StateFlow<List<App>> = _apps.asStateFlow()
+    private val _hidden = MutableStateFlow(hidden().size)
+    /** How many apps the user hid from the list. */
+    val hiddenCount: StateFlow<Int> = _hidden.asStateFlow()
+
+    private fun hidden(): Set<String> = prefs.getStringSet(HIDDEN, emptySet()).orEmpty()
 
     private fun selected(): Set<String> = prefs.getStringSet(SELECTED, null) ?: PaymentApps.names.keys
 
@@ -68,8 +73,12 @@ class PaymentAppPrefs(context: Context) {
         val seen = seen()
         val accounts = accounts()
         val names = PaymentApps.names + seen.filterKeys { it !in PaymentApps.names }
+        val hidden = hidden()
         val order = PaymentApps.names.keys.toList() + read.filter { it !in PaymentApps.names } + seen.keys.filter { it !in PaymentApps.names && it !in read }
-        return order.distinct().map { pkg -> App(pkg, names[pkg] ?: pkg.substringAfterLast('.'), pkg in read, accounts[pkg]) }
+        // The ones being read on top (#17).
+        return order.distinct().filter { it !in hidden }
+            .map { pkg -> App(pkg, names[pkg] ?: pkg.substringAfterLast('.'), pkg in read, accounts[pkg]) }
+            .sortedByDescending { it.read }
     }
 
     fun isRead(pkg: String): Boolean = pkg in selected()
@@ -90,8 +99,26 @@ class PaymentAppPrefs(context: Context) {
         _apps.value = load()
     }
 
+    /** Takes [pkg] off the list for good: it isn't read, and it doesn't come back when it notifies again (#17). */
+    fun hide(pkg: String) {
+        prefs.edit()
+            .putStringSet(HIDDEN, hidden() + pkg)
+            .putStringSet(SELECTED, selected() - pkg)
+            .apply()
+        _apps.value = load()
+        _hidden.value = hidden().size
+    }
+
+    /** Puts every hidden app back on the list (switched off). */
+    fun showHidden() {
+        prefs.edit().remove(HIDDEN).apply()
+        _apps.value = load()
+        _hidden.value = 0
+    }
+
     /** Remembers that [pkg] sent a notification, keeping the 30 most recent apps. */
     fun noteSeen(pkg: String, name: String) {
+        if (pkg in hidden()) return
         val o = runCatching { org.json.JSONObject(prefs.getString(SEEN, "{}") ?: "{}") }.getOrDefault(org.json.JSONObject())
         val already = o.optJSONObject(pkg)
         // Only write when something changed, at most once an hour per app: notifications can arrive often.
@@ -112,6 +139,7 @@ class PaymentAppPrefs(context: Context) {
         const val SELECTED = "selected"
         const val SEEN = "seen"
         const val ACCOUNTS = "accounts"
+        const val HIDDEN = "hidden"
     }
 }
 
