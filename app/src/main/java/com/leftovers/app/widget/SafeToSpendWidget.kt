@@ -52,16 +52,17 @@ class SafeToSpendWidget : GlanceAppWidget() {
         val s = container.settings.settings.first()
         val money = Money(s.currencyCode)
         val all = container.repository.getAllTransactions()
-        val month = YearMonth.now()
-        val items = all.filter { YearMonth.from(it.date) == month }
         val today = LocalDate.now()
+        val cycle = s.plan.cycleOf(today)
+        val items = all.filter { it.date in cycle }
         val spentToday = items.filter { it.type == TxType.EXPENSE && it.epochDay == today.toEpochDay() }.sumOf { it.amountMinor }
         val budget = dailyBudget(
-            s.plan.budgetFor(month, all),
+            s.plan.budgetFor(cycle.month, all),
             items,
-            container.planning.recurring.first().pendingExpenses(month),
+            container.planning.recurring.first().pendingExpenses(cycle),
+            periodEnd = cycle.end,
         )
-        val daysLeft = month.lengthOfMonth() - today.dayOfMonth + 1
+        val daysLeft = cycle.daysLeft(today)
         return when {
             budget == null -> WidgetState("Spent today", money.formatWhole(spentToday), "Tap + to log a spend", false)
             budget.monthUsedUp -> WidgetState("Over this month", money.formatWhole(abs(budget.monthLeft)), "$daysLeft days left this month", true)

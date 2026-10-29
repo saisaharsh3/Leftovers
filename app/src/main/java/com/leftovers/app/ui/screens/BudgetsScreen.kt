@@ -110,10 +110,11 @@ class BudgetsViewModel(
         planning.recurring,
         planning.goals,
     ) { s, categories, all, recurring, goals ->
-        val items = all.filter { YearMonth.from(it.date) == month }
-        val breakdown = s.plan.breakdownFor(month, all)
+        val cycle = s.plan.cycleOf(LocalDate.now())
+        val items = all.filter { it.date in cycle }
+        val breakdown = s.plan.breakdownFor(cycle.month, all)
         val budget = breakdown.total
-        val pending = recurring.pendingExpenses(month)
+        val pending = recurring.pendingExpenses(cycle)
         val spentByCategory = items.filter { it.type == TxType.EXPENSE }
             .groupBy { it.categoryId }
             .mapValues { (_, list) -> list.sumOf { it.amountMinor } }
@@ -124,8 +125,8 @@ class BudgetsViewModel(
             overallBudget = budget,
             breakdown = breakdown,
             totalSpent = items.totalOf(TxType.EXPENSE),
-            daysLeft = month.lengthOfMonth() - LocalDate.now().dayOfMonth + 1,
-            today = dailyBudget(budget, items, pending),
+            daysLeft = cycle.daysLeft(),
+            today = dailyBudget(budget, items, pending, periodEnd = cycle.end),
             pendingSubscriptions = pending,
             goalsMonthly = goals.filter { !it.reached }.sumOf { it.monthlyNeeded() },
             rows = categories.filter { it.type == TxType.EXPENSE }

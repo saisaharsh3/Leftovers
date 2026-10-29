@@ -154,7 +154,10 @@ class HomeViewModel(
         val month = YearMonth.now()
         val todayDate = LocalDate.now()
         val items = all.filter { YearMonth.from(it.date) == month }
-        val budget = s.plan.budgetFor(month, all)
+        // The budget month, which can start on payday instead of the 1st (#34).
+        val cycle = s.plan.cycleOf(todayDate)
+        val budgetItems = all.filter { it.date in cycle }
+        val budget = s.plan.budgetFor(cycle.month, all)
         // Like switching wallets: the balance, spent, income and recent entries follow the chosen account.
         // The budget and safe-to-spend stay for all money together.
         val selected = accountList.firstOrNull { it.id == s.homeAccountId }
@@ -164,9 +167,9 @@ class HomeViewModel(
             loaded = true,
             month = month,
             budgetSet = s.plan.isSet,
-            today = dailyBudget(budget, items, recurring.pendingExpenses(month)),
+            today = dailyBudget(budget, budgetItems, recurring.pendingExpenses(cycle), periodEnd = cycle.end),
             spentToday = items.filter { it.type == TxType.EXPENSE && it.epochDay == todayDate.toEpochDay() }.sumOf { it.amountMinor },
-            daysLeft = month.lengthOfMonth() - todayDate.dayOfMonth + 1,
+            daysLeft = cycle.daysLeft(todayDate),
             monthSpent = shownMonth.totalOf(TxType.EXPENSE),
             monthIncome = shownMonth.totalOf(TxType.INCOME),
             upcoming = recurring.filter { it.active }
@@ -180,7 +183,7 @@ class HomeViewModel(
             recapMonth = month.minusMonths(1).takeIf { prev ->
                 todayDate.dayOfMonth <= 10 && s.recapSeen != prev.toString() && all.any { YearMonth.from(it.date) == prev }
             },
-            carryPrompt = s.plan.pendingCarry(month, all),
+            carryPrompt = s.plan.pendingCarry(cycle.month, all),
             balance = selected?.balanceMinor ?: accountList.filterNot { it.outOfTotal }.sumOf { it.balanceMinor },
             accountCount = accountList.size,
             // Bills and salary aren't tied to an account, so the forecast is only for all money together.

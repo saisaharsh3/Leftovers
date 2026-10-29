@@ -41,12 +41,15 @@ class BudgetAlertManager(
         if (month != YearMonth.now()) return
         val money = Money(s.currencyCode)
 
-        val monthBudget = if (s.plan.isSet) s.plan.budgetFor(month, repository.getAllTransactions()) else 0L
+        // The whole budget follows the budget month, which can start on payday (#34).
+        val cycle = s.plan.cycleOf(java.time.LocalDate.now())
+        val all = repository.getAllTransactions()
+        val monthBudget = if (s.plan.isSet && date in cycle) s.plan.budgetFor(cycle.month, all) else 0L
         if (monthBudget > 0) {
             maybeNotify(
-                key = "$month-all",
+                key = "${cycle.month}-all",
                 label = "monthly budget",
-                spent = repository.expenseTotal(month),
+                spent = all.filter { it.type == com.leftovers.app.data.TxType.EXPENSE && !it.outOfBudget && it.date in cycle }.sumOf { it.amountMinor },
                 budget = monthBudget,
                 money = money,
                 notificationId = 1,

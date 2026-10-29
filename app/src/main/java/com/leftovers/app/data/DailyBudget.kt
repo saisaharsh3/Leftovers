@@ -25,6 +25,8 @@ fun dailyBudget(
     monthItems: List<TransactionItem>,
     reservedMinor: Long = 0,
     today: LocalDate = LocalDate.now(),
+    /** The last day of the budget month, when it isn't the calendar month's (#34). */
+    periodEnd: LocalDate = YearMonth.from(today).atEndOfMonth(),
 ): DailyBudget? {
     if (monthlyBudget <= 0) return null
     val todayDay = today.toEpochDay()
@@ -32,7 +34,7 @@ fun dailyBudget(
     val expenses = monthItems.filter { it.type == TxType.EXPENSE && !it.outOfBudget }
     val spentBefore = expenses.filter { it.epochDay < todayDay }.sumOf { it.amountMinor }
     val spentToday = expenses.filter { it.epochDay == todayDay }.sumOf { it.amountMinor }
-    val daysLeft = YearMonth.from(today).lengthOfMonth() - today.dayOfMonth + 1
+    val daysLeft = (periodEnd.toEpochDay() - todayDay + 1).toInt().coerceAtLeast(1)
     val daily = (monthlyBudget - spentBefore - reservedMinor).coerceAtLeast(0) / daysLeft
     return DailyBudget(daily, spentToday, monthlyBudget, monthlyBudget - spentBefore - spentToday - reservedMinor)
 }

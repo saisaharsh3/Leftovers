@@ -95,6 +95,7 @@ class BudgetPlanViewModel(
     val customText = mutableStateMapOf<Int, String>()
     var carry by mutableStateOf(CarryMode.ASK)
     var extraIncome by mutableStateOf(false)
+    var startDay by mutableStateOf(1)
     private var carryFrom: YearMonth? = null
     private var carryChoices: Map<YearMonth, Boolean> = emptyMap()
 
@@ -112,6 +113,7 @@ class BudgetPlanViewModel(
             plan.custom.forEach { (m, v) -> customText[m] = AmountInput.fromMinor(v) }
             carry = plan.carry
             extraIncome = plan.extraIncome
+            startDay = plan.startDay
             carryFrom = plan.carryFrom
             carryChoices = plan.carryChoices
             loaded = true
@@ -128,6 +130,7 @@ class BudgetPlanViewModel(
         carryFrom = carryFrom,
         carryChoices = carryChoices,
         extraIncome = extraIncome,
+        startDay = startDay,
     )
 
     fun fillEvenly() {
@@ -264,6 +267,35 @@ fun BudgetPlanScreen(
                             )
                             Spacer(Modifier.height(12.dp))
                             SegmentedToggle(CarryMode.entries, viewModel.carry, { it.label }, { viewModel.carry = it }, Modifier.fillMaxWidth())
+                        }
+                    }
+                }
+            }
+
+            item {
+                // When the budget month starts: the 1st, or payday (#34).
+                var choosing by androidx.compose.runtime.remember { mutableStateOf(false) }
+                Glass(Modifier.fillMaxWidth()) {
+                    Row(Modifier.padding(18.dp).pressable({ choosing = true }), verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text("Budget month starts on", style = MaterialTheme.typography.titleSmall, color = c.textPrimary)
+                            Spacer(Modifier.height(2.dp))
+                            val d = viewModel.startDay
+                            Text(
+                                if (d == 1) "The 1st: budgets follow calendar months. Pick payday to run from one to the next."
+                                else "The ${ordinal(d)}: this month's budget runs ${YearMonth.now().atDay(d).format(java.time.format.DateTimeFormatter.ofPattern("d MMM"))} to the ${ordinal(d - 1)} of next month.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = c.textSecondary,
+                            )
+                        }
+                        Spacer(Modifier.width(12.dp))
+                        Box {
+                            Text(ordinal(viewModel.startDay), style = MaterialTheme.typography.titleMedium, color = c.accent)
+                            androidx.compose.material3.DropdownMenu(expanded = choosing, onDismissRequest = { choosing = false }, modifier = Modifier.height(360.dp)) {
+                                (1..28).forEach { day ->
+                                    androidx.compose.material3.DropdownMenuItem(text = { Text(ordinal(day)) }, onClick = { viewModel.startDay = day; choosing = false })
+                                }
+                            }
                         }
                     }
                 }

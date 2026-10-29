@@ -115,5 +115,16 @@ class PlanningRepository(private val database: AppDatabase) {
 }
 
 /** Expense subscriptions that will still be charged later in [month]. */
+/** Subscriptions still to be charged from [today] up to [end], the last day of the budget month (#34). */
+fun List<RecurringItem>.pendingExpenses(cycle: BudgetCycle, today: java.time.LocalDate = java.time.LocalDate.now()): Long =
+    if (cycle.start.dayOfMonth == 1) pendingExpenses(cycle.month)
+    else filter { it.type == TxType.EXPENSE && it.active }.sumOf { r ->
+        // Each month the budget month touches, once: charged on a day from today to the end, and not logged yet.
+        val rec = r.toRecurring()
+        generateSequence(YearMonth.from(today)) { it.plusMonths(1) }.takeWhile { it <= YearMonth.from(cycle.end) }
+            .filter { m -> rec.isPendingIn(m) && rec.chargeDate(m).let { it >= today && it <= cycle.end } }
+            .count() * r.amountMinor
+    }
+
 fun List<RecurringItem>.pendingExpenses(month: YearMonth): Long =
     filter { it.type == TxType.EXPENSE && it.toRecurring().isPendingIn(month) }.sumOf { it.amountMinor }

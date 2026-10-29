@@ -48,9 +48,10 @@ class MonthBudgetWidget : GlanceAppWidget() {
         val s = container.settings.settings.first()
         val money = Money(s.currencyCode)
         val all = container.repository.getAllTransactions()
-        val month = YearMonth.now()
-        val spent = all.filter { it.type == TxType.EXPENSE && YearMonth.from(it.date) == month }.sumOf { it.amountMinor }
-        val daysLeft = month.lengthOfMonth() - LocalDate.now().dayOfMonth + 1
+        val cycle = s.plan.cycleOf(LocalDate.now())
+        val month = cycle.month
+        val spent = all.filter { it.type == TxType.EXPENSE && !it.outOfBudget && it.date in cycle }.sumOf { it.amountMinor }
+        val daysLeft = cycle.daysLeft()
         if (!s.plan.isSet) return MonthState("Spent this month", money.formatWhole(spent), "Set a budget to track what's left", null, false)
         val budget = s.plan.budgetFor(month, all)
         val left = budget - spent

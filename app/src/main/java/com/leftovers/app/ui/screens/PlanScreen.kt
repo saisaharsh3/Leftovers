@@ -92,15 +92,15 @@ class PlanViewModel(
         planning.debts,
     ) { all, s, recurring, goals, debts ->
         val open = debts.openBalances()
-        val month = YearMonth.now()
-        val items = all.filter { YearMonth.from(it.date) == month }
-        val budget = s.plan.budgetFor(month, all)
+        val cycle = s.plan.cycleOf(java.time.LocalDate.now())
+        val items = all.filter { it.date in cycle }
+        val budget = s.plan.budgetFor(cycle.month, all)
         PlanUiState(
             loaded = true,
             plan = s.plan,
             budget = budget,
             spent = items.totalOf(TxType.EXPENSE),
-            dailyLimit = dailyBudget(budget, items, recurring.pendingExpenses(month))?.dailyLimit ?: 0,
+            dailyLimit = dailyBudget(budget, items, recurring.pendingExpenses(cycle), periodEnd = cycle.end)?.dailyLimit ?: 0,
             recurring = recurring,
             goals = goals,
             owedToYou = open.filter { it.netMinor > 0 }.sumOf { it.netMinor },

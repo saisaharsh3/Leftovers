@@ -113,6 +113,7 @@ class SettingsRepository(context: Context) {
                 carryFrom = p[CARRY_FROM]?.let { runCatching { YearMonth.parse(it) }.getOrNull() },
                 carryChoices = BudgetPlan.decodeChoices(p[CARRY_CHOICES]),
                 extraIncome = p[EXTRA_INCOME] ?: false,
+                startDay = p[BUDGET_START_DAY] ?: 1,
             ),
             budgetAlerts = p[BUDGET_ALERTS] ?: true,
             defaultAccountId = p[DEFAULT_ACCOUNT] ?: 1L,
@@ -178,6 +179,7 @@ class SettingsRepository(context: Context) {
         it[CUSTOM_SPLIT] = BudgetPlan.encodeCustom(plan.custom)
         it[CARRY_MODE] = plan.carry.name
         it[EXTRA_INCOME] = plan.extraIncome
+        it[BUDGET_START_DAY] = plan.startDay
         if (plan.carryChoices.isNotEmpty()) it[CARRY_CHOICES] = BudgetPlan.encodeChoices(plan.carryChoices)
         val from = plan.carryFrom ?: it[CARRY_FROM]?.let { raw -> runCatching { YearMonth.parse(raw) }.getOrNull() }
         if (plan.isSet) it[CARRY_FROM] = (from ?: YearMonth.now()).toString() else it.remove(CARRY_FROM)
@@ -281,6 +283,7 @@ class SettingsRepository(context: Context) {
         val CUSTOM_SPLIT = stringPreferencesKey("custom_split")
         val CARRY_MODE = stringPreferencesKey("carry_mode")
         val EXTRA_INCOME = booleanPreferencesKey("extra_income_adds")
+        val BUDGET_START_DAY = intPreferencesKey("budget_start_day")
         val CARRY_CHOICES = stringPreferencesKey("carry_choices")
         val CARRY_FROM = stringPreferencesKey("carry_from")
         val BUDGET_ALERTS = booleanPreferencesKey("budget_alerts")
