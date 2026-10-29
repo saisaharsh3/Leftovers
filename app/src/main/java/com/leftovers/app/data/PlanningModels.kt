@@ -121,7 +121,28 @@ data class Goal(
     val link: String? = null,
     val linkPriceMinor: Long? = null,
     val linkCheckedAt: Long? = null,
+    /** More shops selling the same thing (Flipkart as well as Amazon), as [ShopLink.encode]d JSON. */
+    val moreLinks: String? = null,
 )
+
+/** One shop's page for a goal, and the price last found there and when. */
+data class ShopLink(val url: String, val priceMinor: Long? = null, val checkedAt: Long? = null) {
+    val shop: String get() = runCatching { java.net.URI(url).host.orEmpty().removePrefix("www.").removePrefix("m.") }.getOrDefault("").ifBlank { "Product page" }
+
+    companion object {
+        fun encode(links: List<ShopLink>): String? = links.takeIf { it.isNotEmpty() }?.let { list ->
+            org.json.JSONArray(list.map { org.json.JSONObject().put("url", it.url).put("price", it.priceMinor ?: org.json.JSONObject.NULL).put("at", it.checkedAt ?: org.json.JSONObject.NULL) }).toString()
+        }
+
+        fun decode(json: String?): List<ShopLink> = runCatching {
+            val a = org.json.JSONArray(json ?: return emptyList())
+            (0 until a.length()).map { i ->
+                val o = a.getJSONObject(i)
+                ShopLink(o.getString("url"), if (o.isNull("price")) null else o.getLong("price"), if (o.isNull("at")) null else o.getLong("at"))
+            }
+        }.getOrDefault(emptyList())
+    }
+}
 
 /** Money put into (positive) or taken out of (negative) a goal. */
 @Entity(
@@ -151,8 +172,12 @@ data class GoalWithSaved(
     val link: String? = null,
     val linkPriceMinor: Long? = null,
     val linkCheckedAt: Long? = null,
+    val moreLinks: String? = null,
 ) {
-    fun toGoal() = Goal(id, name, emoji, color, targetMinor, targetMonth, createdAt, link, linkPriceMinor, linkCheckedAt)
+    fun toGoal() = Goal(id, name, emoji, color, targetMinor, targetMonth, createdAt, link, linkPriceMinor, linkCheckedAt, moreLinks)
+
+    /** Every shop's page for this goal: the first link, then the others. */
+    val links: List<ShopLink> get() = listOfNotNull(link?.let { ShopLink(it, linkPriceMinor, linkCheckedAt) }) + ShopLink.decode(moreLinks)
 
     val remainingMinor: Long get() = (targetMinor - savedMinor).coerceAtLeast(0)
     val fraction: Float get() = if (targetMinor > 0) (savedMinor.toFloat() / targetMinor).coerceIn(0f, 1f) else 0f

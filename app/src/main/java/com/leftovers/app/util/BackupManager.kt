@@ -120,6 +120,7 @@ class BackupManager(
                         .put("target", g.targetMinor).put("targetMonth", g.targetMonth).put("createdAt", g.createdAt)
                         .put("link", g.link ?: JSONObject.NULL).put("linkPrice", g.linkPriceMinor ?: JSONObject.NULL)
                         .put("linkCheckedAt", g.linkCheckedAt ?: JSONObject.NULL)
+                        .put("moreLinks", g.moreLinks ?: JSONObject.NULL)
                 }))
                 put("deposits", JSONArray(dao.deposits().map { d ->
                     JSONObject().put("id", d.id).put("goalId", d.goalId).put("amount", d.amountMinor)
@@ -233,6 +234,7 @@ class BackupManager(
                 Goal(
                     it.getLong("id"), it.getString("name"), it.getString("icon"), it.getLong("color"), it.getLong("target"), it.getString("targetMonth"), it.getLong("createdAt"),
                     link = it.stringOrNull("link"), linkPriceMinor = it.longOrNull("linkPrice"), linkCheckedAt = it.longOrNull("linkCheckedAt"),
+                    moreLinks = it.stringOrNull("moreLinks"),
                 )
             }
             val deposits = json.optJSONArray("deposits")?.objects().orEmpty().map {

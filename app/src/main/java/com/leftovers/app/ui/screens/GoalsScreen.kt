@@ -60,6 +60,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.leftovers.app.data.Goal
 import com.leftovers.app.data.GoalDeposit
 import com.leftovers.app.data.GoalWithSaved
+import com.leftovers.app.data.ShopLink
 import com.leftovers.app.data.Palette
 import com.leftovers.app.data.PlanningRepository
 import com.leftovers.app.data.ceilDiv
@@ -141,23 +142,31 @@ class GoalDetailViewModel(savedState: SavedStateHandle, private val planning: Pl
     var checkMessage by mutableStateOf<String?>(null)
         private set
 
+    /** Checks the price at every shop the goal links to; a shop that can't be read keeps its last price. */
     fun checkPrice() {
         val g = goal.value ?: return
-        val link = g.link ?: return
-        if (checking) return
+        val links = g.links
+        if (links.isEmpty() || checking) return
         checking = true
         checkMessage = null
         viewModelScope.launch {
-            runCatching { com.leftovers.app.util.ProductPrice.check(link) }
-                .onSuccess { found -> planning.saveGoal(g.toGoal().copy(linkPriceMinor = found.minor, linkCheckedAt = System.currentTimeMillis())) }
-                .onFailure { checkMessage = it.message ?: "Couldn't check the price." }
+            val failed = mutableListOf<String>()
+            val now = System.currentTimeMillis()
+            val checked = links.map { l ->
+                runCatching { com.leftovers.app.util.ProductPrice.check(l.url) }
+                    .fold({ l.copy(priceMinor = it.minor, checkedAt = now) }, { failed += l.shop; l })
+            }
+            val first = checked.first()
+            planning.saveGoal(
+                g.toGoal().copy(linkPriceMinor = first.priceMinor, linkCheckedAt = first.checkedAt, moreLinks = ShopLink.encode(checked.drop(1))),
+            )
+            if (failed.isNotEmpty()) checkMessage = "Couldn't read the price on ${failed.joinToString(" and ")}."
             checking = false
         }
     }
 
-    fun useLinkPriceAsTarget() {
+    fun useLinkPriceAsTarget(price: Long) {
         val g = goal.value ?: return
-        val price = g.linkPriceMinor ?: return
         viewModelScope.launch { planning.saveGoal(g.toGoal().copy(targetMinor = price)) }
     }
 
@@ -346,8 +355,8 @@ fun GoalDetailScreen(
                     }
                 }
             }
-            g.link?.let { link ->
-                item { ProductCard(g, link, viewModel.checking, viewModel.checkMessage, onCheck = viewModel::checkPrice, onUseAsTarget = viewModel::useLinkPriceAsTarget) }
+            if (g.links.isNotEmpty()) {
+                item { ProductCard(g, viewModel.checking, viewModel.checkMessage, onCheck = viewModel::checkPrice, onUseAsTarget = viewModel::useLinkPriceAsTarget) }
             }
             item {
                 Row(Modifier.appear(1), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -471,6 +480,8 @@ private fun GoalEditor(
     var link by rememberSaveable { mutableStateOf(initial?.link.orEmpty()) }
     var linkPrice by rememberSaveable { mutableStateOf(initial?.linkPriceMinor) }
     var linkCheckedAt by rememberSaveable { mutableStateOf(initial?.linkCheckedAt) }
+    // Other shops selling the same thing, up to three more.
+    var extraLinks by rememberSaveable { mutableStateOf(ShopLink.decode(initial?.moreLinks).map { it.url }) }
     var checking by remember { mutableStateOf(false) }
     var linkMessage by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
@@ -545,6 +556,18 @@ private fun GoalEditor(
                 }, icon = Lucide.Link)
             }
             linkMessage?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = c.textSecondary, modifier = Modifier.padding(start = 6.dp)) }
+            extraLinks.forEachIndexed { i, url ->
+                GlassTextField(
+                    url,
+                    { v -> extraLinks = extraLinks.toMutableList().also { it[i] = v.trim().take(1000) } },
+                    placeholder = "Paste the same thing from another shop",
+                    label = "Another shop",
+                    keyboardType = androidx.compose.ui.text.input.KeyboardType.Uri,
+                )
+            }
+            if (link.isNotBlank() && extraLinks.size < 3 && extraLinks.all { it.isNotBlank() }) {
+                Chip("Add another shop", { extraLinks = extraLinks + "" }, icon = Lucide.Plus)
+            }
             MoneyField(targetText, { targetText = it }, label = "Target amount")
             if (initial == null) MoneyField(savedText, { savedText = it }, label = "Already saved (optional)")
 
@@ -599,6 +622,12 @@ private fun GoalEditor(
                             // A different link's old price doesn't apply.
                             linkPriceMinor = if (link.isBlank() || (link != initial?.link && linkCheckedAt == initial?.linkCheckedAt)) null else linkPrice,
                             linkCheckedAt = if (link.isBlank() || (link != initial?.link && linkCheckedAt == initial?.linkCheckedAt)) null else linkCheckedAt,
+                            // Each other shop keeps its last price while its link is the same.
+                            moreLinks = ShopLink.encode(
+                                extraLinks.filter { it.startsWith("http") }.distinct().map { url ->
+                                    ShopLink.decode(initial?.moreLinks).firstOrNull { it.url == url } ?: ShopLink(url)
+                                },
+                            ),
                         ),
                         AmountInput.toMinor(savedText) ?: 0L,
                     )
@@ -610,50 +639,58 @@ private fun GoalEditor(
     }
 }
 
-/** A goal's product link: the shop, its price when last checked, and Check price to look again. */
+/** A goal's shop links: each shop with its price when last checked, the cheapest marked, and Check price to look again. */
 @Composable
 private fun ProductCard(
     g: GoalWithSaved,
-    link: String,
     checking: Boolean,
     message: String?,
     onCheck: () -> Unit,
-    onUseAsTarget: () -> Unit,
+    onUseAsTarget: (Long) -> Unit,
 ) {
     val c = LocalAppColors.current
     val money = LocalMoney.current
     val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
-    val shop = runCatching { java.net.URI(link).host.orEmpty().removePrefix("www.").removePrefix("m.") }.getOrDefault("").ifBlank { "Product page" }
+    val links = g.links
+    val cheapest = links.filter { it.priceMinor != null }.minByOrNull { it.priceMinor!! }
     Glass(Modifier.fillMaxWidth().appear(1)) {
         Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Lucide.Link, contentDescription = null, tint = c.textSecondary, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(10.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(shop, style = MaterialTheme.typography.titleSmall, color = c.textPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    val price = g.linkPriceMinor
-                    val checked = g.linkCheckedAt?.let { java.time.Instant.ofEpochMilli(it).atZone(java.time.ZoneId.systemDefault()).toLocalDate().friendlyLabel() }
-                    Text(
-                        if (price != null && checked != null) "${money.format(price)} when checked ${checked.replaceFirstChar { it.lowercase() }}" else "Check what it costs there now",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = c.textSecondary,
-                    )
+            links.forEachIndexed { i, l ->
+                if (i > 0) RowDivider(inset = 0.dp)
+                Row(Modifier.fillMaxWidth().pressable({ runCatching { uriHandler.openUri(l.url) } }, pressedScale = 0.98f), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Lucide.Link, contentDescription = null, tint = c.textSecondary, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(10.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(l.shop, style = MaterialTheme.typography.titleSmall, color = c.textPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        val checked = l.checkedAt?.let { java.time.Instant.ofEpochMilli(it).atZone(java.time.ZoneId.systemDefault()).toLocalDate().friendlyLabel() }
+                        Text(
+                            if (l.priceMinor != null && checked != null) "Checked ${checked.replaceFirstChar { it.lowercase() }}" else "Not checked yet",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = c.textSecondary,
+                        )
+                    }
+                    l.priceMinor?.let { price ->
+                        Column(horizontalAlignment = Alignment.End) {
+                            Text(money.format(price), style = MaterialTheme.typography.titleSmall, color = if (links.size > 1 && l == cheapest) c.positive else c.textPrimary)
+                            if (links.size > 1 && l == cheapest) Text("Cheapest", style = MaterialTheme.typography.labelSmall, color = c.positive)
+                        }
+                    }
+                    Spacer(Modifier.width(6.dp))
+                    Icon(Lucide.ExternalLink, contentDescription = "Open ${l.shop}", tint = c.textTertiary, modifier = Modifier.size(16.dp))
                 }
             }
-            val price = g.linkPriceMinor
+            val price = cheapest?.priceMinor
             if (price != null && price != g.targetMinor) {
                 Text(
-                    if (price < g.targetMinor) "That's ${money.format(g.targetMinor - price)} less than your target." else "That's ${money.format(price - g.targetMinor)} more than your target.",
+                    (if (links.size > 1) "The cheapest is " else "That's ") +
+                        if (price < g.targetMinor) "${money.format(g.targetMinor - price)} less than your target." else "${money.format(price - g.targetMinor)} more than your target.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = if (price < g.targetMinor) c.positive else c.warning,
                 )
-                Chip("Make ${money.format(price)} the target", onUseAsTarget, icon = Lucide.Target)
+                Chip("Make ${money.format(price)} the target", { onUseAsTarget(price) }, icon = Lucide.Target)
             }
             message?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = c.warning) }
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                SecondaryButton("Open", { runCatching { uriHandler.openUri(link) } }, Modifier.weight(1f), icon = Lucide.ExternalLink)
-                PrimaryButton(if (checking) "Checking…" else "Check price", onCheck, Modifier.weight(1f), enabled = !checking, icon = Lucide.RotateCcw)
-            }
+            PrimaryButton(if (checking) "Checking…" else if (links.size > 1) "Check prices" else "Check price", onCheck, Modifier.fillMaxWidth(), enabled = !checking, icon = Lucide.RotateCcw)
         }
     }
 }
