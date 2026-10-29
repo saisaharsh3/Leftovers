@@ -361,9 +361,9 @@ class SettingsViewModel(
     /** Asks GitHub now; [onResult] says what it found. */
     fun checkForUpdate(context: Context, onResult: (String) -> Unit) {
         viewModelScope.launch {
-            com.leftovers.app.util.UpdateCheck.latest().fold(
+            com.leftovers.app.util.UpdateCheck.latest(com.leftovers.app.util.UpdateCheck.isDevBuild(context)).fold(
                 { release ->
-                    if (com.leftovers.app.util.UpdateCheck.isNewer(release.version, com.leftovers.app.util.UpdateCheck.installed(context))) {
+                    if (com.leftovers.app.util.UpdateCheck.isNewerThanInstalled(context, release)) {
                         onResult("Leftovers ${release.version} is out")
                         context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(release.url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
                     } else {
@@ -861,7 +861,7 @@ fun SettingsScreen(
                 ) {
                     Icon(Lucide.Lock, contentDescription = null, tint = c.textTertiary, modifier = Modifier.size(14.dp))
                     Spacer(Modifier.width(6.dp))
-                    val version = remember { runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull().orEmpty().removeSuffix("-dev") }
+                    val version = remember { runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull().orEmpty() }
                     val where = if (s.syncDir != null || s.syncServer != null) "Stored on your devices only" else "Stored only on this device"
                     Text("$where · Leftovers $version", style = MaterialTheme.typography.bodySmall, color = c.textTertiary, textAlign = TextAlign.Center)
                 }

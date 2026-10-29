@@ -15,6 +15,9 @@ val signing = Properties().apply {
 }
 fun signingValue(key: String, env: String): String? = signing.getProperty(key) ?: System.getenv(env)
 
+/** Fixed for every Dev build; see androidComponents below. */
+val DEV_VERSION_CODE = 21
+
 android {
     namespace = "com.leftovers.app"
     compileSdk = 37
@@ -61,7 +64,8 @@ android {
         create("dev") {
             initWith(getByName("release"))
             applicationIdSuffix = ".dev"
-            versionNameSuffix = "-dev"
+            // Each Dev build is numbered (1.8.2-dev.57, from the CI run), so testers can tell them apart.
+            versionNameSuffix = "-dev" + (providers.gradleProperty("devNumber").orNull?.let { ".$it" } ?: "")
             matchingFallbacks += listOf("release")
         }
     }
@@ -113,6 +117,14 @@ android {
 ksp {
     arg("room.generateKotlin", "true")
     arg("room.schemaLocation", "$projectDir/schemas")
+}
+
+// Every Dev build has the same version code, so any of them installs over any other: testers can roll back to
+// an older Dev build without uninstalling (Android refuses a lower version code). Releases are untouched.
+androidComponents {
+    onVariants(selector().withBuildType("dev")) { variant ->
+        variant.outputs.forEach { it.versionCode.set(DEV_VERSION_CODE) }
+    }
 }
 
 dependencies {

@@ -5,6 +5,9 @@ All notable changes to Leftovers. Download any version from
 
 ## Unreleased
 
+- Check for a new version in Leftovers Dev looks for a newer Dev build, not a release
+- Every Dev build has its own number (1.8.2-dev.57) and is kept as its own download for a while, so you can go
+  back to an earlier one: any Dev build installs over any other, keeping your Dev data
 - Automatic backups no longer stop without a word: one that's due is also made when the app opens (some phones,
   like HyperOS and MIUI, never run an app's background work), Settings says why the last one failed, there's Back
   up now, and "keep 1 file" removes older ones even when a cloud folder renamed a copy (#35)

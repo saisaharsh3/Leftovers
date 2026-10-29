@@ -68,7 +68,7 @@ jobs:
             echo "$SIGNING_KEYSTORE_BASE64" | base64 --decode > release.jks
             export SIGNING_STORE_FILE=release.jks
           fi
-          ./gradlew assembleDev --stacktrace
+          ./gradlew assembleDev -PdevNumber=${{ github.run_number }} --stacktrace
           rm -f release.jks
 
       - name: Publish the Dev build pre-release
@@ -101,3 +101,21 @@ jobs:
           else
             gh release create dev-build leftovers-dev.apk --prerelease --target "$GITHUB_SHA" --title "$title" --notes-file dev-notes.md
           fi
+
+      - name: Keep this Dev build as its own pre-release, to go back to later
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version="$(grep -m1 'versionName = ' app/build.gradle.kts | sed 's/.*"\(.*\)".*/\1/')-dev.${{ github.run_number }}"
+          tag="dev-$version"
+          cp leftovers-dev.apk "leftovers-$version.apk"
+          {
+            echo "Leftovers Dev **$version**, built $(date -u +'%d %b %Y %H:%M') UTC from $(git rev-parse --short HEAD)."
+            echo
+            echo "An older Dev build, kept so you can go back to it: install this APK over any Leftovers Dev, newer or older. Your Dev data stays."
+            echo "For the newest Dev build, use [Dev build](https://github.com/${{ github.repository }}/releases/tag/dev-build)."
+          } > keep-notes.md
+          gh release create "$tag" "leftovers-$version.apk" --prerelease --latest=false --target "$GITHUB_SHA" --title "Dev $version" --notes-file keep-notes.md
+          # The newest 30 are kept; older ones (and their tags) go.
+          gh release list --limit 200 --json tagName --jq '.[].tagName' | grep '^dev-[0-9]' | sort -t. -k4 -n -r | tail -n +31 |
+            while read -r old; do gh release delete "$old" --yes --cleanup-tag; done
