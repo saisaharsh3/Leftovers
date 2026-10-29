@@ -80,6 +80,8 @@ data class AppSettings(
     val syncDevice: String? = null,
     /** When the last sync finished (epoch millis), 0 if never. */
     val syncLast: Long = 0,
+    /** Fetch today's exchange rates daily for accounts and entries in other currencies; off unless turned on. */
+    val autoRates: Boolean = false,
     /** Tell the user when a newer version is out (asks GitHub weekly); off unless turned on. */
     val updateCheck: Boolean = false,
     /** The newest version already told about, so each is told once. */
@@ -139,6 +141,7 @@ class SettingsRepository(context: Context) {
             syncDevice = p[SYNC_DEVICE],
             syncLast = p[SYNC_LAST] ?: 0L,
             updateCheck = p[UPDATE_CHECK] ?: false,
+            autoRates = p[AUTO_RATES] ?: false,
             updateNotified = p[UPDATE_NOTIFIED],
         )
     }.sharedLive()
@@ -222,6 +225,7 @@ class SettingsRepository(context: Context) {
     }
     suspend fun setSyncDone(at: Long) = store.edit { it[SYNC_LAST] = at }
     suspend fun setUpdateCheck(enabled: Boolean) = store.edit { it[UPDATE_CHECK] = enabled }
+    suspend fun setAutoRates(enabled: Boolean) = store.edit { it[AUTO_RATES] = enabled }
     suspend fun setUpdateNotified(version: String) = store.edit { it[UPDATE_NOTIFIED] = version }
 
     /** This phone's name in the sync folder, like "pixel-7-k3f9q2", made the first time it's needed. */
@@ -294,6 +298,7 @@ class SettingsRepository(context: Context) {
         val SYNC_USER = stringPreferencesKey("sync_user")
         val SYNC_LAST = longPreferencesKey("sync_last")
         val UPDATE_CHECK = booleanPreferencesKey("update_check")
+        val AUTO_RATES = booleanPreferencesKey("auto_rates")
         val UPDATE_NOTIFIED = stringPreferencesKey("update_notified")
         val DEFAULT_ACCOUNT = longPreferencesKey("default_account")
         val REMINDER = booleanPreferencesKey("reminder")

@@ -146,6 +146,12 @@ class AppContainer(private val context: Context) {
                 .distinctUntilChanged()
                 .collect { com.leftovers.app.util.UpdateCheck.schedule(context, it) }
         }
+        scope.launch {
+            delay(STARTUP_QUIET_MS)
+            settings.settings.map { it.autoRates }
+                .distinctUntilChanged()
+                .collect { com.leftovers.app.util.ExchangeRates.schedule(context, it) }
+        }
         // An automatic backup that's due is made when the app opens too, in case the phone never ran the job.
         scope.launch {
             delay(STARTUP_QUIET_MS * 3)

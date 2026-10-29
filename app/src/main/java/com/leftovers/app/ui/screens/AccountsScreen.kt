@@ -81,6 +81,7 @@ import com.leftovers.app.util.LocalMoney
 import com.leftovers.app.util.friendlyLabel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -144,6 +145,20 @@ class AccountsViewModel(
         settings.settings.map { it.currencyCode }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), "INR")
     val rates: StateFlow<Map<String, String>> =
         settings.settings.map { it.foreignRates }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
+    val autoRates: StateFlow<Boolean> =
+        settings.settings.map { it.autoRates }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+
+    fun setAutoRates(enabled: Boolean) {
+        viewModelScope.launch { settings.setAutoRates(enabled) }
+    }
+
+    /** Today's rate for [code], once, when the user taps for it. */
+    fun todaysRate(code: String, onResult: (Result<String>) -> Unit) {
+        viewModelScope.launch {
+            val base = settings.settings.first().currencyCode
+            onResult(com.leftovers.app.util.ExchangeRates.fetch(base, listOf(code)).mapCatching { it[code] ?: error("No rate for $code today") })
+        }
+    }
 
     val defaultAccountId: StateFlow<Long> =
         settings.settings.map { it.defaultAccountId }.flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 1L)
@@ -373,6 +388,9 @@ fun AccountsScreen(
             onDismiss = { editing = null },
             appCurrency = viewModel.appCurrency.collectAsStateWithLifecycle().value,
             rates = viewModel.rates.collectAsStateWithLifecycle().value,
+            autoRates = viewModel.autoRates.collectAsStateWithLifecycle().value,
+            onAutoRates = viewModel::setAutoRates,
+            onTodaysRate = viewModel::todaysRate,
             onSave = { a, makeDefault, rate ->
                 viewModel.save(a, makeDefault, rate)
                 editing = null
@@ -444,6 +462,9 @@ private fun AccountEditor(
     isDefault: Boolean,
     appCurrency: String,
     rates: Map<String, String>,
+    autoRates: Boolean,
+    onAutoRates: (Boolean) -> Unit,
+    onTodaysRate: (String, (Result<String>) -> Unit) -> Unit,
     onDismiss: () -> Unit,
     onSave: (Account, Boolean, String?) -> Unit,
     onMoveEntries: (() -> Unit)?,
@@ -457,6 +478,10 @@ private fun AccountEditor(
     var currency by rememberSaveable { mutableStateOf(initial.currency) }
     var rate by rememberSaveable { mutableStateOf(initial.currency?.let { rates[it] }.orEmpty()) }
     var pickCurrency by rememberSaveable { mutableStateOf(false) }
+    var fetchingRate by remember { mutableStateOf(false) }
+    var rateProblem by remember { mutableStateOf<String?>(null) }
+    // An account in its own currency needs its rate, or its entries couldn't be counted (#30).
+    val rateOk = currency == null || (rate.toBigDecimalOrNull()?.signum() ?: 0) > 0
     val startOpening = if (initial.currency != null) initial.openingNative ?: 0L else initial.openingMinor
     var opening by rememberSaveable { mutableStateOf(if (startOpening != 0L) AmountInput.fromMinor(startOpening) else "") }
     var makeDefault by rememberSaveable { mutableStateOf(isDefault) }
@@ -491,10 +516,39 @@ private fun AccountEditor(
             if (currency != null) {
                 GlassTextField(
                     rate,
-                    { v -> rate = v.filter { it.isDigit() || it == '.' }.take(12) },
+                    { v -> rate = v.filter { it.isDigit() || it == '.' }.take(12); rateProblem = null },
                     placeholder = "e.g. 83.2",
                     label = "1 $currency in ${com.leftovers.app.util.Money(appCurrency).symbol}",
                     keyboardType = androidx.compose.ui.text.input.KeyboardType.Decimal,
+                )
+                // Today's rate on request, and daily if the user wants (#30).
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Chip(if (fetchingRate) "Getting today's rate…" else "Get today's rate", {
+                        val code = currency ?: return@Chip
+                        fetchingRate = true
+                        onTodaysRate(code) { result ->
+                            fetchingRate = false
+                            result.fold({ rate = it; rateProblem = null }, { rateProblem = "Couldn't get today's rate: ${com.leftovers.app.util.WebDavPlace.problem(it)}" })
+                        }
+                    }, icon = Lucide.Download)
+                }
+                rateProblem?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = c.negative, modifier = Modifier.padding(start = 6.dp)) }
+                ListRow(
+                    "Keep rates up to date",
+                    subtitle = "Fetches today's rates once a day from currency-api, a free and open service",
+                    trailing = {
+                        androidx.compose.material3.Switch(
+                            checked = autoRates,
+                            onCheckedChange = com.leftovers.app.ui.components.toggleHaptic(onAutoRates),
+                            colors = androidx.compose.material3.SwitchDefaults.colors(
+                                checkedTrackColor = c.accent,
+                                checkedThumbColor = c.onAccent,
+                                uncheckedTrackColor = c.glass,
+                                uncheckedBorderColor = c.borderTop,
+                                uncheckedThumbColor = c.textSecondary,
+                            ),
+                        )
+                    },
                 )
                 Text(
                     "Entries in this account are entered and shown in $currency. Totals, budgets and charts count them in $appCurrency at this rate.",
@@ -563,7 +617,7 @@ private fun AccountEditor(
                     )
                 },
                 Modifier.fillMaxWidth(),
-                enabled = name.isNotBlank(),
+                enabled = name.isNotBlank() && rateOk,
             )
             if (breakdown != null) BalanceBreakdownCard(breakdown, initial.createdAt)
             if (onMoveEntries != null) {
