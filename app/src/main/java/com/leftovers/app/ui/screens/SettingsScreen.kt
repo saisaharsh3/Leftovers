@@ -305,12 +305,18 @@ class SettingsViewModel(
     fun enableAutoBackup(context: Context, tree: Uri, onResult: (String) -> Unit) {
         viewModelScope.launch {
             settingsRepository.setAutoBackupDir(tree.toString())
-            AutoBackup.runNow(context, tree, settingsRepository.settings.first().autoBackupKeep).fold(
-                {
-                    settingsRepository.setAutoBackupDone(System.currentTimeMillis())
-                    onResult("Backed up $it entries")
-                },
-                { onResult("Couldn't back up to that folder: ${it.message}") },
+            backUpNow(context, onResult)
+        }
+    }
+
+    /** Makes the automatic backup now, into the chosen folder. */
+    fun backUpNow(context: Context, onResult: (String) -> Unit) {
+        viewModelScope.launch {
+            val s = settingsRepository.settings.first()
+            val dir = s.autoBackupDir ?: return@launch
+            AutoBackup.backUp(context, Uri.parse(dir), s.autoBackupKeep).fold(
+                { onResult("Backed up $it entries") },
+                { onResult("Couldn't back up: ${AutoBackup.problem(it)}") },
             )
         }
     }
@@ -739,7 +745,15 @@ fun SettingsScreen(
                                 SegmentedToggle(listOf(1, 7, 30), s.autoBackupDays, { if (it == 1) "Daily" else if (it == 7) "Weekly" else "Monthly" }, { viewModel.setAutoBackupDays(it) }, Modifier.fillMaxWidth())
                                 Text("Backup files to keep", style = MaterialTheme.typography.labelMedium, color = c.textSecondary, modifier = Modifier.padding(start = 6.dp))
                                 SegmentedToggle(listOf(1, 2, 3, 4, 5), s.autoBackupKeep, { it.toString() }, { viewModel.setAutoBackupKeep(it) }, Modifier.fillMaxWidth())
+                                // The last try failed: say why, until a backup works again.
+                                s.autoBackupError?.let { problem ->
+                                    Text("Last automatic backup failed: $problem", style = MaterialTheme.typography.bodySmall, color = c.negative, modifier = Modifier.padding(start = 6.dp))
+                                }
                             }
+                        }
+                        if (s.autoBackupDir != null) {
+                            RowDivider()
+                            NavRow(Lucide.Download, "Back up now", "To the chosen folder") { viewModel.backUpNow(context) { toast(it) } }
                         }
                         RowDivider()
                         ToggleRow(Lucide.Camera, "Include photos in backups", s.backupPhotos, { viewModel.setBackupPhotos(it) })
@@ -784,7 +798,7 @@ fun SettingsScreen(
                                 val kept = if (s.autoBackupKeep == 1) "only the latest" else "the last ${s.autoBackupKeep}"
                                 "Saves a backup to your chosen folder $every and keeps $kept." + if (s.autoBackupLast > 0) {
                                     val at = java.time.Instant.ofEpochMilli(s.autoBackupLast).atZone(java.time.ZoneId.systemDefault())
-                                    " Last backup: ${at.toLocalDate().friendlyLabel()}, ${at.format(java.time.format.DateTimeFormatter.ofPattern("h:mm a"))}."
+                                    " Last automatic backup: ${at.toLocalDate().friendlyLabel()}, ${at.format(java.time.format.DateTimeFormatter.ofPattern("h:mm a"))}."
                                 } else ""
                             },
                             if (s.backupPhotos) "Receipt and Money owed photos are included (up to 40 MB of photos; past that they're left out)." else null,

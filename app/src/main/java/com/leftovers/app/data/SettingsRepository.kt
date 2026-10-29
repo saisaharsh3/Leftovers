@@ -53,6 +53,8 @@ data class AppSettings(
     val autoBackupDir: String? = null,
     /** When the last automatic backup finished (epoch millis), 0 if never. */
     val autoBackupLast: Long = 0,
+    /** Why the last automatic backup failed, until one works again. */
+    val autoBackupError: String? = null,
     /** Notify the day before a subscription is charged. */
     val billReminders: Boolean = true,
     /** Subscription suggestions the user said no to. */
@@ -122,6 +124,7 @@ class SettingsRepository(context: Context) {
             recapSeen = p[RECAP_SEEN].orEmpty(),
             autoBackupDir = p[AUTO_BACKUP_DIR],
             autoBackupLast = p[AUTO_BACKUP_LAST] ?: 0L,
+            autoBackupError = p[AUTO_BACKUP_ERROR],
             billReminders = p[BILL_REMINDERS] ?: true,
             dismissedSuggestions = p[DISMISSED_SUGGESTIONS].orEmpty(),
             deletedKeepDays = p[DELETED_KEEP_DAYS] ?: 90,
@@ -203,7 +206,11 @@ class SettingsRepository(context: Context) {
     suspend fun setAppNotifications(enabled: Boolean) = store.edit { it[APP_NOTIFICATIONS] = enabled }
     suspend fun setRecapSeen(month: String) = store.edit { it[RECAP_SEEN] = month }
     suspend fun setAutoBackupDir(dir: String?) = store.edit { if (dir == null) it.remove(AUTO_BACKUP_DIR) else it[AUTO_BACKUP_DIR] = dir }
-    suspend fun setAutoBackupDone(at: Long) = store.edit { it[AUTO_BACKUP_LAST] = at }
+    suspend fun setAutoBackupDone(at: Long) = store.edit {
+        it[AUTO_BACKUP_LAST] = at
+        it.remove(AUTO_BACKUP_ERROR)
+    }
+    suspend fun setAutoBackupError(message: String?) = store.edit { if (message == null) it.remove(AUTO_BACKUP_ERROR) else it[AUTO_BACKUP_ERROR] = message }
     suspend fun setBillReminders(enabled: Boolean) = store.edit { it[BILL_REMINDERS] = enabled }
     suspend fun setHomeAccount(id: Long?) = store.edit { if (id == null) it.remove(HOME_ACCOUNT) else it[HOME_ACCOUNT] = id }
     suspend fun setAutoBackupDays(days: Int) = store.edit { it[AUTO_BACKUP_DAYS] = days }
@@ -299,6 +306,7 @@ class SettingsRepository(context: Context) {
         val RECAP_SEEN = stringPreferencesKey("recap_seen")
         val AUTO_BACKUP_DIR = stringPreferencesKey("auto_backup_dir")
         val AUTO_BACKUP_LAST = longPreferencesKey("auto_backup_last")
+        val AUTO_BACKUP_ERROR = stringPreferencesKey("auto_backup_error")
         val BILL_REMINDERS = booleanPreferencesKey("bill_reminders")
 
         fun defaultCurrencyCode(): String =
