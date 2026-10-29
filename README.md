@@ -59,7 +59,8 @@ Most budget apps want an account, show ads, or send your spending to a server. L
   Delete (with Undo), Pause or switching account right there. Deleted entries can be restored later from Settings
 
 **Budgets that make sense day to day**
-- Monthly budget, or a yearly one split evenly, by smart rollover, or custom per month
+- Monthly budget, or a yearly one split evenly, by smart rollover, or custom per month; the budget month can start
+  on payday (any day from the 1st to the 28th)
 - *Safe to spend today*: what's left, minus bills still due, spread over the remaining days
 - Choose whether gifts, bonuses and other extra income add to that month's budget (off unless you turn it on;
   then per income category)
@@ -68,14 +69,17 @@ Most budget apps want an account, show ads, or send your spending to a server. L
 
 **Planning**
 - Subscriptions and recurring income every month, every 3 or 6 months, or yearly, logged automatically on their
-  day, with a reminder the morning before a bill; longer cycles count as their monthly share in totals
+  day, with a reminder the morning before a bill; longer cycles count as their monthly share in totals. Interest can
+  be a yearly rate on an account's balance, worked out on the balance each time
 - Skip a single payment without stopping the subscription
 - Spots repeating expenses that look like a subscription and offers to add them
-- Savings goals that say how much to put aside each month and whether you're on track. Add a shop link (Amazon,
-  Flipkart or any shop) and **Check price** reads its current price when you tap it, to compare with your target
+- Savings goals that say how much to put aside each month and whether you're on track. Add links from up to four
+  shops (Amazon, Flipkart or any shop) and **Check prices** reads each one's price when you tap it, marking the
+  cheapest, to compare with your target
 - Accounts (cash, bank, UPI, cards) with live balances, transfers, a breakdown of how each balance adds up,
   and a one-step move of every entry to another account (with undo). An account can have its own currency:
-  its entries are entered and shown in it, and totals count them at the rate you set
+  its entries are entered and shown in it, and totals count them at its rate, typed or fetched (optional). An
+  account can be left out of Safe to spend, or out of the All accounts total (a savings account, say)
 - Total balance across accounts on Home, with where it's heading by the end of the month; switch it to one
   account (like a wallet) to see just that account's balance, spending and income
 - Money owed: what you lent or borrowed and from whom, kept out of your budget. It moves the account the money
@@ -113,7 +117,7 @@ Most budget apps want an account, show ads, or send your spending to a server. L
   logged is skipped, and the totals show before anything is added
 - Restore a backup over everything, or keep what's in the app and add only the backup's new entries
 - Backup and restore to a file or Google Drive (photos included if you like), daily, weekly or monthly automatic
-  backups to a folder you choose, CSV export
+  backups to a folder you choose (with Back up now, and the reason if one fails), CSV export
 - Optional backup password: backups are encrypted (AES-256) and need it to restore
 - Optional payment detection from bank SMS and from bank email alerts, suggesting entries for you to confirm,
   including money coming in as income.
@@ -130,8 +134,9 @@ Most budget apps want an account, show ads, or send your spending to a server. L
 
 Everything stays on your device. There are no accounts, ads or analytics, and the app makes no
 network calls unless you connect the optional AI assistant or an email account, sync with your own WebDAV
-server, tap Check price on a goal, or turn on *Tell me about new versions* (one weekly request to GitHub for
-the latest version number).
+server, tap Check price on a goal, fetch exchange rates (on request, or daily if you turn it on; only the
+currency's name is sent, to the free and open [currency-api](https://github.com/fawazahmed0/exchange-api)), or
+turn on *Tell me about new versions* (one weekly request to GitHub for the latest version number).
 
 - The app is excluded from Android's automatic cloud backup, so backups go only where you save them.
 - With app lock on, screenshots are blocked and the app is hidden in the recent-apps preview. An app PIN or password is

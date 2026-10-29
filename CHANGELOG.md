@@ -3,6 +3,23 @@
 All notable changes to Leftovers. Download any version from
 [Releases](https://github.com/saisaharsh3/Leftovers/releases).
 
+## Unreleased
+
+- Automatic backups no longer stop without a word: one that's due is also made when the app opens (some phones,
+  like HyperOS and MIUI, never run an app's background work), Settings says why the last one failed, there's Back
+  up now, and "keep 1 file" removes older ones even when a cloud folder renamed a copy (#35)
+- Editing an entry can split it, or turn it into money lent or borrowed, like adding one (#36)
+- An account can be left out of Safe to spend and the budget, or out of the All accounts balance (#33)
+- The budget month can start on any day from the 1st to the 28th, payday to payday (#34)
+- Recurring income can be interest: a yearly rate on an account's balance, worked out on the balance each time
+  it's logged (#32)
+- An account in its own currency needs its rate before it's saved. Get today's rate fills it in, and Keep rates
+  up to date fetches it daily (off unless you turn it on) (#30)
+- Payment apps: the apps being read are on top, and others can be hidden from the list, with Show hidden apps to
+  bring them back (#17)
+- Savings goals can link up to four shops, Amazon and Flipkart for example; Check prices looks at each and marks
+  the cheapest
+
 ## 1.8.2
 
 - Pop-ups open on the app's own screen instead of in a window of their own. On some phones the app under such a
