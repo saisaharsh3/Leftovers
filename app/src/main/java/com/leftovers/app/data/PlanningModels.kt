@@ -35,8 +35,21 @@ data class Recurring(
     @ColumnInfo(defaultValue = "1") val everyMonths: Int = 1,
     /** The account it's paid from or into; null uses the default account. */
     val accountId: Long? = null,
+    /**
+     * Interest (#32): the yearly rate in percent ("3.5"). Each time it's logged, the amount is that rate on the
+     * account's balance for the months it covers; [amountMinor] then holds an estimate at the latest balance.
+     */
+    val ratePercent: String? = null,
 ) {
     val yearly: Boolean get() = everyMonths == 12
+
+    /** What [balanceMinor] earns for one payment at [ratePercent], or null when this isn't interest. */
+    fun interestOn(balanceMinor: Long): Long? {
+        val rate = ratePercent?.toBigDecimalOrNull()?.takeIf { it.signum() > 0 } ?: return null
+        if (balanceMinor <= 0) return 0
+        return java.math.BigDecimal.valueOf(balanceMinor).multiply(rate).multiply(java.math.BigDecimal.valueOf(everyMonths.toLong()))
+            .divide(java.math.BigDecimal.valueOf(1200), 0, java.math.RoundingMode.HALF_UP).toLong()
+    }
 
     fun chargeDate(month: YearMonth): LocalDate = month.atDay(dayOfMonth.coerceAtMost(month.lengthOfMonth()))
 
@@ -82,8 +95,9 @@ data class RecurringItem(
     val categoryName: String,
     val categoryEmoji: String,
     val categoryColor: Long,
+    val ratePercent: String? = null,
 ) {
-    fun toRecurring() = Recurring(id, name, amountMinor, type, categoryId, dayOfMonth, startMonth, lastPostedMonth, active, everyMonths, accountId)
+    fun toRecurring() = Recurring(id, name, amountMinor, type, categoryId, dayOfMonth, startMonth, lastPostedMonth, active, everyMonths, accountId, ratePercent)
 
     /**
      * True when an entry looks like one this subscription logged: same type and category, and the same name.

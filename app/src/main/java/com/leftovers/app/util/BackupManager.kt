@@ -113,6 +113,7 @@ class BackupManager(
                         .put("categoryId", r.categoryId).put("day", r.dayOfMonth).put("start", r.startMonth)
                         .put("lastPosted", r.lastPostedMonth ?: JSONObject.NULL).put("active", r.active)
                         .put("every", r.everyMonths).put("account", r.accountId ?: JSONObject.NULL)
+                        .put("rate", r.ratePercent ?: JSONObject.NULL)
                 }))
                 put("goals", JSONArray(dao.goals().map { g ->
                     JSONObject().put("id", g.id).put("name", g.name).put("icon", g.emoji).put("color", g.color)
@@ -225,6 +226,7 @@ class BackupManager(
                     it.getLong("categoryId"), it.getInt("day"), it.getString("start"), it.stringOrNull("lastPosted"), it.getBoolean("active"),
                     it.optInt("every", 1),
                     it.longOrNull("account"),
+                    ratePercent = it.stringOrNull("rate"),
                 )
             }
             val goals = json.optJSONArray("goals")?.objects().orEmpty().map {

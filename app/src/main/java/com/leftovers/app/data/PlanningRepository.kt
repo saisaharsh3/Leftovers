@@ -2,6 +2,7 @@ package com.leftovers.app.data
 
 import androidx.room.withTransaction
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import java.time.LocalDate
 import java.time.YearMonth
 
@@ -81,6 +82,8 @@ class PlanningRepository(private val database: AppDatabase) {
      */
     suspend fun postDueRecurring(accountId: Long?, today: LocalDate = LocalDate.now()): List<Transaction> {
         val posted = mutableListOf<Transaction>()
+        // Interest is worked out on each account's balance as it is when it's logged (#32).
+        val balances = database.accountDao().observeWithBalance().first().associate { it.id to it.balanceMinor }.toMutableMap()
         database.withTransaction {
             val currentMonth = YearMonth.from(today)
             recurringDao.getActive().forEach { r ->
@@ -94,8 +97,17 @@ class PlanningRepository(private val database: AppDatabase) {
                     }
                     val date = r.chargeDate(month)
                     if (date > today) break
+                    val into = r.accountId ?: accountId
+                    val amount = r.interestOn(into?.let { balances[it] } ?: 0L) ?: r.amountMinor
+                    if (amount <= 0) {
+                        // No balance, no interest this time.
+                        lastPosted = month
+                        month = month.plusMonths(1)
+                        continue
+                    }
+                    into?.let { balances[it] = (balances[it] ?: 0L) + amount }
                     val tx = Transaction(
-                        amountMinor = r.amountMinor,
+                        amountMinor = amount,
                         type = r.type,
                         categoryId = r.categoryId,
                         epochDay = date.toEpochDay(),
