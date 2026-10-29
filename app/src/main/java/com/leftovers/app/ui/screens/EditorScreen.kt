@@ -514,6 +514,8 @@ class EditorViewModel(
             shares.forEach { (person, amount) ->
                 planning.saveDebt(Debt(person = person, amountMinor = if (wasLent) amount else -amount, note = text, epochDay = day, receiptPath = photo, accountId = account))
             }
+            // An entry edited into lent or borrowed is now in Money owed, so the expense or income goes.
+            if (isEditing) repository.getTransaction(id)?.let { repository.removeTransaction(it) }
             if (smsId > 0) sms.dismiss(smsId)
             val names = shares.map { it.first }.let { if (it.size == 1) it[0] else it.dropLast(1).joinToString(", ") + " and " + it.last() }
             val same = shares.map { it.second }.distinct().size == 1
@@ -565,16 +567,16 @@ class EditorViewModel(
      * when the entry isn't complete yet.
      */
     fun save(onDone: (String) -> Unit, describe: (Long) -> String): Boolean {
-        if (owed && !isEditing) return saveOwed(onDone, describe)
+        if (owed) return saveOwed(onDone, describe)
         if (amountMinor <= 0 || totalMinor <= 0) return false
         val category = categoryId
         if (category == null) {
             needCategory = true
             return false
         }
-        val parts = if (isEditing || repeatMonthly) emptyList() else splits.toList()
+        val parts = if (repeatMonthly) emptyList() else splits.toList()
         // Others' shares go to Money owed; only your own share is your expense.
-        val sharers = if (isEditing || repeatMonthly || type != TxType.EXPENSE) emptyList()
+        val sharers = if (repeatMonthly || type != TxType.EXPENSE) emptyList()
         else people.map { it to shareOf(it) }.filter { it.second > 0 }
         val yours = totalMinor - sharers.sumOf { it.second }
         // The original amount abroad is kept only when this entry is the whole bill.
@@ -645,7 +647,7 @@ class EditorViewModel(
             val whenText = if (savedDate == LocalDate.now()) "" else " · ${savedDate.friendlyLabel()}"
             onDone(
                 when {
-                    isEditing -> "Changes saved"
+                    isEditing && parts.isEmpty() && sharers.isEmpty() -> "Changes saved"
                     sharers.isNotEmpty() && sharers.map { it.second }.distinct().size == 1 -> "${describe(savedAmount + parts.sumOf { it.amountMinor })} added · " +
                         "${sharers.joinToString(" and ") { it.first }} ${if (sharers.size == 1) "owes" else "owe"} you ${describe(sharers[0].second)}${if (sharers.size > 1) " each" else ""}"
                     sharers.isNotEmpty() -> "${describe(savedAmount + parts.sumOf { it.amountMinor })} added · " +
@@ -910,9 +912,9 @@ fun EditorScreen(
                 if (accounts.size > 1) {
                     AccountPicker(accounts, viewModel.accountId) { viewModel.chooseAccount(it) }
                 }
-                if (!viewModel.isEditing) {
+                run {
                     val repeating = viewModel.repeatMonthly
-                    RoundButton(
+                    if (!viewModel.isEditing) RoundButton(
                         Lucide.Repeat,
                         if (repeating) "Don't repeat" else "Repeat every month",
                         {
