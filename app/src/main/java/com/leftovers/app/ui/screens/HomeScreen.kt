@@ -181,10 +181,10 @@ class HomeViewModel(
                 todayDate.dayOfMonth <= 10 && s.recapSeen != prev.toString() && all.any { YearMonth.from(it.date) == prev }
             },
             carryPrompt = s.plan.pendingCarry(month, all),
-            balance = selected?.balanceMinor ?: accountList.sumOf { it.balanceMinor },
+            balance = selected?.balanceMinor ?: accountList.filterNot { it.outOfTotal }.sumOf { it.balanceMinor },
             accountCount = accountList.size,
             // Bills and salary aren't tied to an account, so the forecast is only for all money together.
-            forecast = if (selected == null) forecastMonthEnd(accountList.sumOf { it.balanceMinor }, all, recurring, todayDate) else null,
+            forecast = if (selected == null) forecastMonthEnd(accountList.filterNot { it.outOfTotal }.sumOf { it.balanceMinor }, all, recurring, todayDate) else null,
             accounts = accountList,
             selectedAccount = selected,
         )
@@ -313,7 +313,7 @@ fun HomeScreen(
                             if (a != null) CategoryIcon(a.icon, a.color, size = 36.dp) else IconTile(Lucide.Wallet, c.textSecondary, size = 36.dp)
                             Spacer(Modifier.width(14.dp))
                             Text(a?.name ?: "All accounts", style = MaterialTheme.typography.bodyMedium, color = c.textPrimary, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            val amount = a?.balanceMinor ?: state.accounts.sumOf { it.balanceMinor }
+                            val amount = a?.balanceMinor ?: state.accounts.filterNot { it.outOfTotal }.sumOf { it.balanceMinor }
                             Text(
                                 a?.shownBalance(money, whole = true) ?: money.formatWhole(amount),
                                 style = MaterialTheme.typography.titleSmall,

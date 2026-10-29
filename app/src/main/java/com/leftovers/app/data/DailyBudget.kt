@@ -28,7 +28,8 @@ fun dailyBudget(
 ): DailyBudget? {
     if (monthlyBudget <= 0) return null
     val todayDay = today.toEpochDay()
-    val expenses = monthItems.filter { it.type == TxType.EXPENSE }
+    // Spending from an account left out of the budget (#33) doesn't use it up.
+    val expenses = monthItems.filter { it.type == TxType.EXPENSE && !it.outOfBudget }
     val spentBefore = expenses.filter { it.epochDay < todayDay }.sumOf { it.amountMinor }
     val spentToday = expenses.filter { it.epochDay == todayDay }.sumOf { it.amountMinor }
     val daysLeft = YearMonth.from(today).lengthOfMonth() - today.dayOfMonth + 1

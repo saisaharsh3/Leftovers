@@ -70,6 +70,8 @@ data class TransactionItem(
     val addsToBudget: Boolean = false,
     val foreignMinor: Long? = null,
     val foreignCurrency: String? = null,
+    /** Its account is left out of the budget (#33): it doesn't use up Safe to spend or the month's budget. */
+    val outOfBudget: Boolean = false,
 ) {
     val date: LocalDate get() = LocalDate.ofEpochDay(epochDay)
 

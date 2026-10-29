@@ -57,8 +57,8 @@ data class BudgetPlan(
 
     fun breakdownFor(month: YearMonth, items: List<TransactionItem>): MonthBudget {
         val byMonth = items.groupBy { YearMonth.from(it.date) }
-        fun income(m: YearMonth) = if (!extraIncome) 0L else byMonth[m].orEmpty().filter { it.type == TxType.INCOME && it.addsToBudget }.sumOf { it.amountMinor }
-        fun spent(m: YearMonth) = byMonth[m].orEmpty().filter { it.type == TxType.EXPENSE }.sumOf { it.amountMinor }
+        fun income(m: YearMonth) = if (!extraIncome) 0L else byMonth[m].orEmpty().filter { it.type == TxType.INCOME && it.addsToBudget && !it.outOfBudget }.sumOf { it.amountMinor }
+        fun spent(m: YearMonth) = byMonth[m].orEmpty().filter { it.type == TxType.EXPENSE && !it.outOfBudget }.sumOf { it.amountMinor }
 
         var carried = 0L
         val start = carryFrom
@@ -75,7 +75,7 @@ data class BudgetPlan(
 
     /** What was left unspent in [month] (never negative). */
     fun leftoverOf(month: YearMonth, items: List<TransactionItem>): Long {
-        val spent = items.filter { it.type == TxType.EXPENSE && YearMonth.from(it.date) == month }.sumOf { it.amountMinor }
+        val spent = items.filter { it.type == TxType.EXPENSE && !it.outOfBudget && YearMonth.from(it.date) == month }.sumOf { it.amountMinor }
         return (budgetFor(month, items) - spent).coerceAtLeast(0)
     }
 

@@ -250,7 +250,7 @@ fun AccountsScreen(
                     Column(Modifier.padding(22.dp)) {
                         Text("Total across accounts", style = MaterialTheme.typography.labelLarge, color = c.textSecondary)
                         Spacer(Modifier.height(4.dp))
-                        RollingText(money.format(accounts.sumOf { it.balanceMinor }), MaterialTheme.typography.displaySmall, c.textPrimary)
+                        RollingText(money.format(accounts.filterNot { it.outOfTotal }.sumOf { it.balanceMinor }), MaterialTheme.typography.displaySmall, c.textPrimary)
                         Spacer(Modifier.height(6.dp))
                         Text("Starts from each account's opening balance", style = MaterialTheme.typography.bodySmall, color = c.textTertiary)
                     }
@@ -488,6 +488,8 @@ private fun AccountEditor(
     val startOpening = if (initial.currency != null) initial.openingNative ?: 0L else initial.openingMinor
     var opening by rememberSaveable { mutableStateOf(if (startOpening != 0L) AmountInput.fromMinor(startOpening) else "") }
     var makeDefault by rememberSaveable { mutableStateOf(isDefault) }
+    var inBudget by rememberSaveable { mutableStateOf(!initial.outOfBudget) }
+    var inTotal by rememberSaveable { mutableStateOf(!initial.outOfTotal) }
     var digits by rememberSaveable { mutableStateOf(initial.smsDigits.orEmpty()) }
 
     if (pickCurrency) {
@@ -598,6 +600,27 @@ private fun AccountEditor(
                     )
                 }
             }
+            // A savings account, say, can be left out of the budget and of the total (#33).
+            @Composable
+            fun Toggle(title: String, subtitle: String, on: Boolean, onChange: (Boolean) -> Unit) = ListRow(
+                title,
+                subtitle = subtitle,
+                trailing = {
+                    androidx.compose.material3.Switch(
+                        checked = on,
+                        onCheckedChange = com.leftovers.app.ui.components.toggleHaptic(onChange),
+                        colors = androidx.compose.material3.SwitchDefaults.colors(
+                            checkedTrackColor = c.accent,
+                            checkedThumbColor = c.onAccent,
+                            uncheckedTrackColor = c.glass,
+                            uncheckedBorderColor = c.borderTop,
+                            uncheckedThumbColor = c.textSecondary,
+                        ),
+                    )
+                },
+            )
+            Toggle("Count in Safe to spend", if (inBudget) "Its spending uses up your budget" else "Its spending doesn't use up your budget", inBudget) { inBudget = it }
+            Toggle("Count in All accounts", if (inTotal) "Its balance is in the total on Home" else "Its balance is left out of the total", inTotal) { inTotal = it }
             Chip(
                 if (makeDefault) "Default for new entries" else "Make this the default",
                 onClick = { makeDefault = !makeDefault },
@@ -612,6 +635,8 @@ private fun AccountEditor(
                         initial.copy(
                             name = name.trim(), icon = icon, color = color, smsDigits = digits.ifBlank { null },
                             currency = currency,
+                            outOfBudget = !inBudget,
+                            outOfTotal = !inTotal,
                             openingNative = if (currency != null) typed else null,
                             openingMinor = if (currency != null) com.leftovers.app.data.toAppCurrency(typed, rate) else typed,
                         ),

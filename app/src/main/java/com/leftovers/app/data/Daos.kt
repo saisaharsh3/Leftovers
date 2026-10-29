@@ -9,8 +9,10 @@ import kotlinx.coroutines.flow.Flow
 private const val SELECT_ITEMS = """
     SELECT t.id, t.amountMinor, t.type, t.categoryId, t.epochDay, t.note, t.createdAt,
            c.name AS categoryName, c.emoji AS categoryEmoji, c.color AS categoryColor,
-           t.accountId, t.receiptPath, c.addsToBudget, t.foreignMinor, t.foreignCurrency
+           t.accountId, t.receiptPath, c.addsToBudget, t.foreignMinor, t.foreignCurrency,
+           COALESCE(a.outOfBudget, 0) AS outOfBudget
     FROM transactions t INNER JOIN categories c ON c.id = t.categoryId
+    LEFT JOIN accounts a ON a.id = t.accountId
 """
 
 private const val NEWEST_FIRST = " ORDER BY t.epochDay DESC, t.createdAt DESC"

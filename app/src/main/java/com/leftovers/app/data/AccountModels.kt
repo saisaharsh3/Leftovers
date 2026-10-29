@@ -26,6 +26,10 @@ data class Account(
     val currency: String? = null,
     /** With [currency]: the opening balance in that currency ([openingMinor] holds it converted). */
     val openingNative: Long? = null,
+    /** Left out of Safe to spend and the budget: its spending doesn't use up the budget (a savings account) (#33). */
+    @androidx.room.ColumnInfo(defaultValue = "0") val outOfBudget: Boolean = false,
+    /** Left out of the All accounts balance on Home and in Accounts (#33). */
+    @androidx.room.ColumnInfo(defaultValue = "0") val outOfTotal: Boolean = false,
 )
 
 data class AccountWithBalance(
@@ -39,10 +43,12 @@ data class AccountWithBalance(
     val balanceMinor: Long,
     val currency: String? = null,
     val openingNative: Long? = null,
+    val outOfBudget: Boolean = false,
+    val outOfTotal: Boolean = false,
     /** With [currency]: the balance in that currency, which is what the account shows. */
     val nativeMinor: Long? = null,
 ) {
-    fun toAccount() = Account(id, name, icon, color, openingMinor, createdAt, smsDigits, currency, openingNative)
+    fun toAccount() = Account(id, name, icon, color, openingMinor, createdAt, smsDigits, currency, openingNative, outOfBudget, outOfTotal)
 
     /** The balance as this account shows it: in its own currency when it has one, else in the app's. */
     fun shownBalance(appMoney: com.leftovers.app.util.Money, whole: Boolean = false): String {
