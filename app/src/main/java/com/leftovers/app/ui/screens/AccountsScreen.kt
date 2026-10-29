@@ -341,7 +341,7 @@ fun AccountsScreen(
                 Text("Balance", style = MaterialTheme.typography.labelLarge, color = c.textSecondary)
                 Text(a.shownBalance(money), style = MaterialTheme.typography.displaySmall, color = if (a.shownNegative) c.negative else c.textPrimary)
                 if (a.currency != null) {
-                    Text("About ${money.formatWhole(a.balanceMinor)} in ${a.currency} converted", style = MaterialTheme.typography.bodySmall, color = c.textSecondary)
+                    Text("About ${money.formatWhole(a.balanceMinor)} converted. In and out below are in ${money.symbol}", style = MaterialTheme.typography.bodySmall, color = c.textSecondary)
                 }
                 Text(
                     "In ${money.formatWhole(b.income + b.transfersIn + b.borrowed)} · Out ${money.formatWhole(b.spent + b.transfersOut + b.lent)}",
@@ -359,11 +359,14 @@ fun AccountsScreen(
                             CategoryIcon(item.categoryEmoji, item.categoryColor, size = 36.dp)
                             Spacer(Modifier.width(14.dp))
                             Column(Modifier.weight(1f)) {
-                                Text(item.note.ifBlank { item.categoryName }, style = MaterialTheme.typography.bodyMedium, color = c.textPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                Text(com.leftovers.app.data.noteText(item.note).ifBlank { item.categoryName }, style = MaterialTheme.typography.bodyMedium, color = c.textPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 Text(item.date.friendlyLabel(), style = MaterialTheme.typography.bodySmall, color = c.textSecondary)
                             }
                             Text(
-                                money.signed(item.amountMinor, item.type),
+                                // In the account's own currency when it was entered in it.
+                                item.foreignCurrency?.takeIf { it == a.currency && item.foreignMinor != null }
+                                    ?.let { com.leftovers.app.util.Money(it).signed(item.foreignMinor!!, item.type) }
+                                    ?: money.signed(item.amountMinor, item.type),
                                 style = MaterialTheme.typography.titleSmall,
                                 color = if (item.type == TxType.INCOME) c.positive else c.textPrimary,
                             )
