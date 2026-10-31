@@ -21,6 +21,8 @@ data class Category(
     val budgetMinor: Long? = null,
     /** Income only: money logged here is added on top of that month's budget (gifts, bonuses). */
     @ColumnInfo(defaultValue = "0") val addsToBudget: Boolean = false,
+    /** Spending only: [Bucket] name for 50/30/20 (#39); null uses the usual one for its name. */
+    val bucket: String? = null,
 )
 
 /** Amounts are stored in minor units (amount × 100) so money math never uses floating point. */

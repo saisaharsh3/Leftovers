@@ -94,6 +94,8 @@ data class BudgetsUiState(
     val pendingSubscriptions: Long = 0,
     val goalsMonthly: Long = 0,
     val rows: List<CategoryBudgetRow> = emptyList(),
+    /** 50/30/20, when it's on (#39). */
+    val buckets: List<com.leftovers.app.data.BucketUse> = emptyList(),
 )
 
 class BudgetsViewModel(
@@ -108,8 +110,8 @@ class BudgetsViewModel(
         repository.categories,
         repository.allTransactions,
         planning.recurring,
-        planning.goals,
-    ) { s, categories, all, recurring, goals ->
+        combine(planning.goals, planning.allDeposits, ::Pair),
+    ) { s, categories, all, recurring, (goals, deposits) ->
         val cycle = s.plan.cycleOf(LocalDate.now())
         val items = all.filter { it.date in cycle }
         val breakdown = s.plan.breakdownFor(cycle.month, all)
@@ -129,6 +131,11 @@ class BudgetsViewModel(
             today = dailyBudget(budget, items, pending, periodEnd = cycle.end),
             pendingSubscriptions = pending,
             goalsMonthly = goals.filter { !it.reached }.sumOf { it.monthlyNeeded() },
+            buckets = if (!s.plan.buckets) emptyList() else {
+                val income = s.plan.bucketIncome.takeIf { it > 0 } ?: items.totalOf(TxType.INCOME)
+                val saved = deposits.filter { it.epochDay in cycle.start.toEpochDay()..cycle.end.toEpochDay() }.sumOf { it.amountMinor }
+                com.leftovers.app.data.bucketUse(income, items, categories, saved)
+            },
             rows = categories.filter { it.type == TxType.EXPENSE }
                 .map { CategoryBudgetRow(it, spentByCategory[it.id] ?: 0L) }
                 // Categories with a limit first, then the ones you spend most on.
@@ -264,6 +271,35 @@ fun BudgetsScreen(
                                     trailing = { Text("${money.format(state.goalsMonthly)}/mo", style = MaterialTheme.typography.titleSmall, color = c.textPrimary) },
                                     onClick = onOpenGoals,
                                 )
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (state.buckets.isNotEmpty()) {
+                item { SectionHeader("50/30/20", Modifier.appear(2)) }
+                item {
+                    Glass(Modifier.fillMaxWidth().appear(2)) {
+                        Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                            if (state.buckets.all { it.allowed == 0L }) {
+                                Text("Log this month's income, or set it in Budget plan, to see your 50/30/20.", style = MaterialTheme.typography.bodySmall, color = c.textSecondary)
+                            }
+                            state.buckets.forEach { b ->
+                                val save = b.bucket == com.leftovers.app.data.Bucket.SAVE
+                                // Savings is a target to reach; needs and wants are limits not to pass.
+                                val over = !save && b.used > b.allowed && b.allowed > 0
+                                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text("${b.bucket.label} · ${b.bucket.share}%", style = MaterialTheme.typography.titleSmall, color = c.textPrimary, modifier = Modifier.weight(1f))
+                                        Text(
+                                            "${money.formatWhole(b.used)} of ${money.formatWhole(b.allowed)}",
+                                            style = MaterialTheme.typography.labelLarge,
+                                            color = when { over -> c.negative; save && b.used >= b.allowed && b.allowed > 0 -> c.positive; else -> c.textSecondary },
+                                        )
+                                    }
+                                    ProgressLine(if (b.allowed > 0) b.used.toFloat() / b.allowed else 0f)
+                                }
                             }
                         }
                     }

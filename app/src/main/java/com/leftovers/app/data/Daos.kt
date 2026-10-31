@@ -114,6 +114,9 @@ interface GoalDao {
     @Query("SELECT * FROM goal_deposits WHERE goalId = :goalId ORDER BY epochDay DESC, createdAt DESC")
     fun observeDeposits(goalId: Long): Flow<List<GoalDeposit>>
 
+    @Query("SELECT * FROM goal_deposits")
+    fun observeAllDeposits(): Flow<List<GoalDeposit>>
+
     /** Returns the new row id for an insert, or -1 for an update. */
     @Upsert
     suspend fun upsert(goal: Goal): Long

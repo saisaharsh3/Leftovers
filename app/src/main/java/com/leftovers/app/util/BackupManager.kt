@@ -84,6 +84,8 @@ class BackupManager(
                     put("extraIncome", s.plan.extraIncome)
                     put("startDay", s.plan.startDay)
                     put("rangeBudget", s.plan.rangeMinor)
+                    put("buckets", s.plan.buckets)
+                    put("bucketIncome", s.plan.bucketIncome)
                     s.plan.rangeFrom?.let { put("rangeFrom", it.toString()) }
                     s.plan.rangeTo?.let { put("rangeTo", it.toString()) }
                     put("carryChoices", BudgetPlan.encodeChoices(s.plan.carryChoices))
@@ -93,6 +95,7 @@ class BackupManager(
                     JSONObject().put("id", c.id).put("name", c.name).put("icon", c.emoji).put("color", c.color)
                         .put("type", c.type.name).put("budget", c.budgetMinor ?: JSONObject.NULL)
                         .put("addsToBudget", c.addsToBudget)
+                        .put("bucket", c.bucket ?: JSONObject.NULL)
                 }))
                 put("accounts", JSONArray(dao.accounts().map { a ->
                     JSONObject().put("id", a.id).put("name", a.name).put("icon", a.icon).put("color", a.color)
@@ -205,7 +208,7 @@ class BackupManager(
                 val name = it.getString("name")
                 // Older backups predate the flag: use the same default as the database migration.
                 val adds = it.optBoolean("addsToBudget", type == TxType.INCOME && name != "Salary")
-                Category(it.getLong("id"), name, it.getString("icon"), it.getLong("color"), type, it.longOrNull("budget"), adds)
+                Category(it.getLong("id"), name, it.getString("icon"), it.getLong("color"), type, it.longOrNull("budget"), adds, it.stringOrNull("bucket"))
             }
             val accounts = json.optJSONArray("accounts")?.objects().orEmpty().map {
                 Account(
@@ -331,6 +334,8 @@ class BackupManager(
                         extraIncome = s.optBoolean("extraIncome", false),
                         startDay = s.optInt("startDay", 1),
                         rangeMinor = s.optLong("rangeBudget", 0),
+                        buckets = s.optBoolean("buckets", false),
+                        bucketIncome = s.optLong("bucketIncome", 0),
                         rangeFrom = s.optString("rangeFrom").takeIf { it.isNotEmpty() }?.let { runCatching { java.time.LocalDate.parse(it) }.getOrNull() },
                         rangeTo = s.optString("rangeTo").takeIf { it.isNotEmpty() }?.let { runCatching { java.time.LocalDate.parse(it) }.getOrNull() },
                         carryChoices = BudgetPlan.decodeChoices(s.optString("carryChoices")),

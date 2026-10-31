@@ -67,10 +67,15 @@ import com.leftovers.app.ui.icons.Lucide
 import com.leftovers.app.ui.theme.LocalAppColors
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
-class CategoriesViewModel(private val repository: TransactionRepository) : ViewModel() {
+class CategoriesViewModel(private val repository: TransactionRepository, settings: com.leftovers.app.data.SettingsRepository) : ViewModel() {
+    /** Whether 50/30/20 is on, to show each spending category's bucket. */
+    val bucketsOn: StateFlow<Boolean> =
+        settings.settings.map { it.plan.buckets }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+
     val categories: StateFlow<List<Category>> =
         repository.categories.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
@@ -93,6 +98,7 @@ fun CategoriesScreen(
     viewModel: CategoriesViewModel = viewModel(factory = AppViewModelProvider.Factory),
 ) {
     val categories by viewModel.categories.collectAsStateWithLifecycle()
+    val bucketsOn by viewModel.bucketsOn.collectAsStateWithLifecycle()
     val c = LocalAppColors.current
     var tab by rememberSaveable { mutableStateOf(TxType.EXPENSE) }
     var editing by remember { mutableStateOf<Category?>(null) }
@@ -133,6 +139,15 @@ fun CategoriesScreen(
                                 leading = { CategoryIcon(cat.emoji, cat.color, size = 42.dp) },
                                 trailing = {
                                     Row(verticalAlignment = Alignment.CenterVertically) {
+                                        // 50/30/20 (#39): tap to move it between needs, wants and savings.
+                                        if (cat.type == TxType.EXPENSE && bucketsOn) {
+                                            val b = com.leftovers.app.data.Bucket.of(cat)
+                                            com.leftovers.app.ui.components.Chip(b.label, {
+                                                val next = com.leftovers.app.data.Bucket.entries[(b.ordinal + 1) % 3]
+                                                viewModel.save(cat.copy(bucket = next.name))
+                                            })
+                                            Spacer(Modifier.width(8.dp))
+                                        }
                                         if (cat.type == TxType.INCOME) {
                                             Switch(
                                                 checked = cat.addsToBudget,

@@ -115,6 +115,8 @@ class SettingsRepository(context: Context) {
                 extraIncome = p[EXTRA_INCOME] ?: false,
                 startDay = p[BUDGET_START_DAY] ?: 1,
                 rangeMinor = p[RANGE_BUDGET] ?: 0L,
+                buckets = p[BUCKETS] ?: false,
+                bucketIncome = p[BUCKET_INCOME] ?: 0L,
                 rangeFrom = p[RANGE_FROM]?.let { runCatching { java.time.LocalDate.parse(it) }.getOrNull() },
                 rangeTo = p[RANGE_TO]?.let { runCatching { java.time.LocalDate.parse(it) }.getOrNull() },
             ),
@@ -184,6 +186,8 @@ class SettingsRepository(context: Context) {
         it[EXTRA_INCOME] = plan.extraIncome
         it[BUDGET_START_DAY] = plan.startDay
         it[RANGE_BUDGET] = plan.rangeMinor
+        it[BUCKETS] = plan.buckets
+        it[BUCKET_INCOME] = plan.bucketIncome
         if (plan.rangeFrom == null) it.remove(RANGE_FROM) else it[RANGE_FROM] = plan.rangeFrom.toString()
         if (plan.rangeTo == null) it.remove(RANGE_TO) else it[RANGE_TO] = plan.rangeTo.toString()
         if (plan.carryChoices.isNotEmpty()) it[CARRY_CHOICES] = BudgetPlan.encodeChoices(plan.carryChoices)
@@ -291,6 +295,8 @@ class SettingsRepository(context: Context) {
         val EXTRA_INCOME = booleanPreferencesKey("extra_income_adds")
         val BUDGET_START_DAY = intPreferencesKey("budget_start_day")
         val RANGE_BUDGET = longPreferencesKey("range_budget")
+        val BUCKETS = booleanPreferencesKey("buckets_503020")
+        val BUCKET_INCOME = longPreferencesKey("bucket_income")
         val RANGE_FROM = stringPreferencesKey("range_from")
         val RANGE_TO = stringPreferencesKey("range_to")
         val CARRY_CHOICES = stringPreferencesKey("carry_choices")

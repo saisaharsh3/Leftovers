@@ -49,7 +49,7 @@ object AppViewModelProvider {
         initializer { DebtsViewModel(container().planning, container().accounts, container().settings) }
         initializer { DeletedViewModel(container().repository, container().settings) }
         initializer { GoalDetailViewModel(createSavedStateHandle(), container().planning) }
-        initializer { CategoriesViewModel(container().repository) }
+        initializer { CategoriesViewModel(container().repository, container().settings) }
         initializer { TransactionPeekViewModel(container().repository, container().accounts) }
         initializer {
             val c = container()

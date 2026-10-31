@@ -47,6 +47,9 @@ data class BudgetPlan(
     val rangeMinor: Long = 0,
     val rangeFrom: LocalDate? = null,
     val rangeTo: LocalDate? = null,
+    /** 50/30/20 (#39): on, and the monthly income it splits; 0 uses the month's income as logged. */
+    val buckets: Boolean = false,
+    val bucketIncome: Long = 0,
 ) {
     /** The dates of a [BudgetMode.RANGE] budget, when they're set. */
     private val range: BudgetCycle?

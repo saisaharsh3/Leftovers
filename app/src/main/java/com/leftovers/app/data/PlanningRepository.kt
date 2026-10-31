@@ -18,6 +18,7 @@ class PlanningRepository(private val database: AppDatabase) {
     val debts: Flow<List<Debt>> = debtDao.observeAll().sharedLive()
 
     fun deposits(goalId: Long): Flow<List<GoalDeposit>> = goalDao.observeDeposits(goalId)
+    val allDeposits: Flow<List<GoalDeposit>> = goalDao.observeAllDeposits()
 
     suspend fun saveRecurring(recurring: Recurring) = recurringDao.upsert(recurring)
     suspend fun deleteRecurring(recurring: Recurring) = recurringDao.delete(recurring)

@@ -97,6 +97,8 @@ class BudgetPlanViewModel(
     var extraIncome by mutableStateOf(false)
     var startDay by mutableStateOf(1)
     var rangeText by mutableStateOf("")
+    var buckets by mutableStateOf(false)
+    var bucketIncomeText by mutableStateOf("")
     var rangeFrom by mutableStateOf<java.time.LocalDate>(java.time.LocalDate.now())
     var rangeTo by mutableStateOf<java.time.LocalDate>(java.time.LocalDate.now().plusDays(13))
     private var carryFrom: YearMonth? = null
@@ -118,6 +120,8 @@ class BudgetPlanViewModel(
             extraIncome = plan.extraIncome
             startDay = plan.startDay
             rangeText = plan.rangeMinor.takeIf { it > 0 }?.let(AmountInput::fromMinor).orEmpty()
+            buckets = plan.buckets
+            bucketIncomeText = plan.bucketIncome.takeIf { it > 0 }?.let(AmountInput::fromMinor).orEmpty()
             plan.rangeFrom?.let { rangeFrom = it }
             plan.rangeTo?.let { rangeTo = it }
             carryFrom = plan.carryFrom
@@ -140,6 +144,8 @@ class BudgetPlanViewModel(
         rangeMinor = AmountInput.toMinor(rangeText) ?: 0,
         rangeFrom = rangeFrom,
         rangeTo = rangeTo,
+        buckets = buckets,
+        bucketIncome = AmountInput.toMinor(bucketIncomeText) ?: 0,
     )
 
     fun fillEvenly() {
@@ -338,6 +344,56 @@ fun BudgetPlanScreen(
                                 uncheckedThumbColor = c.textSecondary,
                             ),
                         )
+                    }
+                }
+            }
+
+            item {
+                // 50/30/20 (#39): needs, wants and savings as shares of income.
+                Glass(Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f)) {
+                                Text("50/30/20", style = MaterialTheme.typography.titleSmall, color = c.textPrimary)
+                                Spacer(Modifier.height(2.dp))
+                                Text(
+                                    "Half of your income for needs, 30% for wants and 20% for savings. Budgets shows how much of each is used.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = c.textSecondary,
+                                )
+                            }
+                            Spacer(Modifier.width(12.dp))
+                            androidx.compose.material3.Switch(
+                                checked = viewModel.buckets,
+                                onCheckedChange = com.leftovers.app.ui.components.toggleHaptic({ viewModel.buckets = it }),
+                                colors = androidx.compose.material3.SwitchDefaults.colors(
+                                    checkedTrackColor = c.accent,
+                                    checkedThumbColor = c.onAccent,
+                                    uncheckedTrackColor = c.glass,
+                                    uncheckedBorderColor = c.borderTop,
+                                    uncheckedThumbColor = c.textSecondary,
+                                ),
+                            )
+                        }
+                        if (viewModel.buckets) {
+                            MoneyField(viewModel.bucketIncomeText, { viewModel.bucketIncomeText = it }, label = "Monthly income (empty: what you log as income)")
+                            val income = AmountInput.toMinor(viewModel.bucketIncomeText) ?: 0L
+                            if (income > 0) {
+                                val money = com.leftovers.app.util.LocalMoney.current
+                                Text(
+                                    "Needs ${money.formatWhole(income / 2)} · Wants ${money.formatWhole(income * 3 / 10)} · Savings ${money.formatWhole(income / 5)}",
+                                    style = MaterialTheme.typography.labelLarge,
+                                    color = c.textPrimary,
+                                    modifier = Modifier.padding(start = 4.dp),
+                                )
+                            }
+                            Text(
+                                "Which categories are needs or wants: Settings → Categories.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = c.textTertiary,
+                                modifier = Modifier.padding(start = 4.dp),
+                            )
+                        }
                     }
                 }
             }
