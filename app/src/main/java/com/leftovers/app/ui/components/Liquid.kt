@@ -18,7 +18,7 @@ val LocalScreenBackdrop = staticCompositionLocalOf<LayerBackdrop?> { null }
  * from redrawing until the next touch, so a tapped card wouldn't step aside, or wouldn't come back.
  */
 class PopupLayer {
-    internal val cards = mutableStateListOf<Pair<Any, @Composable () -> Unit>>()
+    val cards = mutableStateListOf<Pair<Any, @Composable () -> Unit>>()
 
     fun show(key: Any, card: @Composable () -> Unit) {
         val at = cards.indexOfFirst { it.first == key }
@@ -31,7 +31,8 @@ class PopupLayer {
 
     @Composable
     fun Content() {
-        cards.toList().forEach { (_, card) -> card() }
+        // Keyed, so each card keeps its own state (typed text, scroll) while others come and go.
+        cards.toList().forEach { (k, card) -> androidx.compose.runtime.key(k) { card() } }
     }
 }
 

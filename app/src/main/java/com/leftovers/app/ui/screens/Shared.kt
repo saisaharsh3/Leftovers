@@ -1,5 +1,11 @@
 package com.leftovers.app.ui.screens
 
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.ui.draw.clip
 import kotlinx.coroutines.flow.first
 import com.kyant.backdrop.drawBackdrop
 import com.kyant.backdrop.effects.blur
@@ -391,6 +397,15 @@ private fun BlurBehindDialog(enabled: Boolean, appear: Animatable<Float, Animati
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun GlassSheet(onDismiss: () -> Unit, content: @Composable () -> Unit) {
+    // Liquid glass, like the tab bar and pop-ups: drawn on the app's own screen so it can bend it. Not from
+    // inside a dialog, which is a window of its own and would be drawn over the sheet.
+    val layer = com.leftovers.app.ui.components.LocalPopupLayer.current
+    val liquid = com.leftovers.app.ui.components.LocalScreenBackdrop.current
+    val inDialog = LocalView.current.parent is DialogWindowProvider
+    if (layer != null && liquid != null && !inDialog) {
+        LiquidSheet(layer, liquid, onDismiss, content)
+        return
+    }
     val c = LocalAppColors.current
     // Sheets hold forms, so they stay more solid than dialogs even with the screen blurred behind.
     val blurs = rememberWindowBlur()
@@ -635,3 +650,111 @@ fun MorphCard(
     }
 }
 
+
+
+/**
+ * A bottom sheet on the app's own screen, in liquid glass: it slides up, the screen behind dims and blurs a
+ * little, and a tap outside, Back or dragging the handle down closes it. It moves up above the keyboard.
+ */
+@Composable
+private fun LiquidSheet(
+    layer: com.leftovers.app.ui.components.PopupLayer,
+    backdrop: com.kyant.backdrop.backdrops.LayerBackdrop,
+    onDismiss: () -> Unit,
+    content: @Composable () -> Unit,
+) {
+    val locals = androidx.compose.runtime.currentCompositionLocalContext
+    val key = remember { Any() }
+    // 0 = off screen below, 1 = in place; the drag moves it between.
+    val shown = remember { Animatable(0f) }
+    val drag = remember { Animatable(0f) }
+    val scope = rememberCoroutineScope()
+    var height by remember { mutableStateOf(1f) }
+    val latestDismiss by androidx.compose.runtime.rememberUpdatedState(onDismiss)
+    var closing by remember { mutableStateOf(false) }
+    fun close() {
+        if (closing) return
+        closing = true
+        scope.launch {
+            shown.animateTo(0f, tween(220, easing = FastOutSlowInEasing))
+            latestDismiss()
+        }
+    }
+    LaunchedEffect(Unit) { shown.animateTo(1f, spring(dampingRatio = 0.9f, stiffness = 500f)) }
+    val sheet: @Composable () -> Unit = {
+        androidx.compose.runtime.CompositionLocalProvider(locals) {
+            val c = LocalAppColors.current
+            val top = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp)
+            Box(Modifier.fillMaxSize()) {
+                // The screen behind: dimmed and lightly blurred, fading with the sheet. A tap closes it. Over another
+                // sheet or pop-up it only dims, so that one stays in sight (the blur would show the screen instead).
+                val over = layer.cards.indexOfFirst { it.first == key } > 0
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .graphicsLayer { alpha = shown.value.coerceIn(0f, 1f) }
+                        .then(
+                            if (over) Modifier.background(c.background.copy(alpha = 0.35f))
+                            else Modifier.drawBackdrop(
+                                backdrop = backdrop,
+                                shape = { androidx.compose.ui.graphics.RectangleShape },
+                                effects = { blur(8.dp.toPx()) },
+                                onDrawSurface = { drawRect(c.background.copy(alpha = 0.35f)) },
+                            ),
+                        )
+                        .pointerInput(Unit) { detectTapGestures { close() } },
+                )
+                // Room for the sheet: below the status bar, above the keyboard; a tall form scrolls inside it.
+                Box(Modifier.fillMaxSize().statusBarsPadding().padding(top = 24.dp).imePadding()) {
+                Box(
+                    Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .onGloballyPositioned { height = it.size.height.toFloat().coerceAtLeast(1f) }
+                        .graphicsLayer { translationY = (1f - shown.value) * height + drag.value }
+                        .drawBackdrop(
+                            backdrop = backdrop,
+                            shape = { top },
+                            effects = {
+                                vibrancy()
+                                // Frosted well inside: a sheet is a form, and its text must read over anything.
+                                blur(30.dp.toPx())
+                                lens(20.dp.toPx(), 40.dp.toPx(), chromaticAberration = true)
+                            },
+                            onDrawSurface = {
+                                drawRect(if (c.isDark) androidx.compose.ui.graphics.Color(0xFF14141B).copy(alpha = 0.74f) else androidx.compose.ui.graphics.Color.White.copy(alpha = 0.72f))
+                            },
+                        )
+                        // Taps inside stay inside.
+                        .pointerInput(Unit) { detectTapGestures { } },
+                ) {
+                    Column {
+                        // The handle: drag down to close.
+                        Box(
+                            Modifier
+                                .fillMaxWidth()
+                                .pointerInput(Unit) {
+                                    detectVerticalDragGestures(
+                                        onVerticalDrag = { _, dy -> scope.launch { drag.snapTo((drag.value + dy).coerceAtLeast(0f)) } },
+                                        onDragEnd = {
+                                            if (drag.value > height * 0.25f) close()
+                                            else scope.launch { drag.animateTo(0f, spring(dampingRatio = 0.8f)) }
+                                        },
+                                    )
+                                }
+                                .padding(top = 12.dp, bottom = 10.dp),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Box(Modifier.size(width = 36.dp, height = 4.dp).clip(RoundedCornerShape(2.dp)).background(c.textTertiary))
+                        }
+                        Box(Modifier.navigationBarsPadding()) { content() }
+                    }
+                }
+                }
+            }
+            androidx.activity.compose.BackHandler { close() }
+        }
+    }
+    androidx.compose.runtime.SideEffect { layer.show(key, sheet) }
+    androidx.compose.runtime.DisposableEffect(key) { onDispose { layer.hide(key) } }
+}

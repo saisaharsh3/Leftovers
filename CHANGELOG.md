@@ -5,6 +5,8 @@ All notable changes to Leftovers. Download any version from
 
 ## Unreleased
 
+- Bottom sheets are liquid glass like the tab bar and pop-ups (Android 13 and newer), and open on the app's own screen: they slide up over a lightly blurred screen, close with a tap outside, Back or a drag down, and move up above the keyboard
+- Split: the keyboard's done key adds the part, then the keyboard closes and the list shows it
 - Budget plan: Dates, one amount for days you choose, like two weeks or a trip, as well as monthly and yearly (#34)
 - 50/30/20, an optional budget mode: needs, wants and savings as shares of your income, with each spending
   category in one (tap to move it in Categories) and three bars in Budget (#39)
