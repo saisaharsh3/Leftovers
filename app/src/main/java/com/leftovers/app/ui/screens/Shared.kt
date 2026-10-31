@@ -145,7 +145,11 @@ fun GlassTextField(
     /** Masks the text and keeps it out of keyboard suggestions, for secrets like API keys. */
     password: Boolean = false,
     singleLine: Boolean = true,
+    /** The keyboard's ✓ key does this, when given. */
+    onDone: (() -> Unit)? = null,
 ) {
+    // The text field keeps the actions it was first given; this always runs the latest one.
+    val latestOnDone by androidx.compose.runtime.rememberUpdatedState(onDone)
     val c = LocalAppColors.current
     Column(modifier) {
         if (label != null) {
@@ -171,7 +175,9 @@ fun GlassTextField(
                             keyboardType = if (password && keyboardType == KeyboardType.Text) KeyboardType.Password else keyboardType,
                             capitalization = if (keyboardType == KeyboardType.Text && !password) KeyboardCapitalization.Sentences else KeyboardCapitalization.None,
                             autoCorrectEnabled = !password,
+                            imeAction = if (onDone != null) androidx.compose.ui.text.input.ImeAction.Done else androidx.compose.ui.text.input.ImeAction.Default,
                         ),
+                        keyboardActions = androidx.compose.foundation.text.KeyboardActions(onDone = { latestOnDone?.invoke() }),
                         modifier = Modifier
                             .fillMaxWidth()
                             .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier),
@@ -212,7 +218,7 @@ fun GlassTextField(
 }
 
 @Composable
-fun MoneyField(value: String, onValueChange: (String) -> Unit, modifier: Modifier = Modifier, label: String? = null, large: Boolean = false, focusRequester: FocusRequester? = null, symbol: String? = null) {
+fun MoneyField(value: String, onValueChange: (String) -> Unit, modifier: Modifier = Modifier, label: String? = null, large: Boolean = false, focusRequester: FocusRequester? = null, symbol: String? = null, onDone: (() -> Unit)? = null) {
     GlassTextField(
         value = value,
         onValueChange = { raw -> AmountInput.sanitize(raw)?.let(onValueChange) },
@@ -223,6 +229,7 @@ fun MoneyField(value: String, onValueChange: (String) -> Unit, modifier: Modifie
         textStyle = if (large) MaterialTheme.typography.headlineMedium else MaterialTheme.typography.titleLarge,
         modifier = modifier,
         focusRequester = focusRequester,
+        onDone = onDone,
     )
 }
 

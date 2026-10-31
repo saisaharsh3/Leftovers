@@ -1628,10 +1628,16 @@ private fun SplitBody(
     var amountText by rememberSaveable { mutableStateOf("") }
     val rest = total - parts.sumOf { it.amountMinor }
     val partMinor = AmountInput.toMinor(amountText) ?: 0L
+    // After Add part: the keyboard closes and the list scrolls into view, with the new part in it,
+    // instead of the form jumping down under the keyboard as the list grows.
+    val scroll = rememberScrollState()
+    val focus = androidx.compose.ui.platform.LocalFocusManager.current
+    val keyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
+    val scope = rememberCoroutineScope()
 
     run {
         Column(
-            Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 16.dp),
+            Modifier.verticalScroll(scroll).padding(horizontal = 20.dp).padding(bottom = 16.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             header()
@@ -1676,20 +1682,27 @@ private fun SplitBody(
                     Chip(cat.name, onClick = { pick = cat.id }, icon = CategoryIcons[cat.emoji], iconTint = Color(cat.color), selected = pick == cat.id)
                 }
             }
-            MoneyField(amountText, { amountText = it }, label = "Amount for this part")
-            PrimaryButton(
-                "Add part",
-                {
-                    val id = pick ?: return@PrimaryButton
-                    val existing = parts.indexOfFirst { it.categoryId == id }
-                    if (existing >= 0) parts[existing] = parts[existing].copy(amountMinor = parts[existing].amountMinor + partMinor)
-                    else parts += SplitPart(id, partMinor)
-                    amountText = ""
-                    pick = null
-                },
-                Modifier.fillMaxWidth(),
-                enabled = pick != null && partMinor > 0 && partMinor < rest,
-            )
+            val canAdd = pick != null && partMinor > 0 && partMinor < rest
+            fun addPart() {
+                // Read now, not when this was made: the keyboard's ✓ can hold on to an older copy of it.
+                val id = pick ?: return
+                val amount = AmountInput.toMinor(amountText) ?: 0L
+                if (amount <= 0 || amount >= total - parts.sumOf { it.amountMinor }) return
+                val existing = parts.indexOfFirst { it.categoryId == id }
+                if (existing >= 0) parts[existing] = parts[existing].copy(amountMinor = parts[existing].amountMinor + amount)
+                else parts += SplitPart(id, amount)
+                amountText = ""
+                pick = null
+                focus.clearFocus()
+                keyboard?.hide()
+                scope.launch { scroll.animateScrollTo(0) }
+            }
+            // The amount and Add on one row, so Add isn't left under the keyboard; the keyboard's ✓ adds it too.
+            Text("Amount for this part", style = MaterialTheme.typography.labelMedium, color = c.textSecondary, modifier = Modifier.padding(start = 6.dp))
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                MoneyField(amountText, { amountText = it }, Modifier.weight(1f), onDone = ::addPart)
+                PrimaryButton("Add", ::addPart, enabled = canAdd, icon = Lucide.Plus)
+            }
             if (rest <= 0) {
                 Text("The parts add up to the whole amount. Leave something for ${mainCategory?.name ?: "the main category"}.", style = MaterialTheme.typography.bodySmall, color = c.negative)
             }
