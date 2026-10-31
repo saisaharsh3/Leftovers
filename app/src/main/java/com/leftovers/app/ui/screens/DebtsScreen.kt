@@ -181,7 +181,7 @@ fun DebtsScreen(onBack: () -> Unit, viewModel: DebtsViewModel = viewModel(factor
                                 Chip("Remind", { com.leftovers.app.util.DebtReminder.share(context, com.leftovers.app.util.DebtReminder.message(b, money::format), b.person) }, icon = Lucide.Bell)
                                 Spacer(Modifier.padding(start = 8.dp))
                             }
-                            Chip("Pay back", { settling = b.person }, icon = Lucide.Check)
+                            Chip(if (b.netMinor > 0) "Received" else "Paid back", { settling = b.person }, icon = Lucide.Check)
                         }
                         b.entries.forEach { d ->
                             RowDivider(inset = 16.dp)
@@ -199,7 +199,7 @@ fun DebtsScreen(onBack: () -> Unit, viewModel: DebtsViewModel = viewModel(factor
                                     Icon(Lucide.Camera, contentDescription = if (d.photos.size == 1) "Has a photo" else "Has ${d.photos.size} photos", tint = c.textTertiary, modifier = Modifier.padding(end = 8.dp).size(14.dp))
                                 }
                                 Text(
-                                    (if (d.repayment) "Paid back " else if (d.amountMinor > 0) "Lent " else "Borrowed ") + money.format(abs(d.amountMinor)),
+                                    (if (d.repayment) (if (d.amountMinor < 0) "Received " else "Paid back ") else if (d.amountMinor > 0) "Lent " else "Borrowed ") + money.format(abs(d.amountMinor)),
                                     style = MaterialTheme.typography.labelLarge,
                                     color = c.textPrimary,
                                 )
@@ -430,7 +430,7 @@ fun SettleSheet(
             }
             Spacer(Modifier.height(2.dp))
             PrimaryButton(
-                if (all) "Settle up" else "Save ${money.format(amount)} paid back",
+                if (all) "Settle up" else "Save ${money.format(amount)} ${if (theyPay) "received" else "paid back"}",
                 { onSettle(minOf(amount, owed), accountId) },
                 Modifier.fillMaxWidth(),
                 enabled = amount > 0,

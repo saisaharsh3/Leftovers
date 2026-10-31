@@ -429,7 +429,7 @@ fun HomeScreen(
                                 ) {
                                     Icon(
                                         if (d.repayment) Lucide.Check else if (out) Lucide.ArrowUpRight else Lucide.ArrowDownLeft,
-                                        contentDescription = if (d.repayment) "Paid back" else if (out) "Lent" else "Borrowed",
+                                        contentDescription = if (d.repayment) (if (d.amountMinor < 0) "Received" else "Paid back") else if (out) "Lent" else "Borrowed",
                                         tint = if (d.repayment) c.textSecondary else if (out) c.positive else c.warning,
                                         modifier = Modifier.size(16.dp),
                                     )
@@ -437,7 +437,7 @@ fun HomeScreen(
                                 Spacer(Modifier.width(12.dp))
                                 Column(Modifier.weight(1f)) {
                                     Text(
-                                        d.note.ifBlank { if (d.repayment) "Paid back" else if (out) "Lent" else "Borrowed" },
+                                        d.note.ifBlank { if (d.repayment) (if (d.amountMinor < 0) "Received" else "Paid back") else if (out) "Lent" else "Borrowed" },
                                         style = MaterialTheme.typography.bodyMedium,
                                         color = c.textPrimary,
                                         maxLines = 1,
@@ -451,7 +451,10 @@ fun HomeScreen(
                                 }
                                 Column(horizontalAlignment = Alignment.End) {
                                     Text(money.format(abs(d.amountMinor)), style = MaterialTheme.typography.titleSmall, color = c.textPrimary)
-                                    Text(if (d.repayment) "paid back" else if (out) "lent" else "borrowed", style = MaterialTheme.typography.labelSmall, color = c.textTertiary)
+                                    // Without a note the title already says it, so it isn't said twice (#36).
+                                    if (d.note.isNotBlank()) {
+                                        Text(if (d.repayment) (if (d.amountMinor < 0) "received" else "paid back") else if (out) "lent" else "borrowed", style = MaterialTheme.typography.labelSmall, color = c.textTertiary)
+                                    }
                                 }
                             }
                             if (d.photos.isNotEmpty()) {
@@ -477,7 +480,7 @@ fun HomeScreen(
                             com.leftovers.app.util.DebtReminder.share(context, com.leftovers.app.util.DebtReminder.message(b, money::format), b.person)
                         }, size = 56.dp)
                     }
-                    PrimaryButton("Pay back", { close { settling = b.person } }, Modifier.weight(1.4f), icon = Lucide.Check)
+                    PrimaryButton(if (b.netMinor > 0) "Received" else "Paid back", { close { settling = b.person } }, Modifier.weight(1.4f), icon = Lucide.Check)
                 }
             }
     }
