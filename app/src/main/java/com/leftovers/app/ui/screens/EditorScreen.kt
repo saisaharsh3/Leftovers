@@ -1697,12 +1697,9 @@ private fun SplitBody(
                 keyboard?.hide()
                 scope.launch { scroll.animateScrollTo(0) }
             }
-            // The amount and Add on one row, so Add isn't left under the keyboard; the keyboard's ✓ adds it too.
-            Text("Amount for this part", style = MaterialTheme.typography.labelMedium, color = c.textSecondary, modifier = Modifier.padding(start = 6.dp))
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                MoneyField(amountText, { amountText = it }, Modifier.weight(1f), onDone = ::addPart)
-                PrimaryButton("Add", ::addPart, enabled = canAdd, icon = Lucide.Plus)
-            }
+            // The keyboard's ✓ adds the part too, so Add part can stay under the field even while the keyboard covers it.
+            MoneyField(amountText, { amountText = it }, label = "Amount for this part", onDone = ::addPart)
+            PrimaryButton("Add part", ::addPart, Modifier.fillMaxWidth(), enabled = canAdd)
             if (rest <= 0) {
                 Text("The parts add up to the whole amount. Leave something for ${mainCategory?.name ?: "the main category"}.", style = MaterialTheme.typography.bodySmall, color = c.negative)
             }
