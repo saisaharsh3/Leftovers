@@ -114,6 +114,9 @@ class SettingsRepository(context: Context) {
                 carryChoices = BudgetPlan.decodeChoices(p[CARRY_CHOICES]),
                 extraIncome = p[EXTRA_INCOME] ?: false,
                 startDay = p[BUDGET_START_DAY] ?: 1,
+                rangeMinor = p[RANGE_BUDGET] ?: 0L,
+                rangeFrom = p[RANGE_FROM]?.let { runCatching { java.time.LocalDate.parse(it) }.getOrNull() },
+                rangeTo = p[RANGE_TO]?.let { runCatching { java.time.LocalDate.parse(it) }.getOrNull() },
             ),
             budgetAlerts = p[BUDGET_ALERTS] ?: true,
             defaultAccountId = p[DEFAULT_ACCOUNT] ?: 1L,
@@ -180,6 +183,9 @@ class SettingsRepository(context: Context) {
         it[CARRY_MODE] = plan.carry.name
         it[EXTRA_INCOME] = plan.extraIncome
         it[BUDGET_START_DAY] = plan.startDay
+        it[RANGE_BUDGET] = plan.rangeMinor
+        if (plan.rangeFrom == null) it.remove(RANGE_FROM) else it[RANGE_FROM] = plan.rangeFrom.toString()
+        if (plan.rangeTo == null) it.remove(RANGE_TO) else it[RANGE_TO] = plan.rangeTo.toString()
         if (plan.carryChoices.isNotEmpty()) it[CARRY_CHOICES] = BudgetPlan.encodeChoices(plan.carryChoices)
         val from = plan.carryFrom ?: it[CARRY_FROM]?.let { raw -> runCatching { YearMonth.parse(raw) }.getOrNull() }
         if (plan.isSet) it[CARRY_FROM] = (from ?: YearMonth.now()).toString() else it.remove(CARRY_FROM)
@@ -284,6 +290,9 @@ class SettingsRepository(context: Context) {
         val CARRY_MODE = stringPreferencesKey("carry_mode")
         val EXTRA_INCOME = booleanPreferencesKey("extra_income_adds")
         val BUDGET_START_DAY = intPreferencesKey("budget_start_day")
+        val RANGE_BUDGET = longPreferencesKey("range_budget")
+        val RANGE_FROM = stringPreferencesKey("range_from")
+        val RANGE_TO = stringPreferencesKey("range_to")
         val CARRY_CHOICES = stringPreferencesKey("carry_choices")
         val CARRY_FROM = stringPreferencesKey("carry_from")
         val BUDGET_ALERTS = booleanPreferencesKey("budget_alerts")

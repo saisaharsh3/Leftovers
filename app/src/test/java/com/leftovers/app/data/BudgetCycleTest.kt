@@ -57,4 +57,23 @@ class BudgetCycleTest {
         val subs = listOf(sub(5, 18_000, "2026-10"), sub(30, 500, "2026-09"), sub(26, 100, "2026-10"))
         assertEquals(18_500, subs.pendingExpenses(cycle, LocalDate.of(2026, 10, 29)))
     }
+
+    @Test
+    fun aBudgetForDatesOfYourOwn() {
+        val today = LocalDate.now()
+        val plan = BudgetPlan(mode = BudgetMode.RANGE, rangeMinor = 7_000, rangeFrom = today.minusDays(3), rangeTo = today.plusDays(10))
+        val c = plan.cycleOf(today)
+        assertEquals(today.minusDays(3), c.start)
+        assertEquals(11, c.daysLeft(today))
+        fun spend(amount: Long, day: LocalDate) = TransactionItem(
+            id = amount, amountMinor = amount, type = TxType.EXPENSE, categoryId = 1, epochDay = day.toEpochDay(), note = "", createdAt = 0,
+            categoryName = "Food", categoryEmoji = "food", categoryColor = 0, accountId = null, receiptPath = null,
+        )
+        // Spending before the dates doesn't count against them.
+        val items = listOf(spend(1_000, today.minusDays(1)), spend(500, today.minusDays(5)))
+        assertEquals(7_000, plan.budgetFor(c.month, items))
+        assertEquals(6_000, plan.leftoverOf(c.month, items))
+        // Once the dates are over, there's no budget until new ones are set.
+        assertFalse(plan.copy(rangeTo = today.minusDays(1)).isSet)
+    }
 }

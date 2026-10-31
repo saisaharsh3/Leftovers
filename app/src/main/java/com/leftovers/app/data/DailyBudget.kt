@@ -13,6 +13,8 @@ data class DailyBudget(
     /** The month's budget, and what's left of it after everything spent and the subscriptions still due. */
     val monthlyBudget: Long = 0,
     val monthLeft: Long = 0,
+    /** Subscriptions still to be charged before the budget month ends, already set aside from [monthLeft]. */
+    val reserved: Long = 0,
 ) {
     val leftToday: Long get() = dailyLimit - spentToday
     val usedFraction: Float get() = if (dailyLimit > 0) spentToday.toFloat() / dailyLimit else 1f
@@ -36,5 +38,5 @@ fun dailyBudget(
     val spentToday = expenses.filter { it.epochDay == todayDay }.sumOf { it.amountMinor }
     val daysLeft = (periodEnd.toEpochDay() - todayDay + 1).toInt().coerceAtLeast(1)
     val daily = (monthlyBudget - spentBefore - reservedMinor).coerceAtLeast(0) / daysLeft
-    return DailyBudget(daily, spentToday, monthlyBudget, monthlyBudget - spentBefore - spentToday - reservedMinor)
+    return DailyBudget(daily, spentToday, monthlyBudget, monthlyBudget - spentBefore - spentToday - reservedMinor, reservedMinor)
 }

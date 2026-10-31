@@ -83,6 +83,9 @@ class BackupManager(
                     put("carryMode", s.plan.carry.name)
                     put("extraIncome", s.plan.extraIncome)
                     put("startDay", s.plan.startDay)
+                    put("rangeBudget", s.plan.rangeMinor)
+                    s.plan.rangeFrom?.let { put("rangeFrom", it.toString()) }
+                    s.plan.rangeTo?.let { put("rangeTo", it.toString()) }
                     put("carryChoices", BudgetPlan.encodeChoices(s.plan.carryChoices))
                     s.plan.carryFrom?.let { put("carryFrom", it.toString()) }
                 })
@@ -327,6 +330,9 @@ class BackupManager(
                         carry = com.leftovers.app.data.CarryMode.entries.firstOrNull { it.name == s.optString("carryMode") } ?: com.leftovers.app.data.CarryMode.ASK,
                         extraIncome = s.optBoolean("extraIncome", false),
                         startDay = s.optInt("startDay", 1),
+                        rangeMinor = s.optLong("rangeBudget", 0),
+                        rangeFrom = s.optString("rangeFrom").takeIf { it.isNotEmpty() }?.let { runCatching { java.time.LocalDate.parse(it) }.getOrNull() },
+                        rangeTo = s.optString("rangeTo").takeIf { it.isNotEmpty() }?.let { runCatching { java.time.LocalDate.parse(it) }.getOrNull() },
                         carryChoices = BudgetPlan.decodeChoices(s.optString("carryChoices")),
                         carryFrom = s.optString("carryFrom").takeIf { it.isNotEmpty() }?.let { runCatching { java.time.YearMonth.parse(it) }.getOrNull() },
                     ),

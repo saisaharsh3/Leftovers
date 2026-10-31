@@ -65,7 +65,7 @@ class SafeToSpendWidget : GlanceAppWidget() {
         val daysLeft = cycle.daysLeft(today)
         return when {
             budget == null -> WidgetState("Spent today", money.formatWhole(spentToday), "Tap + to log a spend", false)
-            budget.monthUsedUp -> WidgetState("Over this month", money.formatWhole(abs(budget.monthLeft)), "$daysLeft days left this month", true)
+            budget.monthUsedUp -> WidgetState("Over budget", money.formatWhole(abs(budget.monthLeft)), "$daysLeft days left this month", true)
             budget.leftToday < 0 -> WidgetState("Over today", money.formatWhole(abs(budget.leftToday)), "$daysLeft days left this month", true)
             else -> WidgetState(
                 "Safe to spend today",

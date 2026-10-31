@@ -856,7 +856,7 @@ private fun TodayCard(state: HomeUiState, onClick: () -> Unit, modifier: Modifie
                 Text(
                     when {
                         budget == null -> "Spent today"
-                        usedUp -> "Over this month's budget"
+                        usedUp -> "Over budget"
                         over -> "Over today's budget"
                         else -> "Safe to spend today"
                     },
@@ -884,7 +884,12 @@ private fun TodayCard(state: HomeUiState, onClick: () -> Unit, modifier: Modifie
                 Spacer(Modifier.height(10.dp))
                 Row {
                     Text(
-                        if (usedUp) "${money.formatWhole(budget.monthlyBudget - budget.monthLeft)} of ${money.formatWhole(budget.monthlyBudget)} this month"
+                        if (usedUp) {
+                            // Bills still to come take their share too; say so, or "₹20,149 of ₹14,000" makes no sense.
+                            val spent = budget.monthlyBudget - budget.monthLeft - budget.reserved
+                            if (budget.reserved > 0) "${money.formatWhole(spent)} spent + ${money.formatWhole(budget.reserved)} bills due, of ${money.formatWhole(budget.monthlyBudget)}"
+                            else "${money.formatWhole(spent)} of ${money.formatWhole(budget.monthlyBudget)}"
+                        }
                         else "${money.formatWhole(state.spentToday)} of ${money.formatWhole(budget.dailyLimit)}",
                         style = MaterialTheme.typography.bodySmall,
                         color = c.textSecondary,

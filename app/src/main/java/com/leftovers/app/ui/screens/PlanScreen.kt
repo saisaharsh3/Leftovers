@@ -264,6 +264,7 @@ private fun planSummary(plan: BudgetPlan): String {
     return when {
         !plan.isSet -> "Not set"
         plan.mode == BudgetMode.MONTHLY -> "${money.format(plan.monthlyMinor)} a month"
+        plan.mode == BudgetMode.RANGE -> "${money.format(plan.rangeMinor)} until ${plan.rangeTo?.format(java.time.format.DateTimeFormatter.ofPattern("d MMM"))}"
         else -> "${money.format(plan.yearlyMinor)} a year · ${plan.split.title.lowercase()}"
     }
 }
