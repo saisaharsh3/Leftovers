@@ -46,7 +46,7 @@ Most budget apps want an account, show ads, or send your spending to a server. L
 - Keypad-first entry; tap a digit to place a cursor and fix just that digit
 - Expenses and income with categories, notes, accounts and receipt photos
 - Add forgotten spending for any past day from a date strip or calendar
-- Split one bill across several categories
+- Split one bill across several categories; the parts show under it
 - Monthly or yearly statement as a PDF, made on the phone
 - Detects payments from FamApp, Google Pay, PhonePe, Paytm, BHIM and CRED notifications, or any app you choose,
   including your bank's own app, each into the account you pick (optional)
@@ -60,7 +60,8 @@ Most budget apps want an account, show ads, or send your spending to a server. L
 
 **Budgets that make sense day to day**
 - Monthly budget, or a yearly one split evenly, by smart rollover, or custom per month; the budget month can start
-  on payday (any day from the 1st to the 28th)
+  on payday (any day from the 1st to the 28th), or set one amount for dates you choose
+- Optional 50/30/20: needs, wants and savings as shares of your income, with how much of each is used
 - *Safe to spend today*: what's left, minus bills still due, spread over the remaining days
 - Choose whether gifts, bonuses and other extra income add to that month's budget (off unless you turn it on;
   then per income category)

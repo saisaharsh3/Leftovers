@@ -61,7 +61,7 @@ object BackupMerge {
                 skipped++
                 return@mapNotNull null
             }
-            t.copy(id = transactionIds.next(), categoryId = category, accountId = account(t.accountId))
+            t.copy(id = transactionIds.next(), categoryId = category, accountId = account(t.accountId), splitOf = null)
         }
 
         val haveTransfers = existing.transfers.map { listOf(it.epochDay, it.amountMinor, it.fromAccountId, it.toAccountId) }.toMutableSet()

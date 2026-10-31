@@ -408,18 +408,28 @@ fun HistoryScreen(
                         if (spent > 0) Text(money.format(spent), style = MaterialTheme.typography.labelLarge, color = c.textSecondary)
                     }
                 }
-                group.items.forEachIndexed { i, item ->
+                // A split bill: its parts right under the entry they came from (#36).
+                val ordered = splitOrder(group.items)
+                ordered.forEachIndexed { i, item ->
                     item(key = "tx-${item.id}") {
                         CardSlice(
                             first = i == 0,
-                            last = i == group.items.lastIndex,
+                            last = i == ordered.lastIndex,
                             modifier = Modifier
                                 .animateItem(fadeInSpec = tween(220), placementSpec = listMotion, fadeOutSpec = tween(160))
                                 .appear(groupIndex + 1),
                         ) {
-                            if (i > 0) RowDivider()
+                            val part = item.splitOf != null && ordered.any { it.id == item.splitOf }
+                            if (i > 0) RowDivider(inset = if (part) 102.dp else 74.dp)
                             // No swipe actions: they fired by accident. A tap opens the entry, where it can be edited or deleted.
-                            TransactionRow(item, onClick = { peek.show(item) }, modifier = Modifier.peekSource(peek, item.id))
+                            val parts = ordered.filter { it.splitOf == item.id }
+                            TransactionRow(
+                                item,
+                                onClick = { peek.show(item) },
+                                modifier = Modifier.peekSource(peek, item.id).then(if (part) Modifier.padding(start = 28.dp) else Modifier),
+                                subtitle = if (parts.isNotEmpty()) "${item.timeLabel()} · split, ${money.format(item.amountMinor + parts.sumOf { it.amountMinor })} in all"
+                                else if (part) "part of the split" else item.timeLabel(),
+                            )
                         }
                     }
                 }
@@ -663,4 +673,11 @@ private fun compact(minor: Long): String {
         v >= 1000 -> "%.1fk".format(v / 1000)
         else -> "%.0f".format(v)
     }
+}
+
+/** [items] with each split bill's parts right after the entry they were split from. */
+internal fun splitOrder(items: List<TransactionItem>): List<TransactionItem> {
+    val ids = items.map { it.id }.toSet()
+    val partsOf = items.filter { it.splitOf != null && it.splitOf in ids }.groupBy { it.splitOf }
+    return items.filter { it.splitOf == null || it.splitOf !in ids }.flatMap { listOf(it) + partsOf[it.id].orEmpty() }
 }

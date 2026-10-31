@@ -24,14 +24,16 @@ class TransactionRepository(
     suspend fun getAllTransactions(): List<TransactionItem> = transactionDao.getAll()
     suspend fun getTransaction(id: Long): Transaction? = transactionDao.getById(id)
     /** Saves an entry. One coming back (Undo) is taken out of Deleted entries. */
-    suspend fun saveTransaction(transaction: Transaction) {
+    /** Returns the entry's id. */
+    suspend fun saveTransaction(transaction: Transaction): Long {
         if (transaction.id != 0L && removed != null) {
             // An edit that changes the day, amount, kind or note replaces the old entry on synced phones.
             transactionDao.getById(transaction.id)?.takeUnless { it.sameEntry(transaction) }?.let(removed::add)
         }
         removed?.forget(transaction)
-        transactionDao.upsert(transaction)
+        val newId = transactionDao.upsert(transaction)
         if (transaction.id != 0L) deletedDao.delete(listOf(transaction.id))
+        return if (transaction.id != 0L) transaction.id else newId
     }
 
     /** New entries in bulk, like a CSV import. */

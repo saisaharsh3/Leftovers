@@ -10,7 +10,7 @@ private const val SELECT_ITEMS = """
     SELECT t.id, t.amountMinor, t.type, t.categoryId, t.epochDay, t.note, t.createdAt,
            c.name AS categoryName, c.emoji AS categoryEmoji, c.color AS categoryColor,
            t.accountId, t.receiptPath, c.addsToBudget, t.foreignMinor, t.foreignCurrency,
-           COALESCE(a.outOfBudget, 0) AS outOfBudget
+           COALESCE(a.outOfBudget, 0) AS outOfBudget, t.splitOf
     FROM transactions t INNER JOIN categories c ON c.id = t.categoryId
     LEFT JOIN accounts a ON a.id = t.accountId
 """
@@ -31,8 +31,9 @@ interface TransactionDao {
     @Query("SELECT * FROM transactions WHERE id = :id")
     suspend fun getById(id: Long): Transaction?
 
+    /** The entry's id: the new one for a new entry, -1 when an existing one was updated. */
     @Upsert
-    suspend fun upsert(transaction: Transaction)
+    suspend fun upsert(transaction: Transaction): Long
 
     /** Many at once in one database transaction, so screens update once instead of once per entry. */
     @Upsert

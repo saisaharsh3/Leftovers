@@ -589,21 +589,7 @@ class EditorViewModel(
         val savedAmount = yours - parts.sumOf { it.amountMinor }
         val savedDate = date
         viewModelScope.launch {
-            parts.forEach { part ->
-                repository.saveTransaction(
-                    Transaction(
-                        amountMinor = part.amountMinor,
-                        type = savedType,
-                        categoryId = part.categoryId,
-                        epochDay = savedDate.toEpochDay(),
-                        note = note.trim(),
-                        createdAt = createdAt,
-                        accountId = accountId,
-                    ),
-                )
-                if (savedType == TxType.EXPENSE) budgetAlerts.checkAfterExpense(savedDate, part.categoryId)
-            }
-            repository.saveTransaction(
+            val mainId = repository.saveTransaction(
                 Transaction(
                     id = if (isEditing) id else 0,
                     amountMinor = savedAmount,
@@ -618,6 +604,22 @@ class EditorViewModel(
                     foreignCurrency = abroad,
                 ),
             )
+            parts.forEach { part ->
+                repository.saveTransaction(
+                    Transaction(
+                        amountMinor = part.amountMinor,
+                        type = savedType,
+                        categoryId = part.categoryId,
+                        epochDay = savedDate.toEpochDay(),
+                        note = note.trim(),
+                        createdAt = createdAt,
+                        accountId = accountId,
+                        // Shown under the entry it was split from (#36).
+                        splitOf = mainId,
+                    ),
+                )
+                if (savedType == TxType.EXPENSE) budgetAlerts.checkAfterExpense(savedDate, part.categoryId)
+            }
             foreignCurrency?.let { settings.setForeignRate(it, abroadRate) }
             if (originalReceipt != null && originalReceipt != receiptPath) ReceiptStore.delete(originalReceipt)
             val owedNote = note.trim().ifBlank { categories.value.find { it.id == category }?.name.orEmpty() }
@@ -1639,7 +1641,7 @@ private fun SplitBody(
                 return@Column
             }
             Text(
-                "Each part is saved as its own entry with the same date and note.",
+                "Each part is its own entry, with the same date and note, shown under this one.",
                 style = MaterialTheme.typography.bodySmall,
                 color = c.textSecondary,
             )

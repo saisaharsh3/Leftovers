@@ -5,6 +5,11 @@ All notable changes to Leftovers. Download any version from
 
 ## Unreleased
 
+- Budget plan: Dates, one amount for days you choose, like two weeks or a trip, as well as monthly and yearly (#34)
+- 50/30/20, an optional budget mode: needs, wants and savings as shares of your income, with each spending
+  category in one (tap to move it in Categories) and three bars in Budget (#39)
+- A split bill shows as one entry with its parts under it, and its total (#36)
+- When the budget is used up, Home counts the bills still due apart from what's spent
 - Check for a new version in Leftovers Dev looks for a newer Dev build, not a release
 - Every Dev build has its own number (1.8.2-dev.57) and is kept as its own download for a while, so you can go
   back to an earlier one: any Dev build installs over any other, keeping your Dev data
