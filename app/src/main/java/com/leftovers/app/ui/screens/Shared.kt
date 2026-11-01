@@ -888,28 +888,26 @@ internal fun BillBreakdown(
 ) {
     val c = LocalAppColors.current
     val money = LocalMoney.current
-    // Spent is solid: your own share in white, each part in its category's colour. Owed to you is soft green,
-    // a person marked by their initial, so no one reads as a category.
-    data class Piece(
-        val label: String, val amount: Long, val color: androidx.compose.ui.graphics.Color, val open: (() -> Unit)?,
-        val tag: Modifier = Modifier, val person: Boolean = false,
-    )
+    // Colour says one thing: spent is white, owed to you is green. Each piece is a step softer than the one before,
+    // so the pieces stay apart without a rainbow of category colours, and each pill's dot is its piece of the bar.
+    data class Piece(val label: String, val amount: Long, val color: androidx.compose.ui.graphics.Color, val open: (() -> Unit)?, val tag: Modifier = Modifier)
+    fun step(base: androidx.compose.ui.graphics.Color, i: Int, from: Float) = base.copy(alpha = (from - i * 0.16f).coerceAtLeast(0.28f))
     val pieces = buildList {
-        add(Piece("You", main.item.amountMinor, c.textPrimary, null))
-        main.parts.forEach { p ->
+        add(Piece("You", main.item.amountMinor, c.textPrimary.copy(alpha = 0.92f), null))
+        main.parts.forEachIndexed { i, p ->
             val name = com.leftovers.app.data.noteText(p.note).takeIf { it.isNotBlank() && it != com.leftovers.app.data.noteText(main.item.note) } ?: p.categoryName
-            add(Piece(name, p.amountMinor, androidx.compose.ui.graphics.Color(p.categoryColor), { onPart(p) }, partModifier(p)))
+            add(Piece(name, p.amountMinor, step(c.textPrimary, i, 0.62f), { onPart(p) }, partModifier(p)))
         }
-        main.shares.forEach { d -> add(Piece(d.person, d.amountMinor, if (d.settled) c.textTertiary else c.positive, { onShare(d) }, person = true)) }
+        main.shares.forEachIndexed { i, d -> add(Piece(d.person, d.amountMinor, if (d.settled) c.textTertiary.copy(alpha = 0.5f) else step(c.positive, i, 0.9f), { onShare(d) })) }
     }
     val total = pieces.sumOf { it.amount }.coerceAtLeast(1)
     Column(
         modifier.fillMaxWidth().padding(start = 72.dp, end = 16.dp, bottom = 14.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Row(Modifier.fillMaxWidth().height(6.dp), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+        Row(Modifier.fillMaxWidth().height(5.dp), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
             pieces.forEach { piece ->
-                Box(Modifier.weight(piece.amount.toFloat() / total).fillMaxSize().background(piece.color.copy(alpha = if (piece.person) 0.4f else 1f), RoundedCornerShape(3.dp)))
+                Box(Modifier.weight(piece.amount.toFloat() / total).fillMaxSize().background(piece.color, RoundedCornerShape(2.5.dp)))
             }
         }
         androidx.compose.foundation.layout.FlowRow(
@@ -920,18 +918,12 @@ internal fun BillBreakdown(
                 Row(
                     piece.tag
                         .clip(RoundedCornerShape(10.dp))
-                        .background(c.textPrimary.copy(alpha = 0.06f))
+                        .background(c.textPrimary.copy(alpha = 0.05f))
                         .then(piece.open?.let { Modifier.pressable(it, pressedScale = 0.95f) } ?: Modifier)
-                        .padding(horizontal = 9.dp, vertical = 5.dp),
+                        .padding(start = 8.dp, end = 10.dp, top = 5.dp, bottom = 5.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    if (piece.person) {
-                        Box(Modifier.size(16.dp).background(piece.color.copy(alpha = 0.18f), androidx.compose.foundation.shape.CircleShape), contentAlignment = Alignment.Center) {
-                            Text(piece.label.take(1).uppercase(), style = MaterialTheme.typography.labelSmall, color = piece.color)
-                        }
-                    } else {
-                        Box(Modifier.size(7.dp).background(piece.color, androidx.compose.foundation.shape.CircleShape))
-                    }
+                    Box(Modifier.size(7.dp).background(piece.color, androidx.compose.foundation.shape.CircleShape))
                     Spacer(Modifier.width(6.dp))
                     Text(piece.label, style = MaterialTheme.typography.labelMedium, color = c.textSecondary, maxLines = 1)
                     Spacer(Modifier.width(5.dp))
