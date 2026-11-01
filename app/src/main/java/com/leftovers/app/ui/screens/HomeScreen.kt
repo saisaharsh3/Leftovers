@@ -811,22 +811,22 @@ fun HomeScreen(
                         billCards(state.recent, state.shares, state.oneBill).forEach { card ->
                             Glass(Modifier.fillMaxWidth()) {
                                 Column(Modifier.padding(vertical = 6.dp)) {
+                                    // A split bill is its row and where its money went; its parts and shares aren't rows of their own.
+                                    val bill = card.drop(1).any { it.under() }
                                     card.forEachIndexed { i, line ->
-                                        val under = line is BillLine.Share || (line is BillLine.Entry && line.part)
-                                        // A bill's parts and shares sit in a panel under it, with no dividers.
-                                        if (i > 0 && !under) RowDivider(inset = 74.dp)
-                                        when {
-                                            under -> BillPartRow(
-                                                card, i,
-                                                onClick = { if (line is BillLine.Share) peek.share = line.debt else peek.show((line as BillLine.Entry).item) },
-                                                modifier = if (line is BillLine.Entry) Modifier.peekSource(peek, line.item.id) else Modifier,
-                                            )
-                                            line is BillLine.Entry -> TransactionRow(
-                                                line.item,
-                                                onClick = { peek.show(line.item) },
-                                                subtitle = billSubtitle(line.item.date.friendlyLabel(), line),
-                                                wholeMinor = line.whole(),
-                                                modifier = Modifier.peekSource(peek, line.item.id),
+                                        if (line !is BillLine.Entry || line.under()) return@forEachIndexed
+                                        if (i > 0) RowDivider(inset = 74.dp)
+                                        TransactionRow(
+                                            line.item,
+                                            onClick = { peek.show(line.item) },
+                                            subtitle = billSubtitle(line.item.date.friendlyLabel(), line),
+                                            wholeMinor = line.whole(),
+                                            modifier = Modifier.peekSource(peek, line.item.id),
+                                        )
+                                        if (bill && i == 0) {
+                                            BillBreakdown(
+                                                line, onPart = { peek.show(it) }, onShare = { peek.share = it },
+                                                partModifier = { Modifier.peekSource(peek, it.id) },
                                             )
                                         }
                                     }

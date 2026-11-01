@@ -14,7 +14,7 @@ All notable changes to Leftovers. Download any version from
 - 50/30/20, an optional budget mode: needs, wants and savings as shares of your income, with each spending
   category in one (tap to move it in Categories) and three bars in Budget (#39)
 - A split bill shows as one entry with its parts under it, and its total (#36). With splits shown separately, each entry still says it's split, and the bill's whole amount
-- A split bill's parts and shares sit in a soft panel under it, lined up with its title: a dot for each category, an initial for each person, in the order they were added
+- A split bill shows where its money went: a thin bar of the whole amount, solid for what was spent (yours and each category's) and soft green for what people owe you, with a pill for each piece to tap
 - When the budget is used up, Home counts the bills still due apart from what's spent
 - Check for a new version in Leftovers Dev looks for a newer Dev build, not a release
 - Every Dev build has its own number (1.8.2-dev.57) and is kept as its own download for a while, so you can go

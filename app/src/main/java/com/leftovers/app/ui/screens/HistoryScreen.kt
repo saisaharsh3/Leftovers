@@ -443,33 +443,32 @@ fun HistoryScreen(
                 }
                 // Each split bill on a card of its own: the entry, its parts, and who owes for it (#36).
                 billCards(group.items, state.shares, state.oneBill).forEachIndexed { cardIndex, card ->
+                    // A split bill is its row and where its money went; its parts and shares aren't rows of their own.
+                    val bill = card.drop(1).any { it.under() }
                     card.forEachIndexed { i, line ->
-                        val key = when (line) { is BillLine.Entry -> "tx-${line.item.id}"; is BillLine.Share -> "share-${line.debt.id}" }
-                        item(key = key) {
+                        if (line !is BillLine.Entry || line.under()) return@forEachIndexed
+                        item(key = "tx-${line.item.id}") {
                             CardSlice(
                                 first = i == 0,
-                                last = i == card.lastIndex,
+                                last = card.drop(i + 1).all { it.under() },
                                 modifier = Modifier
                                     .animateItem(fadeInSpec = tween(220), placementSpec = listMotion, fadeOutSpec = tween(160))
                                     .padding(top = if (i == 0 && cardIndex > 0) 10.dp else 0.dp)
                                     .appear(groupIndex + 1),
                             ) {
-                                val under = line is BillLine.Share || (line is BillLine.Entry && line.part)
-                                // A bill's parts and shares sit in a panel under it, with no dividers.
-                                if (i > 0 && !under) RowDivider(inset = 74.dp)
+                                if (i > 0) RowDivider(inset = 74.dp)
                                 // No swipe actions: they fired by accident. A tap opens the entry, where it can be edited or deleted.
-                                when {
-                                    under -> BillPartRow(
-                                        card, i,
-                                        onClick = { if (line is BillLine.Share) peek.share = line.debt else peek.show((line as BillLine.Entry).item) },
-                                        modifier = if (line is BillLine.Entry) Modifier.peekSource(peek, line.item.id) else Modifier,
-                                    )
-                                    line is BillLine.Entry -> TransactionRow(
-                                        line.item,
-                                        onClick = { peek.show(line.item) },
-                                        modifier = Modifier.peekSource(peek, line.item.id),
-                                        subtitle = billSubtitle(if (group.label != null) line.item.date.friendlyLabel() else line.item.timeLabel(), line),
-                                        wholeMinor = line.whole(),
+                                TransactionRow(
+                                    line.item,
+                                    onClick = { peek.show(line.item) },
+                                    modifier = Modifier.peekSource(peek, line.item.id),
+                                    subtitle = billSubtitle(if (group.label != null) line.item.date.friendlyLabel() else line.item.timeLabel(), line),
+                                    wholeMinor = line.whole(),
+                                )
+                                if (bill && i == 0) {
+                                    BillBreakdown(
+                                        line, onPart = { peek.show(it) }, onShare = { peek.share = it },
+                                        partModifier = { Modifier.peekSource(peek, it.id) },
                                     )
                                 }
                             }

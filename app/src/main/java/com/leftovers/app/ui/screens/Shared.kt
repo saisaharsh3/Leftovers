@@ -873,77 +873,69 @@ internal fun billSubtitle(whenText: String, line: BillLine.Entry): String = when
 internal fun BillLine.under(): Boolean = this is BillLine.Share || (this is BillLine.Entry && part)
 
 /**
- * A part of a split bill, or a person's share of it: a short line in a soft panel under the bill, lined up with
- * its title, so the bill and what it's made of read as one thing without lines or icons (#36). [card] and [i] say
- * where it sits: the panel rounds off at its first and last line, and a hairline sets the people apart from the parts.
+ * Where a split bill's money went, under its row (#36): a thin bar of the whole amount in one piece per share (yours,
+ * each category's, each person's), and a pill for each piece. Pills wrap, so a bill split many ways stays two short
+ * lines; tapping one opens that part, or that person's share. [main] is the bill's own line.
  */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
-internal fun BillPartRow(card: List<BillLine>, i: Int, onClick: () -> Unit, modifier: Modifier = Modifier) {
+internal fun BillBreakdown(
+    main: BillLine.Entry,
+    onPart: (TransactionItem) -> Unit,
+    onShare: (com.leftovers.app.data.Debt) -> Unit,
+    modifier: Modifier = Modifier,
+    partModifier: (TransactionItem) -> Modifier = { Modifier },
+) {
     val c = LocalAppColors.current
     val money = LocalMoney.current
-    val line = card[i]
-    val first = card.getOrNull(i - 1)?.under() != true
-    val last = card.getOrNull(i + 1)?.under() != true
-    val round = 16.dp
-    val shape = RoundedCornerShape(
-        topStart = if (first) round else 0.dp, topEnd = if (first) round else 0.dp,
-        bottomStart = if (last) round else 0.dp, bottomEnd = if (last) round else 0.dp,
+    // Spent is solid: your own share in white, each part in its category's colour. Owed to you is soft green,
+    // a person marked by their initial, so no one reads as a category.
+    data class Piece(
+        val label: String, val amount: Long, val color: androidx.compose.ui.graphics.Color, val open: (() -> Unit)?,
+        val tag: Modifier = Modifier, val person: Boolean = false,
     )
-    Column(
-        modifier
-            .fillMaxWidth()
-            .padding(start = 72.dp, end = 16.dp, bottom = if (last) 12.dp else 0.dp)
-            .background(c.textPrimary.copy(alpha = 0.05f), shape),
-    ) {
-        if (line is BillLine.Share && card.getOrNull(i - 1).let { it is BillLine.Entry && it.part }) {
-            Box(Modifier.padding(horizontal = 14.dp).fillMaxWidth().height(1.dp).background(c.textPrimary.copy(alpha = 0.07f)))
+    val pieces = buildList {
+        add(Piece("You", main.item.amountMinor, c.textPrimary, null))
+        main.parts.forEach { p ->
+            val name = com.leftovers.app.data.noteText(p.note).takeIf { it.isNotBlank() && it != com.leftovers.app.data.noteText(main.item.note) } ?: p.categoryName
+            add(Piece(name, p.amountMinor, androidx.compose.ui.graphics.Color(p.categoryColor), { onPart(p) }, partModifier(p)))
         }
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .clip(shape)
-                .pressable(onClick, pressedScale = 0.98f)
-                .padding(start = 14.dp, end = 14.dp, top = if (first) 12.dp else 9.dp, bottom = if (last) 12.dp else 9.dp),
-            verticalAlignment = Alignment.CenterVertically,
+        main.shares.forEach { d -> add(Piece(d.person, d.amountMinor, if (d.settled) c.textTertiary else c.positive, { onShare(d) }, person = true)) }
+    }
+    val total = pieces.sumOf { it.amount }.coerceAtLeast(1)
+    Column(
+        modifier.fillMaxWidth().padding(start = 72.dp, end = 16.dp, bottom = 14.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Row(Modifier.fillMaxWidth().height(6.dp), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+            pieces.forEach { piece ->
+                Box(Modifier.weight(piece.amount.toFloat() / total).fillMaxSize().background(piece.color.copy(alpha = if (piece.person) 0.4f else 1f), RoundedCornerShape(3.dp)))
+            }
+        }
+        androidx.compose.foundation.layout.FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            when (line) {
-                is BillLine.Entry -> {
-                    val text = com.leftovers.app.data.noteText(line.item.note)
-                    Box(Modifier.width(22.dp), contentAlignment = Alignment.Center) {
-                        Box(Modifier.size(8.dp).background(androidx.compose.ui.graphics.Color(line.item.categoryColor), androidx.compose.foundation.shape.CircleShape))
+            pieces.forEach { piece ->
+                Row(
+                    piece.tag
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(c.textPrimary.copy(alpha = 0.06f))
+                        .then(piece.open?.let { Modifier.pressable(it, pressedScale = 0.95f) } ?: Modifier)
+                        .padding(horizontal = 9.dp, vertical = 5.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    if (piece.person) {
+                        Box(Modifier.size(16.dp).background(piece.color.copy(alpha = 0.18f), androidx.compose.foundation.shape.CircleShape), contentAlignment = Alignment.Center) {
+                            Text(piece.label.take(1).uppercase(), style = MaterialTheme.typography.labelSmall, color = piece.color)
+                        }
+                    } else {
+                        Box(Modifier.size(7.dp).background(piece.color, androidx.compose.foundation.shape.CircleShape))
                     }
+                    Spacer(Modifier.width(6.dp))
+                    Text(piece.label, style = MaterialTheme.typography.labelMedium, color = c.textSecondary, maxLines = 1)
                     Spacer(Modifier.width(5.dp))
-                    // The note when it has one, with its category after it, quieter.
-                    Text(
-                        if (text.isBlank()) androidx.compose.ui.text.AnnotatedString(line.item.categoryName)
-                        else androidx.compose.ui.text.buildAnnotatedString {
-                            append(text)
-                            pushStyle(androidx.compose.ui.text.SpanStyle(color = c.textTertiary))
-                            append("  " + line.item.categoryName)
-                            pop()
-                        },
-                        style = MaterialTheme.typography.bodyMedium, color = c.textPrimary, maxLines = 1,
-                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.weight(1f),
-                    )
-                    Spacer(Modifier.width(12.dp))
-                    Text(money.format(line.item.amountMinor), style = MaterialTheme.typography.bodyMedium, color = c.textSecondary)
-                }
-                is BillLine.Share -> {
-                    val d = line.debt
-                    val tint = if (d.settled) c.textTertiary else c.positive
-                    // A person: their initial, so they never read as a category's dot.
-                    Box(Modifier.size(22.dp).background(tint.copy(alpha = 0.16f), androidx.compose.foundation.shape.CircleShape), contentAlignment = Alignment.Center) {
-                        Text(d.person.take(1).uppercase(), style = MaterialTheme.typography.labelSmall, color = tint)
-                    }
-                    Spacer(Modifier.width(5.dp))
-                    Text(
-                        d.person, style = MaterialTheme.typography.bodyMedium, color = c.textPrimary, maxLines = 1,
-                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.weight(1f),
-                    )
-                    Text(
-                        (if (d.settled) "settled " else "owes ") + money.format(d.amountMinor),
-                        style = MaterialTheme.typography.bodyMedium, color = tint,
-                    )
+                    Text(money.format(piece.amount), style = MaterialTheme.typography.labelMedium, color = c.textPrimary, maxLines = 1)
                 }
             }
         }
