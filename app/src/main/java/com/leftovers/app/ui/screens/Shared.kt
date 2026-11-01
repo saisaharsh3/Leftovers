@@ -926,7 +926,8 @@ internal fun BillBreakdown(
         Row(Modifier.fillMaxWidth().height(5.dp), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
             pieces.forEach { piece ->
                 // Paid back: an empty outline, so what's still owed stands out.
-                val bar = Modifier.weight(piece.amount.toFloat() / total).fillMaxSize()
+                // Each piece at least a sliver wide, so a small share still shows next to a big one.
+                val bar = Modifier.weight(maxOf(piece.amount.toFloat() / total, 0.04f)).fillMaxSize()
                 Box(if (piece.settled) bar.border(1.dp, piece.color, RoundedCornerShape(2.5.dp)) else bar.background(piece.color, RoundedCornerShape(2.5.dp)))
             }
         }
@@ -949,7 +950,12 @@ internal fun BillBreakdown(
                         Box(Modifier.size(7.dp).background(piece.color, androidx.compose.foundation.shape.CircleShape))
                     }
                     Spacer(Modifier.width(6.dp))
-                    Text(if (piece.settled) "${piece.label} · settled" else piece.label, style = MaterialTheme.typography.labelMedium, color = if (piece.settled) c.textTertiary else c.textSecondary, maxLines = 1)
+                    // A long name gives way, so the amount always shows and the pill never runs past the card.
+                    Text(
+                        if (piece.settled) "${piece.label} · settled" else piece.label,
+                        style = MaterialTheme.typography.labelMedium, color = if (piece.settled) c.textTertiary else c.textSecondary,
+                        maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false),
+                    )
                     Spacer(Modifier.width(5.dp))
                     Text(money.format(piece.amount), style = MaterialTheme.typography.labelMedium, color = if (piece.settled) c.textTertiary else c.textPrimary, maxLines = 1)
                 }

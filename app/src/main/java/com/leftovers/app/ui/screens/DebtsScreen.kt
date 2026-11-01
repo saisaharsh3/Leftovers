@@ -167,7 +167,7 @@ fun DebtsScreen(onBack: () -> Unit, viewModel: DebtsViewModel = viewModel(factor
                     Column(Modifier.padding(vertical = 8.dp)) {
                         Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                             Column(Modifier.weight(1f)) {
-                                Text(b.person, style = MaterialTheme.typography.titleMedium, color = c.textPrimary)
+                                Text(b.person, style = MaterialTheme.typography.titleMedium, color = c.textPrimary, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                                 Text(
                                     when {
                                         b.netMinor > 0 -> "Owes you ${money.format(b.netMinor)}"
