@@ -73,6 +73,11 @@ class NoticesViewModel(private val settings: com.leftovers.app.data.SettingsRepo
     val checking = kotlinx.coroutines.flow.MutableStateFlow(false)
     val checkResult = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
 
+    /** The newer version shown here has been seen: the bell's dot goes. */
+    fun seen(release: UpdateCheck.Release) {
+        viewModelScope.launch { settings.setUpdateSeen(UpdateCheck.encode(release)) }
+    }
+
     /** Asks GitHub for a newer version: when asked, or when the page opens with the check turned on. */
     fun checkForUpdate(context: android.content.Context) {
         if (checking.value) return
@@ -101,6 +106,7 @@ fun NoticesScreen(onBack: () -> Unit, viewModel: NoticesViewModel = androidx.lif
     val version = remember { WhatsNew.version(context) }
     val update = remember(s?.updateAvailable) { UpdateCheck.decode(s?.updateAvailable)?.takeIf { UpdateCheck.isNewerThanInstalled(context, it) } }
     val checkOn = s?.updateCheck
+    LaunchedEffect(update) { update?.let(viewModel::seen) }
     LaunchedEffect(checkOn) { if (checkOn == true && update == null) viewModel.checkForUpdate(context) }
     GlassScreen(title = "Notices", subtitle = "What's new, and new versions", onBack = onBack) { padding ->
         Column(

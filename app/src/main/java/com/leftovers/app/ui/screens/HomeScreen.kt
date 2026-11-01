@@ -132,6 +132,8 @@ data class HomeUiState(
     val whatsNewSeen: String? = null,
     /** A newer version the last check found, if it's still newer than this one is for the screen to say. */
     val updateFound: String? = null,
+    /** The newer version already seen in Notices. */
+    val updateSeen: String? = null,
     /** Last month's leftover, while the user hasn't decided whether to carry it over. */
     val carryPrompt: Long? = null,
     /** Sum of every account's balance; null until accounts load. */
@@ -199,6 +201,7 @@ class HomeViewModel(
             carryPrompt = s.plan.pendingCarry(cycle.month, all),
             whatsNewSeen = s.whatsNewSeen,
             updateFound = s.updateAvailable,
+            updateSeen = s.updateSeen,
             balance = selected?.balanceMinor ?: accountList.filterNot { it.outOfTotal }.sumOf { it.balanceMinor },
             accountCount = accountList.size,
             // Bills and salary aren't tied to an account, so the forecast is only for all money together.
@@ -594,11 +597,11 @@ fun HomeScreen(
                         Text(greeting() + " · " + LocalDate.now().format(greetingDate), style = MaterialTheme.typography.bodyMedium, color = c.textSecondary, maxLines = 1)
                         Text(state.month.label(), style = MaterialTheme.typography.headlineLarge, color = c.textPrimary)
                     }
-                    // Notices: what's new, and a newer version when there is one (a dot says so).
+                    // Notices: what's new, and a newer version when there is one. A red dot says one is out, until Notices is opened.
                     Box {
                         RoundButton(Lucide.Bell, "Notices", onOpenNotices)
-                        if (update != null) {
-                            Box(Modifier.align(Alignment.TopEnd).padding(top = 6.dp, end = 6.dp).size(9.dp).background(c.accent, CircleShape))
+                        if (update != null && state.updateFound != state.updateSeen) {
+                            Box(Modifier.align(Alignment.TopEnd).padding(top = 6.dp, end = 6.dp).size(10.dp).background(c.negative, CircleShape))
                         }
                     }
                     Spacer(Modifier.width(8.dp))
