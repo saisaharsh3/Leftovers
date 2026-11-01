@@ -872,6 +872,22 @@ internal fun billSubtitle(whenText: String, line: BillLine.Entry): String = when
 /** Whether [line] sits under a split bill: one of its parts, or a person's share. */
 internal fun BillLine.under(): Boolean = this is BillLine.Share || (this is BillLine.Entry && part)
 
+/** Split parts' colours: apart from each other, from green (owed) and from the accent. */
+private val BillPartColors = listOf(
+    androidx.compose.ui.graphics.Color(0xFF7FB2FF), // sky
+    androidx.compose.ui.graphics.Color(0xFFFFA26B), // apricot
+    androidx.compose.ui.graphics.Color(0xFFC49BFF), // lavender
+    androidx.compose.ui.graphics.Color(0xFFFFD166), // amber
+    androidx.compose.ui.graphics.Color(0xFFFF8FB8), // pink
+)
+
+/** People's shares: greens that stay apart from each other. */
+private val BillOwedColors = listOf(
+    androidx.compose.ui.graphics.Color(0xFF5FD9A0), // mint
+    androidx.compose.ui.graphics.Color(0xFF2FA872), // deep green
+    androidx.compose.ui.graphics.Color(0xFFA8EFC9), // pale green
+)
+
 /**
  * Where a split bill's money went, under its row (#36): a thin bar of the whole amount in one piece per share (yours,
  * each category's, each person's), and a pill for each piece. Pills wrap, so a bill split many ways stays two short
@@ -888,24 +904,25 @@ internal fun BillBreakdown(
 ) {
     val c = LocalAppColors.current
     val money = LocalMoney.current
-    // Colour says one thing: spent is white, owed to you is green. Each piece is a step softer than the one before,
-    // so the pieces stay apart without a rainbow of category colours, and each pill's dot is its piece of the bar.
+    // Your share is solid white. Parts take clear colours from a set chosen to sit well together, none of them green
+    // or the accent; people take distinct greens, as what's owed to you. Each pill's dot is its piece of the bar.
     data class Piece(val label: String, val amount: Long, val color: androidx.compose.ui.graphics.Color, val open: (() -> Unit)?, val tag: Modifier = Modifier)
-    fun step(base: androidx.compose.ui.graphics.Color, i: Int, from: Float) = base.copy(alpha = (from - i * 0.16f).coerceAtLeast(0.28f))
     val pieces = buildList {
-        add(Piece("You", main.item.amountMinor, c.textPrimary.copy(alpha = 0.92f), null))
+        add(Piece("You", main.item.amountMinor, c.textPrimary, null))
         main.parts.forEachIndexed { i, p ->
             val name = com.leftovers.app.data.noteText(p.note).takeIf { it.isNotBlank() && it != com.leftovers.app.data.noteText(main.item.note) } ?: p.categoryName
-            add(Piece(name, p.amountMinor, step(c.textPrimary, i, 0.62f), { onPart(p) }, partModifier(p)))
+            add(Piece(name, p.amountMinor, BillPartColors[i % BillPartColors.size], { onPart(p) }, partModifier(p)))
         }
-        main.shares.forEachIndexed { i, d -> add(Piece(d.person, d.amountMinor, if (d.settled) c.textTertiary.copy(alpha = 0.5f) else step(c.positive, i, 0.9f), { onShare(d) })) }
+        main.shares.forEachIndexed { i, d ->
+            add(Piece(d.person, d.amountMinor, if (d.settled) c.textTertiary else BillOwedColors[i % BillOwedColors.size], { onShare(d) }))
+        }
     }
     val total = pieces.sumOf { it.amount }.coerceAtLeast(1)
     Column(
         modifier.fillMaxWidth().padding(start = 72.dp, end = 16.dp, bottom = 14.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Row(Modifier.fillMaxWidth().height(5.dp), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+        Row(Modifier.fillMaxWidth().height(5.dp), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
             pieces.forEach { piece ->
                 Box(Modifier.weight(piece.amount.toFloat() / total).fillMaxSize().background(piece.color, RoundedCornerShape(2.5.dp)))
             }
