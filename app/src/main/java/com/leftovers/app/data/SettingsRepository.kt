@@ -90,6 +90,8 @@ data class AppSettings(
     val updateNotified: String? = null,
     /** The version whose What's new card was closed, so it shows once after each update. */
     val whatsNewSeen: String? = null,
+    /** A newer version found by the last check: version, link and when it went up, a line each. */
+    val updateAvailable: String? = null,
 )
 
 class SettingsRepository(context: Context) {
@@ -155,6 +157,7 @@ class SettingsRepository(context: Context) {
             autoRates = p[AUTO_RATES] ?: false,
             updateNotified = p[UPDATE_NOTIFIED],
             whatsNewSeen = p[WHATS_NEW_SEEN],
+            updateAvailable = p[UPDATE_AVAILABLE],
         )
     }.sharedLive()
 
@@ -247,6 +250,7 @@ class SettingsRepository(context: Context) {
     suspend fun setAutoRates(enabled: Boolean) = store.edit { it[AUTO_RATES] = enabled }
     suspend fun setUpdateNotified(version: String) = store.edit { it[UPDATE_NOTIFIED] = version }
     suspend fun setWhatsNewSeen(version: String) = store.edit { it[WHATS_NEW_SEEN] = version }
+    suspend fun setUpdateAvailable(release: String) = store.edit { it[UPDATE_AVAILABLE] = release }
 
     /** This phone's name in the sync folder, like "pixel-7-k3f9q2", made the first time it's needed. */
     suspend fun syncDevice(): String {
@@ -328,6 +332,7 @@ class SettingsRepository(context: Context) {
         val AUTO_RATES = booleanPreferencesKey("auto_rates")
         val UPDATE_NOTIFIED = stringPreferencesKey("update_notified")
         val WHATS_NEW_SEEN = stringPreferencesKey("whats_new_seen")
+        val UPDATE_AVAILABLE = stringPreferencesKey("update_available")
         val DEFAULT_ACCOUNT = longPreferencesKey("default_account")
         val REMINDER = booleanPreferencesKey("reminder")
         val REMINDER_TIME = intPreferencesKey("reminder_time")

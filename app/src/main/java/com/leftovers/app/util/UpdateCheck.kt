@@ -46,6 +46,11 @@ object UpdateCheck {
     /** Leftovers Dev follows the Dev build, not releases. */
     fun isDevBuild(context: Context) = context.packageName.endsWith(".dev")
 
+    /** A release as one string, to keep the one found until it's installed. */
+    fun encode(release: Release) = "${release.version}\n${release.url}\n${release.publishedAt}"
+
+    fun decode(text: String?): Release? = text?.split('\n')?.takeIf { it.size == 3 }?.let { Release(it[0], it[1], it[2].toLongOrNull() ?: 0) }
+
     /** Whether [release] is newer than what's installed. */
     fun isNewerThanInstalled(context: Context, release: Release): Boolean {
         if (!isDevBuild(context)) return isNewer(release.version, installed(context))
@@ -134,6 +139,8 @@ class UpdateCheckWorker(context: Context, params: WorkerParameters) : CoroutineW
         val release = UpdateCheck.latest(UpdateCheck.isDevBuild(applicationContext)).getOrElse { return Result.retry() }
         // Each version (or Dev build) is told about once.
         val key = "${release.version}@${release.publishedAt}"
+        // Kept for Home's notices too.
+        if (UpdateCheck.isNewerThanInstalled(applicationContext, release)) settings.setUpdateAvailable(UpdateCheck.encode(release))
         if (UpdateCheck.isNewerThanInstalled(applicationContext, release) && s.updateNotified != key) {
             UpdateCheck.notify(applicationContext, release)
             settings.setUpdateNotified(key)

@@ -130,6 +130,10 @@ data class HomeUiState(
     val recapMonth: YearMonth? = null,
     /** The version whose What's new was closed. */
     val whatsNewSeen: String? = null,
+    /** A newer version the last check found, if it's still newer than this one is for the screen to say. */
+    val updateFound: String? = null,
+    /** Whether the user turned on looking for new versions. */
+    val updateCheck: Boolean = false,
     /** Last month's leftover, while the user hasn't decided whether to carry it over. */
     val carryPrompt: Long? = null,
     /** Sum of every account's balance; null until accounts load. */
@@ -196,6 +200,8 @@ class HomeViewModel(
             },
             carryPrompt = s.plan.pendingCarry(cycle.month, all),
             whatsNewSeen = s.whatsNewSeen,
+            updateFound = s.updateAvailable,
+            updateCheck = s.updateCheck,
             balance = selected?.balanceMinor ?: accountList.filterNot { it.outOfTotal }.sumOf { it.balanceMinor },
             accountCount = accountList.size,
             // Bills and salary aren't tied to an account, so the forecast is only for all money together.
@@ -227,6 +233,29 @@ class HomeViewModel(
 
     fun closeWhatsNew(version: String) {
         viewModelScope.launch { settings.setWhatsNewSeen(version) }
+    }
+
+    /** Whether Home's notices are looking for a new version now, and what the last look found. */
+    val checking = kotlinx.coroutines.flow.MutableStateFlow(false)
+    val checkResult = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
+
+    /** Asks GitHub for a newer version: only when asked, or when the notices open with the check turned on. */
+    fun checkForUpdate(context: android.content.Context) {
+        if (checking.value) return
+        checking.value = true
+        viewModelScope.launch {
+            com.leftovers.app.util.UpdateCheck.latest(com.leftovers.app.util.UpdateCheck.isDevBuild(context)).fold(
+                { release ->
+                    if (com.leftovers.app.util.UpdateCheck.isNewerThanInstalled(context, release)) {
+                        settings.setUpdateAvailable(com.leftovers.app.util.UpdateCheck.encode(release))
+                    } else {
+                        checkResult.value = "You have the latest version"
+                    }
+                },
+                { checkResult.value = "Couldn't check for a new version" },
+            )
+            checking.value = false
+        }
     }
 
     fun dismissSms(id: Long) {
@@ -264,6 +293,21 @@ fun HomeScreen(
     val versionContext = androidx.compose.ui.platform.LocalContext.current
     val appVersion = remember { com.leftovers.app.util.WhatsNew.version(versionContext) }
     val freshInstall = remember { com.leftovers.app.util.WhatsNew.freshInstall(versionContext) }
+    var showNotices by remember { mutableStateOf(false) }
+    val checking by viewModel.checking.collectAsStateWithLifecycle()
+    val checkResult by viewModel.checkResult.collectAsStateWithLifecycle()
+    val update = remember(state.updateFound) {
+        com.leftovers.app.util.UpdateCheck.decode(state.updateFound)
+            ?.takeIf { com.leftovers.app.util.UpdateCheck.isNewerThanInstalled(versionContext, it) }
+    }
+    // What's new pops up once after each update; a fresh install starts without it.
+    if (state.loaded && state.whatsNewSeen != appVersion && !freshInstall) {
+        WhatsNewDialog(appVersion) { viewModel.closeWhatsNew(appVersion) }
+    }
+    if (showNotices) {
+        androidx.compose.runtime.LaunchedEffect(Unit) { if (state.updateCheck && update == null) viewModel.checkForUpdate(versionContext) }
+        NoticesSheet(appVersion, update, checking, checkResult, { viewModel.checkForUpdate(versionContext) }, { showNotices = false })
+    }
     val money = LocalMoney.current
     if (!state.loaded) return
     var owedOpen by remember { mutableStateOf<String?>(null) }
@@ -582,36 +626,17 @@ fun HomeScreen(
                         Text(greeting() + " · " + LocalDate.now().format(greetingDate), style = MaterialTheme.typography.bodyMedium, color = c.textSecondary, maxLines = 1)
                         Text(state.month.label(), style = MaterialTheme.typography.headlineLarge, color = c.textPrimary)
                     }
+                    // Notices: what's new, and a newer version when there is one (a dot says so).
+                    Box {
+                        RoundButton(Lucide.Bell, "Notices", { showNotices = true })
+                        if (update != null) {
+                            Box(Modifier.align(Alignment.TopEnd).padding(top = 6.dp, end = 6.dp).size(9.dp).background(c.accent, CircleShape))
+                        }
+                    }
+                    Spacer(Modifier.width(8.dp))
                     RoundButton(Lucide.MessageCircle, "AI assistant", onOpenAssistant)
                     Spacer(Modifier.width(8.dp))
                     RoundButton(Lucide.Settings, "Settings", onOpenSettings)
-                }
-            }
-
-            // What's new, once after each update; a fresh install starts without it.
-            if (state.loaded && state.whatsNewSeen != appVersion && !freshInstall) {
-                item(key = "whats-new") {
-                    Glass(Modifier.fillMaxWidth().padding(bottom = 12.dp).appear(1), strong = true) {
-                        Column(Modifier.padding(start = 18.dp, end = 8.dp, top = 8.dp, bottom = 16.dp)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                IconTile(Lucide.Sparkles, c.accent, size = 36.dp)
-                                Spacer(Modifier.width(12.dp))
-                                Column(Modifier.weight(1f)) {
-                                    Text("What's new", style = MaterialTheme.typography.titleSmall, color = c.textPrimary)
-                                    Text(appVersion, style = MaterialTheme.typography.bodySmall, color = c.textSecondary)
-                                }
-                                RoundButton(Lucide.X, "Close what's new", { viewModel.closeWhatsNew(appVersion) }, size = 40.dp)
-                            }
-                            Spacer(Modifier.height(10.dp))
-                            com.leftovers.app.util.WhatsNew.notes.forEach { note ->
-                                Row(Modifier.padding(end = 10.dp, top = 4.dp)) {
-                                    Text("•", style = MaterialTheme.typography.bodyMedium, color = c.accent)
-                                    Spacer(Modifier.width(8.dp))
-                                    Text(note, style = MaterialTheme.typography.bodyMedium, color = c.textSecondary)
-                                }
-                            }
-                        }
-                    }
                 }
             }
 
