@@ -98,7 +98,14 @@ fun TransactionItem.timeLabel(): String =
     Instant.ofEpochMilli(createdAt).atZone(ZoneId.systemDefault()).toLocalTime().format(com.leftovers.app.util.timeFormatter(com.leftovers.app.util.LocalUse24Hour.current))
 
 @Composable
-fun TransactionRow(item: TransactionItem, onClick: () -> Unit, subtitle: String = item.timeLabel(), modifier: Modifier = Modifier) {
+fun TransactionRow(
+    item: TransactionItem,
+    onClick: () -> Unit,
+    subtitle: String = item.timeLabel(),
+    modifier: Modifier = Modifier,
+    /** A split bill's whole amount, shown small under this entry's share of it. */
+    wholeMinor: Long? = null,
+) {
     val money = LocalMoney.current
     val c = LocalAppColors.current
     // The note's words as the title; its tags after the category, on their own.
@@ -122,12 +129,15 @@ fun TransactionRow(item: TransactionItem, onClick: () -> Unit, subtitle: String 
                 val foreign = item.foreignMinor
                 val code = item.foreignCurrency
                 val photo = item.receiptPath != null
-                if ((foreign != null && code != null) || photo) {
+                if ((foreign != null && code != null) || photo || wholeMinor != null) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         if (photo) Icon(com.leftovers.app.ui.icons.Lucide.Camera, contentDescription = "Has a photo", tint = c.textTertiary, modifier = Modifier.size(13.dp))
                         if (foreign != null && code != null) {
                             if (photo) Spacer(Modifier.width(5.dp))
                             Text(com.leftovers.app.util.Money(code).format(foreign), style = MaterialTheme.typography.labelSmall, color = c.textTertiary)
+                        } else if (wholeMinor != null) {
+                            if (photo) Spacer(Modifier.width(5.dp))
+                            Text("of ${money.format(wholeMinor)}", style = MaterialTheme.typography.labelSmall, color = c.textTertiary)
                         }
                     }
                 }
@@ -838,16 +848,18 @@ internal fun billCards(items: List<TransactionItem>, shares: Map<Long, List<com.
 }
 
 /** What a split bill's entry says under its title: how it was split, and the whole amount. */
-internal fun billSubtitle(whenText: String, line: BillLine.Entry, money: com.leftovers.app.util.Money): String = when {
+internal fun billSubtitle(whenText: String, line: BillLine.Entry): String = when {
     line.part -> "part of the split"
-    line.shares.isNotEmpty() -> {
-        val total = line.item.amountMinor + line.parts.sumOf { it.amountMinor } + line.shares.sumOf { it.amountMinor }
-        // The amount on the right is your share; this says it's a share, and of what.
-        "$whenText · split with ${line.shares.size} · ${money.format(total)} in all"
-    }
-    line.parts.isNotEmpty() -> "$whenText · split, ${money.format(line.item.amountMinor + line.parts.sumOf { it.amountMinor })} in all"
+    // The whole amount is on the right, under this entry's share, so the line stays short enough to read.
+    line.shares.isNotEmpty() -> "$whenText · split with ${line.shares.size}"
+    line.parts.isNotEmpty() -> "$whenText · split"
     else -> whenText
 }
+
+/** A split bill's whole amount, for the entry it's split from; null for anything else. */
+internal fun BillLine.Entry.whole(): Long? =
+    if (part || (parts.isEmpty() && shares.isEmpty())) null
+    else item.amountMinor + parts.sumOf { it.amountMinor } + shares.sumOf { it.amountMinor }
 
 /** A person's share of a bill split with people, under the bill: they owe it, or it's settled. Opens the bill. */
 @Composable

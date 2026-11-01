@@ -785,7 +785,8 @@ fun HomeScreen(
                                             is BillLine.Entry -> TransactionRow(
                                                 line.item,
                                                 onClick = { peek.show(line.item) },
-                                                subtitle = billSubtitle(line.item.date.friendlyLabel(), line, money),
+                                                subtitle = billSubtitle(line.item.date.friendlyLabel(), line),
+                                                wholeMinor = line.whole(),
                                                 modifier = Modifier.peekSource(peek, line.item.id).then(if (line.part) Modifier.padding(start = 28.dp) else Modifier),
                                             )
                                             is BillLine.Share -> ShareRow(line.debt, onClick = { peek.share = line.debt }, modifier = Modifier.padding(start = 28.dp))
