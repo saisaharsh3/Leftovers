@@ -5,7 +5,8 @@ All notable changes to Leftovers. Download any version from
 
 ## Unreleased
 
-- After an update, what's new pops up once. The bell on Home keeps it, and shows a newer version when there is one
+- After an update, what's new pops up once. The bell on Home opens Notices: what's new, and a newer version when there is one
+- The AI assistant adds a split bill as one entry, with people's shares in Money owed and parts in other categories, and a bill photo across several categories becomes one split bill
 - Money owed: Remind is a bell button, so the amount owed keeps to one line
 - Bottom sheets are liquid glass like the tab bar and pop-ups (Android 13 and newer), and open on the app's own screen: they slide up over a lightly blurred screen, close with a tap outside, Back or a drag down, and move up above the keyboard
 - Split: the keyboard's done key adds the part, then the keyboard closes and the list shows it

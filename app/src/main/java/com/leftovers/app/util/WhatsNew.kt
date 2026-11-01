@@ -10,6 +10,7 @@ object WhatsNew {
     val notes = listOf(
         "A split bill shows as one entry, with its whole amount and each person's share",
         "Tap a person in a split to change just their share",
+        "The AI assistant adds split bills too, from a chat or a photo of the bill",
         "Add again logs the same entry for today, from its card",
         "Activity sorts by highest or lowest amount",
         "Sheets close with a drag down anywhere on them",

@@ -15,7 +15,16 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.foundation.layout.size
+import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.leftovers.app.ui.components.GlassScreen
+import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -58,27 +67,47 @@ private fun WhatsNewNotes() {
     }
 }
 
-/**
- * Home's notices: a newer version when there is one, and what's new in this one.
- * [checkResult] says what the last check found, or null before one.
- */
+/** The Notices page's state: a newer version the last check found, and the check itself. */
+class NoticesViewModel(private val settings: com.leftovers.app.data.SettingsRepository) : androidx.lifecycle.ViewModel() {
+    val settingsState = settings.settings
+    val checking = kotlinx.coroutines.flow.MutableStateFlow(false)
+    val checkResult = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
+
+    /** Asks GitHub for a newer version: when asked, or when the page opens with the check turned on. */
+    fun checkForUpdate(context: android.content.Context) {
+        if (checking.value) return
+        checking.value = true
+        viewModelScope.launch {
+            UpdateCheck.latest(UpdateCheck.isDevBuild(context)).fold(
+                { release ->
+                    if (UpdateCheck.isNewerThanInstalled(context, release)) settings.setUpdateAvailable(UpdateCheck.encode(release))
+                    else checkResult.value = "You have the latest version"
+                },
+                { checkResult.value = "Couldn't check for a new version" },
+            )
+            checking.value = false
+        }
+    }
+}
+
+/** Notices, from the bell on Home: a newer version when there is one, and what's new in this one. */
 @Composable
-fun NoticesSheet(
-    version: String,
-    update: UpdateCheck.Release?,
-    checking: Boolean,
-    checkResult: String?,
-    onCheck: () -> Unit,
-    onDismiss: () -> Unit,
-) {
+fun NoticesScreen(onBack: () -> Unit, viewModel: NoticesViewModel = androidx.lifecycle.viewmodel.compose.viewModel(factory = com.leftovers.app.ui.AppViewModelProvider.Factory)) {
     val c = LocalAppColors.current
     val context = LocalContext.current
-    GlassSheet(onDismiss) {
+    val s by viewModel.settingsState.collectAsStateWithLifecycle(null)
+    val checking by viewModel.checking.collectAsStateWithLifecycle()
+    val checkResult by viewModel.checkResult.collectAsStateWithLifecycle()
+    val version = remember { WhatsNew.version(context) }
+    val update = remember(s?.updateAvailable) { UpdateCheck.decode(s?.updateAvailable)?.takeIf { UpdateCheck.isNewerThanInstalled(context, it) } }
+    val checkOn = s?.updateCheck
+    LaunchedEffect(checkOn) { if (checkOn == true && update == null) viewModel.checkForUpdate(context) }
+    GlassScreen(title = "Notices", subtitle = "What's new, and new versions", onBack = onBack) { padding ->
         Column(
-            Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
+            Modifier.verticalScroll(rememberScrollState())
+                .padding(start = 16.dp, end = 16.dp, top = padding.calculateTopPadding() + 12.dp, bottom = padding.calculateBottomPadding() + 16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Text("Notices", style = MaterialTheme.typography.headlineSmall, color = c.textPrimary)
             if (update != null) {
                 val dev = update.version.startsWith("Dev")
                 Glass(Modifier.fillMaxWidth(), strong = true, onClick = {
@@ -91,21 +120,24 @@ fun NoticesSheet(
                             Text(if (dev) "A new Dev build is out" else "Leftovers ${update.version} is out", style = MaterialTheme.typography.titleSmall, color = c.textPrimary)
                             Text(if (dev) "${update.version} · tap to download it" else "Tap to download it", style = MaterialTheme.typography.bodySmall, color = c.textSecondary)
                         }
+                        Icon(Lucide.ChevronRight, contentDescription = null, tint = c.textTertiary, modifier = Modifier.size(18.dp))
                     }
                 }
-            } else {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        when {
-                            checking -> "Looking for a new version…"
-                            checkResult != null -> checkResult
-                            else -> "No new version found yet"
-                        },
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = c.textSecondary,
-                        modifier = Modifier.weight(1f),
-                    )
-                    if (!checking) Chip("Check now", onCheck, icon = Lucide.Download)
+            } else if (checkOn != null) {
+                Glass(Modifier.fillMaxWidth()) {
+                    Row(Modifier.padding(start = 16.dp, end = 10.dp, top = 10.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            when {
+                                checking -> "Looking for a new version…"
+                                checkResult != null -> checkResult!!
+                                else -> "No new version found yet"
+                            },
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = c.textSecondary,
+                            modifier = Modifier.weight(1f),
+                        )
+                        if (!checking) Chip("Check now", { viewModel.checkForUpdate(context) }, icon = Lucide.Download)
+                    }
                 }
             }
             Glass(Modifier.fillMaxWidth()) {

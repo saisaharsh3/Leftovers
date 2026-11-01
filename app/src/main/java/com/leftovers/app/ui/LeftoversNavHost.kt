@@ -94,6 +94,7 @@ import com.leftovers.app.ui.screens.BudgetsScreen
 import com.leftovers.app.ui.screens.CategoriesScreen
 import com.leftovers.app.ui.screens.ActivityRequest
 import com.leftovers.app.ui.screens.DebtsScreen
+import com.leftovers.app.ui.screens.NoticesScreen
 import com.leftovers.app.ui.screens.TypeFilter
 import com.leftovers.app.data.TxType
 import com.leftovers.app.ui.screens.DeletedScreen
@@ -129,6 +130,7 @@ private object Routes {
     const val ACCOUNTS = "accounts"
     const val RECAP = "recap/{month}"
     const val SETTINGS = "settings"
+    const val NOTICES = "notices"
     const val CATEGORIES = "categories"
     const val ASSISTANT = "assistant?ask={ask}"
     /** Opens the assistant; a non-empty [ask] is sent as the first question. */
@@ -321,6 +323,7 @@ fun LeftoversNavHost(openAdd: Boolean = false, onOpenAddHandled: () -> Unit = {}
                             onOpenGoal = { nav.navigate(Routes.goal(it)) },
                             onOpenGoals = { nav.navigate(Routes.GOALS) },
                             onOpenSettings = { nav.navigate(Routes.SETTINGS) },
+                            onOpenNotices = { nav.navigate(Routes.NOTICES) },
                             onOpenTransaction = { nav.navigate(Routes.edit(it)) },
                             onReviewSms = { s -> nav.navigate(Routes.add(s.epochDay, s.amountMinor, s.merchant, s.id)) },
                             onOpenRecap = { nav.navigate(Routes.recap(it.toString())) },
@@ -361,6 +364,7 @@ fun LeftoversNavHost(openAdd: Boolean = false, onOpenAddHandled: () -> Unit = {}
                             onOpenDebts = { nav.navigate(Routes.DEBTS) },
                         )
                     }
+                    screen(Routes.NOTICES) { NoticesScreen(onBack = back) }
                     screen(Routes.DEBTS) { DebtsScreen(onBack = back) }
                     screen(Routes.DELETED) { DeletedScreen(onBack = back) }
                     screen(

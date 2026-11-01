@@ -132,8 +132,6 @@ data class HomeUiState(
     val whatsNewSeen: String? = null,
     /** A newer version the last check found, if it's still newer than this one is for the screen to say. */
     val updateFound: String? = null,
-    /** Whether the user turned on looking for new versions. */
-    val updateCheck: Boolean = false,
     /** Last month's leftover, while the user hasn't decided whether to carry it over. */
     val carryPrompt: Long? = null,
     /** Sum of every account's balance; null until accounts load. */
@@ -201,7 +199,6 @@ class HomeViewModel(
             carryPrompt = s.plan.pendingCarry(cycle.month, all),
             whatsNewSeen = s.whatsNewSeen,
             updateFound = s.updateAvailable,
-            updateCheck = s.updateCheck,
             balance = selected?.balanceMinor ?: accountList.filterNot { it.outOfTotal }.sumOf { it.balanceMinor },
             accountCount = accountList.size,
             // Bills and salary aren't tied to an account, so the forecast is only for all money together.
@@ -235,29 +232,6 @@ class HomeViewModel(
         viewModelScope.launch { settings.setWhatsNewSeen(version) }
     }
 
-    /** Whether Home's notices are looking for a new version now, and what the last look found. */
-    val checking = kotlinx.coroutines.flow.MutableStateFlow(false)
-    val checkResult = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
-
-    /** Asks GitHub for a newer version: only when asked, or when the notices open with the check turned on. */
-    fun checkForUpdate(context: android.content.Context) {
-        if (checking.value) return
-        checking.value = true
-        viewModelScope.launch {
-            com.leftovers.app.util.UpdateCheck.latest(com.leftovers.app.util.UpdateCheck.isDevBuild(context)).fold(
-                { release ->
-                    if (com.leftovers.app.util.UpdateCheck.isNewerThanInstalled(context, release)) {
-                        settings.setUpdateAvailable(com.leftovers.app.util.UpdateCheck.encode(release))
-                    } else {
-                        checkResult.value = "You have the latest version"
-                    }
-                },
-                { checkResult.value = "Couldn't check for a new version" },
-            )
-            checking.value = false
-        }
-    }
-
     fun dismissSms(id: Long) {
         viewModelScope.launch { sms.dismiss(id) }
     }
@@ -283,6 +257,7 @@ fun HomeScreen(
     onOpenRecap: (YearMonth) -> Unit,
     onOpenAccounts: () -> Unit,
     onOpenAssistant: () -> Unit,
+    onOpenNotices: () -> Unit,
     onOpenDebts: () -> Unit = {},
     /** Opens Subscriptions on this one: its day in the calendar, and its details. */
     onOpenSubscription: (RecurringItem) -> Unit = { onOpenSubscriptions(it.type == TxType.INCOME) },
@@ -293,9 +268,6 @@ fun HomeScreen(
     val versionContext = androidx.compose.ui.platform.LocalContext.current
     val appVersion = remember { com.leftovers.app.util.WhatsNew.version(versionContext) }
     val freshInstall = remember { com.leftovers.app.util.WhatsNew.freshInstall(versionContext) }
-    var showNotices by remember { mutableStateOf(false) }
-    val checking by viewModel.checking.collectAsStateWithLifecycle()
-    val checkResult by viewModel.checkResult.collectAsStateWithLifecycle()
     val update = remember(state.updateFound) {
         com.leftovers.app.util.UpdateCheck.decode(state.updateFound)
             ?.takeIf { com.leftovers.app.util.UpdateCheck.isNewerThanInstalled(versionContext, it) }
@@ -303,10 +275,6 @@ fun HomeScreen(
     // What's new pops up once after each update; a fresh install starts without it.
     if (state.loaded && state.whatsNewSeen != appVersion && !freshInstall) {
         WhatsNewDialog(appVersion) { viewModel.closeWhatsNew(appVersion) }
-    }
-    if (showNotices) {
-        androidx.compose.runtime.LaunchedEffect(Unit) { if (state.updateCheck && update == null) viewModel.checkForUpdate(versionContext) }
-        NoticesSheet(appVersion, update, checking, checkResult, { viewModel.checkForUpdate(versionContext) }, { showNotices = false })
     }
     val money = LocalMoney.current
     if (!state.loaded) return
@@ -628,7 +596,7 @@ fun HomeScreen(
                     }
                     // Notices: what's new, and a newer version when there is one (a dot says so).
                     Box {
-                        RoundButton(Lucide.Bell, "Notices", { showNotices = true })
+                        RoundButton(Lucide.Bell, "Notices", onOpenNotices)
                         if (update != null) {
                             Box(Modifier.align(Alignment.TopEnd).padding(top = 6.dp, end = 6.dp).size(9.dp).background(c.accent, CircleShape))
                         }
