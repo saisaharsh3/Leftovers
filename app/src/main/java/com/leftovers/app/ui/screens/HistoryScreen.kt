@@ -157,6 +157,8 @@ data class HistoryUiState(
     val accounts: List<FilterOption> = emptyList(),
     val categories: List<FilterOption> = emptyList(),
     val tags: List<String> = emptyList(),
+    /** Splits as one bill with their parts under them; off, every entry on its own. */
+    val oneBill: Boolean = true,
 )
 
 class HistoryViewModel(
@@ -182,9 +184,9 @@ class HistoryViewModel(
 
     val state: StateFlow<HistoryUiState> =
         combine(
-            combine(repository.allTransactions, accountRepository.accounts, planning.recurring, ::Triple),
+            combine(repository.allTransactions, accountRepository.accounts, settings.settings.map { it.splitsAsOneBill }.distinctUntilChanged(), ::Triple),
             month, filter, query, filters,
-        ) { (all, accountList, _), m, f, q, fl ->
+        ) { (all, accountList, oneBill), m, f, q, fl ->
             val monthItems = all.filter { YearMonth.from(it.date) == m }
             val scoped = if (q.isNotBlank()) {
                 val needle = q.trim()
@@ -219,7 +221,8 @@ class HistoryViewModel(
                 } else {
                     // By amount: one list. A split bill counts as its whole amount and keeps its parts under it.
                     val ids = filtered.map { it.id }.toSet()
-                    val bills = filtered.filter { it.splitOf == null || it.splitOf !in ids }
+                    val bills = if (!oneBill) filtered.map { listOf(it) }
+                    else filtered.filter { it.splitOf == null || it.splitOf !in ids }
                         .map { main -> listOf(main) + filtered.filter { it.splitOf == main.id } }
                     val sorted = if (fl.sort == ActivitySort.HIGHEST) bills.sortedByDescending { b -> b.sumOf { it.amountMinor } }
                     else bills.sortedBy { b -> b.sumOf { it.amountMinor } }
@@ -235,6 +238,7 @@ class HistoryViewModel(
                 categories = all.distinctBy { it.categoryId }.sortedBy { it.categoryName }
                     .map { FilterOption(it.categoryId, it.categoryName, it.categoryEmoji, it.categoryColor) },
                 tags = all.allTags(),
+                oneBill = oneBill,
             )
         }.flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), HistoryUiState())
 
@@ -433,7 +437,7 @@ fun HistoryScreen(
                     }
                 }
                 // A split bill: its parts right under the entry they came from (#36).
-                val ordered = splitOrder(group.items)
+                val ordered = if (state.oneBill) splitOrder(group.items) else group.items
                 ordered.forEachIndexed { i, item ->
                     item(key = "tx-${item.id}") {
                         CardSlice(
@@ -443,10 +447,10 @@ fun HistoryScreen(
                                 .animateItem(fadeInSpec = tween(220), placementSpec = listMotion, fadeOutSpec = tween(160))
                                 .appear(groupIndex + 1),
                         ) {
-                            val part = item.splitOf != null && ordered.any { it.id == item.splitOf }
+                            val part = state.oneBill && item.splitOf != null && ordered.any { it.id == item.splitOf }
                             if (i > 0) RowDivider(inset = if (part) 102.dp else 74.dp)
                             // No swipe actions: they fired by accident. A tap opens the entry, where it can be edited or deleted.
-                            val parts = ordered.filter { it.splitOf == item.id }
+                            val parts = if (state.oneBill) ordered.filter { it.splitOf == item.id } else emptyList()
                             TransactionRow(
                                 item,
                                 onClick = { peek.show(item) },

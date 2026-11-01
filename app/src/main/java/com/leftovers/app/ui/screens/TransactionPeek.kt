@@ -40,6 +40,7 @@ import com.leftovers.app.ui.components.CategoryIcon
 import com.leftovers.app.ui.components.LocalUndo
 import com.leftovers.app.ui.components.PrimaryButton
 import com.leftovers.app.ui.components.SecondaryButton
+import com.leftovers.app.ui.components.pressable
 import com.leftovers.app.ui.icons.Lucide
 import com.leftovers.app.ui.theme.LocalAppColors
 import com.leftovers.app.util.LocalMoney
@@ -54,12 +55,24 @@ class TransactionPeekViewModel(private val repository: TransactionRepository, ac
     val accounts: StateFlow<List<AccountWithBalance>> =
         accounts.accounts.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
-    fun delete(item: TransactionItem) {
-        viewModelScope.launch { repository.deleteTransaction(item.toTransaction()) }
+    /** Every entry, to find the rest of a split bill. */
+    val all: StateFlow<List<TransactionItem>> =
+        repository.allTransactions.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    fun delete(items: List<TransactionItem>) {
+        viewModelScope.launch { items.forEach { repository.deleteTransaction(it.toTransaction()) } }
     }
 
-    /** Puts a deleted entry back. Runs from the Undo bar, after this card has gone. */
-    suspend fun restore(item: TransactionItem) = repository.saveTransaction(item.toTransaction())
+    /** Puts deleted entries back. Runs from the Undo bar, after this card has gone. */
+    suspend fun restore(items: List<TransactionItem>) = items.forEach { repository.saveTransaction(it.toTransaction()) }
+
+    /** Splits a bill up: its parts become entries of their own. */
+    fun separate(parts: List<TransactionItem>) {
+        viewModelScope.launch { parts.forEach { repository.saveTransaction(it.toTransaction().copy(splitOf = null)) } }
+    }
+
+    /** Joins the bill again, after Separate is undone. */
+    suspend fun rejoin(parts: List<TransactionItem>) = parts.forEach { repository.saveTransaction(it.toTransaction()) }
 }
 
 /** Which entry's card is open, where it grew from, and which row steps aside until it shrinks back. */
@@ -102,6 +115,11 @@ fun TransactionPeekCard(
     val account = accounts.firstOrNull { it.id == item.accountId }
     var photo by remember { mutableStateOf<String?>(null) }
     val photos = item.receiptPath?.split('\n')?.filter { it.isNotBlank() }.orEmpty()
+    val all by viewModel.all.collectAsStateWithLifecycle()
+    // The bill this entry belongs to: the entry it was split from, and every part of it.
+    val main = if (item.splitOf != null) all.firstOrNull { it.id == item.splitOf } ?: item else item
+    val bill = listOf(main) + all.filter { it.splitOf == main.id }
+    var askDelete by remember { mutableStateOf(false) }
 
     MorphCard(
         from = peek.from,
@@ -172,14 +190,74 @@ fun TransactionPeekCard(
                 photos.forEach { path -> ReceiptThumb(path, onOpen = { photo = path }, size = 64.dp) }
             }
         }
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            SecondaryButton("Delete", {
-                close {
-                    viewModel.delete(item)
-                    undo.show("Entry deleted") { viewModel.restore(item) }
+        // Part of a split bill: the whole bill, with this entry marked, and a way to split it up again.
+        if (bill.size > 1) {
+            Column(
+                Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(c.glass).border(1.dp, c.borderBottom, RoundedCornerShape(22.dp)).padding(vertical = 8.dp),
+            ) {
+                Row(Modifier.padding(horizontal = 16.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text("Split bill · ${money.format(bill.sumOf { it.amountMinor })} in all", style = MaterialTheme.typography.labelLarge, color = c.textSecondary, modifier = Modifier.weight(1f))
+                    Text(
+                        "Separate",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = c.accent,
+                        modifier = Modifier.clip(RoundedCornerShape(50)).pressable({
+                            val parts = bill.drop(1)
+                            close {
+                                viewModel.separate(parts)
+                                undo.show("Split into ${bill.size} entries") { viewModel.rejoin(parts) }
+                            }
+                        }, pressedScale = 0.94f).padding(horizontal = 10.dp, vertical = 4.dp),
+                    )
                 }
-            }, Modifier.weight(1f), icon = Lucide.Trash2)
-            PrimaryButton("Edit", { close { onEdit(item.id) } }, Modifier.weight(1.4f), icon = Lucide.Pencil)
+                bill.forEach { b ->
+                    Row(
+                        Modifier.fillMaxWidth().background(if (b.id == item.id) c.glassStrong else androidx.compose.ui.graphics.Color.Transparent).padding(horizontal = 16.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        CategoryIcon(b.categoryEmoji, b.categoryColor, size = 30.dp)
+                        Spacer(Modifier.width(12.dp))
+                        Text(
+                            com.leftovers.app.data.noteText(b.note).ifBlank { b.categoryName },
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = c.textPrimary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f),
+                        )
+                        Text(money.format(b.amountMinor), style = MaterialTheme.typography.titleSmall, color = c.textPrimary)
+                    }
+                }
+            }
+        }
+        if (askDelete) {
+            // A split bill: all of it, or just this entry.
+            Text("Delete the whole bill, or only this entry?", style = MaterialTheme.typography.bodyMedium, color = c.textSecondary)
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                SecondaryButton("Only this", {
+                    close {
+                        viewModel.delete(listOf(item))
+                        undo.show("Entry deleted") { viewModel.restore(listOf(item)) }
+                    }
+                }, Modifier.weight(1f))
+                PrimaryButton("Whole bill", {
+                    close {
+                        viewModel.delete(bill)
+                        undo.show("Bill deleted") { viewModel.restore(bill) }
+                    }
+                }, Modifier.weight(1f), icon = Lucide.Trash2)
+            }
+        } else {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                SecondaryButton("Delete", {
+                    if (bill.size > 1) askDelete = true
+                    else close {
+                        viewModel.delete(listOf(item))
+                        undo.show("Entry deleted") { viewModel.restore(listOf(item)) }
+                    }
+                }, Modifier.weight(1f), icon = Lucide.Trash2)
+                PrimaryButton("Edit", { close { onEdit(item.id) } }, Modifier.weight(1.4f), icon = Lucide.Pencil)
+            }
         }
     }
 }

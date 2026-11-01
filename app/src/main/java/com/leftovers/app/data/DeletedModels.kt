@@ -22,12 +22,14 @@ data class DeletedTransaction(
     val deletedAt: Long,
     val foreignMinor: Long? = null,
     val foreignCurrency: String? = null,
+    /** The bill it was part of, so a split bill restores as one bill again. */
+    val splitOf: Long? = null,
 ) {
-    fun toTransaction() = Transaction(id, amountMinor, type, categoryId, epochDay, note, createdAt, accountId, receiptPath, foreignMinor, foreignCurrency)
+    fun toTransaction() = Transaction(id, amountMinor, type, categoryId, epochDay, note, createdAt, accountId, receiptPath, foreignMinor, foreignCurrency, splitOf)
 
     companion object {
         fun from(t: Transaction, deletedAt: Long = System.currentTimeMillis()) =
-            DeletedTransaction(t.id, t.amountMinor, t.type, t.categoryId, t.epochDay, t.note, t.createdAt, t.accountId, t.receiptPath, deletedAt, t.foreignMinor, t.foreignCurrency)
+            DeletedTransaction(t.id, t.amountMinor, t.type, t.categoryId, t.epochDay, t.note, t.createdAt, t.accountId, t.receiptPath, deletedAt, t.foreignMinor, t.foreignCurrency, t.splitOf)
     }
 }
 

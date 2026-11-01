@@ -121,6 +121,8 @@ data class HomeUiState(
     /** Everyone with money still owed either way, largest first. */
     val owed: List<com.leftovers.app.data.PersonBalance> = emptyList(),
     val recent: List<TransactionItem> = emptyList(),
+    /** Splits as one bill with their parts under them; off, every entry on its own. */
+    val oneBill: Boolean = true,
     val smsSuggestions: List<SmsSuggestion> = emptyList(),
     /** Last month, when its recap hasn't been seen yet. */
     val recapMonth: YearMonth? = null,
@@ -179,8 +181,10 @@ class HomeViewModel(
             goals = goals.filter { !it.reached }.take(5),
             owed = debts.openBalances().filter { it.netMinor != 0L },
             // Six entries, a split bill counting as one, with its parts under it as in Activity (#36).
-            recent = shownAll.filter { it.splitOf == null || shownAll.none { m -> m.id == it.splitOf } }.take(6)
+            recent = if (!s.splitsAsOneBill) shownAll.take(6)
+            else shownAll.filter { it.splitOf == null || shownAll.none { m -> m.id == it.splitOf } }.take(6)
                 .let { mains -> splitOrder(mains + shownAll.filter { p -> p.splitOf != null && mains.any { it.id == p.splitOf } }) },
+            oneBill = s.splitsAsOneBill,
             smsSuggestions = suggestions,
             recapMonth = month.minusMonths(1).takeIf { prev ->
                 todayDate.dayOfMonth <= 10 && s.recapSeen != prev.toString() && all.any { YearMonth.from(it.date) == prev }
@@ -767,8 +771,8 @@ fun HomeScreen(
                     } else {
                         Column(Modifier.padding(vertical = 6.dp)) {
                             state.recent.forEachIndexed { i, item ->
-                                val part = item.splitOf != null && state.recent.any { it.id == item.splitOf }
-                                val parts = state.recent.filter { it.splitOf == item.id }
+                                val part = state.oneBill && item.splitOf != null && state.recent.any { it.id == item.splitOf }
+                                val parts = if (state.oneBill) state.recent.filter { it.splitOf == item.id } else emptyList()
                                 if (i > 0) RowDivider(inset = if (part) 102.dp else 74.dp)
                                 TransactionRow(
                                     item,

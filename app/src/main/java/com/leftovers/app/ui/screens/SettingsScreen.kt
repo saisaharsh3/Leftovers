@@ -265,6 +265,10 @@ class SettingsViewModel(
         viewModelScope.launch { settingsRepository.setBudgetAlerts(enabled) }
     }
 
+    fun setSplitsAsOneBill(enabled: Boolean) {
+        viewModelScope.launch { settingsRepository.setSplitsAsOneBill(enabled) }
+    }
+
     fun setReminder(enabled: Boolean, minutes: Int) {
         viewModelScope.launch { settingsRepository.setReminder(enabled, minutes) }
     }
@@ -717,6 +721,8 @@ fun SettingsScreen(
                         NavRow(Lucide.Coins, "Currency", "${money.currency.displayName} (${money.symbol})") { showCurrency = true }
                         RowDivider()
                         ToggleRow(Lucide.Bell, "Budget alerts", s.budgetAlerts, viewModel::setBudgetAlerts)
+                        RowDivider()
+                        ToggleRow(Lucide.Split, "Show a split bill as one entry", s.splitsAsOneBill, viewModel::setSplitsAsOneBill)
                         RowDivider()
                         NavRow(Lucide.Tag, "Categories", null, onManageCategories)
                         RowDivider()
