@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -223,9 +224,12 @@ fun TransactionPeekCard(
                         modifier = Modifier.weight(1f),
                     )
                 }
+                // Tapping a line opens it to change: a part on its own, the main entry with the whole bill.
                 bill.forEach { b ->
                     Row(
-                        Modifier.fillMaxWidth().background(if (b.id == item.id) c.glassStrong else androidx.compose.ui.graphics.Color.Transparent).padding(horizontal = 16.dp, vertical = 8.dp),
+                        Modifier.fillMaxWidth().background(if (b.id == item.id) c.glassStrong else androidx.compose.ui.graphics.Color.Transparent)
+                            .pressable({ close { onEdit(b.id) } }, pressedScale = 0.98f)
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         CategoryIcon(b.categoryEmoji, b.categoryColor, size = 30.dp)
@@ -240,10 +244,14 @@ fun TransactionPeekCard(
                             modifier = Modifier.weight(1f),
                         )
                         Text(money.format(b.amountMinor), style = MaterialTheme.typography.titleSmall, color = c.textPrimary)
+                        androidx.compose.material3.Icon(Lucide.ChevronRight, contentDescription = "Edit", tint = c.textTertiary, modifier = Modifier.padding(start = 6.dp).size(16.dp))
                     }
                 }
                 shares.forEach { d ->
-                    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Row(
+                        Modifier.fillMaxWidth().pressable({ close { onEdit(main.id) } }, pressedScale = 0.98f).padding(horizontal = 16.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
                         com.leftovers.app.ui.components.IconTile(Lucide.HandCoins, if (d.settled) c.textTertiary else c.positive, size = 30.dp)
                         Spacer(Modifier.width(12.dp))
                         Text(
@@ -255,6 +263,7 @@ fun TransactionPeekCard(
                             modifier = Modifier.weight(1f),
                         )
                         Text(money.format(d.amountMinor), style = MaterialTheme.typography.titleSmall, color = if (d.settled) c.textTertiary else c.positive)
+                        androidx.compose.material3.Icon(Lucide.ChevronRight, contentDescription = "Edit the bill", tint = c.textTertiary, modifier = Modifier.padding(start = 6.dp).size(16.dp))
                     }
                 }
             }

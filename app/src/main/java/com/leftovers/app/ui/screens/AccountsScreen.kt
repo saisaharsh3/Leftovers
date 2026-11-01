@@ -204,6 +204,8 @@ private val accountIcons = listOf("banknote", "landmark", "wallet", "credit-card
 @Composable
 fun AccountsScreen(
     onBack: () -> Unit,
+    /** Opens an entry to change it. */
+    onOpenTransaction: (Long) -> Unit = {},
     viewModel: AccountsViewModel = viewModel(factory = AppViewModelProvider.Factory),
 ) {
     val accounts by viewModel.accounts.collectAsStateWithLifecycle()
@@ -355,7 +357,11 @@ fun AccountsScreen(
                     Text("Latest", style = MaterialTheme.typography.labelLarge, color = c.textSecondary, modifier = Modifier.padding(bottom = 4.dp))
                     latest.forEachIndexed { i, item ->
                         if (i > 0) RowDivider(inset = 50.dp)
-                        Row(Modifier.fillMaxWidth().padding(vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
+                        // Like the rest of the app, an entry opens to change it.
+                        Row(
+                            Modifier.fillMaxWidth().pressable({ close { onOpenTransaction(item.id) } }, pressedScale = 0.98f).padding(vertical = 9.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
                             CategoryIcon(item.categoryEmoji, item.categoryColor, size = 36.dp)
                             Spacer(Modifier.width(14.dp))
                             Column(Modifier.weight(1f)) {

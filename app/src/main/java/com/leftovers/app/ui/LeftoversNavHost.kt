@@ -417,7 +417,7 @@ fun LeftoversNavHost(openAdd: Boolean = false, onOpenAddHandled: () -> Unit = {}
                     }
                     screen(Routes.GOALS) { GoalsScreen(onBack = back, onOpenGoal = { nav.navigate(Routes.goal(it)) }) }
                     screen(Routes.GOAL, idArg) { GoalDetailScreen(onBack = back) }
-                    screen(Routes.ACCOUNTS) { AccountsScreen(onBack = back) }
+                    screen(Routes.ACCOUNTS) { AccountsScreen(onBack = back, onOpenTransaction = { nav.navigate(Routes.edit(it)) }) }
                     screen(Routes.RECAP, listOf(navArgument("month") { type = NavType.StringType })) { RecapScreen(onClose = back) }
                     screen(Routes.SETTINGS) {
                         SettingsScreen(
