@@ -103,12 +103,7 @@ class DebtsViewModel(
 
 /** Money lent to and borrowed from people. It never counts as spending or income. */
 @Composable
-fun DebtsScreen(
-    onBack: () -> Unit,
-    /** Opens the bill a share came from. */
-    onOpenTransaction: (Long) -> Unit = {},
-    viewModel: DebtsViewModel = viewModel(factory = AppViewModelProvider.Factory),
-) {
+fun DebtsScreen(onBack: () -> Unit, viewModel: DebtsViewModel = viewModel(factory = AppViewModelProvider.Factory)) {
     val loadedBalances by viewModel.balances.collectAsStateWithLifecycle()
     val balances = loadedBalances.orEmpty()
     val people by viewModel.people.collectAsStateWithLifecycle()
@@ -191,7 +186,7 @@ fun DebtsScreen(
                         b.entries.forEach { d ->
                             RowDivider(inset = 16.dp)
                             Row(
-                                Modifier.fillMaxWidth().pressable({ d.splitOf?.let(onOpenTransaction) ?: run { editing = d } }, pressedScale = 0.985f).padding(horizontal = 16.dp, vertical = 10.dp),
+                                Modifier.fillMaxWidth().pressable({ editing = d }, pressedScale = 0.985f).padding(horizontal = 16.dp, vertical = 10.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
                                 Text(

@@ -428,8 +428,7 @@ fun HomeScreen(
                             Row(
                                 Modifier
                                     .fillMaxWidth()
-                                    // A share of a split bill opens the bill; other entries open on their own.
-                                    .pressable({ close { d.splitOf?.let(onOpenTransaction) ?: run { editingDebt = d } } }, pressedScale = 0.98f)
+                                    .pressable({ close { editingDebt = d } }, pressedScale = 0.98f)
                                     .padding(vertical = 10.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
@@ -789,7 +788,7 @@ fun HomeScreen(
                                                 subtitle = billSubtitle(line.item.date.friendlyLabel(), line, money),
                                                 modifier = Modifier.peekSource(peek, line.item.id).then(if (line.part) Modifier.padding(start = 28.dp) else Modifier),
                                             )
-                                            is BillLine.Share -> ShareRow(line.debt, onClick = { peek.show(line.main) }, modifier = Modifier.padding(start = 28.dp))
+                                            is BillLine.Share -> ShareRow(line.debt, onClick = { peek.share = line.debt }, modifier = Modifier.padding(start = 28.dp))
                                         }
                                     }
                                 }

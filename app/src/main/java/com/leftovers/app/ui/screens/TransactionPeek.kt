@@ -88,6 +88,14 @@ class TransactionPeekViewModel(
 
     suspend fun restoreShares(shares: List<com.leftovers.app.data.Debt>) = shares.forEach { planning.saveDebt(it) }
 
+    fun saveShare(debt: com.leftovers.app.data.Debt) {
+        viewModelScope.launch { planning.saveDebt(debt) }
+    }
+
+    fun deleteShare(debt: com.leftovers.app.data.Debt) {
+        viewModelScope.launch { planning.deleteDebt(debt) }
+    }
+
     /** Splits shown as one bill: then a split opens whole, to change all of it at once. */
     val oneBill: StateFlow<Boolean> = settings.settings.map { it.splitsAsOneBill }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), true)
@@ -112,6 +120,8 @@ class TransactionPeekViewModel(
 /** Which entry's card is open, where it grew from, and which row steps aside until it shrinks back. */
 class TransactionPeek {
     var open by mutableStateOf<TransactionItem?>(null)
+    /** A person's share of a split bill, open on its own to change it. */
+    var share by mutableStateOf<com.leftovers.app.data.Debt?>(null)
     var hidden by mutableStateOf<Long?>(null)
     var from: Rect? = null
     val bounds = mutableMapOf<Long, Rect>()
@@ -139,6 +149,19 @@ fun TransactionPeekCard(
     onEdit: (Long) -> Unit,
     viewModel: TransactionPeekViewModel = viewModel(factory = AppViewModelProvider.Factory),
 ) {
+    // A person's share, on its own: the same editor as on Money owed.
+    peek.share?.let { debt ->
+        val owing by viewModel.debts.collectAsStateWithLifecycle()
+        val accountList by viewModel.accounts.collectAsStateWithLifecycle()
+        DebtEditor(
+            initial = debt,
+            people = owing.map { it.person.trim() }.filter { it.isNotEmpty() }.distinctBy { it.lowercase() },
+            accounts = accountList,
+            onDismiss = { peek.share = null },
+            onSave = { viewModel.saveShare(it); peek.share = null },
+            onDelete = { viewModel.deleteShare(debt); peek.share = null },
+        )
+    }
     val item = peek.open ?: return
     val c = LocalAppColors.current
     val money = LocalMoney.current
@@ -267,7 +290,7 @@ fun TransactionPeekCard(
                 }
                 shares.forEach { d ->
                     Row(
-                        Modifier.fillMaxWidth().pressable({ close { onEdit(main.id) } }, pressedScale = 0.98f).padding(horizontal = 16.dp, vertical = 8.dp),
+                        Modifier.fillMaxWidth().pressable({ close { peek.share = d } }, pressedScale = 0.98f).padding(horizontal = 16.dp, vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         com.leftovers.app.ui.components.IconTile(Lucide.HandCoins, if (d.settled) c.textTertiary else c.positive, size = 30.dp)
@@ -281,7 +304,7 @@ fun TransactionPeekCard(
                             modifier = Modifier.weight(1f),
                         )
                         Text(money.format(d.amountMinor), style = MaterialTheme.typography.titleSmall, color = if (d.settled) c.textTertiary else c.positive)
-                        androidx.compose.material3.Icon(Lucide.ChevronRight, contentDescription = "Edit the bill", tint = c.textTertiary, modifier = Modifier.padding(start = 6.dp).size(16.dp))
+                        androidx.compose.material3.Icon(Lucide.ChevronRight, contentDescription = "Edit ${d.person}'s share", tint = c.textTertiary, modifier = Modifier.padding(start = 6.dp).size(16.dp))
                     }
                 }
             }

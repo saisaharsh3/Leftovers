@@ -464,7 +464,7 @@ fun HistoryScreen(
                                         modifier = Modifier.peekSource(peek, line.item.id).then(if (line.part) Modifier.padding(start = 28.dp) else Modifier),
                                         subtitle = billSubtitle(if (group.label != null) line.item.date.friendlyLabel() else line.item.timeLabel(), line, money),
                                     )
-                                    is BillLine.Share -> ShareRow(line.debt, onClick = { peek.show(line.main) }, modifier = Modifier.padding(start = 28.dp))
+                                    is BillLine.Share -> ShareRow(line.debt, onClick = { peek.share = line.debt }, modifier = Modifier.padding(start = 28.dp))
                                 }
                             }
                         }
