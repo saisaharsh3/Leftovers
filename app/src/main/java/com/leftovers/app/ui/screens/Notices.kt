@@ -14,7 +14,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
@@ -37,22 +36,22 @@ import com.leftovers.app.ui.theme.LocalAppColors
 import com.leftovers.app.util.UpdateCheck
 import com.leftovers.app.util.WhatsNew
 
-/** What's new in this version, as a pop-up once after an update. */
+/** What's new in this version, as a pop-up once after an update: liquid glass, like the app's other pop-ups. */
 @Composable
 fun WhatsNewDialog(version: String, onClose: () -> Unit) {
     val c = LocalAppColors.current
-    GlassAlertDialog(
-        onDismissRequest = onClose,
-        title = { Text("What's new") },
-        text = {
+    MorphCard(from = null, onDismiss = onClose) { close ->
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            IconTile(Lucide.Sparkles, c.accent, size = 40.dp)
+            Spacer(Modifier.width(12.dp))
             Column {
+                Text("What's new", style = MaterialTheme.typography.titleLarge, color = c.textPrimary)
                 Text(version, style = MaterialTheme.typography.bodySmall, color = c.textSecondary)
-                Spacer(Modifier.height(10.dp))
-                WhatsNewNotes()
             }
-        },
-        confirmButton = { TextButton(onClick = onClose) { Text("Got it", color = c.accent) } },
-    )
+        }
+        Column { WhatsNewNotes() }
+        com.leftovers.app.ui.components.PrimaryButton("Got it", { close {} }, Modifier.fillMaxWidth())
+    }
 }
 
 @Composable
