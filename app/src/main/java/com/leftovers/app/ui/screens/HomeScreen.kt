@@ -550,7 +550,7 @@ fun HomeScreen(
         )
     }
 
-    // Pull down to run every check now (email, subscriptions due, sync) and reload.
+    // Pull down to run every check now (email, subscriptions due, sync, a new version) and reload.
     val appContext = androidx.compose.ui.platform.LocalContext.current.applicationContext
     val refreshScope = androidx.compose.runtime.rememberCoroutineScope()
     var refreshing by remember { mutableStateOf(false) }

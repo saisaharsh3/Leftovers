@@ -191,6 +191,13 @@ class AppContainer(private val context: Context) {
             if (emailAccount.connection.value == null) null else com.leftovers.app.util.EmailChecker.check(context)
         }
         val sync = async { com.leftovers.app.util.DeviceSync.runIfOn(context) }
+        // A newer version too, when looking for them is turned on; found, it shows on the bell in Home.
+        val update = async {
+            if (!settings.settings.first().updateCheck) return@async null
+            com.leftovers.app.util.UpdateCheck.latest(com.leftovers.app.util.UpdateCheck.isDevBuild(context)).getOrNull()
+                ?.takeIf { com.leftovers.app.util.UpdateCheck.isNewerThanInstalled(context, it) }
+                ?.also { settings.setUpdateAvailable(com.leftovers.app.util.UpdateCheck.encode(it)) }
+        }
         syncRecurring()
         val parts = buildList {
             email.await()?.fold(
@@ -204,6 +211,7 @@ class AppContainer(private val context: Context) {
                 },
                 { add("Couldn't sync") },
             )
+            update.await()?.let { add(if (com.leftovers.app.util.UpdateCheck.isDevBuild(context)) "A new Dev build is out" else "Leftovers ${it.version} is out") }
         }
         parts.joinToString(" · ").ifEmpty { "Up to date" }
     }
