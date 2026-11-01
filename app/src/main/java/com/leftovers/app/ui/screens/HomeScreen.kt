@@ -128,6 +128,8 @@ data class HomeUiState(
     val smsSuggestions: List<SmsSuggestion> = emptyList(),
     /** Last month, when its recap hasn't been seen yet. */
     val recapMonth: YearMonth? = null,
+    /** The version whose What's new was closed. */
+    val whatsNewSeen: String? = null,
     /** Last month's leftover, while the user hasn't decided whether to carry it over. */
     val carryPrompt: Long? = null,
     /** Sum of every account's balance; null until accounts load. */
@@ -193,6 +195,7 @@ class HomeViewModel(
                 todayDate.dayOfMonth <= 10 && s.recapSeen != prev.toString() && all.any { YearMonth.from(it.date) == prev }
             },
             carryPrompt = s.plan.pendingCarry(cycle.month, all),
+            whatsNewSeen = s.whatsNewSeen,
             balance = selected?.balanceMinor ?: accountList.filterNot { it.outOfTotal }.sumOf { it.balanceMinor },
             accountCount = accountList.size,
             // Bills and salary aren't tied to an account, so the forecast is only for all money together.
@@ -220,6 +223,10 @@ class HomeViewModel(
 
     fun deleteDebt(debt: com.leftovers.app.data.Debt) {
         viewModelScope.launch { planning.deleteDebt(debt) }
+    }
+
+    fun closeWhatsNew(version: String) {
+        viewModelScope.launch { settings.setWhatsNewSeen(version) }
     }
 
     fun dismissSms(id: Long) {
@@ -254,6 +261,9 @@ fun HomeScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val c = LocalAppColors.current
+    val versionContext = androidx.compose.ui.platform.LocalContext.current
+    val appVersion = remember { com.leftovers.app.util.WhatsNew.version(versionContext) }
+    val freshInstall = remember { com.leftovers.app.util.WhatsNew.freshInstall(versionContext) }
     val money = LocalMoney.current
     if (!state.loaded) return
     var owedOpen by remember { mutableStateOf<String?>(null) }
@@ -575,6 +585,33 @@ fun HomeScreen(
                     RoundButton(Lucide.MessageCircle, "AI assistant", onOpenAssistant)
                     Spacer(Modifier.width(8.dp))
                     RoundButton(Lucide.Settings, "Settings", onOpenSettings)
+                }
+            }
+
+            // What's new, once after each update; a fresh install starts without it.
+            if (state.loaded && state.whatsNewSeen != appVersion && !freshInstall) {
+                item(key = "whats-new") {
+                    Glass(Modifier.fillMaxWidth().padding(bottom = 12.dp).appear(1), strong = true) {
+                        Column(Modifier.padding(start = 18.dp, end = 8.dp, top = 8.dp, bottom = 16.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                IconTile(Lucide.Sparkles, c.accent, size = 36.dp)
+                                Spacer(Modifier.width(12.dp))
+                                Column(Modifier.weight(1f)) {
+                                    Text("What's new", style = MaterialTheme.typography.titleSmall, color = c.textPrimary)
+                                    Text(appVersion, style = MaterialTheme.typography.bodySmall, color = c.textSecondary)
+                                }
+                                RoundButton(Lucide.X, "Close what's new", { viewModel.closeWhatsNew(appVersion) }, size = 40.dp)
+                            }
+                            Spacer(Modifier.height(10.dp))
+                            com.leftovers.app.util.WhatsNew.notes.forEach { note ->
+                                Row(Modifier.padding(end = 10.dp, top = 4.dp)) {
+                                    Text("•", style = MaterialTheme.typography.bodyMedium, color = c.accent)
+                                    Spacer(Modifier.width(8.dp))
+                                    Text(note, style = MaterialTheme.typography.bodyMedium, color = c.textSecondary)
+                                }
+                            }
+                        }
+                    }
                 }
             }
 

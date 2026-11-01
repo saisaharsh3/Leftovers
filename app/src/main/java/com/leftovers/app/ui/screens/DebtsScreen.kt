@@ -54,6 +54,7 @@ import com.leftovers.app.data.openBalances
 import com.leftovers.app.ui.AppViewModelProvider
 import com.leftovers.app.ui.components.sharedContainer
 import com.leftovers.app.ui.components.Chip
+import com.leftovers.app.ui.components.RoundButton
 import com.leftovers.app.ui.components.EmptyState
 import com.leftovers.app.ui.components.Glass
 import com.leftovers.app.ui.components.GlassScreen
@@ -178,7 +179,8 @@ fun DebtsScreen(onBack: () -> Unit, viewModel: DebtsViewModel = viewModel(factor
                             // Someone who owes you can be reminded, in a message you send from WhatsApp, SMS or any app.
                             if (b.netMinor > 0) {
                                 val context = androidx.compose.ui.platform.LocalContext.current
-                                Chip("Remind", { com.leftovers.app.util.DebtReminder.share(context, com.leftovers.app.util.DebtReminder.message(b, money::format), b.person) }, icon = Lucide.Bell)
+                                Spacer(Modifier.padding(start = 12.dp))
+                                RoundButton(Lucide.Bell, "Remind ${b.person}", { com.leftovers.app.util.DebtReminder.share(context, com.leftovers.app.util.DebtReminder.message(b, money::format), b.person) })
                                 Spacer(Modifier.padding(start = 8.dp))
                             }
                             Chip(if (b.netMinor > 0) "Received" else "Paid back", { settling = b.person }, icon = Lucide.Check)

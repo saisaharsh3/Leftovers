@@ -5,6 +5,8 @@ All notable changes to Leftovers. Download any version from
 
 ## Unreleased
 
+- After an update, Home shows what's new in a card, until it's closed
+- Money owed: Remind is a bell button, so the amount owed keeps to one line
 - Bottom sheets are liquid glass like the tab bar and pop-ups (Android 13 and newer), and open on the app's own screen: they slide up over a lightly blurred screen, close with a tap outside, Back or a drag down, and move up above the keyboard
 - Split: the keyboard's done key adds the part, then the keyboard closes and the list shows it
 - Budget plan: Dates, one amount for days you choose, like two weeks or a trip, as well as monthly and yearly (#34)
