@@ -132,7 +132,7 @@ class BudgetsViewModel(
             pendingSubscriptions = pending,
             goalsMonthly = goals.filter { !it.reached }.sumOf { it.monthlyNeeded() },
             buckets = if (!s.plan.buckets) emptyList() else {
-                val income = s.plan.bucketIncome.takeIf { it > 0 } ?: items.totalOf(TxType.INCOME)
+                val income = com.leftovers.app.data.bucketBase(s.plan.bucketIncome, items.totalOf(TxType.INCOME), budget)
                 val saved = deposits.filter { it.epochDay in cycle.start.toEpochDay()..cycle.end.toEpochDay() }.sumOf { it.amountMinor }
                 com.leftovers.app.data.bucketUse(income, items, categories, saved)
             },

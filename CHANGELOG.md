@@ -5,6 +5,10 @@ All notable changes to Leftovers. Download any version from
 
 ## Unreleased
 
+- 50/30/20: an option to pick Needs, Wants or Savings first when adding an expense, then one of its categories; off,
+  all categories stay in one row (#39)
+- 50/30/20: the Left this month widget shows Needs, Wants and Savings, each with how much of its part is used (#39)
+- 50/30/20 with no income set or logged splits the budget instead of reading "of ₹0" (#39)
 - Pulling down on Home also looks for a new version, when Tell me about new versions is on
 - Money owed: an entry can be paid back on its own, with Received (money lent) or Paid back (borrowed) in its editor, and the money goes back through its account
 - After an update, what's new pops up once. The bell on Home opens Notices: what's new, and a newer version when there is one

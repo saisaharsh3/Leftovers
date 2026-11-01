@@ -50,6 +50,8 @@ data class BudgetPlan(
     /** 50/30/20 (#39): on, and the monthly income it splits; 0 uses the month's income as logged. */
     val buckets: Boolean = false,
     val bucketIncome: Long = 0,
+    /** With [buckets]: adding an entry picks Needs, Wants or Savings first, then a category in it (#39). */
+    val bucketPicker: Boolean = false,
 ) {
     /** The dates of a [BudgetMode.RANGE] budget, when they're set. */
     private val range: BudgetCycle?

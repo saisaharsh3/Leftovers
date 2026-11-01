@@ -99,6 +99,7 @@ class BudgetPlanViewModel(
     var rangeText by mutableStateOf("")
     var buckets by mutableStateOf(false)
     var bucketIncomeText by mutableStateOf("")
+    var bucketPicker by mutableStateOf(false)
     var rangeFrom by mutableStateOf<java.time.LocalDate>(java.time.LocalDate.now())
     var rangeTo by mutableStateOf<java.time.LocalDate>(java.time.LocalDate.now().plusDays(13))
     private var carryFrom: YearMonth? = null
@@ -122,6 +123,7 @@ class BudgetPlanViewModel(
             rangeText = plan.rangeMinor.takeIf { it > 0 }?.let(AmountInput::fromMinor).orEmpty()
             buckets = plan.buckets
             bucketIncomeText = plan.bucketIncome.takeIf { it > 0 }?.let(AmountInput::fromMinor).orEmpty()
+            bucketPicker = plan.bucketPicker
             plan.rangeFrom?.let { rangeFrom = it }
             plan.rangeTo?.let { rangeTo = it }
             carryFrom = plan.carryFrom
@@ -146,6 +148,7 @@ class BudgetPlanViewModel(
         rangeTo = rangeTo,
         buckets = buckets,
         bucketIncome = AmountInput.toMinor(bucketIncomeText) ?: 0,
+        bucketPicker = bucketPicker,
     )
 
     fun fillEvenly() {
@@ -376,7 +379,7 @@ fun BudgetPlanScreen(
                             )
                         }
                         if (viewModel.buckets) {
-                            MoneyField(viewModel.bucketIncomeText, { viewModel.bucketIncomeText = it }, label = "Monthly income (empty: what you log as income)")
+                            MoneyField(viewModel.bucketIncomeText, { viewModel.bucketIncomeText = it }, label = "Monthly income (empty: what you log, or your budget)")
                             val income = AmountInput.toMinor(viewModel.bucketIncomeText) ?: 0L
                             if (income > 0) {
                                 val money = com.leftovers.app.util.LocalMoney.current
@@ -393,6 +396,30 @@ fun BudgetPlanScreen(
                                 color = c.textTertiary,
                                 modifier = Modifier.padding(start = 4.dp),
                             )
+                            // Off: all categories in one row, as always.
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Column(Modifier.weight(1f)) {
+                                    Text("Pick Needs, Wants or Savings first", style = MaterialTheme.typography.titleSmall, color = c.textPrimary)
+                                    Spacer(Modifier.height(2.dp))
+                                    Text(
+                                        "When adding an expense, choose the group, then one of its categories.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = c.textSecondary,
+                                    )
+                                }
+                                Spacer(Modifier.width(12.dp))
+                                androidx.compose.material3.Switch(
+                                    checked = viewModel.bucketPicker,
+                                    onCheckedChange = com.leftovers.app.ui.components.toggleHaptic({ viewModel.bucketPicker = it }),
+                                    colors = androidx.compose.material3.SwitchDefaults.colors(
+                                        checkedTrackColor = c.accent,
+                                        checkedThumbColor = c.onAccent,
+                                        uncheckedTrackColor = c.glass,
+                                        uncheckedBorderColor = c.borderTop,
+                                        uncheckedThumbColor = c.textSecondary,
+                                    ),
+                                )
+                            }
                         }
                     }
                 }

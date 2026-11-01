@@ -29,4 +29,13 @@ class BucketsTest {
         assertEquals(listOf(30_000L, 18_000L, 12_000L), use.map { it.allowed })
         assertEquals(listOf(18_000L, 20_000L, 5_000L), use.map { it.used })
     }
+
+    // #39: with no income set or logged, the budget is split, not 0.
+    @Test
+    fun splitsTheBudgetWithoutIncome() {
+        assertEquals(50_000L, bucketBase(50_000, 40_000, 30_000))
+        assertEquals(40_000L, bucketBase(0, 40_000, 30_000))
+        assertEquals(30_000L, bucketBase(0, 0, 30_000))
+        assertEquals(0L, bucketBase(0, 0, 0))
+    }
 }

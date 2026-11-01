@@ -21,6 +21,13 @@ enum class Bucket(val label: String, val share: Int) {
     }
 }
 
+/**
+ * What 50/30/20 splits (#39): the income set for it, else the month's income as logged, else the month's budget,
+ * so the bars never read "of ₹0" before any income is in.
+ */
+fun bucketBase(setIncome: Long, loggedIncome: Long, budget: Long): Long =
+    setIncome.takeIf { it > 0 } ?: loggedIncome.takeIf { it > 0 } ?: budget.coerceAtLeast(0)
+
 /** One bucket's month: how much it may take, and how much went to it. */
 data class BucketUse(val bucket: Bucket, val allowed: Long, val used: Long)
 

@@ -172,6 +172,10 @@ class EditorViewModel(
 ) : ViewModel() {
     /** Whether an AI is connected, for reading a receipt photo into the entry. */
     val aiConfig = assistant.config
+
+    /** 50/30/20 with its picker on: an expense's category is chosen by Needs, Wants or Savings first (#39). */
+    val pickByBucket: StateFlow<Boolean> = settings.settings.map { it.plan.buckets && it.plan.bucketPicker }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
     var readingReceipt by mutableStateOf(false)
         private set
     /** What happened when the photo was read: filled in, or why not. */
@@ -1128,12 +1132,46 @@ fun EditorScreen(
             )
         }
         val sorted = remember(categories, history, viewModel.type) { viewModel.sortedCategories(categories, history) }
+        // 50/30/20, when chosen: Needs, Wants or Savings first, then only that group's categories (#39).
+        val byBucket by viewModel.pickByBucket.collectAsStateWithLifecycle()
+        val grouped = byBucket && viewModel.type == TxType.EXPENSE
+        var group by rememberSaveable(viewModel.type) { mutableStateOf<String?>(null) }
+        // An entry being changed opens on its category's group.
+        LaunchedEffect(grouped, viewModel.categoryId) {
+            if (grouped && group == null) sorted.find { it.id == viewModel.categoryId }?.let { group = com.leftovers.app.data.Bucket.of(it).name }
+        }
+        val shown = if (grouped && group != null) sorted.filter { com.leftovers.app.data.Bucket.of(it).name == group } else sorted
         LazyRow(
             contentPadding = PaddingValues(horizontal = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             modifier = sliding,
         ) {
-            items(sorted, key = { it.id }) { cat ->
+            if (grouped && group == null) {
+                items(com.leftovers.app.data.Bucket.entries, key = { "bucket-${it.name}" }) { b ->
+                    Chip(
+                        text = b.label,
+                        onClick = { group = b.name },
+                        icon = when (b) {
+                            com.leftovers.app.data.Bucket.NEED -> Lucide.House
+                            com.leftovers.app.data.Bucket.WANT -> Lucide.ShoppingBag
+                            com.leftovers.app.data.Bucket.SAVE -> Lucide.PiggyBank
+                        },
+                        iconTint = c.textSecondary,
+                    )
+                }
+            } else {
+                if (grouped) {
+                    // Back to the three groups.
+                    item(key = "bucket-back") {
+                        Chip(
+                            com.leftovers.app.data.Bucket.entries.first { it.name == group }.label,
+                            onClick = { group = null },
+                            icon = Lucide.ChevronLeft,
+                            iconTint = c.textSecondary,
+                        )
+                    }
+                }
+            items(shown, key = { it.id }) { cat ->
                 Chip(
                     text = cat.name,
                     onClick = { viewModel.selectCategory(cat.id) },
@@ -1141,6 +1179,7 @@ fun EditorScreen(
                     iconTint = Color(cat.color),
                     selected = viewModel.categoryId == cat.id,
                 )
+            }
             }
             item { Chip("Edit", onClick = onManageCategories, icon = Lucide.SlidersHorizontal, iconTint = c.textSecondary) }
         }

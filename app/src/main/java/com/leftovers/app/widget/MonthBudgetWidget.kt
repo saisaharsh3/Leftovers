@@ -16,6 +16,7 @@ import androidx.glance.appwidget.cornerRadius
 import androidx.glance.appwidget.provideContent
 import androidx.glance.background
 import androidx.glance.layout.Column
+import androidx.glance.layout.Row
 import androidx.glance.layout.Spacer
 import androidx.glance.layout.fillMaxSize
 import androidx.glance.layout.fillMaxWidth
@@ -34,7 +35,14 @@ import java.time.LocalDate
 import java.time.YearMonth
 import kotlin.math.abs
 
-private data class MonthState(val label: String, val amount: String, val caption: String, val used: Float?, val over: Boolean)
+/** One 50/30/20 group in the widget: its name, how much of it is used, and whether it's over. */
+private data class GroupState(val label: String, val percent: String, val used: Float, val over: Boolean)
+
+private data class MonthState(
+    val label: String, val amount: String, val caption: String, val used: Float?, val over: Boolean,
+    /** In 50/30/20: Needs, Wants and Savings, shown in place of the one budget. */
+    val groups: List<GroupState> = emptyList(),
+)
 
 /** Home-screen widget: what's left of this month's budget. */
 class MonthBudgetWidget : GlanceAppWidget() {
@@ -52,6 +60,21 @@ class MonthBudgetWidget : GlanceAppWidget() {
         val month = cycle.month
         val spent = all.filter { it.type == TxType.EXPENSE && !it.outOfBudget && it.date in cycle }.sumOf { it.amountMinor }
         val daysLeft = cycle.daysLeft()
+        if (s.plan.buckets) {
+            val items = all.filter { it.date in cycle }
+            val budget = if (s.plan.isSet) s.plan.budgetFor(month, all) else 0L
+            val base = com.leftovers.app.data.bucketBase(s.plan.bucketIncome, items.filter { it.type == TxType.INCOME }.sumOf { it.amountMinor }, budget)
+            val saved = container.planning.allDeposits.first()
+                .filter { it.epochDay in cycle.start.toEpochDay()..cycle.end.toEpochDay() }.sumOf { it.amountMinor }
+            val uses = com.leftovers.app.data.bucketUse(base, items, container.repository.categories.first(), saved)
+            return MonthState(
+                "50/30/20", "", "$daysLeft days left", null, false,
+                uses.map { u ->
+                    val share = if (u.allowed > 0) u.used.toFloat() / u.allowed else 0f
+                    GroupState(u.bucket.label, if (u.allowed > 0) "${(share * 100).toInt()}%" else money.formatWhole(u.used), share.coerceIn(0f, 1f), u.allowed > 0 && u.used > u.allowed)
+                },
+            )
+        }
         if (!s.plan.isSet) return MonthState("Spent this month", money.formatWhole(spent), "Set a budget to track what's left", null, false)
         val budget = s.plan.budgetFor(month, all)
         val left = budget - spent
@@ -76,6 +99,10 @@ class MonthBudgetWidget : GlanceAppWidget() {
                 .padding(18.dp)
                 .clickable(actionStartActivity(Intent(context, MainActivity::class.java))),
         ) {
+            if (state.groups.isNotEmpty()) {
+                Groups(state, white, muted)
+                return@Column
+            }
             Text(state.label, style = TextStyle(color = muted, fontSize = 12.sp, fontWeight = FontWeight.Medium))
             Spacer(GlanceModifier.height(4.dp))
             Text(
@@ -95,6 +122,29 @@ class MonthBudgetWidget : GlanceAppWidget() {
             Spacer(GlanceModifier.height(6.dp))
             Text(state.caption, style = TextStyle(color = muted, fontSize = 12.sp), maxLines = 1)
         }
+    }
+}
+
+/** Needs, Wants and Savings: each one's share of its part used, a bar each, red once it's over. */
+@androidx.compose.runtime.Composable
+private fun Groups(state: MonthState, white: ColorProvider, muted: ColorProvider) {
+    Row(GlanceModifier.fillMaxWidth()) {
+        Text(state.label, style = TextStyle(color = muted, fontSize = 12.sp, fontWeight = FontWeight.Medium), modifier = GlanceModifier.defaultWeight())
+        Text(state.caption, style = TextStyle(color = muted, fontSize = 12.sp), maxLines = 1)
+    }
+    state.groups.forEach { g ->
+        Spacer(GlanceModifier.height(7.dp))
+        Row(GlanceModifier.fillMaxWidth()) {
+            Text(g.label, style = TextStyle(color = white, fontSize = 13.sp, fontWeight = FontWeight.Medium), modifier = GlanceModifier.defaultWeight())
+            Text(g.percent, style = TextStyle(color = if (g.over) ColorProvider(Color(0xFFF58A8A)) else white, fontSize = 13.sp, fontWeight = FontWeight.Bold), maxLines = 1)
+        }
+        Spacer(GlanceModifier.height(3.dp))
+        LinearProgressIndicator(
+            progress = g.used,
+            modifier = GlanceModifier.fillMaxWidth().height(5.dp),
+            color = ColorProvider(if (g.over) Color(0xFFF58A8A) else Color(0xFFCDF46F)),
+            backgroundColor = ColorProvider(Color(0x22FFFFFF)),
+        )
     }
 }
 
