@@ -117,13 +117,26 @@ import java.time.YearMonth
 
 enum class TypeFilter(val label: String) { ALL("All"), EXPENSE("Spent"), INCOME("Income") }
 
-data class DayGroup(val date: LocalDate, val items: List<TransactionItem>)
+/** A day's entries; with [label], one list in another order (by amount) instead of a day. */
+data class DayGroup(val date: LocalDate, val items: List<TransactionItem>, val label: String? = null)
 
 /** Narrows the list to one account, one category and/or one #tag. A tag looks across all months. */
 /** [allTime]: every entry instead of one month's (#29); it isn't a filter, so it doesn't make the list "filtered". */
-data class ActivityFilters(val accountId: Long? = null, val categoryId: Long? = null, val tag: String? = null, val allTime: Boolean = false) {
-    val active get() = accountId != null || categoryId != null || tag != null
+data class ActivityFilters(
+    val accountId: Long? = null,
+    val categoryId: Long? = null,
+    val tag: String? = null,
+    val allTime: Boolean = false,
+    val sort: ActivitySort = ActivitySort.NEWEST,
+) {
+    /** Some entries are left out; a different order alone leaves everything in. */
+    val narrows get() = accountId != null || categoryId != null || tag != null
+    /** Anything to show as a removable chip. */
+    val active get() = narrows || sort != ActivitySort.NEWEST
 }
+
+/** The order entries are listed in: by day, newest first, or by amount. */
+enum class ActivitySort(val label: String) { NEWEST("Newest"), HIGHEST("Highest"), LOWEST("Lowest") }
 
 /** How another screen asks Activity to open: which tab, and optionally one account. */
 data class ActivityRequest(val filter: TypeFilter, val accountId: Long? = null)
@@ -201,7 +214,18 @@ class HistoryViewModel(
                 month = m,
                 filter = f,
                 query = q,
-                groups = filtered.groupBy { it.epochDay }.map { (day, items) -> DayGroup(LocalDate.ofEpochDay(day), items) },
+                groups = if (fl.sort == ActivitySort.NEWEST) {
+                    filtered.groupBy { it.epochDay }.map { (day, items) -> DayGroup(LocalDate.ofEpochDay(day), items) }
+                } else {
+                    // By amount: one list. A split bill counts as its whole amount and keeps its parts under it.
+                    val ids = filtered.map { it.id }.toSet()
+                    val bills = filtered.filter { it.splitOf == null || it.splitOf !in ids }
+                        .map { main -> listOf(main) + filtered.filter { it.splitOf == main.id } }
+                    val sorted = if (fl.sort == ActivitySort.HIGHEST) bills.sortedByDescending { b -> b.sumOf { it.amountMinor } }
+                    else bills.sortedBy { b -> b.sumOf { it.amountMinor } }
+                    if (sorted.isEmpty()) emptyList()
+                    else listOf(DayGroup(sorted.first().first().date, sorted.flatten(), if (fl.sort == ActivitySort.HIGHEST) "Highest first" else "Lowest first"))
+                },
                 monthItems = monthItems,
                 income = filtered.totalOf(TxType.INCOME),
                 expense = filtered.totalOf(TxType.EXPENSE),
@@ -349,8 +373,8 @@ fun HistoryScreen(
                             when {
                                 state.query.isNotBlank() -> "$what in results"
                                 state.filters.tag != null -> "$what on #${state.filters.tag} · all time"
-                                state.filters.allTime -> "$what · all time" + if (state.filters.active) " · filtered" else ""
-                                state.filters.active -> "$what this month · filtered"
+                                state.filters.allTime -> "$what · all time" + if (state.filters.narrows) " · filtered" else ""
+                                state.filters.narrows -> "$what this month · filtered"
                                 else -> "$what this month"
                             },
                             style = MaterialTheme.typography.labelLarge,
@@ -383,8 +407,8 @@ fun HistoryScreen(
 
             if (state.groups.isEmpty()) {
                 item {
-                    if (state.query.isNotBlank() || state.filters.active) {
-                        EmptyState(Lucide.Search, "No matches", if (state.filters.active) "Nothing matches these filters." else "Try a different word.")
+                    if (state.query.isNotBlank() || state.filters.narrows) {
+                        EmptyState(Lucide.Search, "No matches", if (state.filters.narrows) "Nothing matches these filters." else "Try a different word.")
                     } else {
                         if (state.filters.allTime) EmptyState(Lucide.ReceiptText, "No entries yet", "Tap the + button below to add your first one.")
                         else EmptyState(Lucide.ReceiptText, "No entries this month", "Switch to the calendar view to add something you forgot.")
@@ -404,7 +428,7 @@ fun HistoryScreen(
                             .padding(start = 6.dp, end = 6.dp, top = 22.dp, bottom = 8.dp)
                             .appear(groupIndex + 1),
                     ) {
-                        Text(group.date.friendlyLabel(), style = MaterialTheme.typography.labelLarge, color = c.textSecondary, modifier = Modifier.weight(1f))
+                        Text(group.label ?: group.date.friendlyLabel(), style = MaterialTheme.typography.labelLarge, color = c.textSecondary, modifier = Modifier.weight(1f))
                         if (spent > 0) Text(money.format(spent), style = MaterialTheme.typography.labelLarge, color = c.textSecondary)
                     }
                 }
@@ -427,8 +451,11 @@ fun HistoryScreen(
                                 item,
                                 onClick = { peek.show(item) },
                                 modifier = Modifier.peekSource(peek, item.id).then(if (part) Modifier.padding(start = 28.dp) else Modifier),
-                                subtitle = if (parts.isNotEmpty()) "${item.timeLabel()} · split, ${money.format(item.amountMinor + parts.sumOf { it.amountMinor })} in all"
-                                else if (part) "part of the split" else item.timeLabel(),
+                                subtitle = run {
+                                    val whenText = if (group.label != null) item.date.friendlyLabel() else item.timeLabel()
+                                    if (parts.isNotEmpty()) "$whenText · split, ${money.format(item.amountMinor + parts.sumOf { it.amountMinor })} in all"
+                                    else if (part) "part of the split" else whenText
+                                },
                             )
                         }
                     }
@@ -451,6 +478,7 @@ private fun ActiveFilters(state: HistoryUiState, onChange: (ActivityFilters) -> 
         state.accounts.firstOrNull { it.id == f.accountId }?.let { Chip(it.name, { onChange(f.copy(accountId = null)) }, icon = Lucide.X, selected = true) }
         state.categories.firstOrNull { it.id == f.categoryId }?.let { Chip(it.name, { onChange(f.copy(categoryId = null)) }, icon = Lucide.X, selected = true) }
         f.tag?.let { Chip("#$it", { onChange(f.copy(tag = null)) }, icon = Lucide.X, selected = true) }
+        if (f.sort != ActivitySort.NEWEST) Chip(f.sort.label, { onChange(f.copy(sort = ActivitySort.NEWEST)) }, icon = Lucide.X, selected = true)
     }
 }
 
@@ -469,6 +497,15 @@ private fun FilterSheet(state: HistoryUiState, onChange: (ActivityFilters) -> Un
             fun Section(title: String, content: @Composable () -> Unit) {
                 Text(title, style = MaterialTheme.typography.labelMedium, color = c.textSecondary, modifier = Modifier.padding(start = 6.dp, top = 4.dp))
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) { content() }
+            }
+            Section("Sort") {
+                ActivitySort.entries.forEach { o ->
+                    Chip(
+                        o.label, { onChange(f.copy(sort = o)) },
+                        icon = when (o) { ActivitySort.NEWEST -> Lucide.Calendar; ActivitySort.HIGHEST -> Lucide.TrendingUp; ActivitySort.LOWEST -> Lucide.TrendingDown },
+                        selected = o == f.sort,
+                    )
+                }
             }
             if (state.accounts.isNotEmpty()) {
                 Section("Account") {

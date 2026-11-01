@@ -178,7 +178,9 @@ class HomeViewModel(
                 .take(6),
             goals = goals.filter { !it.reached }.take(5),
             owed = debts.openBalances().filter { it.netMinor != 0L },
-            recent = shownAll.take(6),
+            // Six entries, a split bill counting as one, with its parts under it as in Activity (#36).
+            recent = shownAll.filter { it.splitOf == null || shownAll.none { m -> m.id == it.splitOf } }.take(6)
+                .let { mains -> splitOrder(mains + shownAll.filter { p -> p.splitOf != null && mains.any { it.id == p.splitOf } }) },
             smsSuggestions = suggestions,
             recapMonth = month.minusMonths(1).takeIf { prev ->
                 todayDate.dayOfMonth <= 10 && s.recapSeen != prev.toString() && all.any { YearMonth.from(it.date) == prev }
@@ -765,8 +767,19 @@ fun HomeScreen(
                     } else {
                         Column(Modifier.padding(vertical = 6.dp)) {
                             state.recent.forEachIndexed { i, item ->
-                                if (i > 0) RowDivider()
-                                TransactionRow(item, onClick = { peek.show(item) }, subtitle = item.date.friendlyLabel(), modifier = Modifier.peekSource(peek, item.id))
+                                val part = item.splitOf != null && state.recent.any { it.id == item.splitOf }
+                                val parts = state.recent.filter { it.splitOf == item.id }
+                                if (i > 0) RowDivider(inset = if (part) 102.dp else 74.dp)
+                                TransactionRow(
+                                    item,
+                                    onClick = { peek.show(item) },
+                                    subtitle = when {
+                                        parts.isNotEmpty() -> "${item.date.friendlyLabel()} · split, ${money.format(item.amountMinor + parts.sumOf { it.amountMinor })} in all"
+                                        part -> "part of the split"
+                                        else -> item.date.friendlyLabel()
+                                    },
+                                    modifier = Modifier.peekSource(peek, item.id).then(if (part) Modifier.padding(start = 28.dp) else Modifier),
+                                )
                             }
                         }
                     }

@@ -152,8 +152,11 @@ import java.time.YearMonth
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 
-/** A slice of a split entry: [amountMinor] goes to [categoryId]; the rest stays with the main category. */
-data class SplitPart(val categoryId: Long, val amountMinor: Long)
+/**
+ * A slice of a split entry: [amountMinor] goes to [categoryId]; the rest stays with the main category.
+ * [note] is the part's own note; empty, it takes the main entry's.
+ */
+data class SplitPart(val categoryId: Long, val amountMinor: Long, val note: String = "")
 
 /** Drives the keypad editor for adding a new entry or editing an existing one. */
 class EditorViewModel(
@@ -611,7 +614,7 @@ class EditorViewModel(
                         type = savedType,
                         categoryId = part.categoryId,
                         epochDay = savedDate.toEpochDay(),
-                        note = note.trim(),
+                        note = part.note.trim().ifBlank { note.trim() },
                         createdAt = createdAt,
                         accountId = accountId,
                         // Shown under the entry it was split from (#36).
@@ -1626,6 +1629,7 @@ private fun SplitBody(
     val money = LocalMoney.current
     var pick by rememberSaveable { mutableStateOf<Long?>(null) }
     var amountText by rememberSaveable { mutableStateOf("") }
+    var partNote by rememberSaveable { mutableStateOf("") }
     val rest = total - parts.sumOf { it.amountMinor }
     val partMinor = AmountInput.toMinor(amountText) ?: 0L
     // After Add part: the keyboard closes and the list scrolls into view, with the new part in it,
@@ -1647,7 +1651,7 @@ private fun SplitBody(
                 return@Column
             }
             Text(
-                "Each part is its own entry, with the same date and note, shown under this one.",
+                "Each part is its own entry on the same day, shown under this one. Give a part its own note, or it keeps this entry's.",
                 style = MaterialTheme.typography.bodySmall,
                 color = c.textSecondary,
             )
@@ -1664,6 +1668,7 @@ private fun SplitBody(
                         com.leftovers.app.ui.components.RowDivider()
                         com.leftovers.app.ui.components.ListRow(
                             cat?.name ?: "Category",
+                            subtitle = part.note.ifBlank { null },
                             leading = { if (cat != null) CategoryIcon(cat.emoji, cat.color, size = 38.dp) },
                             trailing = {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1688,16 +1693,20 @@ private fun SplitBody(
                 val id = pick ?: return
                 val amount = AmountInput.toMinor(amountText) ?: 0L
                 if (amount <= 0 || amount >= total - parts.sumOf { it.amountMinor }) return
-                val existing = parts.indexOfFirst { it.categoryId == id }
+                val text = partNote.trim()
+                // The same category and note again adds to that part; another note is a part of its own.
+                val existing = parts.indexOfFirst { it.categoryId == id && it.note == text }
                 if (existing >= 0) parts[existing] = parts[existing].copy(amountMinor = parts[existing].amountMinor + amount)
-                else parts += SplitPart(id, amount)
+                else parts += SplitPart(id, amount, text)
                 amountText = ""
+                partNote = ""
                 pick = null
                 focus.clearFocus()
                 keyboard?.hide()
                 scope.launch { scroll.animateScrollTo(0) }
             }
             // The keyboard's ✓ adds the part too, so Add part can stay under the field even while the keyboard covers it.
+            GlassTextField(partNote, { partNote = it.take(80) }, placeholder = "Note for this part (optional)", modifier = Modifier.fillMaxWidth())
             MoneyField(amountText, { amountText = it }, label = "Amount for this part", onDone = ::addPart)
             PrimaryButton("Add part", ::addPart, Modifier.fillMaxWidth(), enabled = canAdd)
             if (rest <= 0) {
