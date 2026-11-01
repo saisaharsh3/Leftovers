@@ -871,72 +871,86 @@ internal fun billSubtitle(whenText: String, line: BillLine.Entry): String = when
     else -> whenText
 }
 
+/** Whether [line] sits under a split bill: one of its parts, or a person's share. */
+internal fun BillLine.under(): Boolean = this is BillLine.Share || (this is BillLine.Entry && part)
+
 /**
- * A part of a split bill, or a person's share of it, under the bill: one short line, joined to the bill by a thin
- * line from its icon, so the bill reads as one thing (#36). [last] ends the line here.
+ * A part of a split bill, or a person's share of it: a short line in a soft panel under the bill, lined up with
+ * its title, so the bill and what it's made of read as one thing without lines or icons (#36). [card] and [i] say
+ * where it sits: the panel rounds off at its first and last line, and a hairline sets the people apart from the parts.
  */
 @Composable
-internal fun BillPartRow(line: BillLine, last: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
+internal fun BillPartRow(card: List<BillLine>, i: Int, onClick: () -> Unit, modifier: Modifier = Modifier) {
     val c = LocalAppColors.current
     val money = LocalMoney.current
-    val guide = billGuide()
-    Row(
+    val line = card[i]
+    val first = card.getOrNull(i - 1)?.under() != true
+    val last = card.getOrNull(i + 1)?.under() != true
+    val round = 16.dp
+    val shape = RoundedCornerShape(
+        topStart = if (first) round else 0.dp, topEnd = if (first) round else 0.dp,
+        bottomStart = if (last) round else 0.dp, bottomEnd = if (last) round else 0.dp,
+    )
+    Column(
         modifier
             .fillMaxWidth()
-            .pressable(onClick, pressedScale = 0.985f)
-            .height(IntrinsicSize.Min)
-            .padding(start = 16.dp, end = 16.dp),
-        verticalAlignment = Alignment.CenterVertically,
+            .padding(start = 72.dp, end = 16.dp, bottom = if (last) 12.dp else 0.dp)
+            .background(c.textPrimary.copy(alpha = 0.05f), shape),
     ) {
-        // The bill's line, down from its icon, turning in to this one.
-        Box(
-            Modifier.width(42.dp).fillMaxHeight().drawBehind {
-                val x = size.width / 2
-                val w = 1.5.dp.toPx()
-                drawLine(guide, androidx.compose.ui.geometry.Offset(x, 0f), androidx.compose.ui.geometry.Offset(x, if (last) size.height / 2 else size.height), w)
-                drawLine(guide, androidx.compose.ui.geometry.Offset(x, size.height / 2), androidx.compose.ui.geometry.Offset(size.width, size.height / 2), w)
-            },
-        )
-        Spacer(Modifier.width(6.dp))
-        when (line) {
-            is BillLine.Entry -> {
-                val text = com.leftovers.app.data.noteText(line.item.note)
-                CategoryIcon(line.item.categoryEmoji, line.item.categoryColor, size = 28.dp)
-                Spacer(Modifier.width(10.dp))
-                Text(
-                    if (text.isNotBlank()) "$text · ${line.item.categoryName}" else line.item.categoryName,
-                    style = MaterialTheme.typography.bodyMedium, color = c.textPrimary, maxLines = 1,
-                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f).padding(vertical = 10.dp),
-                )
-                Text(money.format(line.item.amountMinor), style = MaterialTheme.typography.bodyMedium, color = c.textSecondary)
-            }
-            is BillLine.Share -> {
-                val d = line.debt
-                com.leftovers.app.ui.components.IconTile(com.leftovers.app.ui.icons.Lucide.HandCoins, if (d.settled) c.textTertiary else c.positive, size = 28.dp)
-                Spacer(Modifier.width(10.dp))
-                Text(
-                    d.person + if (d.settled) " · settled" else " · owes you",
-                    style = MaterialTheme.typography.bodyMedium, color = c.textPrimary, maxLines = 1,
-                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f).padding(vertical = 10.dp),
-                )
-                Text(money.format(d.amountMinor), style = MaterialTheme.typography.bodyMedium, color = if (d.settled) c.textTertiary else c.positive)
+        if (line is BillLine.Share && card.getOrNull(i - 1).let { it is BillLine.Entry && it.part }) {
+            Box(Modifier.padding(horizontal = 14.dp).fillMaxWidth().height(1.dp).background(c.textPrimary.copy(alpha = 0.07f)))
+        }
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .clip(shape)
+                .pressable(onClick, pressedScale = 0.98f)
+                .padding(start = 14.dp, end = 14.dp, top = if (first) 12.dp else 9.dp, bottom = if (last) 12.dp else 9.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            when (line) {
+                is BillLine.Entry -> {
+                    val text = com.leftovers.app.data.noteText(line.item.note)
+                    Box(Modifier.width(22.dp), contentAlignment = Alignment.Center) {
+                        Box(Modifier.size(8.dp).background(androidx.compose.ui.graphics.Color(line.item.categoryColor), androidx.compose.foundation.shape.CircleShape))
+                    }
+                    Spacer(Modifier.width(5.dp))
+                    // The note when it has one, with its category after it, quieter.
+                    Text(
+                        if (text.isBlank()) androidx.compose.ui.text.AnnotatedString(line.item.categoryName)
+                        else androidx.compose.ui.text.buildAnnotatedString {
+                            append(text)
+                            pushStyle(androidx.compose.ui.text.SpanStyle(color = c.textTertiary))
+                            append("  " + line.item.categoryName)
+                            pop()
+                        },
+                        style = MaterialTheme.typography.bodyMedium, color = c.textPrimary, maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.weight(1f),
+                    )
+                    Spacer(Modifier.width(12.dp))
+                    Text(money.format(line.item.amountMinor), style = MaterialTheme.typography.bodyMedium, color = c.textSecondary)
+                }
+                is BillLine.Share -> {
+                    val d = line.debt
+                    val tint = if (d.settled) c.textTertiary else c.positive
+                    // A person: their initial, so they never read as a category's dot.
+                    Box(Modifier.size(22.dp).background(tint.copy(alpha = 0.16f), androidx.compose.foundation.shape.CircleShape), contentAlignment = Alignment.Center) {
+                        Text(d.person.take(1).uppercase(), style = MaterialTheme.typography.labelSmall, color = tint)
+                    }
+                    Spacer(Modifier.width(5.dp))
+                    Text(
+                        d.person, style = MaterialTheme.typography.bodyMedium, color = c.textPrimary, maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.weight(1f),
+                    )
+                    Text(
+                        (if (d.settled) "settled " else "owes ") + money.format(d.amountMinor),
+                        style = MaterialTheme.typography.bodyMedium, color = tint,
+                    )
+                }
             }
         }
     }
 }
-
-/** The colour of the line joining a split bill to its parts. */
-@Composable
-internal fun billGuide() = LocalAppColors.current.textTertiary.copy(alpha = 0.35f)
-
-/** Under a split bill's icon, the top of the line that joins its [BillPartRow]s, when [show]. */
-internal fun Modifier.billStem(show: Boolean, color: androidx.compose.ui.graphics.Color): Modifier =
-    if (!show) this else drawBehind {
-        val x = 37.dp.toPx()
-        drawLine(color, androidx.compose.ui.geometry.Offset(x, size.height / 2 + 21.dp.toPx()), androidx.compose.ui.geometry.Offset(x, size.height), 1.5.dp.toPx())
-    }
 
 /** A split bill's whole amount, for the entry it's split from; null for anything else. */
 internal fun BillLine.Entry.whole(): Long? =

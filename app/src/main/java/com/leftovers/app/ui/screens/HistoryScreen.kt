@@ -455,19 +455,19 @@ fun HistoryScreen(
                                     .appear(groupIndex + 1),
                             ) {
                                 val under = line is BillLine.Share || (line is BillLine.Entry && line.part)
-                                // A bill's parts and shares sit tight under it, joined by a line, with no dividers.
+                                // A bill's parts and shares sit in a panel under it, with no dividers.
                                 if (i > 0 && !under) RowDivider(inset = 74.dp)
                                 // No swipe actions: they fired by accident. A tap opens the entry, where it can be edited or deleted.
                                 when {
                                     under -> BillPartRow(
-                                        line, last = card.getOrNull(i + 1).let { it !is BillLine.Share && !(it is BillLine.Entry && it.part) },
+                                        card, i,
                                         onClick = { if (line is BillLine.Share) peek.share = line.debt else peek.show((line as BillLine.Entry).item) },
                                         modifier = if (line is BillLine.Entry) Modifier.peekSource(peek, line.item.id) else Modifier,
                                     )
                                     line is BillLine.Entry -> TransactionRow(
                                         line.item,
                                         onClick = { peek.show(line.item) },
-                                        modifier = Modifier.peekSource(peek, line.item.id).billStem(card.getOrNull(i + 1).let { it is BillLine.Share || (it is BillLine.Entry && it.part) }, billGuide()),
+                                        modifier = Modifier.peekSource(peek, line.item.id),
                                         subtitle = billSubtitle(if (group.label != null) line.item.date.friendlyLabel() else line.item.timeLabel(), line),
                                         wholeMinor = line.whole(),
                                     )

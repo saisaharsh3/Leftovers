@@ -813,11 +813,11 @@ fun HomeScreen(
                                 Column(Modifier.padding(vertical = 6.dp)) {
                                     card.forEachIndexed { i, line ->
                                         val under = line is BillLine.Share || (line is BillLine.Entry && line.part)
-                                        // A bill's parts and shares sit tight under it, joined by a line, with no dividers.
+                                        // A bill's parts and shares sit in a panel under it, with no dividers.
                                         if (i > 0 && !under) RowDivider(inset = 74.dp)
                                         when {
                                             under -> BillPartRow(
-                                                line, last = card.getOrNull(i + 1).let { it !is BillLine.Share && !(it is BillLine.Entry && it.part) },
+                                                card, i,
                                                 onClick = { if (line is BillLine.Share) peek.share = line.debt else peek.show((line as BillLine.Entry).item) },
                                                 modifier = if (line is BillLine.Entry) Modifier.peekSource(peek, line.item.id) else Modifier,
                                             )
@@ -826,7 +826,7 @@ fun HomeScreen(
                                                 onClick = { peek.show(line.item) },
                                                 subtitle = billSubtitle(line.item.date.friendlyLabel(), line),
                                                 wholeMinor = line.whole(),
-                                                modifier = Modifier.peekSource(peek, line.item.id).billStem(card.getOrNull(i + 1).let { it is BillLine.Share || (it is BillLine.Entry && it.part) }, billGuide()),
+                                                modifier = Modifier.peekSource(peek, line.item.id),
                                             )
                                         }
                                     }
