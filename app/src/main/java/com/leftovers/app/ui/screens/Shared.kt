@@ -816,7 +816,14 @@ private fun LiquidSheet(
 
 /** One line in a list of entries: an entry, or a person's share of a bill split with people (#36). */
 sealed interface BillLine {
-    data class Entry(val item: TransactionItem, val part: Boolean, val parts: List<TransactionItem>, val shares: List<com.leftovers.app.data.Debt>) : BillLine
+    /** [ofBill]: a part of a split bill, shown on its own line with splits shown separately. */
+    data class Entry(
+        val item: TransactionItem,
+        val part: Boolean,
+        val parts: List<TransactionItem>,
+        val shares: List<com.leftovers.app.data.Debt>,
+        val ofBill: Boolean = false,
+    ) : BillLine
     data class Share(val debt: com.leftovers.app.data.Debt, val main: TransactionItem) : BillLine
 }
 
@@ -825,7 +832,9 @@ sealed interface BillLine {
  * first, then its parts and the people who owe for it. With [oneBill] off, every entry is on its own line.
  */
 internal fun billCards(items: List<TransactionItem>, shares: Map<Long, List<com.leftovers.app.data.Debt>>, oneBill: Boolean): List<List<BillLine>> {
-    if (!oneBill) return listOf(items.map { BillLine.Entry(it, false, emptyList(), emptyList()) }).filter { it.isNotEmpty() }
+    // Separately, each entry has a line of its own, still marked as split, with the bill's whole amount (#36).
+    if (!oneBill) return listOf(items.map { BillLine.Entry(it, false, items.filter { p -> p.splitOf == it.id }, shares[it.id].orEmpty(), ofBill = it.splitOf != null) })
+        .filter { it.isNotEmpty() }
     val ordered = splitOrder(items)
     val ids = ordered.map { it.id }.toSet()
     val cards = mutableListOf<List<BillLine>>()
@@ -850,6 +859,7 @@ internal fun billCards(items: List<TransactionItem>, shares: Map<Long, List<com.
 /** What a split bill's entry says under its title: how it was split, and the whole amount. */
 internal fun billSubtitle(whenText: String, line: BillLine.Entry): String = when {
     line.part -> "part of the split"
+    line.ofBill -> "$whenText · part of a split"
     // The whole amount is on the right, under this entry's share, so the line stays short enough to read.
     line.shares.isNotEmpty() -> "$whenText · split with ${line.shares.size}"
     line.parts.isNotEmpty() -> "$whenText · split"
