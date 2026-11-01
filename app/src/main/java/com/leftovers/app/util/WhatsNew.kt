@@ -13,6 +13,8 @@ object WhatsNew {
         "The AI assistant adds split bills too, from a chat or a photo of the bill",
         "Add again logs the same entry for today, from its card",
         "Activity sorts by highest or lowest amount",
+        "Money owed: save something before you know the amount, and pay back one entry on its own",
+        "50/30/20: pick Needs, Wants or Savings first, and see all three on the widget",
         "Sheets close with a drag down anywhere on them",
     )
 

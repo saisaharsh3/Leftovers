@@ -363,7 +363,7 @@ class AssistantTools(private val container: AppContainer, private val privacy: A
                 }).toString(), "${list.size} goals")
             }
             "list_money_owed" -> {
-                val balances = container.planning.debts.first().openBalances().filter { it.netMinor != 0L }
+                val balances = container.planning.debts.first().openBalances().filter { it.open }
                 val o = JSONObject()
                     .put("owed_to_user", major(balances.filter { it.netMinor > 0 }.sumOf { it.netMinor }))
                     .put("user_owes", major(balances.filter { it.netMinor < 0 }.sumOf { -it.netMinor }))
@@ -374,6 +374,7 @@ class AssistantTools(private val container: AppContainer, private val privacy: A
                                 JSONObject().put("date", LocalDate.ofEpochDay(d.epochDay).toString())
                                     .put(if (d.amountMinor > 0) "lent" else "borrowed", major(kotlin.math.abs(d.amountMinor)))
                                     .also { if (d.splitOf != null) it.put("share_of_split_bill", d.splitOf) }
+                                    .also { if (d.isPending) it.put("amount_pending", if (d.theyOwe) "they will owe the user" else "the user will owe them") }
                                     .also { if (d.note.isNotBlank()) it.put("note", if (privacy.shareNotes) scrub(d.note) else "[hidden: the user keeps notes private]") }
                             }))
                     }))

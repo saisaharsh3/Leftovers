@@ -187,7 +187,7 @@ class HomeViewModel(
                 .filter { it.toRecurring().nextChargeDate() <= todayDate.plusDays(30) }
                 .take(6),
             goals = goals.filter { !it.reached }.take(5),
-            owed = debts.openBalances().filter { it.netMinor != 0L },
+            owed = debts.openBalances().filter { it.open },
             // Six entries, a split bill counting as one, with its parts under it as in Activity (#36).
             recent = if (!s.splitsAsOneBill) shownAll.take(6)
             else shownAll.filter { it.splitOf == null || shownAll.none { m -> m.id == it.splitOf } }.take(6)
@@ -394,7 +394,7 @@ fun HomeScreen(
 
     // Tapping someone on Money owed: a card in the middle with everything about them, to edit or settle.
     state.owed.firstOrNull { it.person.equals(owedOpen, ignoreCase = true) }?.let { b ->
-        val theyOwe = b.netMinor > 0
+        val theyOwe = if (b.pendingOnly) b.entries.first().theyOwe else b.netMinor > 0
         val tone = if (theyOwe) c.positive else c.warning
         val entries = b.entries.sortedByDescending { it.epochDay }
         val lent = b.entries.filter { !it.repayment && it.amountMinor > 0 }.sumOf { it.amountMinor }
@@ -436,7 +436,8 @@ fun HomeScreen(
                             .padding(horizontal = 18.dp, vertical = 16.dp),
                     ) {
                         Text(if (theyOwe) "Owes you" else "You owe", style = MaterialTheme.typography.labelLarge, color = tone)
-                        Text(money.format(abs(b.netMinor)), style = MaterialTheme.typography.displaySmall, color = c.textPrimary)
+                        if (b.pendingOnly) Text("Amount pending", style = MaterialTheme.typography.headlineSmall, color = c.textPrimary)
+                        else Text(money.format(abs(b.netMinor)), style = MaterialTheme.typography.displaySmall, color = c.textPrimary)
                         if (parts.size > 1) {
                             Text(
                                 parts.joinToString(" · "),
@@ -488,7 +489,7 @@ fun HomeScreen(
                                     )
                                 }
                                 Column(horizontalAlignment = Alignment.End) {
-                                    Text(money.format(abs(d.amountMinor)), style = MaterialTheme.typography.titleSmall, color = c.textPrimary)
+                                    Text(if (d.isPending) "Pending" else money.format(abs(d.amountMinor)), style = MaterialTheme.typography.titleSmall, color = c.textPrimary)
                                     // Without a note the title already says it, so it isn't said twice (#36).
                                     if (d.note.isNotBlank()) {
                                         Text(if (d.repayment) (if (d.amountMinor < 0) "received" else "paid back") else if (out) "lent" else "borrowed", style = MaterialTheme.typography.labelSmall, color = c.textTertiary)
@@ -1073,7 +1074,7 @@ private fun OwedSummary(
                 }
             }
             shown.forEach { b ->
-                val theyOwe = b.netMinor > 0
+                val theyOwe = if (b.pendingOnly) b.entries.first().theyOwe else b.netMinor > 0
                 val latest = b.entries.maxByOrNull { it.epochDay }
                 RowDivider(inset = 16.dp)
                 com.leftovers.app.ui.components.ListRow(
@@ -1085,8 +1086,8 @@ private fun OwedSummary(
                     leading = { IconTile(Lucide.HandCoins, if (theyOwe) c.positive else c.warning, size = 38.dp) },
                     trailing = {
                         Column(horizontalAlignment = Alignment.End) {
-                            Text(money.format(abs(b.netMinor)), style = MaterialTheme.typography.titleSmall, color = if (theyOwe) c.positive else c.textPrimary)
-                            Text(if (theyOwe) "owes you" else "you owe", style = MaterialTheme.typography.labelSmall, color = c.textTertiary)
+                            Text(if (b.pendingOnly) "Pending" else money.format(abs(b.netMinor)), style = MaterialTheme.typography.titleSmall, color = if (theyOwe) c.positive else c.textPrimary)
+                            Text(if (b.pendingOnly) "amount to come" else if (theyOwe) "owes you" else "you owe", style = MaterialTheme.typography.labelSmall, color = c.textTertiary)
                         }
                     },
                     onClick = { onOpen(b.person, rows[b.person]) },

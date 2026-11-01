@@ -522,7 +522,25 @@ class EditorViewModel(
     }
 
     private fun saveOwed(onDone: (String) -> Unit, describe: (Long) -> String): Boolean {
-        if (amountMinor <= 0 || totalMinor <= 0) return false
+        // No amount yet: a reminder for each person, filled in once it's known (#36).
+        if (amountMinor <= 0) {
+            if (owedWith.isEmpty()) {
+                needPerson = true
+                return false
+            }
+            val way = if (lent) 1 else -1
+            val people = owedWith.toList()
+            val text = note.trim()
+            val day = date.toEpochDay()
+            val account = accountId
+            viewModelScope.launch {
+                people.forEach { planning.saveDebt(Debt(person = it, amountMinor = 0, note = text, epochDay = day, receiptPath = receiptPath, accountId = account, pending = way)) }
+                if (isEditing) repository.getTransaction(id)?.let { repository.removeTransaction(it) }
+                onDone("Saved for ${people.joinToString(" and ")} · amount pending, in Money owed")
+            }
+            return true
+        }
+        if (totalMinor <= 0) return false
         val shares = owedShares()
         if (shares.isEmpty()) {
             needPerson = true

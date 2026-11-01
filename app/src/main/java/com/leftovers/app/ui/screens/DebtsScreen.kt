@@ -172,6 +172,7 @@ fun DebtsScreen(onBack: () -> Unit, viewModel: DebtsViewModel = viewModel(factor
                                     when {
                                         b.netMinor > 0 -> "Owes you ${money.format(b.netMinor)}"
                                         b.netMinor < 0 -> "You owe ${money.format(-b.netMinor)}"
+                                        b.pendingOnly -> "Amount pending"
                                         else -> "Even"
                                     },
                                     style = MaterialTheme.typography.bodyMedium,
@@ -185,7 +186,8 @@ fun DebtsScreen(onBack: () -> Unit, viewModel: DebtsViewModel = viewModel(factor
                                 RoundButton(Lucide.Bell, "Remind ${b.person}", { com.leftovers.app.util.DebtReminder.share(context, com.leftovers.app.util.DebtReminder.message(b, money::format), b.person) })
                                 Spacer(Modifier.padding(start = 8.dp))
                             }
-                            Chip(if (b.netMinor > 0) "Received" else "Paid back", { settling = b.person }, icon = Lucide.Check)
+                            // Nothing to pay back until an amount is in.
+                            if (!b.pendingOnly) Chip(if (b.netMinor > 0) "Received" else "Paid back", { settling = b.person }, icon = Lucide.Check)
                         }
                         b.entries.forEach { d ->
                             RowDivider(inset = 16.dp)
@@ -203,7 +205,8 @@ fun DebtsScreen(onBack: () -> Unit, viewModel: DebtsViewModel = viewModel(factor
                                     Icon(Lucide.Camera, contentDescription = if (d.photos.size == 1) "Has a photo" else "Has ${d.photos.size} photos", tint = c.textTertiary, modifier = Modifier.padding(end = 8.dp).size(14.dp))
                                 }
                                 Text(
-                                    (if (d.repayment) (if (d.amountMinor < 0) "Received " else "Paid back ") else if (d.amountMinor > 0) "Lent " else "Borrowed ") + money.format(abs(d.amountMinor)),
+                                    if (d.isPending) (if (d.theyOwe) "Lent · amount pending" else "Borrowed · amount pending")
+                                    else (if (d.repayment) (if (d.amountMinor < 0) "Received " else "Paid back ") else if (d.amountMinor > 0) "Lent " else "Borrowed ") + money.format(abs(d.amountMinor)),
                                     style = MaterialTheme.typography.labelLarge,
                                     color = c.textPrimary,
                                 )
@@ -274,7 +277,7 @@ fun DebtEditor(
             else initial.accountId,
         )
     }
-    var lent by rememberSaveable { mutableStateOf(initial.amountMinor >= 0) }
+    var lent by rememberSaveable { mutableStateOf(initial.id == 0L && initial.amountMinor == 0L || initial.theyOwe) }
     var person by rememberSaveable { mutableStateOf(initial.person) }
     var amountText by rememberSaveable { mutableStateOf(if (initial.amountMinor != 0L) AmountInput.fromMinor(abs(initial.amountMinor)) else "") }
     var note by rememberSaveable { mutableStateOf(initial.note) }
@@ -328,7 +331,7 @@ fun DebtEditor(
                     matches.forEach { Chip(it, { person = it }) }
                 }
             }
-            MoneyField(amountText, { amountText = it }, label = "Amount")
+            MoneyField(amountText, { amountText = it }, label = if (amount > 0) "Amount" else "Amount (leave empty if you don't know it yet)")
             // Lending takes the money out of this account until it's paid back; borrowing puts it in.
             if (accounts.size > 1 || (accounts.isNotEmpty() && accountId == null)) {
                 Text(
@@ -369,12 +372,16 @@ fun DebtEditor(
             fun edited(): Debt {
                 // Photos removed while editing are deleted once the change is saved.
                 original.filter { it !in photos }.forEach { ReceiptStore.delete(it) }
-                return initial.copy(person = person.trim(), amountMinor = if (lent) amount else -amount, note = note.trim(), receiptPath = photosToPath(photos), accountId = accountId)
+                // No amount yet: kept as a reminder, which way it will go, until it's filled in (#36).
+                return initial.copy(
+                    person = person.trim(), amountMinor = if (lent) amount else -amount, note = note.trim(), receiptPath = photosToPath(photos),
+                    accountId = accountId, pending = if (amount > 0) 0 else if (lent) 1 else -1,
+                )
             }
-            val ready = person.isNotBlank() && amount > 0
+            val ready = person.isNotBlank()
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 // An open entry can be paid back on its own, apart from the rest with this person.
-                if (onSettle != null && initial.id != 0L && !initial.settled && !initial.repayment) {
+                if (onSettle != null && initial.id != 0L && !initial.settled && !initial.repayment && amount > 0) {
                     SecondaryButton(
                         if (lent) "Received" else "Paid back",
                         { if (ready) onSettle(edited()) },

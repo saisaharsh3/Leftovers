@@ -5,6 +5,7 @@ All notable changes to Leftovers. Download any version from
 
 ## Unreleased
 
+- Money owed: lent or borrowed can be saved without an amount, as a reminder (a laptop a friend is sending, say): it shows as amount pending and counts nowhere until it's filled in (#36)
 - 50/30/20: an option to pick Needs, Wants or Savings first when adding an expense, then one of its categories; off,
   all categories stay in one row (#39)
 - 50/30/20: the Left this month widget shows Needs, Wants and Savings, each with how much of its part is used (#39)

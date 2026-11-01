@@ -139,6 +139,7 @@ class BackupManager(
                         .put("day", d.epochDay).put("settled", d.settled).put("createdAt", d.createdAt)
                         .put("account", d.accountId ?: JSONObject.NULL).put("repayment", d.repayment)
                         .put("splitOf", d.splitOf ?: JSONObject.NULL)
+                        .put("pending", d.pending)
                         .put("receipts", JSONArray(d.photos.map { photoRef(it) }.filter { it != JSONObject.NULL }))
                 }))
                 if (photos.length() > 0) put("photos", photos)
@@ -259,6 +260,7 @@ class BackupManager(
                     accountId = if (it.isNull("account")) null else it.optLong("account"),
                     repayment = it.optBoolean("repayment"),
                     splitOf = it.longOrNull("splitOf"),
+                    pending = it.optInt("pending", 0),
                 )
             }
 
