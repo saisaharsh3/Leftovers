@@ -1675,9 +1675,9 @@ private fun SplitBody(
     val keyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
     val scope = rememberCoroutineScope()
 
-    Column {
+    run {
         Column(
-            Modifier.weight(1f, fill = false).verticalScroll(scroll).padding(horizontal = 20.dp).padding(bottom = 12.dp),
+            Modifier.verticalScroll(scroll).padding(horizontal = 20.dp).padding(bottom = 16.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             header()
@@ -1759,9 +1759,8 @@ private fun SplitBody(
             if (rest <= 0) {
                 Text("The parts add up to the whole amount. Leave something for ${mainCategory?.name ?: "the main category"}.", style = MaterialTheme.typography.bodySmall, color = c.negative)
             }
+            SecondaryButton("Done", onDismiss, Modifier.fillMaxWidth())
         }
-        // Always in view, however long the list of parts gets.
-        SecondaryButton("Done", onDismiss, Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 16.dp))
     }
 }
 
