@@ -156,7 +156,7 @@ import java.time.format.DateTimeFormatter
  * A slice of a split entry: [amountMinor] goes to [categoryId]; the rest stays with the main category.
  * [note] is the part's own note; empty, it takes the main entry's.
  */
-data class SplitPart(val categoryId: Long, val amountMinor: Long, val note: String = "")
+data class SplitPart(val categoryId: Long, val amountMinor: Long, val note: String = "", val id: Long = 0)
 
 /** Drives the keypad editor for adding a new entry or editing an existing one. */
 class EditorViewModel(
@@ -249,6 +249,8 @@ class EditorViewModel(
     var repeatMonthly by mutableStateOf(false)
     /** Other categories that take part of the amount; saved as separate entries. */
     val splits = mutableStateListOf<SplitPart>()
+    /** Editing a split bill: its parts as they were saved, to update or remove them. */
+    private var savedParts: List<Transaction> = emptyList()
     val splitTotal: Long get() = splits.sumOf { it.amountMinor }
     /** People sharing this expense; each one's share is saved to Money owed. */
     val people = mutableStateListOf<String>()
@@ -346,6 +348,13 @@ class EditorViewModel(
                     accountId = tx.accountId
                     receiptPath = tx.receiptPath
                     originalReceipt = tx.receiptPath
+                    val parts = repository.getAllTransactions().filter { it.splitOf == tx.id }.map { it.toTransaction() }
+                    if (parts.isNotEmpty()) {
+                        savedParts = parts
+                        amountText = AmountInput.fromMinor(tx.amountMinor + parts.sumOf { it.amountMinor })
+                        // A part that only repeats the bill's note shows none of its own.
+                        parts.forEach { p -> splits += SplitPart(p.categoryId, p.amountMinor, if (p.note == tx.note) "" else p.note, p.id) }
+                    }
                 }
                 loaded = true
             }
@@ -607,9 +616,12 @@ class EditorViewModel(
                     foreignCurrency = abroad,
                 ),
             )
+            val kept = parts.map { it.id }.toSet()
+            savedParts.filter { it.id !in kept }.forEach { repository.deleteTransaction(it) }
             parts.forEach { part ->
                 repository.saveTransaction(
                     Transaction(
+                        id = part.id,
                         amountMinor = part.amountMinor,
                         type = savedType,
                         categoryId = part.categoryId,
@@ -652,7 +664,7 @@ class EditorViewModel(
             val whenText = if (savedDate == LocalDate.now()) "" else " · ${savedDate.friendlyLabel()}"
             onDone(
                 when {
-                    isEditing && parts.isEmpty() && sharers.isEmpty() -> "Changes saved"
+                    isEditing && sharers.isEmpty() -> "Changes saved"
                     sharers.isNotEmpty() && sharers.map { it.second }.distinct().size == 1 -> "${describe(savedAmount + parts.sumOf { it.amountMinor })} added · " +
                         "${sharers.joinToString(" and ") { it.first }} ${if (sharers.size == 1) "owes" else "owe"} you ${describe(sharers[0].second)}${if (sharers.size > 1) " each" else ""}"
                     sharers.isNotEmpty() -> "${describe(savedAmount + parts.sumOf { it.amountMinor })} added · " +
@@ -680,6 +692,8 @@ class EditorViewModel(
                 // The photo stays with the entry in Deleted entries until it's removed for good.
                 repository.deleteTransaction(it)
             }
+            // A split bill goes as a whole: its parts too.
+            savedParts.forEach { repository.deleteTransaction(it) }
             stopRepeating?.let { planning.deleteRecurring(it.toRecurring()) }
             onDone()
         }

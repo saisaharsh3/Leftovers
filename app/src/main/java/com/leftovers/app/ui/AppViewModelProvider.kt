@@ -50,7 +50,7 @@ object AppViewModelProvider {
         initializer { DeletedViewModel(container().repository, container().settings) }
         initializer { GoalDetailViewModel(createSavedStateHandle(), container().planning) }
         initializer { CategoriesViewModel(container().repository, container().settings) }
-        initializer { TransactionPeekViewModel(container().repository, container().accounts) }
+        initializer { TransactionPeekViewModel(container().repository, container().accounts, container().settings) }
         initializer {
             val c = container()
             SettingsViewModel(c.repository, c.settings, c.backup, c.assistant, c.planning, c.accounts) { c.resetEverything() }

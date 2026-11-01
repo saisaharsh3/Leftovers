@@ -48,10 +48,19 @@ import com.leftovers.app.util.Money
 import com.leftovers.app.util.friendlyLabel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
-class TransactionPeekViewModel(private val repository: TransactionRepository, accounts: AccountRepository) : ViewModel() {
+class TransactionPeekViewModel(
+    private val repository: TransactionRepository,
+    accounts: AccountRepository,
+    settings: com.leftovers.app.data.SettingsRepository,
+) : ViewModel() {
+    /** Splits shown as one bill: then a split opens whole, to change all of it at once. */
+    val oneBill: StateFlow<Boolean> = settings.settings.map { it.splitsAsOneBill }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), true)
+
     val accounts: StateFlow<List<AccountWithBalance>> =
         accounts.accounts.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
@@ -120,6 +129,7 @@ fun TransactionPeekCard(
     val main = if (item.splitOf != null) all.firstOrNull { it.id == item.splitOf } ?: item else item
     val bill = listOf(main) + all.filter { it.splitOf == main.id }
     var askDelete by remember { mutableStateOf(false) }
+    val oneBill by viewModel.oneBill.collectAsStateWithLifecycle()
 
     MorphCard(
         from = peek.from,
@@ -256,7 +266,12 @@ fun TransactionPeekCard(
                         undo.show("Entry deleted") { viewModel.restore(listOf(item)) }
                     }
                 }, Modifier.weight(1f), icon = Lucide.Trash2)
-                PrimaryButton("Edit", { close { onEdit(item.id) } }, Modifier.weight(1.4f), icon = Lucide.Pencil)
+                PrimaryButton(
+                    if (bill.size > 1 && oneBill) "Edit bill" else "Edit",
+                    { close { onEdit(if (bill.size > 1 && oneBill) main.id else item.id) } },
+                    Modifier.weight(1.4f),
+                    icon = Lucide.Pencil,
+                )
             }
         }
     }
