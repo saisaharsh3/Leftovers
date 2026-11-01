@@ -123,6 +123,8 @@ data class HomeUiState(
     val recent: List<TransactionItem> = emptyList(),
     /** Splits as one bill with their parts under them; off, every entry on its own. */
     val oneBill: Boolean = true,
+    /** What people owe for bills split with them, by the entry (your share) each came from. */
+    val shares: Map<Long, List<com.leftovers.app.data.Debt>> = emptyMap(),
     val smsSuggestions: List<SmsSuggestion> = emptyList(),
     /** Last month, when its recap hasn't been seen yet. */
     val recapMonth: YearMonth? = null,
@@ -185,6 +187,7 @@ class HomeViewModel(
             else shownAll.filter { it.splitOf == null || shownAll.none { m -> m.id == it.splitOf } }.take(6)
                 .let { mains -> splitOrder(mains + shownAll.filter { p -> p.splitOf != null && mains.any { it.id == p.splitOf } }) },
             oneBill = s.splitsAsOneBill,
+            shares = debts.filter { it.splitOf != null && !it.repayment }.groupBy { it.splitOf!! },
             smsSuggestions = suggestions,
             recapMonth = month.minusMonths(1).takeIf { prev ->
                 todayDate.dayOfMonth <= 10 && s.recapSeen != prev.toString() && all.any { YearMonth.from(it.date) == prev }
@@ -450,7 +453,7 @@ fun HomeScreen(
                                         overflow = TextOverflow.Ellipsis,
                                     )
                                     Text(
-                                        LocalDate.ofEpochDay(d.epochDay).friendlyLabel(),
+                                        listOfNotNull("Split bill".takeIf { d.splitOf != null }, LocalDate.ofEpochDay(d.epochDay).friendlyLabel()).joinToString(" · "),
                                         style = MaterialTheme.typography.bodySmall,
                                         color = c.textSecondary,
                                     )
@@ -765,25 +768,30 @@ fun HomeScreen(
 
             item { SectionHeader("Recent", Modifier.appear(5), action = if (state.recent.isNotEmpty()) "See all" else null, onAction = { onOpenActivity(null, state.selectedAccount?.id) }) }
             item {
-                Glass(Modifier.fillMaxWidth().appear(5)) {
-                    if (state.recent.isEmpty()) {
+                if (state.recent.isEmpty()) {
+                    Glass(Modifier.fillMaxWidth().appear(5)) {
                         EmptyState(Lucide.Wallet, "Nothing logged yet", "Tap the + button below to add your first expense.")
-                    } else {
-                        Column(Modifier.padding(vertical = 6.dp)) {
-                            state.recent.forEachIndexed { i, item ->
-                                val part = state.oneBill && item.splitOf != null && state.recent.any { it.id == item.splitOf }
-                                val parts = if (state.oneBill) state.recent.filter { it.splitOf == item.id } else emptyList()
-                                if (i > 0) RowDivider(inset = if (part) 102.dp else 74.dp)
-                                TransactionRow(
-                                    item,
-                                    onClick = { peek.show(item) },
-                                    subtitle = when {
-                                        parts.isNotEmpty() -> "${item.date.friendlyLabel()} · split, ${money.format(item.amountMinor + parts.sumOf { it.amountMinor })} in all"
-                                        part -> "part of the split"
-                                        else -> item.date.friendlyLabel()
-                                    },
-                                    modifier = Modifier.peekSource(peek, item.id).then(if (part) Modifier.padding(start = 28.dp) else Modifier),
-                                )
+                    }
+                } else {
+                    // Each split bill on a card of its own, as in Activity (#36).
+                    Column(Modifier.appear(5), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        billCards(state.recent, state.shares, state.oneBill).forEach { card ->
+                            Glass(Modifier.fillMaxWidth()) {
+                                Column(Modifier.padding(vertical = 6.dp)) {
+                                    card.forEachIndexed { i, line ->
+                                        val under = line is BillLine.Share || (line is BillLine.Entry && line.part)
+                                        if (i > 0) RowDivider(inset = if (under) 102.dp else 74.dp)
+                                        when (line) {
+                                            is BillLine.Entry -> TransactionRow(
+                                                line.item,
+                                                onClick = { peek.show(line.item) },
+                                                subtitle = billSubtitle(line.item.date.friendlyLabel(), line, money),
+                                                modifier = Modifier.peekSource(peek, line.item.id).then(if (line.part) Modifier.padding(start = 28.dp) else Modifier),
+                                            )
+                                            is BillLine.Share -> ShareRow(line.debt, onClick = { peek.show(line.main) }, modifier = Modifier.padding(start = 28.dp))
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
@@ -1024,7 +1032,7 @@ private fun OwedSummary(
                 com.leftovers.app.ui.components.ListRow(
                     b.person,
                     subtitle = latest?.let { d ->
-                        listOfNotNull(d.note.ifBlank { null }, LocalDate.ofEpochDay(d.epochDay).friendlyLabel()).joinToString(" · ") +
+                        listOfNotNull("Split".takeIf { d.splitOf != null }, d.note.ifBlank { null }, LocalDate.ofEpochDay(d.epochDay).friendlyLabel()).joinToString(" · ") +
                             if (b.entries.size > 1) " · +${b.entries.size - 1} more" else ""
                     },
                     leading = { IconTile(Lucide.HandCoins, if (theyOwe) c.positive else c.warning, size = 38.dp) },

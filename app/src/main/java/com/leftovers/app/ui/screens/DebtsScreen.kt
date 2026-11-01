@@ -190,7 +190,7 @@ fun DebtsScreen(onBack: () -> Unit, viewModel: DebtsViewModel = viewModel(factor
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
                                 Text(
-                                    listOfNotNull(d.note.ifBlank { null }, LocalDate.ofEpochDay(d.epochDay).friendlyLabel()).joinToString(" · "),
+                                    listOfNotNull("Split".takeIf { d.splitOf != null }, d.note.ifBlank { null }, LocalDate.ofEpochDay(d.epochDay).friendlyLabel()).joinToString(" · "),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = c.textSecondary,
                                     modifier = Modifier.weight(1f),

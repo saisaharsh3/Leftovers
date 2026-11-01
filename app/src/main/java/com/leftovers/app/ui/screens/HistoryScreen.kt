@@ -159,6 +159,8 @@ data class HistoryUiState(
     val tags: List<String> = emptyList(),
     /** Splits as one bill with their parts under them; off, every entry on its own. */
     val oneBill: Boolean = true,
+    /** What people owe for bills split with them, by the entry (your share) each came from. */
+    val shares: Map<Long, List<com.leftovers.app.data.Debt>> = emptyMap(),
 )
 
 class HistoryViewModel(
@@ -184,9 +186,9 @@ class HistoryViewModel(
 
     val state: StateFlow<HistoryUiState> =
         combine(
-            combine(repository.allTransactions, accountRepository.accounts, settings.settings.map { it.splitsAsOneBill }.distinctUntilChanged(), ::Triple),
+            combine(repository.allTransactions, accountRepository.accounts, settings.settings.map { it.splitsAsOneBill }.distinctUntilChanged(), planning.debts) { a, b, c, d -> Books(a, b, c, d) },
             month, filter, query, filters,
-        ) { (all, accountList, oneBill), m, f, q, fl ->
+        ) { (all, accountList, oneBill, debts), m, f, q, fl ->
             val monthItems = all.filter { YearMonth.from(it.date) == m }
             val scoped = if (q.isNotBlank()) {
                 val needle = q.trim()
@@ -221,11 +223,13 @@ class HistoryViewModel(
                 } else {
                     // By amount: one list. A split bill counts as its whole amount and keeps its parts under it.
                     val ids = filtered.map { it.id }.toSet()
+                    // A bill split with people counts as what you paid in all.
+                    val owedFor = debts.filter { it.splitOf != null && !it.repayment }.groupBy { it.splitOf!! }.mapValues { (_, l) -> l.sumOf { it.amountMinor } }
                     val bills = if (!oneBill) filtered.map { listOf(it) }
                     else filtered.filter { it.splitOf == null || it.splitOf !in ids }
                         .map { main -> listOf(main) + filtered.filter { it.splitOf == main.id } }
-                    val sorted = if (fl.sort == ActivitySort.HIGHEST) bills.sortedByDescending { b -> b.sumOf { it.amountMinor } }
-                    else bills.sortedBy { b -> b.sumOf { it.amountMinor } }
+                    fun whole(b: List<TransactionItem>) = b.sumOf { it.amountMinor } + if (oneBill) owedFor[b.first().id] ?: 0L else 0L
+                    val sorted = if (fl.sort == ActivitySort.HIGHEST) bills.sortedByDescending(::whole) else bills.sortedBy(::whole)
                     if (sorted.isEmpty()) emptyList()
                     else listOf(DayGroup(sorted.first().first().date, sorted.flatten(), if (fl.sort == ActivitySort.HIGHEST) "Highest first" else "Lowest first"))
                 },
@@ -239,6 +243,7 @@ class HistoryViewModel(
                     .map { FilterOption(it.categoryId, it.categoryName, it.categoryEmoji, it.categoryColor) },
                 tags = all.allTags(),
                 oneBill = oneBill,
+                shares = debts.filter { it.splitOf != null && !it.repayment }.groupBy { it.splitOf!! },
             )
         }.flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), HistoryUiState())
 
@@ -436,31 +441,32 @@ fun HistoryScreen(
                         if (spent > 0) Text(money.format(spent), style = MaterialTheme.typography.labelLarge, color = c.textSecondary)
                     }
                 }
-                // A split bill: its parts right under the entry they came from (#36).
-                val ordered = if (state.oneBill) splitOrder(group.items) else group.items
-                ordered.forEachIndexed { i, item ->
-                    item(key = "tx-${item.id}") {
-                        CardSlice(
-                            first = i == 0,
-                            last = i == ordered.lastIndex,
-                            modifier = Modifier
-                                .animateItem(fadeInSpec = tween(220), placementSpec = listMotion, fadeOutSpec = tween(160))
-                                .appear(groupIndex + 1),
-                        ) {
-                            val part = state.oneBill && item.splitOf != null && ordered.any { it.id == item.splitOf }
-                            if (i > 0) RowDivider(inset = if (part) 102.dp else 74.dp)
-                            // No swipe actions: they fired by accident. A tap opens the entry, where it can be edited or deleted.
-                            val parts = if (state.oneBill) ordered.filter { it.splitOf == item.id } else emptyList()
-                            TransactionRow(
-                                item,
-                                onClick = { peek.show(item) },
-                                modifier = Modifier.peekSource(peek, item.id).then(if (part) Modifier.padding(start = 28.dp) else Modifier),
-                                subtitle = run {
-                                    val whenText = if (group.label != null) item.date.friendlyLabel() else item.timeLabel()
-                                    if (parts.isNotEmpty()) "$whenText · split, ${money.format(item.amountMinor + parts.sumOf { it.amountMinor })} in all"
-                                    else if (part) "part of the split" else whenText
-                                },
-                            )
+                // Each split bill on a card of its own: the entry, its parts, and who owes for it (#36).
+                billCards(group.items, state.shares, state.oneBill).forEachIndexed { cardIndex, card ->
+                    card.forEachIndexed { i, line ->
+                        val key = when (line) { is BillLine.Entry -> "tx-${line.item.id}"; is BillLine.Share -> "share-${line.debt.id}" }
+                        item(key = key) {
+                            CardSlice(
+                                first = i == 0,
+                                last = i == card.lastIndex,
+                                modifier = Modifier
+                                    .animateItem(fadeInSpec = tween(220), placementSpec = listMotion, fadeOutSpec = tween(160))
+                                    .padding(top = if (i == 0 && cardIndex > 0) 10.dp else 0.dp)
+                                    .appear(groupIndex + 1),
+                            ) {
+                                val under = line is BillLine.Share || (line is BillLine.Entry && line.part)
+                                if (i > 0) RowDivider(inset = if (under) 102.dp else 74.dp)
+                                // No swipe actions: they fired by accident. A tap opens the entry, where it can be edited or deleted.
+                                when (line) {
+                                    is BillLine.Entry -> TransactionRow(
+                                        line.item,
+                                        onClick = { peek.show(line.item) },
+                                        modifier = Modifier.peekSource(peek, line.item.id).then(if (line.part) Modifier.padding(start = 28.dp) else Modifier),
+                                        subtitle = billSubtitle(if (group.label != null) line.item.date.friendlyLabel() else line.item.timeLabel(), line, money),
+                                    )
+                                    is BillLine.Share -> ShareRow(line.debt, onClick = { peek.show(line.main) }, modifier = Modifier.padding(start = 28.dp))
+                                }
+                            }
                         }
                     }
                 }
@@ -722,3 +728,11 @@ internal fun splitOrder(items: List<TransactionItem>): List<TransactionItem> {
     val partsOf = items.filter { it.splitOf != null && it.splitOf in ids }.groupBy { it.splitOf }
     return items.filter { it.splitOf == null || it.splitOf !in ids }.flatMap { listOf(it) + partsOf[it.id].orEmpty() }
 }
+
+/** What Activity is made from, before its filters. */
+private data class Books(
+    val all: List<TransactionItem>,
+    val accounts: List<com.leftovers.app.data.AccountWithBalance>,
+    val oneBill: Boolean,
+    val debts: List<com.leftovers.app.data.Debt>,
+)

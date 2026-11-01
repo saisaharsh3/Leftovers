@@ -251,6 +251,8 @@ class EditorViewModel(
     val splits = mutableStateListOf<SplitPart>()
     /** Editing a split bill: its parts as they were saved, to update or remove them. */
     private var savedParts: List<Transaction> = emptyList()
+    /** Editing a bill split with people: what each of them owes for it, as saved. */
+    private var savedShares: List<Debt> = emptyList()
     val splitTotal: Long get() = splits.sumOf { it.amountMinor }
     /** People sharing this expense; each one's share is saved to Money owed. */
     val people = mutableStateListOf<String>()
@@ -349,11 +351,20 @@ class EditorViewModel(
                     receiptPath = tx.receiptPath
                     originalReceipt = tx.receiptPath
                     val parts = repository.getAllTransactions().filter { it.splitOf == tx.id }.map { it.toTransaction() }
-                    if (parts.isNotEmpty()) {
+                    val shares = planning.debts.first().filter { it.splitOf == tx.id && !it.repayment }
+                    if (parts.isNotEmpty() || shares.isNotEmpty()) {
                         savedParts = parts
-                        amountText = AmountInput.fromMinor(tx.amountMinor + parts.sumOf { it.amountMinor })
+                        savedShares = shares
+                        // The whole bill: your share, the parts and everyone else's share.
+                        amountText = AmountInput.fromMinor(tx.amountMinor + parts.sumOf { it.amountMinor } + shares.sumOf { it.amountMinor })
                         // A part that only repeats the bill's note shows none of its own.
                         parts.forEach { p -> splits += SplitPart(p.categoryId, p.amountMinor, if (p.note == tx.note) "" else p.note, p.id) }
+                        // The people it was split with, as they were: evenly, or each with their own amount.
+                        shares.forEach { people += it.person }
+                        if (shares.isNotEmpty() && shares.any { it.amountMinor != personShare }) {
+                            equalSplit = false
+                            shares.forEach { customShares[it.person] = AmountInput.fromMinor(it.amountMinor) }
+                        }
                     }
                 }
                 loaded = true
@@ -638,9 +649,16 @@ class EditorViewModel(
             foreignCurrency?.let { settings.setForeignRate(it, abroadRate) }
             if (originalReceipt != null && originalReceipt != receiptPath) ReceiptStore.delete(originalReceipt)
             val owedNote = note.trim().ifBlank { categories.value.find { it.id == category }?.name.orEmpty() }
+            // Each person's share, linked to this entry so it can be shown and changed with it. Changing the split
+            // updates what they owe; anyone taken off it no longer owes for it.
             sharers.forEach { (person, share) ->
-                planning.saveDebt(Debt(person = person, amountMinor = share, note = owedNote, epochDay = savedDate.toEpochDay(), accountId = accountId))
+                val was = savedShares.firstOrNull { it.person.equals(person, ignoreCase = true) }
+                planning.saveDebt(
+                    was?.copy(amountMinor = share, note = owedNote, epochDay = savedDate.toEpochDay(), accountId = accountId)
+                        ?: Debt(person = person, amountMinor = share, note = owedNote, epochDay = savedDate.toEpochDay(), accountId = accountId, splitOf = mainId),
+                )
             }
+            savedShares.filter { s -> sharers.none { it.first.equals(s.person, ignoreCase = true) } }.forEach { planning.deleteDebt(it) }
             if (smsId > 0) sms.dismiss(smsId)
             val repeats = repeatMonthly && !isEditing
             if (repeats) {
@@ -692,8 +710,9 @@ class EditorViewModel(
                 // The photo stays with the entry in Deleted entries until it's removed for good.
                 repository.deleteTransaction(it)
             }
-            // A split bill goes as a whole: its parts too.
+            // A split bill goes as a whole: its parts, and what people owe for it.
             savedParts.forEach { repository.deleteTransaction(it) }
+            savedShares.forEach { planning.deleteDebt(it) }
             stopRepeating?.let { planning.deleteRecurring(it.toRecurring()) }
             onDone()
         }

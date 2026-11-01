@@ -137,6 +137,7 @@ class BackupManager(
                     JSONObject().put("id", d.id).put("person", d.person).put("amount", d.amountMinor).put("note", d.note)
                         .put("day", d.epochDay).put("settled", d.settled).put("createdAt", d.createdAt)
                         .put("account", d.accountId ?: JSONObject.NULL).put("repayment", d.repayment)
+                        .put("splitOf", d.splitOf ?: JSONObject.NULL)
                         .put("receipts", JSONArray(d.photos.map { photoRef(it) }.filter { it != JSONObject.NULL }))
                 }))
                 if (photos.length() > 0) put("photos", photos)
@@ -256,6 +257,7 @@ class BackupManager(
                     // Older backups have no account: those entries stay out of every balance, as before.
                     accountId = if (it.isNull("account")) null else it.optLong("account"),
                     repayment = it.optBoolean("repayment"),
+                    splitOf = it.longOrNull("splitOf"),
                 )
             }
 

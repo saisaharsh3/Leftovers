@@ -56,7 +56,19 @@ class TransactionPeekViewModel(
     private val repository: TransactionRepository,
     accounts: AccountRepository,
     settings: com.leftovers.app.data.SettingsRepository,
+    private val planning: com.leftovers.app.data.PlanningRepository,
 ) : ViewModel() {
+    /** What people owe for bills split with them. */
+    val debts: StateFlow<List<com.leftovers.app.data.Debt>> =
+        planning.debts.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** A whole bill split with people: their shares go with it, and come back with Undo. */
+    fun deleteShares(shares: List<com.leftovers.app.data.Debt>) {
+        viewModelScope.launch { shares.forEach { planning.deleteDebt(it) } }
+    }
+
+    suspend fun restoreShares(shares: List<com.leftovers.app.data.Debt>) = shares.forEach { planning.saveDebt(it) }
+
     /** Splits shown as one bill: then a split opens whole, to change all of it at once. */
     val oneBill: StateFlow<Boolean> = settings.settings.map { it.splitsAsOneBill }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), true)
@@ -75,13 +87,7 @@ class TransactionPeekViewModel(
     /** Puts deleted entries back. Runs from the Undo bar, after this card has gone. */
     suspend fun restore(items: List<TransactionItem>) = items.forEach { repository.saveTransaction(it.toTransaction()) }
 
-    /** Splits a bill up: its parts become entries of their own. */
-    fun separate(parts: List<TransactionItem>) {
-        viewModelScope.launch { parts.forEach { repository.saveTransaction(it.toTransaction().copy(splitOf = null)) } }
-    }
 
-    /** Joins the bill again, after Separate is undone. */
-    suspend fun rejoin(parts: List<TransactionItem>) = parts.forEach { repository.saveTransaction(it.toTransaction()) }
 }
 
 /** Which entry's card is open, where it grew from, and which row steps aside until it shrinks back. */
@@ -128,6 +134,9 @@ fun TransactionPeekCard(
     // The bill this entry belongs to: the entry it was split from, and every part of it.
     val main = if (item.splitOf != null) all.firstOrNull { it.id == item.splitOf } ?: item else item
     val bill = listOf(main) + all.filter { it.splitOf == main.id }
+    val debtList by viewModel.debts.collectAsStateWithLifecycle()
+    val shares = debtList.filter { it.splitOf == main.id && !it.repayment }
+    val isBill = bill.size > 1 || shares.isNotEmpty()
     var askDelete by remember { mutableStateOf(false) }
     val oneBill by viewModel.oneBill.collectAsStateWithLifecycle()
 
@@ -201,23 +210,17 @@ fun TransactionPeekCard(
             }
         }
         // Part of a split bill: the whole bill, with this entry marked, and a way to split it up again.
-        if (bill.size > 1) {
+        if (isBill) {
             Column(
                 Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(c.glass).border(1.dp, c.borderBottom, RoundedCornerShape(22.dp)).padding(vertical = 8.dp),
             ) {
                 Row(Modifier.padding(horizontal = 16.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text("Split bill · ${money.format(bill.sumOf { it.amountMinor })} in all", style = MaterialTheme.typography.labelLarge, color = c.textSecondary, modifier = Modifier.weight(1f))
                     Text(
-                        "Separate",
+                        "Split bill · ${money.format(bill.sumOf { it.amountMinor } + shares.sumOf { it.amountMinor })} in all" +
+                            if (shares.isNotEmpty()) " · with ${shares.size} ${if (shares.size == 1) "other" else "others"}" else "",
                         style = MaterialTheme.typography.labelLarge,
-                        color = c.accent,
-                        modifier = Modifier.clip(RoundedCornerShape(50)).pressable({
-                            val parts = bill.drop(1)
-                            close {
-                                viewModel.separate(parts)
-                                undo.show("Split into ${bill.size} entries") { viewModel.rejoin(parts) }
-                            }
-                        }, pressedScale = 0.94f).padding(horizontal = 10.dp, vertical = 4.dp),
+                        color = c.textSecondary,
+                        modifier = Modifier.weight(1f),
                     )
                 }
                 bill.forEach { b ->
@@ -228,7 +231,8 @@ fun TransactionPeekCard(
                         CategoryIcon(b.categoryEmoji, b.categoryColor, size = 30.dp)
                         Spacer(Modifier.width(12.dp))
                         Text(
-                            com.leftovers.app.data.noteText(b.note).ifBlank { b.categoryName },
+                            // With people, your share is "You".
+                            if (shares.isNotEmpty() && b.id == main.id) "You · ${b.categoryName}" else com.leftovers.app.data.noteText(b.note).ifBlank { b.categoryName },
                             style = MaterialTheme.typography.bodyMedium,
                             color = c.textPrimary,
                             maxLines = 1,
@@ -236,6 +240,21 @@ fun TransactionPeekCard(
                             modifier = Modifier.weight(1f),
                         )
                         Text(money.format(b.amountMinor), style = MaterialTheme.typography.titleSmall, color = c.textPrimary)
+                    }
+                }
+                shares.forEach { d ->
+                    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        com.leftovers.app.ui.components.IconTile(Lucide.HandCoins, if (d.settled) c.textTertiary else c.positive, size = 30.dp)
+                        Spacer(Modifier.width(12.dp))
+                        Text(
+                            "${d.person} · ${if (d.settled) "settled" else "owes you"}",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = c.textPrimary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f),
+                        )
+                        Text(money.format(d.amountMinor), style = MaterialTheme.typography.titleSmall, color = if (d.settled) c.textTertiary else c.positive)
                     }
                 }
             }
@@ -253,22 +272,23 @@ fun TransactionPeekCard(
                 PrimaryButton("Whole bill", {
                     close {
                         viewModel.delete(bill)
-                        undo.show("Bill deleted") { viewModel.restore(bill) }
+                        viewModel.deleteShares(shares)
+                        undo.show("Bill deleted") { viewModel.restore(bill); viewModel.restoreShares(shares) }
                     }
                 }, Modifier.weight(1f), icon = Lucide.Trash2)
             }
         } else {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 SecondaryButton("Delete", {
-                    if (bill.size > 1) askDelete = true
+                    if (isBill) askDelete = true
                     else close {
                         viewModel.delete(listOf(item))
                         undo.show("Entry deleted") { viewModel.restore(listOf(item)) }
                     }
                 }, Modifier.weight(1f), icon = Lucide.Trash2)
                 PrimaryButton(
-                    if (bill.size > 1 && oneBill) "Edit bill" else "Edit",
-                    { close { onEdit(if (bill.size > 1 && oneBill) main.id else item.id) } },
+                    if (isBill && oneBill) "Edit bill" else "Edit",
+                    { close { onEdit(if (isBill && oneBill) main.id else item.id) } },
                     Modifier.weight(1.4f),
                     icon = Lucide.Pencil,
                 )

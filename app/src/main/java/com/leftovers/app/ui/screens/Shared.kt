@@ -758,3 +758,64 @@ private fun LiquidSheet(
     androidx.compose.runtime.SideEffect { layer.show(key, sheet) }
     androidx.compose.runtime.DisposableEffect(key) { onDispose { layer.hide(key) } }
 }
+
+
+/** One line in a list of entries: an entry, or a person's share of a bill split with people (#36). */
+sealed interface BillLine {
+    data class Entry(val item: TransactionItem, val part: Boolean, val parts: List<TransactionItem>, val shares: List<com.leftovers.app.data.Debt>) : BillLine
+    data class Share(val debt: com.leftovers.app.data.Debt, val main: TransactionItem) : BillLine
+}
+
+/**
+ * [items] as cards: entries on their own share a card, and each split bill gets one of its own, the entry
+ * first, then its parts and the people who owe for it. With [oneBill] off, every entry is on its own line.
+ */
+internal fun billCards(items: List<TransactionItem>, shares: Map<Long, List<com.leftovers.app.data.Debt>>, oneBill: Boolean): List<List<BillLine>> {
+    if (!oneBill) return listOf(items.map { BillLine.Entry(it, false, emptyList(), emptyList()) }).filter { it.isNotEmpty() }
+    val ordered = splitOrder(items)
+    val ids = ordered.map { it.id }.toSet()
+    val cards = mutableListOf<List<BillLine>>()
+    var plain = mutableListOf<BillLine>()
+    ordered.forEach { item ->
+        if (item.splitOf != null && item.splitOf in ids) return@forEach
+        val parts = ordered.filter { it.splitOf == item.id }
+        val owed = shares[item.id].orEmpty()
+        if (parts.isEmpty() && owed.isEmpty()) {
+            plain += BillLine.Entry(item, false, emptyList(), emptyList())
+        } else {
+            if (plain.isNotEmpty()) { cards += plain; plain = mutableListOf() }
+            cards += listOf<BillLine>(BillLine.Entry(item, false, parts, owed)) +
+                parts.map { BillLine.Entry(it, true, emptyList(), emptyList()) } +
+                owed.map { BillLine.Share(it, item) }
+        }
+    }
+    if (plain.isNotEmpty()) cards += plain
+    return cards
+}
+
+/** What a split bill's entry says under its title: how it was split, and the whole amount. */
+internal fun billSubtitle(whenText: String, line: BillLine.Entry, money: com.leftovers.app.util.Money): String = when {
+    line.part -> "part of the split"
+    line.shares.isNotEmpty() -> {
+        val total = line.item.amountMinor + line.parts.sumOf { it.amountMinor } + line.shares.sumOf { it.amountMinor }
+        // The amount on the right is your share; this says it's a share, and of what.
+        "$whenText · split with ${line.shares.size} · ${money.format(total)} in all"
+    }
+    line.parts.isNotEmpty() -> "$whenText · split, ${money.format(line.item.amountMinor + line.parts.sumOf { it.amountMinor })} in all"
+    else -> whenText
+}
+
+/** A person's share of a bill split with people, under the bill: they owe it, or it's settled. Opens the bill. */
+@Composable
+internal fun ShareRow(debt: com.leftovers.app.data.Debt, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    val c = LocalAppColors.current
+    val money = LocalMoney.current
+    ListRow(
+        title = debt.person,
+        modifier = modifier,
+        subtitle = if (debt.settled) "settled · part of the split" else "owes you · part of the split",
+        leading = { com.leftovers.app.ui.components.IconTile(com.leftovers.app.ui.icons.Lucide.HandCoins, if (debt.settled) c.textTertiary else c.positive, size = 42.dp) },
+        trailing = { Text(money.format(debt.amountMinor), style = MaterialTheme.typography.titleSmall, color = if (debt.settled) c.textTertiary else c.positive) },
+        onClick = onClick,
+    )
+}
