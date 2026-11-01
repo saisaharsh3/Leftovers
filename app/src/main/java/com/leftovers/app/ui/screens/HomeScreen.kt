@@ -813,16 +813,21 @@ fun HomeScreen(
                                 Column(Modifier.padding(vertical = 6.dp)) {
                                     card.forEachIndexed { i, line ->
                                         val under = line is BillLine.Share || (line is BillLine.Entry && line.part)
-                                        if (i > 0) RowDivider(inset = if (under) 102.dp else 74.dp)
-                                        when (line) {
-                                            is BillLine.Entry -> TransactionRow(
+                                        // A bill's parts and shares sit tight under it, joined by a line, with no dividers.
+                                        if (i > 0 && !under) RowDivider(inset = 74.dp)
+                                        when {
+                                            under -> BillPartRow(
+                                                line, last = card.getOrNull(i + 1).let { it !is BillLine.Share && !(it is BillLine.Entry && it.part) },
+                                                onClick = { if (line is BillLine.Share) peek.share = line.debt else peek.show((line as BillLine.Entry).item) },
+                                                modifier = if (line is BillLine.Entry) Modifier.peekSource(peek, line.item.id) else Modifier,
+                                            )
+                                            line is BillLine.Entry -> TransactionRow(
                                                 line.item,
                                                 onClick = { peek.show(line.item) },
                                                 subtitle = billSubtitle(line.item.date.friendlyLabel(), line),
                                                 wholeMinor = line.whole(),
-                                                modifier = Modifier.peekSource(peek, line.item.id).then(if (line.part) Modifier.padding(start = 28.dp) else Modifier),
+                                                modifier = Modifier.peekSource(peek, line.item.id).billStem(card.getOrNull(i + 1).let { it is BillLine.Share || (it is BillLine.Entry && it.part) }, billGuide()),
                                             )
-                                            is BillLine.Share -> ShareRow(line.debt, onClick = { peek.share = line.debt }, modifier = Modifier.padding(start = 28.dp))
                                         }
                                     }
                                 }

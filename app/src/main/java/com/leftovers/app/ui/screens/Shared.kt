@@ -13,7 +13,11 @@ import com.kyant.backdrop.effects.blur
 import com.kyant.backdrop.effects.lens
 import com.kyant.backdrop.effects.vibrancy
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import com.leftovers.app.ui.components.pressable
 import androidx.compose.animation.core.spring
 import kotlinx.coroutines.launch
 import androidx.compose.foundation.layout.widthIn
@@ -841,7 +845,8 @@ internal fun billCards(items: List<TransactionItem>, shares: Map<Long, List<com.
     var plain = mutableListOf<BillLine>()
     ordered.forEach { item ->
         if (item.splitOf != null && item.splitOf in ids) return@forEach
-        val parts = ordered.filter { it.splitOf == item.id }
+        // In the order they were added, as in the split sheet.
+        val parts = ordered.filter { it.splitOf == item.id }.sortedBy { it.id }
         val owed = shares[item.id].orEmpty()
         if (parts.isEmpty() && owed.isEmpty()) {
             plain += BillLine.Entry(item, false, emptyList(), emptyList())
@@ -866,22 +871,75 @@ internal fun billSubtitle(whenText: String, line: BillLine.Entry): String = when
     else -> whenText
 }
 
+/**
+ * A part of a split bill, or a person's share of it, under the bill: one short line, joined to the bill by a thin
+ * line from its icon, so the bill reads as one thing (#36). [last] ends the line here.
+ */
+@Composable
+internal fun BillPartRow(line: BillLine, last: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    val c = LocalAppColors.current
+    val money = LocalMoney.current
+    val guide = billGuide()
+    Row(
+        modifier
+            .fillMaxWidth()
+            .pressable(onClick, pressedScale = 0.985f)
+            .height(IntrinsicSize.Min)
+            .padding(start = 16.dp, end = 16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        // The bill's line, down from its icon, turning in to this one.
+        Box(
+            Modifier.width(42.dp).fillMaxHeight().drawBehind {
+                val x = size.width / 2
+                val w = 1.5.dp.toPx()
+                drawLine(guide, androidx.compose.ui.geometry.Offset(x, 0f), androidx.compose.ui.geometry.Offset(x, if (last) size.height / 2 else size.height), w)
+                drawLine(guide, androidx.compose.ui.geometry.Offset(x, size.height / 2), androidx.compose.ui.geometry.Offset(size.width, size.height / 2), w)
+            },
+        )
+        Spacer(Modifier.width(6.dp))
+        when (line) {
+            is BillLine.Entry -> {
+                val text = com.leftovers.app.data.noteText(line.item.note)
+                CategoryIcon(line.item.categoryEmoji, line.item.categoryColor, size = 28.dp)
+                Spacer(Modifier.width(10.dp))
+                Text(
+                    if (text.isNotBlank()) "$text · ${line.item.categoryName}" else line.item.categoryName,
+                    style = MaterialTheme.typography.bodyMedium, color = c.textPrimary, maxLines = 1,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f).padding(vertical = 10.dp),
+                )
+                Text(money.format(line.item.amountMinor), style = MaterialTheme.typography.bodyMedium, color = c.textSecondary)
+            }
+            is BillLine.Share -> {
+                val d = line.debt
+                com.leftovers.app.ui.components.IconTile(com.leftovers.app.ui.icons.Lucide.HandCoins, if (d.settled) c.textTertiary else c.positive, size = 28.dp)
+                Spacer(Modifier.width(10.dp))
+                Text(
+                    d.person + if (d.settled) " · settled" else " · owes you",
+                    style = MaterialTheme.typography.bodyMedium, color = c.textPrimary, maxLines = 1,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f).padding(vertical = 10.dp),
+                )
+                Text(money.format(d.amountMinor), style = MaterialTheme.typography.bodyMedium, color = if (d.settled) c.textTertiary else c.positive)
+            }
+        }
+    }
+}
+
+/** The colour of the line joining a split bill to its parts. */
+@Composable
+internal fun billGuide() = LocalAppColors.current.textTertiary.copy(alpha = 0.35f)
+
+/** Under a split bill's icon, the top of the line that joins its [BillPartRow]s, when [show]. */
+internal fun Modifier.billStem(show: Boolean, color: androidx.compose.ui.graphics.Color): Modifier =
+    if (!show) this else drawBehind {
+        val x = 37.dp.toPx()
+        drawLine(color, androidx.compose.ui.geometry.Offset(x, size.height / 2 + 21.dp.toPx()), androidx.compose.ui.geometry.Offset(x, size.height), 1.5.dp.toPx())
+    }
+
 /** A split bill's whole amount, for the entry it's split from; null for anything else. */
 internal fun BillLine.Entry.whole(): Long? =
     if (part || (parts.isEmpty() && shares.isEmpty())) null
     else item.amountMinor + parts.sumOf { it.amountMinor } + shares.sumOf { it.amountMinor }
 
-/** A person's share of a bill split with people, under the bill: they owe it, or it's settled. Opens the bill. */
-@Composable
-internal fun ShareRow(debt: com.leftovers.app.data.Debt, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    val c = LocalAppColors.current
-    val money = LocalMoney.current
-    ListRow(
-        title = debt.person,
-        modifier = modifier,
-        subtitle = if (debt.settled) "settled · part of the split" else "owes you · part of the split",
-        leading = { com.leftovers.app.ui.components.IconTile(com.leftovers.app.ui.icons.Lucide.HandCoins, if (debt.settled) c.textTertiary else c.positive, size = 42.dp) },
-        trailing = { Text(money.format(debt.amountMinor), style = MaterialTheme.typography.titleSmall, color = if (debt.settled) c.textTertiary else c.positive) },
-        onClick = onClick,
-    )
-}
