@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.draw.clip
 import kotlinx.coroutines.flow.first
 import com.kyant.backdrop.drawBackdrop
@@ -747,7 +748,50 @@ private fun LiquidSheet(
                         ) {
                             Box(Modifier.size(width = 36.dp, height = 4.dp).clip(RoundedCornerShape(2.dp)).background(c.textTertiary))
                         }
-                        Box(Modifier.navigationBarsPadding()) { content() }
+                        // Dragging down anywhere on the sheet closes it too, once what's inside is scrolled to the top.
+                        fun settle() {
+                            if (drag.value > height * 0.25f) close()
+                            else scope.launch { drag.animateTo(0f, spring(dampingRatio = 0.8f)) }
+                        }
+                        val pull = remember {
+                            object : androidx.compose.ui.input.nestedscroll.NestedScrollConnection {
+                                override fun onPreScroll(available: androidx.compose.ui.geometry.Offset, source: androidx.compose.ui.input.nestedscroll.NestedScrollSource): androidx.compose.ui.geometry.Offset {
+                                    // Pulled down a little, then back up: the sheet goes back up before the form scrolls.
+                                    if (available.y < 0 && drag.value > 0f) {
+                                        val take = maxOf(available.y, -drag.value)
+                                        scope.launch { drag.snapTo(drag.value + take) }
+                                        return androidx.compose.ui.geometry.Offset(0f, take)
+                                    }
+                                    return androidx.compose.ui.geometry.Offset.Zero
+                                }
+
+                                override fun onPostScroll(consumed: androidx.compose.ui.geometry.Offset, available: androidx.compose.ui.geometry.Offset, source: androidx.compose.ui.input.nestedscroll.NestedScrollSource): androidx.compose.ui.geometry.Offset {
+                                    if (available.y > 0 && source == androidx.compose.ui.input.nestedscroll.NestedScrollSource.UserInput) {
+                                        scope.launch { drag.snapTo(drag.value + available.y) }
+                                        return androidx.compose.ui.geometry.Offset(0f, available.y)
+                                    }
+                                    return androidx.compose.ui.geometry.Offset.Zero
+                                }
+
+                                override suspend fun onPreFling(available: androidx.compose.ui.unit.Velocity): androidx.compose.ui.unit.Velocity {
+                                    if (drag.value <= 0f) return androidx.compose.ui.unit.Velocity.Zero
+                                    settle()
+                                    return available
+                                }
+                            }
+                        }
+                        Box(
+                            Modifier
+                                .navigationBarsPadding()
+                                .nestedScroll(pull)
+                                // A form that doesn't scroll: the drag reaches here directly.
+                                .pointerInput(Unit) {
+                                    detectVerticalDragGestures(
+                                        onVerticalDrag = { _, dy -> scope.launch { drag.snapTo((drag.value + dy).coerceAtLeast(0f)) } },
+                                        onDragEnd = { settle() },
+                                    )
+                                },
+                        ) { content() }
                     }
                 }
                 }

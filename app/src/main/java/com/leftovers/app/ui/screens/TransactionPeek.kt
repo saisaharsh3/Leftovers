@@ -329,13 +329,14 @@ fun TransactionPeekCard(
             }
         } else {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                SecondaryButton("Delete", {
+                // Round, like Add again, so the three fit side by side.
+                com.leftovers.app.ui.components.RoundButton(Lucide.Trash2, "Delete", {
                     if (isBill) askDelete = true
                     else close {
                         viewModel.delete(listOf(item))
                         undo.show("Entry deleted") { viewModel.restore(listOf(item)) }
                     }
-                }, Modifier.weight(1f), icon = Lucide.Trash2)
+                }, size = 56.dp)
                 // The same again, for today.
                 com.leftovers.app.ui.components.RoundButton(Lucide.Repeat, "Add again for today", {
                     close { viewModel.addAgain(item) { id -> undo.show("Added again for today") { viewModel.removeAgain(id) } } }
@@ -343,7 +344,7 @@ fun TransactionPeekCard(
                 PrimaryButton(
                     if (isBill && oneBill) "Edit bill" else "Edit",
                     { close { onEdit(if (isBill && oneBill) main.id else item.id) } },
-                    Modifier.weight(1.4f),
+                    Modifier.weight(1f),
                     icon = Lucide.Pencil,
                 )
             }
