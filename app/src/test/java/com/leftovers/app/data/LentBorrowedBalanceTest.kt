@@ -67,6 +67,16 @@ class LentBorrowedBalanceTest {
         assertEquals(115_000L, balance(1))
     }
 
+    // One entry paid back on its own: the others with that person stay open.
+    @Test fun settlingOneEntry() = runBlocking {
+        db.debtDao().upsert(Debt(23, "Nick", 30_000, accountId = 1))
+        db.debtDao().upsert(Debt(24, "Nick", 5_000, accountId = 1))
+        planning.settleEntry(db.debtDao().getAll().first { it.id == 23L })
+        assertEquals(95_000L, balance(1))
+        assertEquals(listOf(5_000L), db.debtDao().getAll().filter { !it.settled }.map { it.amountMinor })
+        assertEquals(5_000L, db.debtDao().getAll().openBalances().single().netMinor)
+    }
+
     @Test fun borrowingPutsMoneyIn() = runBlocking {
         db.debtDao().upsert(Debt(11, "Priya", -20_000, accountId = 1))
         assertEquals(120_000L, balance(1))

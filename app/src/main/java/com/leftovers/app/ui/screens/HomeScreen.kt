@@ -227,6 +227,10 @@ class HomeViewModel(
         viewModelScope.launch { planning.saveDebt(debt) }
     }
 
+    fun settleDebt(debt: com.leftovers.app.data.Debt) {
+        viewModelScope.launch { planning.settleEntry(debt) }
+    }
+
     fun deleteDebt(debt: com.leftovers.app.data.Debt) {
         viewModelScope.launch { planning.deleteDebt(debt) }
     }
@@ -537,6 +541,10 @@ fun HomeScreen(
             },
             onDelete = {
                 viewModel.deleteDebt(debt)
+                editingDebt = null
+            },
+            onSettle = {
+                viewModel.settleDebt(it)
                 editingDebt = null
             },
         )

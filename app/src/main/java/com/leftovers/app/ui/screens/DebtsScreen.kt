@@ -55,6 +55,7 @@ import com.leftovers.app.ui.AppViewModelProvider
 import com.leftovers.app.ui.components.sharedContainer
 import com.leftovers.app.ui.components.Chip
 import com.leftovers.app.ui.components.RoundButton
+import com.leftovers.app.ui.components.SecondaryButton
 import com.leftovers.app.ui.components.EmptyState
 import com.leftovers.app.ui.components.Glass
 import com.leftovers.app.ui.components.GlassScreen
@@ -98,6 +99,7 @@ class DebtsViewModel(
 
     fun save(debt: Debt) = viewModelScope.launch { planning.saveDebt(debt) }
     fun delete(debt: Debt) = viewModelScope.launch { planning.deleteDebt(debt) }
+    fun settleEntry(debt: Debt) = viewModelScope.launch { planning.settleEntry(debt) }
     fun settle(person: String) = viewModelScope.launch { planning.settle(person) }
     fun settleUp(person: String, amountMinor: Long, accountId: Long?) = viewModelScope.launch { planning.settleUp(person, amountMinor, accountId, chosen = true) }
 }
@@ -242,6 +244,10 @@ fun DebtsScreen(onBack: () -> Unit, viewModel: DebtsViewModel = viewModel(factor
             } else {
                 null
             },
+            onSettle = {
+                viewModel.settleEntry(it)
+                editing = null
+            },
         )
     }
 }
@@ -254,6 +260,8 @@ fun DebtEditor(
     onDismiss: () -> Unit,
     onSave: (Debt) -> Unit,
     onDelete: (() -> Unit)?,
+    /** This entry paid back in full, with any changes made here: Received for money lent, Paid back for borrowed. */
+    onSettle: ((Debt) -> Unit)? = null,
     accounts: List<com.leftovers.app.data.AccountWithBalance> = emptyList(),
     defaultAccountId: Long? = null,
 ) {
@@ -308,6 +316,10 @@ fun DebtEditor(
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             Text(if (initial.id == 0L) "Lent or borrowed" else initial.person, style = MaterialTheme.typography.headlineSmall, color = c.textPrimary)
+            // Paid back already: said once, under the name.
+            if (initial.settled && !initial.repayment) {
+                Text(if (initial.amountMinor >= 0) "Received · settled" else "Paid back · settled", style = MaterialTheme.typography.bodySmall, color = c.textTertiary)
+            }
             SegmentedToggle(listOf(true, false), lent, { if (it) "I lent" else "I borrowed" }, { lent = it }, Modifier.fillMaxWidth())
             GlassTextField(person, { person = it.take(30) }, placeholder = "e.g. Nick", label = if (lent) "To" else "From")
             val matches = people.filter { it.contains(person.trim(), ignoreCase = true) && !it.equals(person.trim(), ignoreCase = true) }.take(6)
@@ -354,16 +366,24 @@ fun DebtEditor(
                 }
             }
             Spacer(Modifier.height(2.dp))
-            PrimaryButton(
-                "Save",
-                {
-                    // Photos removed while editing are deleted once the change is saved.
-                    original.filter { it !in photos }.forEach { ReceiptStore.delete(it) }
-                    onSave(initial.copy(person = person.trim(), amountMinor = if (lent) amount else -amount, note = note.trim(), receiptPath = photosToPath(photos), accountId = accountId))
-                },
-                Modifier.fillMaxWidth(),
-                enabled = person.isNotBlank() && amount > 0,
-            )
+            fun edited(): Debt {
+                // Photos removed while editing are deleted once the change is saved.
+                original.filter { it !in photos }.forEach { ReceiptStore.delete(it) }
+                return initial.copy(person = person.trim(), amountMinor = if (lent) amount else -amount, note = note.trim(), receiptPath = photosToPath(photos), accountId = accountId)
+            }
+            val ready = person.isNotBlank() && amount > 0
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                // An open entry can be paid back on its own, apart from the rest with this person.
+                if (onSettle != null && initial.id != 0L && !initial.settled && !initial.repayment) {
+                    SecondaryButton(
+                        if (lent) "Received" else "Paid back",
+                        { if (ready) onSettle(edited()) },
+                        Modifier.weight(1f),
+                        icon = Lucide.Check,
+                    )
+                }
+                PrimaryButton("Save", { onSave(edited()) }, Modifier.weight(1f), enabled = ready)
+            }
             viewing?.let { p ->
                 ReceiptViewer(p, onDismiss = { viewing = null }, onRemove = {
                     if (p !in original) ReceiptStore.delete(p)

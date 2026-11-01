@@ -67,6 +67,27 @@ class PlanningRepository(private val database: AppDatabase) {
         }
     }
 
+    /**
+     * One entry paid back in full, apart from the rest with that person: it's settled, and the money moves back
+     * the other way through its account, as a settled repayment so it doesn't count again.
+     */
+    suspend fun settleEntry(debt: Debt, epochDay: Long = LocalDate.now().toEpochDay()) {
+        database.withTransaction {
+            debtDao.upsert(debt.copy(settled = true))
+            debtDao.upsert(
+                Debt(
+                    person = debt.person.trim(),
+                    amountMinor = -debt.amountMinor,
+                    note = "Paid back",
+                    epochDay = epochDay,
+                    accountId = debt.accountId,
+                    repayment = true,
+                    settled = true,
+                ),
+            )
+        }
+    }
+
     /** Everything with [person] paid back in full. */
     suspend fun settle(person: String) = settleUp(person)
 

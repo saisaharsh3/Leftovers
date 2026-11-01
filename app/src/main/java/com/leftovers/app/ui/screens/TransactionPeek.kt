@@ -92,6 +92,10 @@ class TransactionPeekViewModel(
         viewModelScope.launch { planning.saveDebt(debt) }
     }
 
+    fun settleShare(debt: com.leftovers.app.data.Debt) {
+        viewModelScope.launch { planning.settleEntry(debt) }
+    }
+
     fun deleteShare(debt: com.leftovers.app.data.Debt) {
         viewModelScope.launch { planning.deleteDebt(debt) }
     }
@@ -160,6 +164,7 @@ fun TransactionPeekCard(
             onDismiss = { peek.share = null },
             onSave = { viewModel.saveShare(it); peek.share = null },
             onDelete = { viewModel.deleteShare(debt); peek.share = null },
+            onSettle = { viewModel.settleShare(it); peek.share = null },
         )
     }
     val item = peek.open ?: return

@@ -5,6 +5,7 @@ All notable changes to Leftovers. Download any version from
 
 ## Unreleased
 
+- Money owed: an entry can be paid back on its own, with Received (money lent) or Paid back (borrowed) in its editor, and the money goes back through its account
 - After an update, what's new pops up once. The bell on Home opens Notices: what's new, and a newer version when there is one
 - The AI assistant adds a split bill as one entry, with people's shares in Money owed and parts in other categories, and a bill photo across several categories becomes one split bill
 - Money owed: Remind is a bell button, so the amount owed keeps to one line
