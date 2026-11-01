@@ -1663,6 +1663,9 @@ private fun SplitBody(
     var pick by rememberSaveable { mutableStateOf<Long?>(null) }
     var amountText by rememberSaveable { mutableStateOf("") }
     var partNote by rememberSaveable { mutableStateOf("") }
+    // A part taken back into the fields to change it: the saved entry it is, so saving updates it.
+    var changingId by rememberSaveable { mutableStateOf(0L) }
+    val amountFocus = remember { androidx.compose.ui.focus.FocusRequester() }
     val rest = total - parts.sumOf { it.amountMinor }
     val partMinor = AmountInput.toMinor(amountText) ?: 0L
     // After Add part: the keyboard closes and the list scrolls into view, with the new part in it,
@@ -1672,9 +1675,9 @@ private fun SplitBody(
     val keyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
     val scope = rememberCoroutineScope()
 
-    run {
+    Column {
         Column(
-            Modifier.verticalScroll(scroll).padding(horizontal = 20.dp).padding(bottom = 16.dp),
+            Modifier.weight(1f, fill = false).verticalScroll(scroll).padding(horizontal = 20.dp).padding(bottom = 12.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             header()
@@ -1701,6 +1704,13 @@ private fun SplitBody(
                         com.leftovers.app.ui.components.RowDivider()
                         com.leftovers.app.ui.components.ListRow(
                             cat?.name ?: "Category",
+                            onClick = {
+                                pick = part.categoryId
+                                amountText = AmountInput.fromMinor(part.amountMinor)
+                                partNote = part.note
+                                changingId = part.id
+                                parts.removeAt(i)
+                            },
                             subtitle = part.note.ifBlank { null },
                             leading = { if (cat != null) CategoryIcon(cat.emoji, cat.color, size = 38.dp) },
                             trailing = {
@@ -1730,23 +1740,28 @@ private fun SplitBody(
                 // The same category and note again adds to that part; another note is a part of its own.
                 val existing = parts.indexOfFirst { it.categoryId == id && it.note == text }
                 if (existing >= 0) parts[existing] = parts[existing].copy(amountMinor = parts[existing].amountMinor + amount)
-                else parts += SplitPart(id, amount, text)
+                else parts += SplitPart(id, amount, text, changingId)
                 amountText = ""
                 partNote = ""
+                changingId = 0L
                 pick = null
                 focus.clearFocus()
                 keyboard?.hide()
                 scope.launch { scroll.animateScrollTo(0) }
             }
             // The keyboard's ✓ adds the part too, so Add part can stay under the field even while the keyboard covers it.
-            GlassTextField(partNote, { partNote = it.take(80) }, placeholder = "Note for this part (optional)", modifier = Modifier.fillMaxWidth())
-            MoneyField(amountText, { amountText = it }, label = "Amount for this part", onDone = ::addPart)
-            PrimaryButton("Add part", ::addPart, Modifier.fillMaxWidth(), enabled = canAdd)
+            GlassTextField(
+                partNote, { partNote = it.take(80) }, placeholder = "Note for this part (optional)", modifier = Modifier.fillMaxWidth(),
+                onDone = { runCatching { amountFocus.requestFocus() } },
+            )
+            MoneyField(amountText, { amountText = it }, label = "Amount for this part", focusRequester = amountFocus, onDone = ::addPart)
+            PrimaryButton(if (changingId != 0L) "Save part" else "Add part", ::addPart, Modifier.fillMaxWidth(), enabled = canAdd)
             if (rest <= 0) {
                 Text("The parts add up to the whole amount. Leave something for ${mainCategory?.name ?: "the main category"}.", style = MaterialTheme.typography.bodySmall, color = c.negative)
             }
-            SecondaryButton("Done", onDismiss, Modifier.fillMaxWidth())
         }
+        // Always in view, however long the list of parts gets.
+        SecondaryButton("Done", onDismiss, Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 16.dp))
     }
 }
 

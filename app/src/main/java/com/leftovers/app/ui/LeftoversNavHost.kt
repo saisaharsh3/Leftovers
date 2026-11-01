@@ -361,7 +361,7 @@ fun LeftoversNavHost(openAdd: Boolean = false, onOpenAddHandled: () -> Unit = {}
                             onOpenDebts = { nav.navigate(Routes.DEBTS) },
                         )
                     }
-                    screen(Routes.DEBTS) { DebtsScreen(onBack = back) }
+                    screen(Routes.DEBTS) { DebtsScreen(onBack = back, onOpenTransaction = { nav.navigate(Routes.edit(it)) }) }
                     screen(Routes.DELETED) { DeletedScreen(onBack = back) }
                     screen(
                         Routes.ADD,

@@ -59,6 +59,24 @@ class TransactionPeekViewModel(
     settings: com.leftovers.app.data.SettingsRepository,
     private val planning: com.leftovers.app.data.PlanningRepository,
 ) : ViewModel() {
+    /** The same entry again, for today: for things logged often. [onAdded] gets its id, for Undo. */
+    fun addAgain(item: TransactionItem, onAdded: (Long) -> Unit) {
+        viewModelScope.launch {
+            onAdded(
+                repository.saveTransaction(
+                    item.toTransaction().copy(
+                        id = 0, epochDay = java.time.LocalDate.now().toEpochDay(), createdAt = System.currentTimeMillis(),
+                        receiptPath = null, splitOf = null,
+                    ),
+                ),
+            )
+        }
+    }
+
+    suspend fun removeAgain(id: Long) {
+        repository.getTransaction(id)?.let { repository.removeTransaction(it) }
+    }
+
     /** What people owe for bills split with them. */
     val debts: StateFlow<List<com.leftovers.app.data.Debt>> =
         planning.debts.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
@@ -295,6 +313,10 @@ fun TransactionPeekCard(
                         undo.show("Entry deleted") { viewModel.restore(listOf(item)) }
                     }
                 }, Modifier.weight(1f), icon = Lucide.Trash2)
+                // The same again, for today.
+                com.leftovers.app.ui.components.RoundButton(Lucide.Repeat, "Add again for today", {
+                    close { viewModel.addAgain(item) { id -> undo.show("Added again for today") { viewModel.removeAgain(id) } } }
+                }, size = 56.dp)
                 PrimaryButton(
                     if (isBill && oneBill) "Edit bill" else "Edit",
                     { close { onEdit(if (isBill && oneBill) main.id else item.id) } },

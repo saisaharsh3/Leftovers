@@ -428,7 +428,8 @@ fun HomeScreen(
                             Row(
                                 Modifier
                                     .fillMaxWidth()
-                                    .pressable({ close { editingDebt = d } }, pressedScale = 0.98f)
+                                    // A share of a split bill opens the bill; other entries open on their own.
+                                    .pressable({ close { d.splitOf?.let(onOpenTransaction) ?: run { editingDebt = d } } }, pressedScale = 0.98f)
                                     .padding(vertical = 10.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
