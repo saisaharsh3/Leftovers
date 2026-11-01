@@ -298,7 +298,7 @@ fun TransactionPeekCard(
                         Modifier.fillMaxWidth().pressable({ close { peek.share = d } }, pressedScale = 0.98f).padding(horizontal = 16.dp, vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        com.leftovers.app.ui.components.IconTile(Lucide.HandCoins, if (d.settled) c.textTertiary else c.positive, size = 30.dp)
+                        com.leftovers.app.ui.components.IconTile(if (d.settled) Lucide.Check else Lucide.HandCoins, if (d.settled) c.textTertiary else c.positive, size = 30.dp)
                         Spacer(Modifier.width(12.dp))
                         Text(
                             "${d.person} · ${if (d.settled) "settled" else "owes you"}",

@@ -906,15 +906,16 @@ internal fun BillBreakdown(
     val money = LocalMoney.current
     // Your share is solid white. Parts take clear colours from a set chosen to sit well together, none of them green
     // or the accent; people take distinct greens, as what's owed to you. Each pill's dot is its piece of the bar.
-    data class Piece(val label: String, val amount: Long, val color: androidx.compose.ui.graphics.Color, val open: (() -> Unit)?, val tag: Modifier = Modifier)
+    data class Piece(val label: String, val amount: Long, val color: androidx.compose.ui.graphics.Color, val open: (() -> Unit)?, val tag: Modifier = Modifier, val settled: Boolean = false)
     val pieces = buildList {
-        add(Piece("You", main.item.amountMinor, c.textPrimary, null))
+        // Your share is the bill's own entry: it opens the bill, like its row.
+        add(Piece("You", main.item.amountMinor, c.textPrimary, { onPart(main.item) }))
         main.parts.forEachIndexed { i, p ->
             val name = com.leftovers.app.data.noteText(p.note).takeIf { it.isNotBlank() && it != com.leftovers.app.data.noteText(main.item.note) } ?: p.categoryName
             add(Piece(name, p.amountMinor, BillPartColors[i % BillPartColors.size], { onPart(p) }, partModifier(p)))
         }
         main.shares.forEachIndexed { i, d ->
-            add(Piece(d.person, d.amountMinor, if (d.settled) c.textTertiary else BillOwedColors[i % BillOwedColors.size], { onShare(d) }))
+            add(Piece(d.person, d.amountMinor, if (d.settled) c.textTertiary else BillOwedColors[i % BillOwedColors.size], { onShare(d) }, settled = d.settled))
         }
     }
     val total = pieces.sumOf { it.amount }.coerceAtLeast(1)
@@ -924,7 +925,9 @@ internal fun BillBreakdown(
     ) {
         Row(Modifier.fillMaxWidth().height(5.dp), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
             pieces.forEach { piece ->
-                Box(Modifier.weight(piece.amount.toFloat() / total).fillMaxSize().background(piece.color, RoundedCornerShape(2.5.dp)))
+                // Paid back: an empty outline, so what's still owed stands out.
+                val bar = Modifier.weight(piece.amount.toFloat() / total).fillMaxSize()
+                Box(if (piece.settled) bar.border(1.dp, piece.color, RoundedCornerShape(2.5.dp)) else bar.background(piece.color, RoundedCornerShape(2.5.dp)))
             }
         }
         androidx.compose.foundation.layout.FlowRow(
@@ -940,11 +943,15 @@ internal fun BillBreakdown(
                         .padding(start = 8.dp, end = 10.dp, top = 5.dp, bottom = 5.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Box(Modifier.size(7.dp).background(piece.color, androidx.compose.foundation.shape.CircleShape))
+                    if (piece.settled) {
+                        Icon(com.leftovers.app.ui.icons.Lucide.Check, contentDescription = null, tint = c.textTertiary, modifier = Modifier.size(12.dp))
+                    } else {
+                        Box(Modifier.size(7.dp).background(piece.color, androidx.compose.foundation.shape.CircleShape))
+                    }
                     Spacer(Modifier.width(6.dp))
-                    Text(piece.label, style = MaterialTheme.typography.labelMedium, color = c.textSecondary, maxLines = 1)
+                    Text(if (piece.settled) "${piece.label} · settled" else piece.label, style = MaterialTheme.typography.labelMedium, color = if (piece.settled) c.textTertiary else c.textSecondary, maxLines = 1)
                     Spacer(Modifier.width(5.dp))
-                    Text(money.format(piece.amount), style = MaterialTheme.typography.labelMedium, color = c.textPrimary, maxLines = 1)
+                    Text(money.format(piece.amount), style = MaterialTheme.typography.labelMedium, color = if (piece.settled) c.textTertiary else c.textPrimary, maxLines = 1)
                 }
             }
         }
