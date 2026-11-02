@@ -3,7 +3,7 @@
 All notable changes to Leftovers. Download any version from
 [Releases](https://github.com/saisaharsh3/Leftovers/releases).
 
-## Unreleased
+## 1.9.0
 
 - Home screen widgets come in Glass, Dark or Light (Settings → Appearance), and fit any size they're made: one row high, each keeps what matters
 - Pop-ups are clearer liquid glass: the screen behind shows through

@@ -8,14 +8,12 @@ import android.content.Context
  */
 object WhatsNew {
     val notes = listOf(
-        "A split bill shows as one entry, with its whole amount and each person's share",
-        "Tap a person in a split to change just their share",
-        "The AI assistant adds split bills too, from a chat or a photo of the bill",
-        "Add again logs the same entry for today, from its card",
-        "Activity sorts by highest or lowest amount",
-        "Money owed: save something before you know the amount, and pay back one entry on its own",
-        "50/30/20: pick Needs, Wants or Savings first, and see all three on the widget",
-        "Sheets close with a drag down anywhere on them",
+        "Split bills: one entry, with where the money went and each person's share in Money owed",
+        "Money owed: save it before you know the amount, and pay back one entry on its own",
+        "50/30/20 budgeting, and a budget for dates you choose, like a trip",
+        "The budget month can start on payday, and income can be interest",
+        "Home screen widgets in Glass, Dark or Light, at any size",
+        "The bell on Home keeps what's new, and tells you about new versions",
     )
 
     fun version(context: Context): String =

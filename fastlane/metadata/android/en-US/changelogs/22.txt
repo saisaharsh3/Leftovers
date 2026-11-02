@@ -1,0 +1,8 @@
+- Split bills: one entry, its whole amount and each share
+- Money owed: pending amounts, pay back one entry
+- 50/30/20 budgeting and budgets for chosen dates
+- Budget month from any day; interest income
+- Widgets in Glass, Dark or Light, at any size
+- What's new and new versions on Home
+- Clearer liquid glass sheets and pop-ups
+- Backups that never stop without a word
