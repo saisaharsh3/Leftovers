@@ -5,6 +5,7 @@ All notable changes to Leftovers. Download any version from
 
 ## Unreleased
 
+- Home screen widgets come in Glass, Dark or Light (Settings → Appearance), and fit any size they're made: one row high, each keeps what matters
 - Pop-ups are clearer liquid glass: the screen behind shows through
 - The Left this month widget in 50/30/20 shows Needs, Wants and Savings side by side, so they fit its size
 - Money owed: lent or borrowed can be saved without an amount, as a reminder (a laptop a friend is sending, say): it shows as amount pending and counts nowhere until it's filled in (#36)

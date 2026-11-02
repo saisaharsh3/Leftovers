@@ -71,7 +71,7 @@ import androidx.work.WorkerParameters
  */
 class QuickAddWidget : GlanceAppWidget() {
     override val stateDefinition = PreferencesGlanceStateDefinition
-    override val sizeMode = SizeMode.Responsive(setOf(NARROW, COMPACT, TALL_NARROW, TALL))
+    override val sizeMode = SizeMode.Responsive(setOf(NARROW, COMPACT, ROOMY_NARROW, ROOMY, TALL_NARROW, TALL))
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val container = (context.applicationContext as LeftoversApp).container
@@ -99,6 +99,7 @@ class QuickAddWidget : GlanceAppWidget() {
                     spentToday = money.formatWhole(items.filter { it.type == TxType.EXPENSE && it.epochDay == today }.sumOf { it.amountMinor }),
                     amounts = steps(settings.currencyCode).map { it to money.formatWhole(it) },
                     message = if (fresh) prefs[MESSAGE] else null,
+                look = WidgetLook.of(settings.widgetStyle),
                 ),
             )
         }
@@ -110,6 +111,7 @@ class QuickAddWidget : GlanceAppWidget() {
         val spentToday: String,
         val amounts: List<Pair<Long, String>>,
         val message: String?,
+        val look: WidgetLook,
     )
 
     @Composable
@@ -125,11 +127,15 @@ class QuickAddWidget : GlanceAppWidget() {
             GlanceModifier
                 .fillMaxSize()
                 .cornerRadius(28.dp)
-                // Glass: the wallpaper shows through, with light on its top and edge.
-                .background(androidx.glance.ImageProvider(com.leftovers.app.R.drawable.widget_glass))
+                // Glass, dark or light, as chosen in Settings.
+                .background(androidx.glance.ImageProvider(v.look.background))
                 .padding(horizontal = 14.dp, vertical = if (tall) 14.dp else 10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            if (!tall && size.height < TWO_ROWS) {
+                OneRow(context, v, amounts, openAdd)
+                return@Column
+            }
             Header(context, v)
             Spacer(GlanceModifier.height(if (tall) 12.dp else 8.dp))
             val buttonHeight = if (tall) 52.dp else 44.dp
@@ -139,10 +145,10 @@ class QuickAddWidget : GlanceAppWidget() {
                     val action: Action = v.category?.let { actionRunCallback<LogQuickAdd>(actionParametersOf(AMOUNT to minor, CATEGORY_ID to it.id)) }
                         ?: actionStartActivity(Intent(context, MainActivity::class.java))
                     Box(
-                        GlanceModifier.defaultWeight().height(buttonHeight).cornerRadius(buttonHeight / 2).background(BUTTON).clickable(action),
+                        GlanceModifier.defaultWeight().height(buttonHeight).cornerRadius(buttonHeight / 2).background(v.look.button).clickable(action),
                         contentAlignment = Alignment.Center,
                     ) {
-                        Text(label, style = TextStyle(color = ColorProvider(TEXT), fontSize = if (tall) 16.sp else 14.sp, fontWeight = FontWeight.Bold), maxLines = 1)
+                        Text(label, style = TextStyle(color = ColorProvider(v.look.text), fontSize = if (tall) 16.sp else 14.sp, fontWeight = FontWeight.Bold), maxLines = 1)
                     }
                 }
                 if (!tall) {
@@ -161,6 +167,47 @@ class QuickAddWidget : GlanceAppWidget() {
         }
     }
 
+    /**
+     * One row high: the category as its dot (tap to switch), then the amounts and +. After a tap, a ✓ that undoes it
+     * in place of the dot.
+     */
+    @Composable
+    private fun OneRow(context: Context, v: View, amounts: List<Pair<Long, String>>, openAdd: Action) {
+        val h = 36.dp
+        Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            val category = v.category
+            Box(
+                GlanceModifier.size(h).cornerRadius(h / 2).background(v.look.button).then(
+                    when {
+                        v.message != null -> GlanceModifier.clickable(actionRunCallback<UndoQuickAdd>())
+                        category == null -> GlanceModifier.clickable(actionStartActivity(Intent(context, MainActivity::class.java)))
+                        v.canSwitch -> GlanceModifier.clickable(actionRunCallback<SwitchQuickAddCategory>(actionParametersOf(CATEGORY_ID to category.id)))
+                        else -> GlanceModifier
+                    },
+                ),
+                contentAlignment = Alignment.Center,
+            ) {
+                if (v.message != null) Text("↶", style = TextStyle(color = ColorProvider(ACCENT), fontSize = 16.sp, fontWeight = FontWeight.Bold))
+                else Box(GlanceModifier.size(12.dp).cornerRadius(6.dp).background(category?.let { Color(it.color) } ?: v.look.muted)) {}
+            }
+            // A row of their own: a widget's row holds at most ten things.
+            Row(GlanceModifier.defaultWeight(), verticalAlignment = Alignment.CenterVertically) {
+                amounts.forEach { (minor, label) ->
+                    Spacer(GlanceModifier.width(6.dp))
+                    val action: Action = category?.let { actionRunCallback<LogQuickAdd>(actionParametersOf(AMOUNT to minor, CATEGORY_ID to it.id)) }
+                        ?: actionStartActivity(Intent(context, MainActivity::class.java))
+                    Box(GlanceModifier.defaultWeight().height(h).cornerRadius(h / 2).background(v.look.button).clickable(action), contentAlignment = Alignment.Center) {
+                        Text(label, style = TextStyle(color = ColorProvider(v.look.text), fontSize = 13.sp, fontWeight = FontWeight.Bold), maxLines = 1)
+                    }
+                }
+            }
+            Spacer(GlanceModifier.width(6.dp))
+            Box(GlanceModifier.size(h).cornerRadius(h / 2).background(ACCENT).clickable(openAdd), contentAlignment = Alignment.Center) {
+                Text("+", style = TextStyle(color = ColorProvider(ON_ACCENT), fontSize = 20.sp, fontWeight = FontWeight.Bold))
+            }
+        }
+    }
+
     /** The category (tap to switch) and today's spend; after a tap, what was logged and Undo. */
     @Composable
     private fun Header(context: Context, v: View) {
@@ -168,9 +215,9 @@ class QuickAddWidget : GlanceAppWidget() {
             if (v.message != null) {
                 Text("✓", style = TextStyle(color = ColorProvider(ACCENT), fontSize = 14.sp, fontWeight = FontWeight.Bold))
                 Spacer(GlanceModifier.width(6.dp))
-                Text(v.message, style = TextStyle(color = ColorProvider(TEXT), fontSize = 13.sp, fontWeight = FontWeight.Medium), maxLines = 1, modifier = GlanceModifier.defaultWeight())
+                Text(v.message, style = TextStyle(color = ColorProvider(v.look.text), fontSize = 13.sp, fontWeight = FontWeight.Medium), maxLines = 1, modifier = GlanceModifier.defaultWeight())
                 Box(
-                    GlanceModifier.height(28.dp).cornerRadius(14.dp).background(BUTTON).padding(horizontal = 12.dp).clickable(actionRunCallback<UndoQuickAdd>()),
+                    GlanceModifier.height(28.dp).cornerRadius(14.dp).background(v.look.button).padding(horizontal = 12.dp).clickable(actionRunCallback<UndoQuickAdd>()),
                     contentAlignment = Alignment.Center,
                 ) {
                     Text("Undo", style = TextStyle(color = ColorProvider(ACCENT), fontSize = 13.sp, fontWeight = FontWeight.Bold))
@@ -182,7 +229,7 @@ class QuickAddWidget : GlanceAppWidget() {
                 GlanceModifier
                     .height(28.dp)
                     .cornerRadius(14.dp)
-                    .background(BUTTON)
+                    .background(v.look.button)
                     .padding(start = 10.dp, end = 12.dp)
                     .then(
                         if (category == null) GlanceModifier.clickable(actionStartActivity(Intent(context, MainActivity::class.java)))
@@ -191,35 +238,36 @@ class QuickAddWidget : GlanceAppWidget() {
                     ),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Box(GlanceModifier.size(8.dp).cornerRadius(4.dp).background(category?.let { Color(it.color) } ?: MUTED)) {}
+                Box(GlanceModifier.size(8.dp).cornerRadius(4.dp).background(category?.let { Color(it.color) } ?: v.look.muted)) {}
                 Spacer(GlanceModifier.width(7.dp))
                 Text(
                     category?.name ?: "Add a category first",
-                    style = TextStyle(color = ColorProvider(TEXT), fontSize = 12.sp, fontWeight = FontWeight.Medium),
+                    style = TextStyle(color = ColorProvider(v.look.text), fontSize = 12.sp, fontWeight = FontWeight.Medium),
                     maxLines = 1,
                 )
                 if (v.canSwitch) {
                     Spacer(GlanceModifier.width(5.dp))
-                    Text("⇄", style = TextStyle(color = ColorProvider(MUTED), fontSize = 11.sp))
+                    Text("⇄", style = TextStyle(color = ColorProvider(v.look.muted), fontSize = 11.sp))
                 }
             }
             Spacer(GlanceModifier.defaultWeight())
-            Text("Today ", style = TextStyle(color = ColorProvider(MUTED), fontSize = 12.sp), maxLines = 1)
-            Text(v.spentToday, style = TextStyle(color = ColorProvider(TEXT), fontSize = 13.sp, fontWeight = FontWeight.Bold), maxLines = 1)
+            Text("Today ", style = TextStyle(color = ColorProvider(v.look.muted), fontSize = 12.sp), maxLines = 1)
+            Text(v.spentToday, style = TextStyle(color = ColorProvider(v.look.text), fontSize = 13.sp, fontWeight = FontWeight.Bold), maxLines = 1)
         }
     }
 
     companion object {
-        private val NARROW = DpSize(180.dp, 70.dp)
-        private val COMPACT = DpSize(220.dp, 70.dp)
+        private val NARROW = DpSize(180.dp, 56.dp)
+        private val COMPACT = DpSize(220.dp, 56.dp)
+        // Two rows: the category and today's spend above the buttons.
+        private val ROOMY_NARROW = DpSize(180.dp, 100.dp)
+        private val ROOMY = DpSize(220.dp, 100.dp)
         // Responsive widgets are drawn at the largest of these that fits, so LocalSize is one of them.
         private val TALL_NARROW = DpSize(180.dp, 150.dp)
         private val TALL = DpSize(220.dp, 150.dp)
+        /** Below this, there's room for one row of buttons only. */
+        private val TWO_ROWS = 100.dp
 
-        // Buttons are lighter glass on the widget's glass.
-        private val BUTTON = Color(0x24FFFFFF)
-        private val TEXT = Color(0xFFF5F5F7)
-        private val MUTED = Color(0xFFA1A1AA)
         private val ACCENT = Color(0xFFCDF46F)
         private val ON_ACCENT = Color(0xFF151A04)
 

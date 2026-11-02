@@ -18,6 +18,9 @@ private val Context.dataStore by preferencesDataStore(name = "settings")
 
 enum class ThemeMode(val label: String) { DARK("Dark"), LIGHT("Light"), SYSTEM("System default") }
 
+/** How the home-screen widgets look. */
+enum class WidgetStyle(val label: String) { GLASS("Glass"), DARK("Dark"), LIGHT("Light") }
+
 /** How times are shown: like the phone, or always 12- or 24-hour. */
 enum class TimeFormat(val label: String) { PHONE("Phone"), H12("12-hour"), H24("24-hour") }
 
@@ -31,6 +34,7 @@ data class AppSettings(
     /** Black background for OLED screens, when the dark theme is in use. */
     val pureBlack: Boolean = false,
     val timeFormat: TimeFormat = TimeFormat.PHONE,
+    val widgetStyle: WidgetStyle = WidgetStyle.GLASS,
     /** Last exchange rate used per currency in travel mode, e.g. "AED" to "22.7" (home currency per unit). */
     val foreignRates: Map<String, String> = emptyMap(),
     val plan: BudgetPlan,
@@ -108,6 +112,7 @@ class SettingsRepository(context: Context) {
             glassEffects = p[GLASS_EFFECTS] ?: true,
             pureBlack = p[PURE_BLACK] ?: false,
             timeFormat = TimeFormat.entries.firstOrNull { it.name == p[TIME_FORMAT] } ?: TimeFormat.PHONE,
+            widgetStyle = WidgetStyle.entries.firstOrNull { it.name == p[WIDGET_STYLE] } ?: WidgetStyle.GLASS,
             foreignRates = p[FOREIGN_RATES].orEmpty().split(';').mapNotNull { pair ->
                 pair.split('=').takeIf { it.size == 2 && it[0].isNotBlank() }?.let { it[0] to it[1] }
             }.toMap(),
@@ -182,6 +187,7 @@ class SettingsRepository(context: Context) {
 
     /** Remembers the rate last used for [code], so the next entry in that currency starts with it. */
     suspend fun setTimeFormat(format: TimeFormat) = store.edit { it[TIME_FORMAT] = format.name }
+    suspend fun setWidgetStyle(style: WidgetStyle) = store.edit { it[WIDGET_STYLE] = style.name }
 
     suspend fun setForeignRate(code: String, rate: String) = store.edit { p ->
         val rates = p[FOREIGN_RATES].orEmpty().split(';').filter { it.isNotBlank() && !it.startsWith("$code=") } + "$code=$rate"
@@ -304,6 +310,7 @@ class SettingsRepository(context: Context) {
         val PURE_BLACK = booleanPreferencesKey("pure_black")
         val FOREIGN_RATES = stringPreferencesKey("foreign_rates")
         val TIME_FORMAT = stringPreferencesKey("time_format")
+        val WIDGET_STYLE = stringPreferencesKey("widget_style")
         val MONTHLY_BUDGET = longPreferencesKey("monthly_budget")
         val YEARLY_BUDGET = longPreferencesKey("yearly_budget")
         val BUDGET_MODE = stringPreferencesKey("budget_mode")

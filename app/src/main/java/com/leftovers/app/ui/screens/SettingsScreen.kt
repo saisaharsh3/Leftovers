@@ -245,6 +245,10 @@ class SettingsViewModel(
         viewModelScope.launch { settingsRepository.setTimeFormat(format) }
     }
 
+    fun setWidgetStyle(style: com.leftovers.app.data.WidgetStyle) {
+        viewModelScope.launch { settingsRepository.setWidgetStyle(style) }
+    }
+
     fun setTheme(mode: ThemeMode) {
         viewModelScope.launch { settingsRepository.setThemeMode(mode) }
     }
@@ -605,6 +609,15 @@ fun SettingsScreen(
                             s.timeFormat,
                             { it.label },
                             viewModel::setTimeFormat,
+                            Modifier.fillMaxWidth(),
+                        )
+                        Spacer(Modifier.height(10.dp))
+                        Text("Home screen widgets", style = MaterialTheme.typography.labelMedium, color = c.textSecondary, modifier = Modifier.padding(start = 4.dp, bottom = 8.dp))
+                        SegmentedToggle(
+                            com.leftovers.app.data.WidgetStyle.entries,
+                            s.widgetStyle,
+                            { it.label },
+                            viewModel::setWidgetStyle,
                             Modifier.fillMaxWidth(),
                         )
                     }
