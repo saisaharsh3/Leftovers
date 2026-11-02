@@ -22,6 +22,7 @@ import androidx.glance.layout.fillMaxSize
 import androidx.glance.layout.fillMaxWidth
 import androidx.glance.layout.height
 import androidx.glance.layout.padding
+import androidx.glance.layout.width
 import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
@@ -99,52 +100,60 @@ class MonthBudgetWidget : GlanceAppWidget() {
                 .padding(18.dp)
                 .clickable(actionStartActivity(Intent(context, MainActivity::class.java))),
         ) {
-            if (state.groups.isNotEmpty()) {
-                Groups(state, white, muted)
-                return@Column
-            }
-            Text(state.label, style = TextStyle(color = muted, fontSize = 12.sp, fontWeight = FontWeight.Medium))
-            Spacer(GlanceModifier.height(4.dp))
-            Text(
-                state.amount,
-                style = TextStyle(color = if (state.over) ColorProvider(Color(0xFFF58A8A)) else white, fontSize = 30.sp, fontWeight = FontWeight.Bold),
-                maxLines = 1,
-            )
-            state.used?.let { used ->
-                Spacer(GlanceModifier.height(8.dp))
-                LinearProgressIndicator(
-                    progress = used,
-                    modifier = GlanceModifier.fillMaxWidth().height(6.dp),
-                    color = ColorProvider(if (state.over) Color(0xFFF58A8A) else Color(0xFFCDF46F)),
-                    backgroundColor = ColorProvider(Color(0x22FFFFFF)),
-                )
-            }
-            Spacer(GlanceModifier.height(6.dp))
-            Text(state.caption, style = TextStyle(color = muted, fontSize = 12.sp), maxLines = 1)
+            if (state.groups.isNotEmpty()) Groups(state, white, muted) else OneBudget(state, white, muted)
         }
     }
 }
 
-/** Needs, Wants and Savings: each one's share of its part used, a bar each, red once it's over. */
+/** What's left of the one budget: the amount, a bar, and how much of it is spent. */
+@androidx.compose.runtime.Composable
+private fun OneBudget(state: MonthState, white: ColorProvider, muted: ColorProvider) {
+    Text(state.label, style = TextStyle(color = muted, fontSize = 12.sp, fontWeight = FontWeight.Medium))
+    Spacer(GlanceModifier.height(4.dp))
+    Text(
+        state.amount,
+        style = TextStyle(color = if (state.over) ColorProvider(Color(0xFFF58A8A)) else white, fontSize = 30.sp, fontWeight = FontWeight.Bold),
+        maxLines = 1,
+    )
+    state.used?.let { used ->
+        Spacer(GlanceModifier.height(8.dp))
+        LinearProgressIndicator(
+            progress = used,
+            modifier = GlanceModifier.fillMaxWidth().height(6.dp),
+            color = ColorProvider(if (state.over) Color(0xFFF58A8A) else Color(0xFFCDF46F)),
+            backgroundColor = ColorProvider(Color(0x22FFFFFF)),
+        )
+    }
+    Spacer(GlanceModifier.height(6.dp))
+    Text(state.caption, style = TextStyle(color = muted, fontSize = 12.sp), maxLines = 1)
+}
+
+/**
+ * Needs, Wants and Savings side by side, so all three fit the widget's two rows: each one's share of its part used,
+ * and a bar, red once it's over.
+ */
 @androidx.compose.runtime.Composable
 private fun Groups(state: MonthState, white: ColorProvider, muted: ColorProvider) {
     Row(GlanceModifier.fillMaxWidth()) {
         Text(state.label, style = TextStyle(color = muted, fontSize = 12.sp, fontWeight = FontWeight.Medium), modifier = GlanceModifier.defaultWeight())
         Text(state.caption, style = TextStyle(color = muted, fontSize = 12.sp), maxLines = 1)
     }
-    state.groups.forEach { g ->
-        Spacer(GlanceModifier.height(7.dp))
-        Row(GlanceModifier.fillMaxWidth()) {
-            Text(g.label, style = TextStyle(color = white, fontSize = 13.sp, fontWeight = FontWeight.Medium), modifier = GlanceModifier.defaultWeight())
-            Text(g.percent, style = TextStyle(color = if (g.over) ColorProvider(Color(0xFFF58A8A)) else white, fontSize = 13.sp, fontWeight = FontWeight.Bold), maxLines = 1)
+    Spacer(GlanceModifier.height(10.dp))
+    Row(GlanceModifier.fillMaxWidth()) {
+        state.groups.forEachIndexed { i, g ->
+            if (i > 0) Spacer(GlanceModifier.width(12.dp))
+            Column(GlanceModifier.defaultWeight()) {
+                Text(g.label, style = TextStyle(color = muted, fontSize = 12.sp, fontWeight = FontWeight.Medium), maxLines = 1)
+                Text(g.percent, style = TextStyle(color = if (g.over) ColorProvider(Color(0xFFF58A8A)) else white, fontSize = 22.sp, fontWeight = FontWeight.Bold), maxLines = 1)
+                Spacer(GlanceModifier.height(6.dp))
+                LinearProgressIndicator(
+                    progress = g.used,
+                    modifier = GlanceModifier.fillMaxWidth().height(5.dp),
+                    color = ColorProvider(if (g.over) Color(0xFFF58A8A) else Color(0xFFCDF46F)),
+                    backgroundColor = ColorProvider(Color(0x22FFFFFF)),
+                )
+            }
         }
-        Spacer(GlanceModifier.height(3.dp))
-        LinearProgressIndicator(
-            progress = g.used,
-            modifier = GlanceModifier.fillMaxWidth().height(5.dp),
-            color = ColorProvider(if (g.over) Color(0xFFF58A8A) else Color(0xFFCDF46F)),
-            backgroundColor = ColorProvider(Color(0x22FFFFFF)),
-        )
     }
 }
 

@@ -568,11 +568,11 @@ fun MorphCard(
                                 shape = { com.kyant.shapes.RoundedRectangle(30.dp) },
                                 effects = {
                                     vibrancy()
-                                    // Frosted inside, so icons and switches behind never show through the text.
-                                    blur(28.dp.toPx())
+                                    // Clear glass: what's behind shows through, softened just enough for the text on it.
+                                    blur(10.dp.toPx())
                                     lens(22.dp.toPx(), 44.dp.toPx(), chromaticAberration = true)
                                 },
-                                onDrawSurface = { drawRect(if (c.isDark) androidx.compose.ui.graphics.Color(0xFF14141B).copy(alpha = 0.62f) else androidx.compose.ui.graphics.Color.White.copy(alpha = 0.62f)) },
+                                onDrawSurface = { drawRect(if (c.isDark) androidx.compose.ui.graphics.Color(0xFF14141B).copy(alpha = 0.42f) else androidx.compose.ui.graphics.Color.White.copy(alpha = 0.42f)) },
                             )
                         } else {
                             // The same glass as the cards on screen, over the blurred screen behind.
