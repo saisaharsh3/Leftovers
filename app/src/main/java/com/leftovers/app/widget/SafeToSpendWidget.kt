@@ -20,7 +20,9 @@ import androidx.glance.layout.Column
 import androidx.glance.layout.Row
 import androidx.glance.layout.Spacer
 import androidx.glance.layout.fillMaxSize
+import androidx.glance.layout.fillMaxWidth
 import androidx.glance.layout.height
+import androidx.glance.layout.width
 import androidx.glance.layout.padding
 import androidx.glance.layout.size
 import androidx.glance.text.FontWeight
@@ -38,7 +40,8 @@ import java.time.LocalDate
 import java.time.YearMonth
 import kotlin.math.abs
 
-private data class WidgetState(val label: String, val amount: String, val caption: String, val over: Boolean)
+/** [used]: how much of today's allowance is spent, for its bar; null without a budget. */
+private data class WidgetState(val label: String, val amount: String, val caption: String, val over: Boolean, val used: Float? = null)
 
 /** Home-screen widget: what's safe to spend today, with a quick add button. */
 class SafeToSpendWidget : GlanceAppWidget() {
@@ -65,13 +68,14 @@ class SafeToSpendWidget : GlanceAppWidget() {
         val daysLeft = cycle.daysLeft(today)
         return when {
             budget == null -> WidgetState("Spent today", money.formatWhole(spentToday), "Tap + to log a spend", false)
-            budget.monthUsedUp -> WidgetState("Over budget", money.formatWhole(abs(budget.monthLeft)), "$daysLeft days left this month", true)
-            budget.leftToday < 0 -> WidgetState("Over today", money.formatWhole(abs(budget.leftToday)), "$daysLeft days left this month", true)
+            budget.monthUsedUp -> WidgetState("Over budget", money.formatWhole(abs(budget.monthLeft)), "$daysLeft days left this month", true, 1f)
+            budget.leftToday < 0 -> WidgetState("Over today", money.formatWhole(abs(budget.leftToday)), "$daysLeft days left this month", true, 1f)
             else -> WidgetState(
                 "Safe to spend today",
                 money.formatWhole(budget.leftToday),
                 "${money.formatWhole(spentToday)} of ${money.formatWhole(budget.dailyLimit)} spent",
                 false,
+                if (budget.dailyLimit > 0) (spentToday.toFloat() / budget.dailyLimit).coerceIn(0f, 1f) else 0f,
             )
         }
     }
@@ -85,7 +89,8 @@ class SafeToSpendWidget : GlanceAppWidget() {
             GlanceModifier
                 .fillMaxSize()
                 .cornerRadius(28.dp)
-                .background(Color(0xFF15151B))
+                // Glass: the wallpaper shows through, with light on its top and edge.
+                .background(androidx.glance.ImageProvider(com.leftovers.app.R.drawable.widget_glass))
                 .padding(18.dp)
                 .clickable(actionStartActivity(Intent(context, MainActivity::class.java))),
             verticalAlignment = Alignment.CenterVertically,
@@ -102,9 +107,20 @@ class SafeToSpendWidget : GlanceAppWidget() {
                     ),
                     maxLines = 1,
                 )
-                Spacer(GlanceModifier.height(4.dp))
+                // Today's allowance, as a bar: how much of it is gone.
+                state.used?.let { used ->
+                    Spacer(GlanceModifier.height(8.dp))
+                    androidx.glance.appwidget.LinearProgressIndicator(
+                        progress = used,
+                        modifier = GlanceModifier.fillMaxWidth().height(5.dp),
+                        color = ColorProvider(if (state.over) Color(0xFFF58A8A) else accent),
+                        backgroundColor = ColorProvider(Color(0x22FFFFFF)),
+                    )
+                }
+                Spacer(GlanceModifier.height(6.dp))
                 Text(state.caption, style = TextStyle(color = muted, fontSize = 12.sp), maxLines = 1)
             }
+            Spacer(GlanceModifier.width(14.dp))
             Box(
                 GlanceModifier
                     .size(52.dp)

@@ -96,7 +96,8 @@ class MonthBudgetWidget : GlanceAppWidget() {
             GlanceModifier
                 .fillMaxSize()
                 .cornerRadius(28.dp)
-                .background(Color(0xFF15151B))
+                // Glass: the wallpaper shows through, with light on its top and edge.
+                .background(androidx.glance.ImageProvider(com.leftovers.app.R.drawable.widget_glass))
                 .padding(18.dp)
                 .clickable(actionStartActivity(Intent(context, MainActivity::class.java))),
         ) {

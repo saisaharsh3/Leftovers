@@ -125,7 +125,8 @@ class QuickAddWidget : GlanceAppWidget() {
             GlanceModifier
                 .fillMaxSize()
                 .cornerRadius(28.dp)
-                .background(SURFACE)
+                // Glass: the wallpaper shows through, with light on its top and edge.
+                .background(androidx.glance.ImageProvider(com.leftovers.app.R.drawable.widget_glass))
                 .padding(horizontal = 14.dp, vertical = if (tall) 14.dp else 10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -215,8 +216,8 @@ class QuickAddWidget : GlanceAppWidget() {
         private val TALL_NARROW = DpSize(180.dp, 150.dp)
         private val TALL = DpSize(220.dp, 150.dp)
 
-        private val SURFACE = Color(0xFF15151B)
-        private val BUTTON = Color(0xFF26262F)
+        // Buttons are lighter glass on the widget's glass.
+        private val BUTTON = Color(0x24FFFFFF)
         private val TEXT = Color(0xFFF5F5F7)
         private val MUTED = Color(0xFFA1A1AA)
         private val ACCENT = Color(0xFFCDF46F)
