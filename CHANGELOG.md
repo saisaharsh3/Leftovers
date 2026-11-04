@@ -3,6 +3,10 @@
 All notable changes to Leftovers. Download any version from
 [Releases](https://github.com/saisaharsh3/Leftovers/releases).
 
+## Unreleased
+
+- A settled lent or borrowed entry shows what it was, when it was lent and paid back, the account, whether it came from a split bill, and when it was added
+
 ## 1.9.0
 
 - Home screen widgets come in Glass, Dark or Light (Settings → Appearance), and fit any size they're made: one row high, each keeps what matters

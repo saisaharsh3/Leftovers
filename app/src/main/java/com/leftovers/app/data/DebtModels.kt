@@ -32,6 +32,8 @@ data class Debt(
      * [amountMinor] 0 until it's filled in; 0 for everything else.
      */
     val pending: Int = 0,
+    /** The day it was paid back, for entries settled from v27 on; null before then, or while it's open. */
+    val settledOn: Long? = null,
 ) {
     val photos: List<String> get() = receiptPath?.split('\n')?.filter { it.isNotBlank() }.orEmpty()
 

@@ -271,8 +271,8 @@ interface DebtDao {
     @Query("DELETE FROM debts")
     suspend fun deleteAll()
 
-    @Query("UPDATE debts SET settled = 1 WHERE settled = 0 AND LOWER(TRIM(person)) = LOWER(TRIM(:person))")
-    suspend fun settle(person: String)
+    @Query("UPDATE debts SET settled = 1, settledOn = :day WHERE settled = 0 AND LOWER(TRIM(person)) = LOWER(TRIM(:person))")
+    suspend fun settle(person: String, day: Long)
 
     @Query("SELECT * FROM debts WHERE settled = 0 AND LOWER(TRIM(person)) = LOWER(TRIM(:person)) ORDER BY createdAt DESC")
     suspend fun openFor(person: String): List<Debt>

@@ -9,6 +9,7 @@ import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material3.Icon
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.platform.LocalContext
 import com.leftovers.app.util.ReceiptStore
@@ -255,6 +256,39 @@ fun DebtsScreen(onBack: () -> Unit, viewModel: DebtsViewModel = viewModel(factor
     }
 }
 
+/** A settled entry's story: what it was, when it was lent or borrowed and paid back, the account, and where it came from. */
+@Composable
+private fun SettledDetails(d: Debt, accounts: List<com.leftovers.app.data.AccountWithBalance>) {
+    val c = LocalAppColors.current
+    val money = com.leftovers.app.util.LocalMoney.current
+    val lent = d.theyOwe
+    val rows = listOfNotNull(
+        (if (lent) "Lent" else "Borrowed") to money.format(abs(d.amountMinor)),
+        "On" to LocalDate.ofEpochDay(d.epochDay).friendlyLabel(),
+        "Settled" to (d.settledOn?.let { LocalDate.ofEpochDay(it).friendlyLabel() } ?: "Paid back"),
+        (if (lent) "Paid from" else "Received into") to (accounts.firstOrNull { it.id == d.accountId }?.name ?: "No account"),
+        ("From" to "A split bill").takeIf { d.splitOf != null },
+        "Added" to java.time.Instant.ofEpochMilli(d.createdAt).atZone(java.time.ZoneId.systemDefault()).let {
+            it.toLocalDate().friendlyLabel() + " · " + it.toLocalTime().format(java.time.format.DateTimeFormatter.ofLocalizedTime(java.time.format.FormatStyle.SHORT))
+        },
+    )
+    com.leftovers.app.ui.components.Glass(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Lucide.Check, contentDescription = null, tint = c.positive, modifier = Modifier.size(16.dp))
+                Spacer(Modifier.width(8.dp))
+                Text(if (lent) "Received · settled" else "Paid back · settled", style = MaterialTheme.typography.titleSmall, color = c.positive)
+            }
+            rows.forEach { (label, value) ->
+                Row {
+                    Text(label, style = MaterialTheme.typography.bodyMedium, color = c.textSecondary, modifier = Modifier.weight(1f))
+                    Text(value, style = MaterialTheme.typography.bodyMedium, color = c.textPrimary)
+                }
+            }
+        }
+    }
+}
+
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun DebtEditor(
@@ -319,10 +353,8 @@ fun DebtEditor(
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             Text(if (initial.id == 0L) "Lent or borrowed" else initial.person, style = MaterialTheme.typography.headlineSmall, color = c.textPrimary)
-            // Paid back already: said once, under the name.
-            if (initial.settled && !initial.repayment) {
-                Text(if (initial.amountMinor >= 0) "Received · settled" else "Paid back · settled", style = MaterialTheme.typography.bodySmall, color = c.textTertiary)
-            }
+            // Paid back already: what it was, when, and through which account, before anything to change.
+            if (initial.settled && !initial.repayment) SettledDetails(initial, accounts)
             SegmentedToggle(listOf(true, false), lent, { if (it) "I lent" else "I borrowed" }, { lent = it }, Modifier.fillMaxWidth())
             GlassTextField(person, { person = it.take(30) }, placeholder = "e.g. Nick", label = if (lent) "To" else "From")
             val matches = people.filter { it.contains(person.trim(), ignoreCase = true) && !it.equals(person.trim(), ignoreCase = true) }.take(6)

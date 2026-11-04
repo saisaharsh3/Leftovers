@@ -49,7 +49,7 @@ class PlanningRepository(private val database: AppDatabase) {
             val open = debtDao.openFor(person)
             val net = open.sumOf { it.amountMinor }
             if (net == 0L) {
-                debtDao.settle(person)
+                debtDao.settle(person, epochDay)
                 return@withTransaction
             }
             val paid = (amountMinor ?: kotlin.math.abs(net)).coerceIn(1, kotlin.math.abs(net))
@@ -63,7 +63,7 @@ class PlanningRepository(private val database: AppDatabase) {
                     repayment = true,
                 ),
             )
-            if (paid == kotlin.math.abs(net)) debtDao.settle(person)
+            if (paid == kotlin.math.abs(net)) debtDao.settle(person, epochDay)
         }
     }
 
@@ -73,7 +73,7 @@ class PlanningRepository(private val database: AppDatabase) {
      */
     suspend fun settleEntry(debt: Debt, epochDay: Long = LocalDate.now().toEpochDay()) {
         database.withTransaction {
-            debtDao.upsert(debt.copy(settled = true))
+            debtDao.upsert(debt.copy(settled = true, settledOn = epochDay))
             debtDao.upsert(
                 Debt(
                     person = debt.person.trim(),
@@ -83,6 +83,7 @@ class PlanningRepository(private val database: AppDatabase) {
                     accountId = debt.accountId,
                     repayment = true,
                     settled = true,
+                    settledOn = epochDay,
                 ),
             )
         }
