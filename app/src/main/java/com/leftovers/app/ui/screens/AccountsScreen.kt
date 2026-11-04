@@ -112,12 +112,8 @@ class AccountsViewModel(
     transactions: TransactionRepository,
     planning: com.leftovers.app.data.PlanningRepository,
 ) : ViewModel() {
-    /** Moves the account at [index] one place up ([by] -1) or down (1). */
-    fun move(accounts: List<AccountWithBalance>, index: Int, by: Int) {
-        val to = index + by
-        if (to !in accounts.indices) return
-        val ids = accounts.map { it.id }.toMutableList()
-        java.util.Collections.swap(ids, index, to)
+    /** The accounts in this order, as they were dragged (#47). */
+    fun reorder(ids: List<Long>) {
         viewModelScope.launch { repository.reorder(ids) }
     }
 
@@ -209,6 +205,17 @@ class AccountsViewModel(
     }
 }
 
+/** Six dots to hold a row by while reordering. */
+@Composable
+private fun GripHandle(color: androidx.compose.ui.graphics.Color) {
+    androidx.compose.foundation.Canvas(Modifier.size(width = 22.dp, height = 22.dp)) {
+        val r = 1.6.dp.toPx()
+        for (x in listOf(size.width * 0.35f, size.width * 0.65f)) for (y in listOf(size.height * 0.25f, size.height * 0.5f, size.height * 0.75f)) {
+            drawCircle(color, r, androidx.compose.ui.geometry.Offset(x, y))
+        }
+    }
+}
+
 private val accountIcons = listOf(
     "banknote", "landmark", "wallet", "credit-card", "smartphone", "piggy-bank", "coins", "building", "briefcase", "trending-up",
     "hand-coins", "gem", "shield", "house", "globe", "plane", "laptop", "store", "shopping-bag", "gift", "graduation-cap", "heart-pulse",
@@ -282,9 +289,14 @@ fun AccountsScreen(
             }
             item {
                 Glass(Modifier.fillMaxWidth().appear(1)) {
-                    Column(Modifier.padding(vertical = 6.dp)) {
-                        accounts.forEachIndexed { i, a ->
-                            if (i > 0) RowDivider()
+                    // While reordering, a row is held and dragged up or down; otherwise it opens the account.
+                    com.leftovers.app.ui.components.DragReorderColumn(
+                        accounts, key = { it.id }, enabled = arranging,
+                        onOrder = { list -> viewModel.reorder(list.map { it.id }) },
+                        modifier = Modifier.padding(vertical = 6.dp),
+                    ) { a, i, lifted ->
+                        Column(Modifier.background(if (lifted) c.glassStrong else androidx.compose.ui.graphics.Color.Transparent)) {
+                            if (i > 0 && !lifted) RowDivider()
                             ListRow(
                                 title = a.name,
                                 modifier = Modifier
@@ -293,25 +305,14 @@ fun AccountsScreen(
                                 subtitle = if (a.id == defaultId) "Default for new entries" else null,
                                 leading = { CategoryIcon(a.icon, a.color, size = 42.dp) },
                                 trailing = {
-                                    if (arranging) {
-                                        // Up and down, one place at a time.
-                                        Row {
-                                            RoundButton(Lucide.ArrowUp, "Move ${a.name} up", { viewModel.move(accounts, i, -1) }, size = 38.dp, enabled = i > 0)
-                                            Spacer(Modifier.width(6.dp))
-                                            RoundButton(
-                                                Lucide.ArrowUp, "Move ${a.name} down", { viewModel.move(accounts, i, 1) }, size = 38.dp, enabled = i < accounts.lastIndex,
-                                                modifier = Modifier.graphicsLayer { rotationZ = 180f },
-                                            )
-                                        }
-                                    } else {
-                                        Text(
-                                            a.shownBalance(money),
-                                            style = MaterialTheme.typography.titleSmall,
-                                            color = if (a.shownNegative) c.negative else c.textPrimary,
-                                        )
-                                    }
+                                    if (arranging) GripHandle(c.textTertiary)
+                                    else Text(
+                                        a.shownBalance(money),
+                                        style = MaterialTheme.typography.titleSmall,
+                                        color = if (a.shownNegative) c.negative else c.textPrimary,
+                                    )
                                 },
-                                onClick = { if (!arranging) { viewingFrom = rowBounds[a.id]; viewing = a.id } },
+                                onClick = if (arranging) null else ({ viewingFrom = rowBounds[a.id]; viewing = a.id }),
                             )
                         }
                     }

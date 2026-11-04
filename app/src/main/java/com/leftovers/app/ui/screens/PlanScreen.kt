@@ -100,8 +100,8 @@ class PlanViewModel(
             loaded = true,
             plan = s.plan,
             budget = budget,
-            spent = items.totalOf(TxType.EXPENSE),
-            dailyLimit = dailyBudget(budget, items, recurring.pendingExpenses(cycle), periodEnd = cycle.end)?.dailyLimit ?: 0,
+            spent = items.filter { !it.outOfBudget }.totalOf(TxType.EXPENSE),
+            dailyLimit = dailyBudget(budget, items, if (s.plan.envelope) 0L else recurring.pendingExpenses(cycle), periodEnd = cycle.end)?.dailyLimit ?: 0,
             recurring = recurring,
             goals = goals,
             owedToYou = open.filter { it.netMinor > 0 }.sumOf { it.netMinor },
@@ -266,7 +266,7 @@ private fun planSummary(plan: BudgetPlan): String {
         !plan.isSet -> "Not set"
         plan.mode == BudgetMode.MONTHLY -> "${money.format(plan.monthlyMinor)} a month"
         plan.mode == BudgetMode.PERIOD -> "${money.format(plan.periodMinor)} " + periodName(plan.periodDays)
-        plan.mode == BudgetMode.RANGE -> "${money.format(plan.rangeMinor)} until ${plan.rangeTo?.format(java.time.format.DateTimeFormatter.ofPattern("d MMM"))}"
+        plan.mode == BudgetMode.RANGE -> (plan.rangeTag?.let { "#$it · " } ?: "") + "${money.format(plan.rangeMinor)} until ${plan.rangeTo?.format(java.time.format.DateTimeFormatter.ofPattern("d MMM"))}"
         else -> "${money.format(plan.yearlyMinor)} a year · ${plan.split.title.lowercase()}"
     }
 }

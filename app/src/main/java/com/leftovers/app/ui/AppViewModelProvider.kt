@@ -41,7 +41,7 @@ object AppViewModelProvider {
         initializer { StatsViewModel(container().repository, container().settings, container().planning) }
         initializer { PlanViewModel(container().repository, container().settings, container().planning) }
         initializer { BudgetsViewModel(container().repository, container().settings, container().planning) }
-        initializer { BudgetPlanViewModel(container().settings, container().repository) }
+        initializer { BudgetPlanViewModel(container().settings, container().repository, container().accounts) }
         initializer {
             val c = container()
             SubscriptionsViewModel(c.planning, c.repository, c.accounts, c.settings) { c.syncRecurring() }

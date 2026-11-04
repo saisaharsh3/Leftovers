@@ -90,6 +90,8 @@ class BackupManager(
                     put("periodBudget", s.plan.periodMinor)
                     put("periodDays", s.plan.periodDays)
                     s.plan.periodFrom?.let { put("periodFrom", it.toString()) }
+                    s.plan.rangeTag?.let { put("rangeTag", it) }
+                    s.plan.rangeAccount?.let { put("rangeAccount", it) }
                     s.plan.rangeFrom?.let { put("rangeFrom", it.toString()) }
                     s.plan.rangeTo?.let { put("rangeTo", it.toString()) }
                     put("carryChoices", BudgetPlan.encodeChoices(s.plan.carryChoices))
@@ -351,6 +353,8 @@ class BackupManager(
                         periodMinor = s.optLong("periodBudget", 0),
                         periodDays = s.optInt("periodDays", 14),
                         periodFrom = s.optString("periodFrom").takeIf { it.isNotEmpty() }?.let { runCatching { java.time.LocalDate.parse(it) }.getOrNull() },
+                        rangeTag = s.optString("rangeTag").takeIf { it.isNotEmpty() },
+                        rangeAccount = if (s.has("rangeAccount")) s.optLong("rangeAccount") else null,
                         rangeFrom = s.optString("rangeFrom").takeIf { it.isNotEmpty() }?.let { runCatching { java.time.LocalDate.parse(it) }.getOrNull() },
                         rangeTo = s.optString("rangeTo").takeIf { it.isNotEmpty() }?.let { runCatching { java.time.LocalDate.parse(it) }.getOrNull() },
                         carryChoices = BudgetPlan.decodeChoices(s.optString("carryChoices")),

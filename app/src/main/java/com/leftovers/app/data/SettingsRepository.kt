@@ -136,6 +136,8 @@ class SettingsRepository(context: Context) {
                 periodMinor = p[PERIOD_BUDGET] ?: 0L,
                 periodDays = p[PERIOD_DAYS] ?: 14,
                 periodFrom = p[PERIOD_FROM]?.let { runCatching { java.time.LocalDate.parse(it) }.getOrNull() },
+                rangeTag = p[RANGE_TAG],
+                rangeAccount = p[RANGE_ACCOUNT],
                 rangeFrom = p[RANGE_FROM]?.let { runCatching { java.time.LocalDate.parse(it) }.getOrNull() },
                 rangeTo = p[RANGE_TO]?.let { runCatching { java.time.LocalDate.parse(it) }.getOrNull() },
             ),
@@ -217,6 +219,8 @@ class SettingsRepository(context: Context) {
         it[PERIOD_BUDGET] = plan.periodMinor
         it[PERIOD_DAYS] = plan.periodDays
         if (plan.periodFrom == null) it.remove(PERIOD_FROM) else it[PERIOD_FROM] = plan.periodFrom.toString()
+        if (plan.rangeTag == null) it.remove(RANGE_TAG) else it[RANGE_TAG] = plan.rangeTag
+        if (plan.rangeAccount == null) it.remove(RANGE_ACCOUNT) else it[RANGE_ACCOUNT] = plan.rangeAccount
         if (plan.rangeFrom == null) it.remove(RANGE_FROM) else it[RANGE_FROM] = plan.rangeFrom.toString()
         if (plan.rangeTo == null) it.remove(RANGE_TO) else it[RANGE_TO] = plan.rangeTo.toString()
         if (plan.carryChoices.isNotEmpty()) it[CARRY_CHOICES] = BudgetPlan.encodeChoices(plan.carryChoices)
@@ -336,6 +340,8 @@ class SettingsRepository(context: Context) {
         val PERIOD_BUDGET = longPreferencesKey("period_budget")
         val PERIOD_DAYS = intPreferencesKey("period_days")
         val PERIOD_FROM = stringPreferencesKey("period_from")
+        val RANGE_TAG = stringPreferencesKey("range_tag")
+        val RANGE_ACCOUNT = longPreferencesKey("range_account")
         val RANGE_FROM = stringPreferencesKey("range_from")
         val RANGE_TO = stringPreferencesKey("range_to")
         val CARRY_CHOICES = stringPreferencesKey("carry_choices")

@@ -14,14 +14,23 @@ class TransactionRepository(
     private val deletedDao: DeletedDao,
     /** Entries deleted or changed here, for Sync between devices; null in tests. */
     private val removed: SyncRemoved? = null,
+    /**
+     * The budget plan, for an envelope (#42): expenses it doesn't cover are marked out of the budget, so every
+     * figure that follows the budget (Safe to spend, the bars, alerts, widgets) leaves them out.
+     */
+    private val plan: Flow<BudgetPlan> = kotlinx.coroutines.flow.flowOf(BudgetPlan()),
 ) {
     val categories: Flow<List<Category>> = categoryDao.observeAll()
-    val allTransactions: Flow<List<TransactionItem>> = transactionDao.observeAll().sharedLive()
+    val allTransactions: Flow<List<TransactionItem>> =
+        kotlinx.coroutines.flow.combine(transactionDao.observeAll(), plan) { items, p -> scoped(items, p) }.sharedLive()
+
+    private fun scoped(items: List<TransactionItem>, p: BudgetPlan): List<TransactionItem> =
+        if (!p.envelope) items else items.map { if (it.type == TxType.EXPENSE && !it.outOfBudget && !p.counts(it)) it.copy(outOfBudget = true) else it }
 
     fun transactionsIn(month: YearMonth): Flow<List<TransactionItem>> =
         transactionDao.observeRange(month.atDay(1).toEpochDay(), month.atEndOfMonth().toEpochDay())
 
-    suspend fun getAllTransactions(): List<TransactionItem> = transactionDao.getAll()
+    suspend fun getAllTransactions(): List<TransactionItem> = scoped(transactionDao.getAll(), plan.first())
     suspend fun getTransaction(id: Long): Transaction? = transactionDao.getById(id)
     /** Saves an entry. One coming back (Undo) is taken out of Deleted entries. */
     /** Returns the entry's id. */

@@ -116,7 +116,7 @@ class BudgetsViewModel(
         val items = all.filter { it.date in cycle }
         val breakdown = s.plan.breakdownFor(cycle.month, all)
         val budget = breakdown.total
-        val pending = recurring.pendingExpenses(cycle)
+        val pending = if (s.plan.envelope) 0L else recurring.pendingExpenses(cycle)
         val spentByCategory = items.filter { it.type == TxType.EXPENSE }
             .groupBy { it.categoryId }
             .mapValues { (_, list) -> list.sumOf { it.amountMinor } }
@@ -126,7 +126,8 @@ class BudgetsViewModel(
             plan = s.plan,
             overallBudget = budget,
             breakdown = breakdown,
-            totalSpent = items.totalOf(TxType.EXPENSE),
+            // What uses the budget: not accounts left out of it (#33), nor spending outside an envelope (#42).
+            totalSpent = items.filter { !it.outOfBudget }.totalOf(TxType.EXPENSE),
             daysLeft = cycle.daysLeft(),
             today = dailyBudget(budget, items, pending, periodEnd = cycle.end),
             pendingSubscriptions = pending,

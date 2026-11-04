@@ -65,7 +65,10 @@ class AppContainer(private val context: Context) {
     val settings = SettingsRepository(context)
     /** Entries deleted or changed here, which Sync between devices removes on the other phones. */
     val syncRemoved = com.leftovers.app.util.SyncRemoved(java.io.File(context.filesDir, "sync-removed.json"))
-    val repository = TransactionRepository(database.transactionDao(), database.categoryDao(), database.recurringDao(), database.deletedDao(), syncRemoved)
+    val repository = TransactionRepository(
+        database.transactionDao(), database.categoryDao(), database.recurringDao(), database.deletedDao(), syncRemoved,
+        settings.settings.map { it.plan }.distinctUntilChanged(),
+    )
     val planning = PlanningRepository(database)
     val accounts = AccountRepository(
         database.accountDao(), database.transferDao(), database.transactionDao(), database.debtDao(),

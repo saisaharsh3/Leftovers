@@ -83,7 +83,14 @@ import java.util.Locale
 class BudgetPlanViewModel(
     private val settings: SettingsRepository,
     repository: TransactionRepository,
+    accounts: com.leftovers.app.data.AccountRepository,
 ) : ViewModel() {
+    val accountList: StateFlow<List<com.leftovers.app.data.AccountWithBalance>> =
+        accounts.accounts.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+    /** An envelope (#42): only entries with this tag and/or from this account count. */
+    var envelope by mutableStateOf(false)
+    var rangeTagText by mutableStateOf("")
+    var rangeAccount by mutableStateOf<Long?>(null)
     var loaded by mutableStateOf(false)
         private set
     var wasSet by mutableStateOf(false)
@@ -129,6 +136,9 @@ class BudgetPlanViewModel(
             bucketIncomeText = plan.bucketIncome.takeIf { it > 0 }?.let(AmountInput::fromMinor).orEmpty()
             bucketPicker = plan.bucketPicker
             plan.rangeFrom?.let { rangeFrom = it }
+            envelope = plan.rangeTag != null || plan.rangeAccount != null
+            rangeTagText = plan.rangeTag.orEmpty()
+            rangeAccount = plan.rangeAccount
             periodText = plan.periodMinor.takeIf { it > 0 }?.let(AmountInput::fromMinor).orEmpty()
             periodDays = plan.periodDays
             plan.periodFrom?.let { periodFrom = it }
@@ -152,6 +162,8 @@ class BudgetPlanViewModel(
         startDay = startDay,
         rangeMinor = AmountInput.toMinor(rangeText) ?: 0,
         rangeFrom = rangeFrom,
+        rangeTag = rangeTagText.trim().removePrefix("#").lowercase().takeIf { envelope && it.isNotEmpty() },
+        rangeAccount = rangeAccount.takeIf { envelope },
         periodMinor = AmountInput.toMinor(periodText) ?: 0,
         periodDays = periodDays,
         periodFrom = periodFrom,
@@ -602,7 +614,7 @@ private fun PeriodCard(viewModel: BudgetPlanViewModel, plan: BudgetPlan) {
 }
 
 /** A budget for dates of the user's own: from, to, and how much (#34). */
-@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 private fun RangeCard(viewModel: BudgetPlanViewModel) {
     val c = LocalAppColors.current
@@ -626,6 +638,38 @@ private fun RangeCard(viewModel: BudgetPlanViewModel) {
             }
             if (amount > 0 && days > 0) {
                 Text("${money.format(amount / days)} a day", style = MaterialTheme.typography.labelLarge, color = c.textSecondary, modifier = Modifier.padding(start = 4.dp))
+            }
+            // An envelope: only what's chosen for it counts (#42).
+            Text("What counts", style = MaterialTheme.typography.labelMedium, color = c.textSecondary, modifier = Modifier.padding(start = 4.dp))
+            SegmentedToggle(listOf(false, true), viewModel.envelope, { if (it) "Only chosen" else "All spending" }, { viewModel.envelope = it }, Modifier.fillMaxWidth())
+            if (viewModel.envelope) {
+                GlassTextField(
+                    viewModel.rangeTagText, { viewModel.rangeTagText = it.filter { ch -> !ch.isWhitespace() }.take(24) },
+                    placeholder = "Entries tagged, like #trip", modifier = Modifier.fillMaxWidth(),
+                )
+                val accountList by viewModel.accountList.collectAsStateWithLifecycle()
+                androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    com.leftovers.app.ui.components.Chip("Any account", { viewModel.rangeAccount = null }, selected = viewModel.rangeAccount == null)
+                    accountList.forEach { a ->
+                        com.leftovers.app.ui.components.Chip(
+                            a.name, { viewModel.rangeAccount = a.id }, icon = com.leftovers.app.ui.icons.CategoryIcons[a.icon],
+                            iconTint = androidx.compose.ui.graphics.Color(a.color), selected = viewModel.rangeAccount == a.id,
+                        )
+                    }
+                }
+                val tag = viewModel.rangeTagText.trim().removePrefix("#")
+                Text(
+                    when {
+                        tag.isEmpty() && viewModel.rangeAccount == null -> "Choose a tag or an account. Until then, all spending counts."
+                        else -> "Only expenses " + listOfNotNull(
+                            "tagged #$tag".takeIf { tag.isNotEmpty() },
+                            accountList.firstOrNull { it.id == viewModel.rangeAccount }?.let { "from ${it.name}" },
+                        ).joinToString(" and ") + " use it up. Rent, bills and the rest leave it be."
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = c.textSecondary,
+                    modifier = Modifier.padding(start = 4.dp),
+                )
             }
             Text(
                 "Safe to spend and the budget follow these dates. When they end, set new ones.",

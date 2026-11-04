@@ -74,7 +74,7 @@ class SafeToSpendWidget : GlanceAppWidget() {
         val budget = dailyBudget(
             s.plan.budgetFor(cycle.month, all),
             items,
-            container.planning.recurring.first().pendingExpenses(cycle),
+            if (s.plan.envelope) 0L else container.planning.recurring.first().pendingExpenses(cycle),
             periodEnd = cycle.end,
         )
         val daysLeft = cycle.daysLeft(today)

@@ -5,7 +5,9 @@ All notable changes to Leftovers. Download any version from
 
 ## Unreleased
 
-- Accounts can be put in any order (Reorder in Accounts), and there are more icons to choose for one (#47)
+- Accounts can be put in any order: tap Reorder in Accounts and drag them by finger. There are more icons to choose for one, too (#47)
+- Envelope budgets: a Dates budget can count only the entries chosen for it, those with a #tag like #trip and/or from one account, so rent and other spending in the same dates leave it be, in Safe to spend, the bars and the alerts too (#42)
+- The budget's spent figures leave out accounts kept out of the budget, as Safe to spend already did (#33)
 - Budget plan: Weeks, one amount for every week, two weeks, four weeks or any number of days, from a payday you choose, for people paid weekly or every two weeks; each period starts fresh (#45)
 - Backups that failed with "can no longer open that folder" after choosing it again: the app now keeps the folder for good, clears out folders it no longer uses so Android doesn't refuse, says so when Android still won't keep one, and turning Sync off no longer takes away a folder backups use too (#41)
 - Block screenshots, in Settings → Security, for a blank preview in Recents and no screenshots, without turning on App lock (#44)

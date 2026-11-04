@@ -59,7 +59,20 @@ data class BudgetPlan(
     val periodMinor: Long = 0,
     val periodDays: Int = 14,
     val periodFrom: LocalDate? = null,
+    /**
+     * [BudgetMode.RANGE] as an envelope (#42): only expenses with this #tag (without the #) and/or from this account
+     * use it up. Null for both: every expense in the dates counts, as before.
+     */
+    val rangeTag: String? = null,
+    val rangeAccount: Long? = null,
 ) {
+    /** An envelope: a Dates budget that counts only the entries chosen for it, so other spending and bills leave it be. */
+    val envelope: Boolean get() = mode == BudgetMode.RANGE && (rangeTag != null || rangeAccount != null)
+
+    /** Whether [item] uses up the budget: always, unless this is an envelope and [item] isn't one of its entries. */
+    fun counts(item: TransactionItem): Boolean = !envelope ||
+        ((rangeTag == null || rangeTag in hashtags(item.note)) && (rangeAccount == null || item.accountId == rangeAccount))
+
     /** [BudgetMode.PERIOD]: the period [date] falls in, counted in whole periods from [periodFrom], back or forward. */
     private fun periodOf(date: LocalDate): BudgetCycle? {
         val from = periodFrom ?: return null
