@@ -87,6 +87,9 @@ class BackupManager(
                     put("buckets", s.plan.buckets)
                     put("bucketIncome", s.plan.bucketIncome)
                     put("bucketPicker", s.plan.bucketPicker)
+                    put("periodBudget", s.plan.periodMinor)
+                    put("periodDays", s.plan.periodDays)
+                    s.plan.periodFrom?.let { put("periodFrom", it.toString()) }
                     s.plan.rangeFrom?.let { put("rangeFrom", it.toString()) }
                     s.plan.rangeTo?.let { put("rangeTo", it.toString()) }
                     put("carryChoices", BudgetPlan.encodeChoices(s.plan.carryChoices))
@@ -345,6 +348,9 @@ class BackupManager(
                         buckets = s.optBoolean("buckets", false),
                         bucketIncome = s.optLong("bucketIncome", 0),
                         bucketPicker = s.optBoolean("bucketPicker", false),
+                        periodMinor = s.optLong("periodBudget", 0),
+                        periodDays = s.optInt("periodDays", 14),
+                        periodFrom = s.optString("periodFrom").takeIf { it.isNotEmpty() }?.let { runCatching { java.time.LocalDate.parse(it) }.getOrNull() },
                         rangeFrom = s.optString("rangeFrom").takeIf { it.isNotEmpty() }?.let { runCatching { java.time.LocalDate.parse(it) }.getOrNull() },
                         rangeTo = s.optString("rangeTo").takeIf { it.isNotEmpty() }?.let { runCatching { java.time.LocalDate.parse(it) }.getOrNull() },
                         carryChoices = BudgetPlan.decodeChoices(s.optString("carryChoices")),

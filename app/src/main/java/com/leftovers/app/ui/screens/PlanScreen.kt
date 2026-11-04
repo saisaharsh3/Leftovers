@@ -29,6 +29,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.leftovers.app.data.periodName
 import com.leftovers.app.data.BudgetMode
 import com.leftovers.app.data.BudgetPlan
 import com.leftovers.app.data.GoalWithSaved
@@ -264,6 +265,7 @@ private fun planSummary(plan: BudgetPlan): String {
     return when {
         !plan.isSet -> "Not set"
         plan.mode == BudgetMode.MONTHLY -> "${money.format(plan.monthlyMinor)} a month"
+        plan.mode == BudgetMode.PERIOD -> "${money.format(plan.periodMinor)} " + periodName(plan.periodDays)
         plan.mode == BudgetMode.RANGE -> "${money.format(plan.rangeMinor)} until ${plan.rangeTo?.format(java.time.format.DateTimeFormatter.ofPattern("d MMM"))}"
         else -> "${money.format(plan.yearlyMinor)} a year · ${plan.split.title.lowercase()}"
     }

@@ -12,8 +12,11 @@ data class BudgetCycle(val month: YearMonth, val start: LocalDate, val end: Loca
     fun daysLeft(today: LocalDate = LocalDate.now()) = (end.toEpochDay() - today.toEpochDay() + 1).toInt().coerceAtLeast(1)
 }
 
-/** [RANGE]: one amount for dates the user picks, like two weeks or a trip (#34). */
-enum class BudgetMode { MONTHLY, YEARLY, RANGE }
+/**
+ * [RANGE]: one amount for dates the user picks, like two weeks or a trip (#34). [PERIOD]: one amount for every so many
+ * days, starting on a payday, for people paid weekly or every two weeks (#45).
+ */
+enum class BudgetMode { MONTHLY, YEARLY, PERIOD, RANGE }
 
 /** What happens to money left unspent when a month ends. Overspending is never carried. */
 enum class CarryMode(val label: String) { ASK("Ask me"), ALWAYS("Always"), NEVER("Never") }
@@ -52,7 +55,19 @@ data class BudgetPlan(
     val bucketIncome: Long = 0,
     /** With [buckets]: adding an entry picks Needs, Wants or Savings first, then a category in it (#39). */
     val bucketPicker: Boolean = false,
+    /** [BudgetMode.PERIOD]: the amount for each period, how many days one lasts, and a day one starts on. */
+    val periodMinor: Long = 0,
+    val periodDays: Int = 14,
+    val periodFrom: LocalDate? = null,
 ) {
+    /** [BudgetMode.PERIOD]: the period [date] falls in, counted in whole periods from [periodFrom], back or forward. */
+    private fun periodOf(date: LocalDate): BudgetCycle? {
+        val from = periodFrom ?: return null
+        val days = periodDays.coerceIn(1, 366).toLong()
+        val start = from.plusDays(Math.floorDiv(date.toEpochDay() - from.toEpochDay(), days) * days)
+        return BudgetCycle(YearMonth.from(start), start, start.plusDays(days - 1))
+    }
+
     /** The dates of a [BudgetMode.RANGE] budget, when they're set. */
     private val range: BudgetCycle?
         get() {
@@ -70,6 +85,7 @@ data class BudgetPlan(
     /** The budget month [date] falls in; with dates of its own, their range while it lasts. */
     fun cycleOf(date: LocalDate): BudgetCycle {
         if (mode == BudgetMode.RANGE) range?.takeIf { date in it }?.let { return it }
+        if (mode == BudgetMode.PERIOD) periodOf(date)?.let { return it }
         return cycle(if (date.dayOfMonth >= firstDay) YearMonth.from(date) else YearMonth.from(date).minusMonths(1))
     }
 
@@ -80,6 +96,7 @@ data class BudgetPlan(
         get() = when (mode) {
             BudgetMode.MONTHLY -> monthlyMinor > 0
             BudgetMode.YEARLY -> yearlyMinor > 0
+            BudgetMode.PERIOD -> periodMinor > 0 && periodFrom != null
             // Over once its last day has passed: there's nothing to spend against until new dates are set.
             BudgetMode.RANGE -> rangeMinor > 0 && range != null && !LocalDate.now().isAfter(rangeTo)
         }
@@ -87,7 +104,7 @@ data class BudgetPlan(
     val customTotal: Long get() = custom.values.sum()
 
     /** Smart rollover already moves unspent money forward within the year; a one-off range has nothing to carry into. */
-    val supportsCarry: Boolean get() = !(mode == BudgetMode.YEARLY && split == YearSplit.SMART) && mode != BudgetMode.RANGE
+    val supportsCarry: Boolean get() = !(mode == BudgetMode.YEARLY && split == YearSplit.SMART) && mode != BudgetMode.RANGE && mode != BudgetMode.PERIOD
 
     private fun carries(month: YearMonth): Boolean = supportsCarry && when (carry) {
         CarryMode.ALWAYS -> true
@@ -108,6 +125,12 @@ data class BudgetPlan(
         if (mode == BudgetMode.RANGE && r != null) {
             val income = if (!extraIncome) 0L else items.filter { it.date in r && it.type == TxType.INCOME && it.addsToBudget && !it.outOfBudget }.sumOf { it.amountMinor }
             return MonthBudget(rangeMinor, income, 0)
+        }
+        // Every few days: this period's amount, plus extra income in it; each period starts fresh.
+        val p = periodOf(LocalDate.now())
+        if (mode == BudgetMode.PERIOD && p != null) {
+            val income = if (!extraIncome) 0L else items.filter { it.date in p && it.type == TxType.INCOME && it.addsToBudget && !it.outOfBudget }.sumOf { it.amountMinor }
+            return MonthBudget(periodMinor, income, 0)
         }
         val byMonth = items.groupBy(::budgetMonth)
         fun income(m: YearMonth) = if (!extraIncome) 0L else byMonth[m].orEmpty().filter { it.type == TxType.INCOME && it.addsToBudget && !it.outOfBudget }.sumOf { it.amountMinor }
@@ -144,6 +167,7 @@ data class BudgetPlan(
     fun baseFor(month: YearMonth, items: List<TransactionItem>): Long = when (mode) {
         BudgetMode.MONTHLY -> monthlyMinor
         BudgetMode.RANGE -> rangeMinor
+        BudgetMode.PERIOD -> periodMinor
         BudgetMode.YEARLY -> when {
             yearlyMinor <= 0 -> 0
             split == YearSplit.EVEN -> yearlyMinor / 12
@@ -180,6 +204,14 @@ data class BudgetPlan(
                 month to amount
             }.toMap()
     }
+}
+
+/** How often a [BudgetMode.PERIOD] budget repeats, in words: "every week", "every 2 weeks", "every 10 days". */
+fun periodName(days: Int): String = when {
+    days == 7 -> "every week"
+    days % 7 == 0 -> "every ${days / 7} weeks"
+    days == 1 -> "every day"
+    else -> "every $days days"
 }
 
 /** A month's budget split into where the money comes from. */

@@ -50,6 +50,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.leftovers.app.data.periodName
 import com.leftovers.app.data.BudgetMode
 import com.leftovers.app.data.BudgetPlan
 import com.leftovers.app.data.CarryMode
@@ -100,6 +101,9 @@ class BudgetPlanViewModel(
     var buckets by mutableStateOf(false)
     var bucketIncomeText by mutableStateOf("")
     var bucketPicker by mutableStateOf(false)
+    var periodText by mutableStateOf("")
+    var periodDays by mutableStateOf(14)
+    var periodFrom by mutableStateOf<java.time.LocalDate>(java.time.LocalDate.now())
     var rangeFrom by mutableStateOf<java.time.LocalDate>(java.time.LocalDate.now())
     var rangeTo by mutableStateOf<java.time.LocalDate>(java.time.LocalDate.now().plusDays(13))
     private var carryFrom: YearMonth? = null
@@ -125,6 +129,9 @@ class BudgetPlanViewModel(
             bucketIncomeText = plan.bucketIncome.takeIf { it > 0 }?.let(AmountInput::fromMinor).orEmpty()
             bucketPicker = plan.bucketPicker
             plan.rangeFrom?.let { rangeFrom = it }
+            periodText = plan.periodMinor.takeIf { it > 0 }?.let(AmountInput::fromMinor).orEmpty()
+            periodDays = plan.periodDays
+            plan.periodFrom?.let { periodFrom = it }
             plan.rangeTo?.let { rangeTo = it }
             carryFrom = plan.carryFrom
             carryChoices = plan.carryChoices
@@ -145,6 +152,9 @@ class BudgetPlanViewModel(
         startDay = startDay,
         rangeMinor = AmountInput.toMinor(rangeText) ?: 0,
         rangeFrom = rangeFrom,
+        periodMinor = AmountInput.toMinor(periodText) ?: 0,
+        periodDays = periodDays,
+        periodFrom = periodFrom,
         rangeTo = rangeTo,
         buckets = buckets,
         bucketIncome = AmountInput.toMinor(bucketIncomeText) ?: 0,
@@ -234,14 +244,17 @@ fun BudgetPlanScreen(
             item {
                 SegmentedToggle(
                     BudgetMode.entries, viewModel.mode,
-                    { when (it) { BudgetMode.MONTHLY -> "Monthly"; BudgetMode.YEARLY -> "Yearly"; BudgetMode.RANGE -> "Dates" } },
+                    { when (it) { BudgetMode.MONTHLY -> "Monthly"; BudgetMode.YEARLY -> "Yearly"; BudgetMode.PERIOD -> "Weeks"; BudgetMode.RANGE -> "Dates" } },
                     { viewModel.mode = it }, Modifier.fillMaxWidth(),
                 )
             }
             if (viewModel.mode == BudgetMode.RANGE) item {
                 RangeCard(viewModel)
             }
-            if (viewModel.mode != BudgetMode.RANGE) item {
+            if (viewModel.mode == BudgetMode.PERIOD) item {
+                PeriodCard(viewModel, plan)
+            }
+            if (viewModel.mode == BudgetMode.MONTHLY || viewModel.mode == BudgetMode.YEARLY) item {
                 val yearly = viewModel.mode == BudgetMode.YEARLY
                 Glass(Modifier.fillMaxWidth(), strong = true, shape = RoundedCornerShape(30.dp)) {
                     Column(Modifier.padding(20.dp)) {
@@ -293,7 +306,7 @@ fun BudgetPlanScreen(
                 }
             }
 
-            if (viewModel.mode != BudgetMode.RANGE) item {
+            if (viewModel.mode == BudgetMode.MONTHLY || viewModel.mode == BudgetMode.YEARLY) item {
                 // When the budget month starts: the 1st, or payday (#34).
                 var choosing by androidx.compose.runtime.remember { mutableStateOf(false) }
                 Glass(Modifier.fillMaxWidth()) {
@@ -511,6 +524,79 @@ private fun SplitOption(option: YearSplit, selected: Boolean, onClick: () -> Uni
                 Spacer(Modifier.height(2.dp))
                 Text(option.description, style = MaterialTheme.typography.bodySmall, color = c.textSecondary)
             }
+        }
+    }
+}
+
+/**
+ * A budget for every so many days (#45): how much, how long a period is (1, 2 or 4 weeks, or a number of days), and a
+ * payday it starts on. Each period starts fresh.
+ */
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
+private fun PeriodCard(viewModel: BudgetPlanViewModel, plan: BudgetPlan) {
+    val c = LocalAppColors.current
+    val money = com.leftovers.app.util.LocalMoney.current
+    var picking by androidx.compose.runtime.remember { mutableStateOf(false) }
+    var customDays by androidx.compose.runtime.remember { mutableStateOf(viewModel.periodDays.takeIf { it !in listOf(7, 14, 28) }?.toString() ?: "") }
+    val fmt = java.time.format.DateTimeFormatter.ofPattern("EEE, d MMM")
+    val amount = AmountInput.toMinor(viewModel.periodText) ?: 0L
+    Glass(Modifier.fillMaxWidth(), strong = true, shape = RoundedCornerShape(30.dp)) {
+        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            MoneyField(viewModel.periodText, { viewModel.periodText = it }, label = "Budget " + periodName(viewModel.periodDays), large = true)
+            Text("Every", style = MaterialTheme.typography.labelMedium, color = c.textSecondary, modifier = Modifier.padding(start = 4.dp))
+            androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf(7 to "Week", 14 to "2 weeks", 28 to "4 weeks").forEach { (d, label) ->
+                    com.leftovers.app.ui.components.Chip(label, { viewModel.periodDays = d; customDays = "" }, selected = viewModel.periodDays == d && customDays.isEmpty())
+                }
+            }
+            // Any other length, in days.
+            GlassTextField(
+                customDays,
+                { t -> customDays = t.filter(Char::isDigit).take(3); customDays.toIntOrNull()?.takeIf { it in 1..366 }?.let { viewModel.periodDays = it } },
+                placeholder = "Or a number of days",
+                modifier = Modifier.fillMaxWidth(),
+                keyboardType = androidx.compose.ui.text.input.KeyboardType.Number,
+            )
+            Row(
+                Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(c.glass).pressable({ picking = true }).padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text("Starts on ${viewModel.periodFrom.format(fmt)}", style = MaterialTheme.typography.titleSmall, color = c.textPrimary)
+                    Text("A payday · tap to change", style = MaterialTheme.typography.bodySmall, color = c.textSecondary)
+                }
+                Icon(Lucide.ChevronRight, contentDescription = null, tint = c.textTertiary, modifier = Modifier.size(18.dp))
+            }
+            if (plan.isSet) {
+                val now = plan.cycleOf(java.time.LocalDate.now())
+                Text(
+                    "Now: ${now.start.format(fmt)} to ${now.end.format(fmt)} · ${money.format(amount / viewModel.periodDays.coerceAtLeast(1))} a day",
+                    style = MaterialTheme.typography.labelLarge, color = c.textPrimary, modifier = Modifier.padding(start = 4.dp),
+                )
+            }
+            Text(
+                "Safe to spend and the budget follow each period, and each one starts fresh.",
+                style = MaterialTheme.typography.bodySmall,
+                color = c.textTertiary,
+                modifier = Modifier.padding(start = 4.dp),
+            )
+        }
+    }
+    if (picking) {
+        val utc = java.time.ZoneOffset.UTC
+        val state = androidx.compose.material3.rememberDatePickerState(initialSelectedDateMillis = viewModel.periodFrom.atStartOfDay(utc).toInstant().toEpochMilli())
+        GlassDatePickerDialog(
+            onDismissRequest = { picking = false },
+            confirmButton = {
+                androidx.compose.material3.TextButton(onClick = {
+                    state.selectedDateMillis?.let { viewModel.periodFrom = java.time.Instant.ofEpochMilli(it).atZone(utc).toLocalDate() }
+                    picking = false
+                }) { Text("Done", color = c.textPrimary) }
+            },
+            dismissButton = { androidx.compose.material3.TextButton(onClick = { picking = false }) { Text("Cancel", color = c.textSecondary) } },
+        ) {
+            androidx.compose.material3.DatePicker(state, colors = androidx.compose.material3.DatePickerDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh))
         }
     }
 }

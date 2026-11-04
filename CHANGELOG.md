@@ -5,6 +5,7 @@ All notable changes to Leftovers. Download any version from
 
 ## Unreleased
 
+- Budget plan: Weeks, one amount for every week, two weeks, four weeks or any number of days, from a payday you choose, for people paid weekly or every two weeks; each period starts fresh (#45)
 - Backups that failed with "can no longer open that folder" after choosing it again: the app now keeps the folder for good, clears out folders it no longer uses so Android doesn't refuse, says so when Android still won't keep one, and turning Sync off no longer takes away a folder backups use too (#41)
 - Block screenshots, in Settings → Security, for a blank preview in Recents and no screenshots, without turning on App lock (#44)
 - The month heading is a month on its own in every language: "Ноябрь 2026" in Russian, not "ноября 2026" (#44)
