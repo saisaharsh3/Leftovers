@@ -65,6 +65,7 @@ import com.leftovers.app.ui.components.Chip
 import com.leftovers.app.ui.components.Glass
 import com.leftovers.app.ui.components.GlassScreen
 import com.leftovers.app.ui.components.ListRow
+import com.leftovers.app.ui.components.RoundButton
 import com.leftovers.app.ui.components.PrimaryButton
 import com.leftovers.app.ui.components.RollingText
 import com.leftovers.app.ui.components.RowDivider
@@ -111,6 +112,15 @@ class AccountsViewModel(
     transactions: TransactionRepository,
     planning: com.leftovers.app.data.PlanningRepository,
 ) : ViewModel() {
+    /** Moves the account at [index] one place up ([by] -1) or down (1). */
+    fun move(accounts: List<AccountWithBalance>, index: Int, by: Int) {
+        val to = index + by
+        if (to !in accounts.indices) return
+        val ids = accounts.map { it.id }.toMutableList()
+        java.util.Collections.swap(ids, index, to)
+        viewModelScope.launch { repository.reorder(ids) }
+    }
+
     val debts: StateFlow<List<com.leftovers.app.data.Debt>> =
         planning.debts.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
@@ -199,7 +209,10 @@ class AccountsViewModel(
     }
 }
 
-private val accountIcons = listOf("banknote", "landmark", "wallet", "credit-card", "smartphone", "piggy-bank", "coins", "building", "briefcase", "trending-up")
+private val accountIcons = listOf(
+    "banknote", "landmark", "wallet", "credit-card", "smartphone", "piggy-bank", "coins", "building", "briefcase", "trending-up",
+    "hand-coins", "gem", "shield", "house", "globe", "plane", "laptop", "store", "shopping-bag", "gift", "graduation-cap", "heart-pulse",
+)
 
 @Composable
 fun AccountsScreen(
@@ -220,6 +233,8 @@ fun AccountsScreen(
     var moving by remember { mutableStateOf<Account?>(null) }
     // Tapping an account opens a card with its balance and latest entries; Edit there opens the editor.
     var viewing by remember { mutableStateOf<Long?>(null) }
+    // Moving accounts up and down instead of opening them (#47).
+    var arranging by remember { mutableStateOf(false) }
     var hidden by remember { mutableStateOf<Long?>(null) }
     var viewingFrom by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
     val rowBounds = remember { mutableMapOf<Long, androidx.compose.ui.geometry.Rect>() }
@@ -258,7 +273,13 @@ fun AccountsScreen(
                     }
                 }
             }
-            item { SectionHeader("Your accounts", Modifier.appear(1)) }
+            item {
+                SectionHeader(
+                    "Your accounts", Modifier.appear(1),
+                    action = if (accounts.size > 1) (if (arranging) "Done" else "Reorder") else null,
+                    onAction = { arranging = !arranging },
+                )
+            }
             item {
                 Glass(Modifier.fillMaxWidth().appear(1)) {
                     Column(Modifier.padding(vertical = 6.dp)) {
@@ -272,13 +293,25 @@ fun AccountsScreen(
                                 subtitle = if (a.id == defaultId) "Default for new entries" else null,
                                 leading = { CategoryIcon(a.icon, a.color, size = 42.dp) },
                                 trailing = {
-                                    Text(
-                                        a.shownBalance(money),
-                                        style = MaterialTheme.typography.titleSmall,
-                                        color = if (a.shownNegative) c.negative else c.textPrimary,
-                                    )
+                                    if (arranging) {
+                                        // Up and down, one place at a time.
+                                        Row {
+                                            RoundButton(Lucide.ArrowUp, "Move ${a.name} up", { viewModel.move(accounts, i, -1) }, size = 38.dp, enabled = i > 0)
+                                            Spacer(Modifier.width(6.dp))
+                                            RoundButton(
+                                                Lucide.ArrowUp, "Move ${a.name} down", { viewModel.move(accounts, i, 1) }, size = 38.dp, enabled = i < accounts.lastIndex,
+                                                modifier = Modifier.graphicsLayer { rotationZ = 180f },
+                                            )
+                                        }
+                                    } else {
+                                        Text(
+                                            a.shownBalance(money),
+                                            style = MaterialTheme.typography.titleSmall,
+                                            color = if (a.shownNegative) c.negative else c.textPrimary,
+                                        )
+                                    }
                                 },
-                                onClick = { viewingFrom = rowBounds[a.id]; viewing = a.id },
+                                onClick = { if (!arranging) { viewingFrom = rowBounds[a.id]; viewing = a.id } },
                             )
                         }
                     }

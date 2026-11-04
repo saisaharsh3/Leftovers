@@ -21,7 +21,13 @@ class AccountRepository(
         }
     val transfers: Flow<List<Transfer>> = transferDao.observeAll()
 
-    suspend fun saveAccount(account: Account): Long = accountDao.upsert(account)
+    /** A new account goes at the end of the list. */
+    suspend fun saveAccount(account: Account): Long = accountDao.upsert(
+        if (account.id != 0L) account else account.copy(position = (accountDao.getAll().maxOfOrNull { it.position } ?: -1) + 1),
+    )
+
+    /** The accounts in [ids]' order, as the user arranged them (#47). */
+    suspend fun reorder(ids: List<Long>) = ids.forEachIndexed { i, id -> accountDao.setPosition(id, i) }
 
     /** Deletes the account, or returns how many entries still use it (and deletes nothing). */
     suspend fun deleteAccount(account: Account): Int {

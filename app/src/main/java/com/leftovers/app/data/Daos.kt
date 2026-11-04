@@ -163,7 +163,7 @@ interface AccountDao {
             + COALESCE((SELECT SUM(amountMinor) FROM transfers WHERE toAccountId = a.id), 0)
             - COALESCE((SELECT SUM(amountMinor) FROM transfers WHERE fromAccountId = a.id), 0)
             - COALESCE((SELECT SUM(amountMinor) FROM debts WHERE accountId = a.id), 0) AS balanceMinor
-        FROM accounts a ORDER BY a.id
+        FROM accounts a ORDER BY a.position, a.id
         """,
     )
     fun observeWithBalance(): Flow<List<AccountWithBalance>>
@@ -187,8 +187,11 @@ interface AccountDao {
     )
     fun observeNativeParts(): Flow<List<NativeParts>>
 
-    @Query("SELECT * FROM accounts ORDER BY id")
+    @Query("SELECT * FROM accounts ORDER BY position, id")
     suspend fun getAll(): List<Account>
+
+    @Query("UPDATE accounts SET position = :position WHERE id = :id")
+    suspend fun setPosition(id: Long, position: Int)
 
     @Upsert
     suspend fun upsert(account: Account): Long

@@ -105,7 +105,7 @@ class BackupManager(
                     JSONObject().put("id", a.id).put("name", a.name).put("icon", a.icon).put("color", a.color)
                         .put("opening", a.openingMinor).put("createdAt", a.createdAt).put("smsDigits", a.smsDigits ?: JSONObject.NULL)
                         .put("currency", a.currency ?: JSONObject.NULL).put("openingNative", a.openingNative ?: JSONObject.NULL)
-                        .put("outOfBudget", a.outOfBudget).put("outOfTotal", a.outOfTotal)
+                        .put("outOfBudget", a.outOfBudget).put("outOfTotal", a.outOfTotal).put("position", a.position)
                 }))
                 put("transactions", JSONArray(transactions.map { t ->
                     JSONObject().put("id", t.id).put("amount", t.amountMinor).put("type", t.type.name)
@@ -222,7 +222,7 @@ class BackupManager(
                 Account(
                     it.getLong("id"), it.getString("name"), it.getString("icon"), it.getLong("color"), it.getLong("opening"), it.getLong("createdAt"), it.stringOrNull("smsDigits"),
                     currency = it.stringOrNull("currency"), openingNative = it.longOrNull("openingNative"),
-                    outOfBudget = it.optBoolean("outOfBudget"), outOfTotal = it.optBoolean("outOfTotal"),
+                    outOfBudget = it.optBoolean("outOfBudget"), outOfTotal = it.optBoolean("outOfTotal"), position = it.optInt("position"),
                 )
             }
             val transactions = json.getJSONArray("transactions").objects().map {
