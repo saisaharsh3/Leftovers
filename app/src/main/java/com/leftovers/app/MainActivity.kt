@@ -92,9 +92,9 @@ class MainActivity : FragmentActivity() {
                     enableEdgeToEdge(statusBarStyle = style, navigationBarStyle = style)
                 }
 
-                // With app lock on, hide balances from the Recents preview and block screenshots.
-                LaunchedEffect(s.appLock) {
-                    if (s.appLock) {
+                // With app lock on, or screenshots blocked, hide balances from the Recents preview and block screenshots.
+                LaunchedEffect(s.appLock, s.blockScreenshots) {
+                    if (s.appLock || s.blockScreenshots) {
                         window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
                     } else {
                         window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)

@@ -281,6 +281,10 @@ class SettingsViewModel(
         viewModelScope.launch { settingsRepository.setAppLock(enabled) }
     }
 
+    fun setBlockScreenshots(enabled: Boolean) {
+        viewModelScope.launch { settingsRepository.setBlockScreenshots(enabled) }
+    }
+
     fun setLockAfter(seconds: Int) {
         viewModelScope.launch { settingsRepository.setLockAfter(seconds) }
     }
@@ -313,7 +317,11 @@ class SettingsViewModel(
     fun enableAutoBackup(context: Context, tree: Uri, onResult: (String) -> Unit) {
         viewModelScope.launch {
             settingsRepository.setAutoBackupDir(tree.toString())
-            backUpNow(context, onResult)
+            // Into the folder just chosen: reading it back from settings straight away could still give the old one.
+            AutoBackup.backUp(context, tree, settingsRepository.settings.first().autoBackupKeep).fold(
+                { onResult("Backed up $it entries") },
+                { onResult("Couldn't back up: ${AutoBackup.problem(it)}") },
+            )
         }
     }
 
@@ -388,14 +396,16 @@ class SettingsViewModel(
             settingsRepository.setSyncDir(null)
             settingsRepository.setSyncServer(null, null)
             (context.applicationContext as com.leftovers.app.LeftoversApp).container.syncLogin.set(null)
-            dir?.let { runCatching { context.contentResolver.releasePersistableUriPermission(Uri.parse(it), Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION) } }
+            // Backups may use the same folder; it stays for them.
+            com.leftovers.app.util.FolderAccess.release(context, dir, listOf(settingsRepository.settings.first().autoBackupDir))
         }
     }
 
     fun disableAutoBackup(context: Context, dir: String?) {
         viewModelScope.launch {
             settingsRepository.setAutoBackupDir(null)
-            dir?.let { runCatching { context.contentResolver.releasePersistableUriPermission(Uri.parse(it), Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION) } }
+            // Sync may use the same folder; it stays for it.
+            com.leftovers.app.util.FolderAccess.release(context, dir, listOf(settingsRepository.settings.first().syncDir))
         }
     }
 
@@ -519,18 +529,15 @@ fun SettingsScreen(
     }
     val pickBackupFolder = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { tree ->
         if (tree != null) {
-            runCatching {
-                context.contentResolver.takePersistableUriPermission(tree, Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
-            }
-            viewModel.enableAutoBackup(context, tree) { toast(it) }
+            // Android has to let the app keep the folder, or the next backup would fail (#41).
+            if (com.leftovers.app.util.FolderAccess.keep(context, tree, listOf(settings?.syncDir))) viewModel.enableAutoBackup(context, tree) { toast(it) }
+            else toast("Android won't let Leftovers keep that folder. Try another one")
         }
     }
     val pickSyncFolder = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { tree ->
         if (tree != null) {
-            runCatching {
-                context.contentResolver.takePersistableUriPermission(tree, Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
-            }
-            viewModel.enableSync(context, tree) { toast(it) }
+            if (com.leftovers.app.util.FolderAccess.keep(context, tree, listOf(settings?.autoBackupDir))) viewModel.enableSync(context, tree) { toast(it) }
+            else toast("Android won't let Leftovers keep that folder. Try another one")
         }
     }
     val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
@@ -648,6 +655,10 @@ fun SettingsScreen(
                                     null -> "Phone lock"
                                 } + " · " + lockAfterLabel(s.lockAfterSeconds).lowercase(),
                             ) { showLockOptions = true }
+                        } else {
+                            // App lock blocks them already; without it, this can.
+                            RowDivider()
+                            ToggleRow(Lucide.Camera, "Block screenshots", s.blockScreenshots, viewModel::setBlockScreenshots)
                         }
                         RowDivider()
                         ToggleRow(Lucide.Repeat, "Remind me before bills", s.billReminders, { on ->

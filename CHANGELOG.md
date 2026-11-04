@@ -5,6 +5,9 @@ All notable changes to Leftovers. Download any version from
 
 ## Unreleased
 
+- Backups that failed with "can no longer open that folder" after choosing it again: the app now keeps the folder for good, clears out folders it no longer uses so Android doesn't refuse, says so when Android still won't keep one, and turning Sync off no longer takes away a folder backups use too (#41)
+- Block screenshots, in Settings → Security, for a blank preview in Recents and no screenshots, without turning on App lock (#44)
+- The month heading is a month on its own in every language: "Ноябрь 2026" in Russian, not "ноября 2026" (#44)
 - A settled lent or borrowed entry shows what it was, when it was lent and paid back, the account, whether it came from a split bill, and when it was added
 
 ## 1.9.0

@@ -85,7 +85,8 @@ object AmountInput {
 
 private val dayThisYear = DateTimeFormatter.ofPattern("EEE, d MMM")
 private val dayOtherYear = DateTimeFormatter.ofPattern("d MMM yyyy")
-private val monthFormat = DateTimeFormatter.ofPattern("MMMM yyyy")
+// The month on its own (LLLL), not as in a date (MMMM): "Ноябрь 2026" in Russian, not "ноября 2026" (#44).
+private val monthFormat = DateTimeFormatter.ofPattern("LLLL yyyy")
 private val shortDate = DateTimeFormatter.ofPattern("d MMM")
 
 fun LocalDate.friendlyLabel(today: LocalDate = LocalDate.now()): String = when (this) {
@@ -96,7 +97,8 @@ fun LocalDate.friendlyLabel(today: LocalDate = LocalDate.now()): String = when (
 
 fun LocalDate.shortLabel(): String = format(shortDate)
 
-fun YearMonth.label(): String = format(monthFormat)
+fun YearMonth.label(locale: java.util.Locale = java.util.Locale.getDefault()): String =
+    format(monthFormat.withLocale(locale)).replaceFirstChar { it.titlecase(locale) }
 
 data class CurrencyOption(val code: String, val name: String, val symbol: String)
 
