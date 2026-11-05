@@ -295,13 +295,14 @@ fun AccountsScreen(
                         onOrder = { list -> viewModel.reorder(list.map { it.id }) },
                         modifier = Modifier.padding(vertical = 6.dp),
                     ) { a, i, lifted ->
-                        Column(Modifier.background(if (lifted) c.glassStrong else androidx.compose.ui.graphics.Color.Transparent)) {
+                        // Lifted, it sits on a solid card: see-through, the shadow under it showed as a light outline.
+                        Column(Modifier.background(if (lifted) androidx.compose.material3.MaterialTheme.colorScheme.surfaceContainerHigh else androidx.compose.ui.graphics.Color.Transparent)) {
                             if (i > 0 && !lifted) RowDivider()
                             ListRow(
                                 title = a.name,
                                 modifier = Modifier
                                     .trackScreenBounds { rowBounds[a.id] = it }
-                                    .graphicsLayer { alpha = if (hidden == a.id) 0f else 1f },
+                                    .then(if (hidden == a.id) Modifier.graphicsLayer { alpha = 0f } else Modifier),
                                 subtitle = if (a.id == defaultId) "Default for new entries" else null,
                                 leading = { CategoryIcon(a.icon, a.color, size = 42.dp) },
                                 trailing = {

@@ -57,6 +57,8 @@ class AppContainer(private val context: Context) {
     private companion object {
         /** How long start-up housekeeping (rescheduling, clean-up) waits for the first screen. */
         const val STARTUP_QUIET_MS = 2_000L
+        /** How long pulling down on Home waits for email, sync and updates before letting go. */
+        const val REFRESH_WAIT_MS = 4_000L
     }
 
     private val database = AppDatabase.build(context)
@@ -189,34 +191,40 @@ class AppContainer(private val context: Context) {
      * Home's pull to refresh: every check that can run on demand (subscriptions that have come due, the email
      * account if one is connected, Sync between devices if it's on), and a few words on what it found.
      */
-    suspend fun refreshNow(): String = coroutineScope {
-        val email = async {
+    suspend fun refreshNow(): String {
+        // The checks run in the app's own scope: the pull waits a few seconds at most, and a slow server
+        // finishes in the background instead of holding the spinner (anything it finds still shows up).
+        val email = scope.async {
             if (emailAccount.connection.value == null) null else com.leftovers.app.util.EmailChecker.check(context)
         }
-        val sync = async { com.leftovers.app.util.DeviceSync.runIfOn(context) }
+        val sync = scope.async { com.leftovers.app.util.DeviceSync.runIfOn(context) }
         // A newer version too, when looking for them is turned on; found, it shows on the bell in Home.
-        val update = async {
+        val update = scope.async {
             if (!settings.settings.first().updateCheck) return@async null
             com.leftovers.app.util.UpdateCheck.latest(com.leftovers.app.util.UpdateCheck.isDevBuild(context)).getOrNull()
                 ?.takeIf { com.leftovers.app.util.UpdateCheck.isNewerThanInstalled(context, it) }
                 ?.also { settings.setUpdateAvailable(com.leftovers.app.util.UpdateCheck.encode(it)) }
         }
         syncRecurring()
+        val waitUntil = System.currentTimeMillis() + REFRESH_WAIT_MS
+        suspend fun <T> kotlinx.coroutines.Deferred<T>.soon(): T? =
+            kotlinx.coroutines.withTimeoutOrNull((waitUntil - System.currentTimeMillis()).coerceAtLeast(1)) { await() }
+        val slow = listOf(email, sync, update)
         val parts = buildList {
-            email.await()?.fold(
+            email.soon()?.fold(
                 { found -> if (found > 0) add("$found new ${if (found == 1) "payment" else "payments"} from email") },
                 { add("Couldn't check email") },
             )
-            sync.await()?.fold(
+            sync.soon()?.fold(
                 { o ->
                     val changed = o.added + o.removed
                     if (changed > 0) add("$changed ${if (changed == 1) "change" else "changes"} from your other phones")
                 },
                 { add("Couldn't sync") },
             )
-            update.await()?.let { add(if (com.leftovers.app.util.UpdateCheck.isDevBuild(context)) "A new Dev build is out" else "Leftovers ${it.version} is out") }
+            update.soon()?.let { add(if (com.leftovers.app.util.UpdateCheck.isDevBuild(context)) "A new Dev build is out" else "Leftovers ${it.version} is out") }
         }
-        parts.joinToString(" · ").ifEmpty { "Up to date" }
+        return parts.joinToString(" · ").ifEmpty { if (slow.any { it.isActive }) "Still checking in the background" else "Up to date" }
     }
 
     /** Logs subscriptions/recurring income that have come due, then checks budgets. */
