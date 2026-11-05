@@ -19,6 +19,7 @@ All notable changes to Leftovers. Download any version from
 - A subscription already logged by hand or from its SMS isn't logged again, and its SMS isn't suggested once the app has logged it
 - Pulling down on Home waits 4 seconds at most for email, sync and updates; the rest finishes in the background
 - Dragging an account lifts a solid row, without a light outline
+- Activity search: typing fast no longer loses letters, several words find entries with all of them in any order ("rent 18000", "sam lunch"), account names are searched too, and a #tag filter stays on while searching
 
 ## 1.9.0
 

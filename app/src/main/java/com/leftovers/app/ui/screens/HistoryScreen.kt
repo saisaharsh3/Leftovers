@@ -115,6 +115,19 @@ import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.YearMonth
 
+/**
+ * Whether [item] is found by a search: every word in [query] is somewhere in its note, category or account
+ * ([accountName]), in any order. A word that's a number, "430" or "1,250.50", also finds entries of that amount.
+ */
+internal fun searchMatches(item: TransactionItem, query: String, accountName: String?): Boolean =
+    query.trim().split(Regex("""\s+""")).filter { it.isNotEmpty() }.all { word ->
+        val amount = AmountInput.toMinor(word.replace(",", ""))
+        item.note.contains(word, ignoreCase = true) ||
+            item.categoryName.contains(word, ignoreCase = true) ||
+            accountName?.contains(word, ignoreCase = true) == true ||
+            (amount != null && item.amountMinor == amount)
+    }
+
 enum class TypeFilter(val label: String) { ALL("All"), EXPENSE("Spent"), INCOME("Income") }
 
 /** A day's entries; with [label], one list in another order (by amount) instead of a day. */
@@ -191,14 +204,8 @@ class HistoryViewModel(
         ) { (all, accountList, oneBill, debts), m, f, q, fl ->
             val monthItems = all.filter { YearMonth.from(it.date) == m }
             val scoped = if (q.isNotBlank()) {
-                val needle = q.trim()
-                // "430" or "1,250.50" also finds entries of exactly that amount.
-                val amount = AmountInput.toMinor(needle.replace(",", ""))
-                all.filter {
-                    it.note.contains(needle, ignoreCase = true) ||
-                        it.categoryName.contains(needle, ignoreCase = true) ||
-                        (amount != null && it.amountMinor == amount)
-                }
+                val accountNames = accountList.associate { it.id to it.name }
+                all.filter { searchMatches(it, q, accountNames[it.accountId]) && (fl.tag == null || fl.tag in hashtags(it.note)) }
             } else if (fl.tag != null) {
                 all.filter { fl.tag in hashtags(it.note) }
             } else if (fl.allTime) {
@@ -276,6 +283,12 @@ fun HistoryScreen(
     val c = LocalAppColors.current
     val money = LocalMoney.current
     var searchOpen by rememberSaveable { mutableStateOf(false) }
+    // What's typed lives here, so every key lands in the field at once; the list follows it.
+    var typed by rememberSaveable { mutableStateOf("") }
+    fun search(text: String) {
+        typed = text
+        viewModel.setQuery(text)
+    }
     var mode by rememberSaveable { mutableStateOf(ActivityView.LIST) }
     var selectedDay by rememberSaveable { mutableStateOf(LocalDate.now().toEpochDay()) }
     var filterSheet by rememberSaveable { mutableStateOf(false) }
@@ -286,7 +299,7 @@ fun HistoryScreen(
         requestedFilter?.let {
             mode = ActivityView.LIST
             searchOpen = false
-            viewModel.setQuery("")
+            search("")
             viewModel.setFilters(ActivityFilters(accountId = it.accountId))
             viewModel.setMonth(YearMonth.now())
             viewModel.setFilter(it.filter)
@@ -304,7 +317,7 @@ fun HistoryScreen(
                 {
                     mode = if (mode == ActivityView.LIST) ActivityView.CALENDAR else ActivityView.LIST
                     searchOpen = false
-                    viewModel.setQuery("")
+                    search("")
                 },
             )
             if (mode == ActivityView.LIST) {
@@ -314,7 +327,7 @@ fun HistoryScreen(
                     if (searchOpen) "Close search" else "Search",
                     {
                         searchOpen = !searchOpen
-                        if (!searchOpen) viewModel.setQuery("")
+                        if (!searchOpen) search("")
                     },
                 )
             }
@@ -328,7 +341,7 @@ fun HistoryScreen(
             item(key = "top") {
                 Column(Modifier.animateItem(fadeInSpec = null, fadeOutSpec = null, placementSpec = listMotion)) {
                 if (searchOpen) {
-                    GlassTextField(state.query, viewModel::setQuery, placeholder = "Search notes, #tags, categories or amounts")
+                    GlassTextField(typed, ::search, placeholder = "Search notes, #tags, categories or amounts")
                 } else if (state.filters.tag == null || mode == ActivityView.CALENDAR) {
                     // One month at a time, or everything (on the list; the calendar is always one month).
                     if (mode == ActivityView.LIST) {
