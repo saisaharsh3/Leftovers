@@ -13,6 +13,12 @@ All notable changes to Leftovers. Download any version from
 - Block screenshots, in Settings → Security, for a blank preview in Recents and no screenshots, without turning on App lock (#44)
 - The month heading is a month on its own in every language: "Ноябрь 2026" in Russian, not "ноября 2026" (#44)
 - A settled lent or borrowed entry shows what it was, when it was lent and paid back, the account, whether it came from a split bill, and when it was added
+- Importing statements from payment apps like PhonePe, Paytm and Google Pay: amounts come from the columns that hold amounts, not the card or account used ("Paid by XX1234" was read as an amount), PDFs that print each payment as a block are read, transfers between your own accounts are kept out, and the note is who was paid
+- Two real payments alike in one file, ₹80 at the same shop twice in a day, are both imported; only entries already in the app are skipped as duplicates
+- An import can be undone right after it, and Settings → Import entries lists recent imports, each with a Remove that moves its entries to Deleted entries, so an import that came in wrong can be taken back
+- A subscription already logged by hand or from its SMS isn't logged again, and its SMS isn't suggested once the app has logged it
+- Pulling down on Home waits 4 seconds at most for email, sync and updates; the rest finishes in the background
+- Dragging an account lifts a solid row, without a light outline
 
 ## 1.9.0
 

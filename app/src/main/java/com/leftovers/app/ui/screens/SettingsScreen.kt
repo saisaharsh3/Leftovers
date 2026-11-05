@@ -89,6 +89,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
 class SettingsViewModel(
@@ -160,7 +161,10 @@ class SettingsViewModel(
             fun fallback(type: com.leftovers.app.data.TxType) = cats.filter { it.type == type }.let { list ->
                 list.firstOrNull { it.name.lowercase() in setOf("other", "others", "miscellaneous", "misc", "general") } ?: list.firstOrNull()
             }
-            val existing = repository.getAllTransactions().map { Triple(it.epochDay, it.amountMinor, it.type to it.note.trim().lowercase()) }.toMutableSet()
+            // Already in the app, counted: a file with two real payments alike (₹80 at the same shop twice a day)
+            // keeps both, and only as many as the app already has are skipped as duplicates.
+            val existing = repository.getAllTransactions().groupingBy { Triple(it.epochDay, it.amountMinor, it.type to it.note.trim().lowercase()) }
+                .eachCount().toMutableMap()
             var duplicates = 0
             var noCategory = 0
             val newCategories = linkedMapOf<Pair<com.leftovers.app.data.TxType, String>, String>()
@@ -168,7 +172,9 @@ class SettingsViewModel(
             val toAdd = mutableListOf<com.leftovers.app.data.Transaction>()
             parsed.rows.forEach { row ->
                 val key = Triple(row.date.toEpochDay(), row.amountMinor, row.type to row.note.trim().lowercase())
-                if (!existing.add(key)) {
+                val left = existing[key] ?: 0
+                if (left > 0) {
+                    existing[key] = left - 1
                     duplicates++
                     return@forEach
                 }
@@ -199,7 +205,7 @@ class SettingsViewModel(
         csvPreview = null
     }
 
-    fun confirmCsvImport(onDone: (Int) -> Unit) {
+    fun confirmCsvImport(onDone: (Int, Long) -> Unit) {
         val preview = csvPreview ?: return
         csvPreview = null
         viewModelScope.launch {
@@ -216,12 +222,28 @@ class SettingsViewModel(
                 }
             }
             val cats = repository.categories.first()
-            val entries = preview.toAdd.mapIndexed { i, t ->
+            val at = System.currentTimeMillis()
+            val entries = preview.toAdd.mapIndexed { i, t0 ->
+                val t = t0.copy(createdAt = at)
                 val (type, name) = preview.pendingCategory[i] ?: return@mapIndexed t
                 cats.firstOrNull { it.type == type && it.name.equals(name, ignoreCase = true) }?.let { t.copy(categoryId = it.id) } ?: t
             }
             repository.addTransactions(entries)
-            onDone(entries.size)
+            onDone(entries.size, at)
+        }
+    }
+
+    /** Files imported before, newest first, to take one back if it came in wrong. */
+    val imports: StateFlow<List<com.leftovers.app.util.ImportBatches.Batch>> = repository.allTransactions
+        .map { com.leftovers.app.util.ImportBatches.find(it) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** Takes an import back: its entries go to Deleted entries, so they can still be restored. */
+    fun removeImport(batch: com.leftovers.app.util.ImportBatches.Batch, onDone: (Int) -> Unit) {
+        viewModelScope.launch {
+            val ids = repository.getAllTransactions().filter { com.leftovers.app.util.ImportBatches.inBatch(it, batch) }.map { it.id }
+            ids.forEach { id -> repository.getTransaction(id)?.let { repository.deleteTransaction(it) } }
+            onDone(ids.size)
         }
     }
 
@@ -805,6 +827,36 @@ fun SettingsScreen(
                                 ),
                             )
                         }
+                        // Files imported before, to take one back if it came in wrong.
+                        val imports by viewModel.imports.collectAsStateWithLifecycle()
+                        var removing by remember { mutableStateOf<com.leftovers.app.util.ImportBatches.Batch?>(null) }
+                        imports.take(5).forEach { b ->
+                            RowDivider()
+                            val whenText = java.time.Instant.ofEpochMilli(b.from).atZone(java.time.ZoneId.systemDefault()).let {
+                                it.toLocalDate().friendlyLabel() + " · " + it.toLocalTime().format(java.time.format.DateTimeFormatter.ofLocalizedTime(java.time.format.FormatStyle.SHORT))
+                            }
+                            ListRow(
+                                "Imported $whenText",
+                                subtitle = "${b.count} entries · ${money.format(b.spent)} spent" + if (b.received > 0) " · ${money.format(b.received)} received" else "",
+                                leading = { IconTile(Lucide.History, c.textSecondary, size = 38.dp) },
+                                trailing = { Text("Remove", style = MaterialTheme.typography.labelLarge, color = c.negative) },
+                                onClick = { removing = b },
+                            )
+                        }
+                        removing?.let { b ->
+                            GlassAlertDialog(
+                                onDismissRequest = { removing = null },
+                                title = { Text("Remove this import?") },
+                                text = { Text("Its ${b.count} entries go to Deleted entries, where they can be restored.", color = c.textSecondary) },
+                                confirmButton = {
+                                    androidx.compose.material3.TextButton(onClick = {
+                                        removing = null
+                                        viewModel.removeImport(b) { n -> scope.launch { snackbar.showSnackbar("Removed $n entries") } }
+                                    }) { Text("Remove", color = c.negative) }
+                                },
+                                dismissButton = { androidx.compose.material3.TextButton(onClick = { removing = null }) { Text("Cancel", color = c.textSecondary) } },
+                            )
+                        }
                         RowDivider()
                         ListRow(
                             "Delete all entries",
@@ -1221,7 +1273,15 @@ fun SettingsScreen(
                 confirmButton = {
                     if (adding > 0) {
                         TextButton(onClick = {
-                            viewModel.confirmCsvImport { n -> scope.launch { snackbar.showSnackbar("Imported $n ${if (n == 1) "entry" else "entries"}") } }
+                            viewModel.confirmCsvImport { n, at ->
+                                scope.launch {
+                                    val r = snackbar.showSnackbar("Imported $n ${if (n == 1) "entry" else "entries"}", actionLabel = "Undo", duration = androidx.compose.material3.SnackbarDuration.Long)
+                                    // Undo: the import's entries go to Deleted entries, like removing it from the list.
+                                    if (r == androidx.compose.material3.SnackbarResult.ActionPerformed) {
+                                        viewModel.removeImport(com.leftovers.app.util.ImportBatches.Batch(at, at, n, 0, 0)) { m -> scope.launch { snackbar.showSnackbar("Removed $m ${if (m == 1) "entry" else "entries"}") } }
+                                    }
+                                }
+                            }
                         }) { Text("Import", color = c.textPrimary) }
                     } else {
                         TextButton(onClick = viewModel::cancelCsvImport) { Text("OK", color = c.textPrimary) }
