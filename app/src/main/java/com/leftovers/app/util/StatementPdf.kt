@@ -40,6 +40,16 @@ object StatementPdf {
     /** A subscription or recurring payment in the statement. */
     data class Charge(val name: String, val date: LocalDate, val amountMinor: Long)
 
+    /**
+     * Money lent, borrowed or paid back in the period. Lending isn't spending, so without this a balance can drop
+     * by what was lent with nothing in the statement to say why.
+     */
+    data class Owed(val date: LocalDate, val person: String, val kind: OwedKind, val amountMinor: Long)
+    enum class OwedKind(val label: String, val withName: String) {
+        LENT("Lent", "Lent to %s"), BORROWED("Borrowed", "Borrowed from %s"),
+        PAID_TO_YOU("Paid back to you", "%s paid you back"), YOU_PAID("You paid back", "You paid %s back"),
+    }
+
     /** One month's totals, for a year's statement. */
     data class MonthRow(val month: YearMonth, val incomeMinor: Long, val spentMinor: Long)
 
@@ -60,6 +70,8 @@ object StatementPdf {
         val months: List<MonthRow>,
         /** Every entry, newest first, for the optional list after the summary. */
         val entries: List<TransactionItem>,
+        /** Lent, borrowed and paid back in the period, oldest first. */
+        val owed: List<Owed> = emptyList(),
     ) {
         val isYear: Boolean get() = month == null
         val leftMinor: Long? get() = budgetMinor?.let { it - spentMinor }
@@ -80,6 +92,7 @@ object StatementPdf {
         plan: BudgetPlan,
         recurring: List<RecurringItem>,
         today: LocalDate = LocalDate.now(),
+        debts: List<com.leftovers.app.data.Debt> = emptyList(),
     ): Statement {
         val months = if (month != null) listOf(month) else (1..12).map { YearMonth.of(year, it) }
         fun inPeriod(d: LocalDate) = if (month != null) YearMonth.from(d) == month else d.year == year
@@ -107,6 +120,18 @@ object StatementPdf {
                 MonthRow(m, inMonth.totalOf(TxType.INCOME), inMonth.totalOf(TxType.EXPENSE))
             },
             entries = items,
+            owed = debts.filter { !it.isPending && it.amountMinor != 0L && inPeriod(LocalDate.ofEpochDay(it.epochDay)) }
+                .sortedBy { it.epochDay }
+                .map { d ->
+                    // A repayment's sign is the opposite of what it pays off: negative is money coming back to you.
+                    val kind = when {
+                        d.repayment && d.amountMinor < 0 -> OwedKind.PAID_TO_YOU
+                        d.repayment -> OwedKind.YOU_PAID
+                        d.amountMinor > 0 -> OwedKind.LENT
+                        else -> OwedKind.BORROWED
+                    }
+                    Owed(LocalDate.ofEpochDay(d.epochDay), d.person.trim(), kind, kotlin.math.abs(d.amountMinor))
+                },
         )
     }
 
@@ -247,6 +272,34 @@ object StatementPdf {
                     pen.text(c, "and ${rows.size - room} more", MARGIN + 52f, y, 9f, MUTED)
                 }
             }
+        }
+        // Money owed: what went out or came back that isn't income or spending. Names only with notes, like notes.
+        if (s.owed.isNotEmpty()) {
+            val lines = minOf(s.owed.size, 6)
+            if (y > PAGE_H - 90f - lines * 16f) {
+                pen.footer(c, pageNo)
+                doc.finishPage(page)
+                page = newPage()
+                c = page.canvas
+                c.drawColor(Color.WHITE)
+                y = MARGIN + 10f
+            } else {
+                y += 6f
+            }
+            y = pen.section(c, "Money owed", y)
+            val totals = OwedKind.entries.mapNotNull { k ->
+                s.owed.filter { it.kind == k }.sumOf { it.amountMinor }.takeIf { it > 0 }?.let { "${k.label} ${money.format(it)}" }
+            }
+            pen.text(c, totals.joinToString(" · "), MARGIN, y, 9.5f, MUTED, maxWidth = PAGE_W - 2 * MARGIN)
+            y += 18f
+            s.owed.takeLast(lines).forEach { o ->
+                pen.text(c, o.date.format(day), MARGIN, y, 9.5f, MUTED)
+                val what = if (includeNotes && o.person.isNotBlank()) o.kind.withName.format(o.person) else o.kind.label
+                pen.text(c, what, MARGIN + 52f, y, 10f, INK, maxWidth = PAGE_W - 2 * MARGIN - 52f - 100f)
+                pen.text(c, money.format(o.amountMinor), PAGE_W - MARGIN, y, 10f, INK, align = Paint.Align.RIGHT)
+                y += 16f
+            }
+            if (s.owed.size > lines) pen.text(c, "and ${s.owed.size - lines} earlier", MARGIN + 52f, y, 9f, MUTED)
         }
         pen.footer(c, pageNo)
         doc.finishPage(page)

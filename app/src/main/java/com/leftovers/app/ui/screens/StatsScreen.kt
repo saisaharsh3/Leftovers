@@ -147,7 +147,7 @@ class StatsViewModel(
             val s = settings.settings.first()
             val m = chosen
             val statement = kotlinx.coroutines.withContext(Dispatchers.Default) {
-                com.leftovers.app.util.StatementPdf.build(if (yearly) null else m, m.year, all, s.plan, planning.recurring.first())
+                com.leftovers.app.util.StatementPdf.build(if (yearly) null else m, m.year, all, s.plan, planning.recurring.first(), debts = planning.debts.first())
             }
             val uri = com.leftovers.app.util.StatementPdf.write(context, statement, Money(s.currencyCode), notes, entries)
             onReady(uri, statement.title)
