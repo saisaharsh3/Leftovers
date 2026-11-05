@@ -57,11 +57,32 @@ enum class AiProvider(
     // The phone's own model (Gemini Nano): no key, nothing leaves the phone. Shown only in builds that have it.
     ON_DEVICE("On this phone", ApiStyle.ON_DEVICE, "on-device", "gemini-nano",
         listOf("gemini-nano"), "", null,
-        note = "Runs on the phone with the AI Android keeps there, on phones like the Pixel 9, Galaxy S26 and OnePlus 15R. Nothing leaves the phone. It's small: best for short questions and simple changes, and only while Leftovers is open."),
+        note = "Runs on the phone with the AI Android keeps there. Nothing leaves the phone. It's small: best for short questions and simple changes, and only while Leftovers is open."),
     CUSTOM("Custom", ApiStyle.OPENAI, null, "",
         emptyList(), "API key (if the server needs one)", null,
         note = "Any OpenAI-compatible server over HTTPS, e.g. one you host yourself. Only connect to servers you trust."),
 }
+
+/**
+ * The phones and tablets Google lists for apps using Gemini Nano this way (ML Kit's Prompt API), by brand, as of
+ * November 2026. Others may follow with Android updates; the setup sheet also checks the phone itself.
+ */
+val onDevicePhones: List<Pair<String, List<String>>> = listOf(
+    "Google" to listOf("Pixel 9", "Pixel 9 Pro", "Pixel 9 Pro XL", "Pixel 9 Pro Fold", "Pixel 10", "Pixel 10 Pro", "Pixel 10 Pro XL", "Pixel 10 Pro Fold", "Pixel 11", "Pixel 11 Pro", "Pixel 11 Pro XL", "Pixel 11 Pro Fold"),
+    "Samsung" to listOf("Galaxy S26", "Galaxy S26+", "Galaxy S26 Ultra", "Galaxy Z Fold7", "Galaxy Z TriFold", "Galaxy Z Flip8", "Galaxy Z Fold8", "Galaxy Z Fold8 Ultra"),
+    "OnePlus" to listOf("OnePlus 13", "OnePlus 13s", "OnePlus 15", "OnePlus 15R"),
+    "Xiaomi" to listOf("Xiaomi 14T Pro", "Xiaomi 15", "Xiaomi 15T", "Xiaomi 15T Pro", "Xiaomi 15 Ultra", "Xiaomi 17", "Xiaomi 17 Ultra", "Xiaomi Pad Mini"),
+    "POCO" to listOf("POCO F7 Ultra", "POCO F8 Pro", "POCO F8 Ultra", "POCO X7 Pro", "POCO X8 Pro"),
+    "OPPO" to listOf("Find N5", "Find X8", "Find X8 Pro", "Find X9", "Find X9 Pro", "Reno 14 Pro 5G", "Reno 15 Pro 5G", "Reno 15 Pro Mini 5G", "Reno 15 Pro Max 5G"),
+    "vivo" to listOf("vivo X200", "vivo X200 Pro", "vivo X200 FE", "vivo X200T", "vivo X300", "vivo X300 Pro", "vivo T4 Ultra"),
+    "iQOO" to listOf("iQOO 13", "iQOO 15"),
+    "realme" to listOf("realme GT 7 Pro", "realme GT 7T"),
+    "Honor" to listOf("Magic 7", "Magic 7 Pro", "Magic V5", "Magic 8 Pro"),
+    "Motorola" to listOf("Razr 60 Ultra", "Razr Ultra 2025", "Signature"),
+    "Sony" to listOf("Xperia 1 VIII"),
+    "Sharp" to listOf("AQUOS R11"),
+    "Lenovo" to listOf("Idea Tab Pro Gen 2", "Legion Tab Gen 5 (8.8\")"),
+)
 
 /** [thorough] trades speed for more careful answers (more model "thinking"). */
 data class AssistantConfig(

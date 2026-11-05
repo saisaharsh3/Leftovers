@@ -974,6 +974,29 @@ private fun LocalModelStatus() {
         com.leftovers.app.ai.LocalStatus.UNAVAILABLE -> "This phone doesn't have its own AI, or Android hasn't set it up yet."
     }
     Text(error ?: text, style = MaterialTheme.typography.bodySmall, color = if (status == com.leftovers.app.ai.LocalStatus.READY && error == null) c.positive else c.textSecondary, modifier = Modifier.padding(start = 6.dp))
+    // Every phone Google lists, so people can check theirs before connecting.
+    var showPhones by rememberSaveable { mutableStateOf(false) }
+    Text(
+        if (showPhones) "Hide the list" else "Phones it works on (${com.leftovers.app.ai.onDevicePhones.sumOf { it.second.size }}) ›",
+        style = MaterialTheme.typography.labelLarge,
+        color = c.accent,
+        modifier = Modifier.padding(start = 6.dp).pressable({ showPhones = !showPhones }, pressedScale = 0.97f),
+    )
+    if (showPhones) {
+        Column(Modifier.padding(start = 6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            com.leftovers.app.ai.onDevicePhones.forEach { (brand, models) ->
+                Text(
+                    buildAnnotatedString {
+                        withStyle(SpanStyle(fontWeight = FontWeight.SemiBold, color = c.textPrimary)) { append(brand) }
+                        append("  " + models.joinToString(", "))
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = c.textSecondary,
+                )
+            }
+            Text("Google's list for apps, November 2026. More phones may get it with Android updates.", style = MaterialTheme.typography.labelSmall, color = c.textTertiary)
+        }
+    }
     if (status == com.leftovers.app.ai.LocalStatus.DOWNLOADABLE) {
         SecondaryButton("Get it", {
             status = com.leftovers.app.ai.LocalStatus.DOWNLOADING
