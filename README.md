@@ -12,6 +12,7 @@ today, plan for the things you want, and ask an AI about your money if you'd lik
 
 [![Build](https://github.com/saisaharsh3/Leftovers/actions/workflows/build.yml/badge.svg)](https://github.com/saisaharsh3/Leftovers/actions/workflows/build.yml)
 [![Download](https://img.shields.io/badge/Download-latest%20APK-CDF46F?logo=android&logoColor=black)](https://github.com/saisaharsh3/Leftovers/releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/saisaharsh3/Leftovers/total?label=Downloads&color=CDF46F)](https://github.com/saisaharsh3/Leftovers/releases)
 ![Android 8.0+](https://img.shields.io/badge/Android-8.0%2B-3DDC84?logo=android&logoColor=white)
 ![Kotlin](https://img.shields.io/badge/Kotlin-Jetpack%20Compose-7F52FF?logo=kotlin&logoColor=white)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue)](https://github.com/saisaharsh3/Leftovers/blob/main/LICENSE)
