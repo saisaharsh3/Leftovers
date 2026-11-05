@@ -53,13 +53,28 @@ object CsvImporter {
         val headerAt = rowsWithText.indexOfFirst { cells -> cells.any { it.clean() in dateNames } }
         if (headerAt < 0) return Parsed(emptyList(), 0, "Couldn't find a header row with a Date column.")
         val header = rowsWithText[headerAt].map { it.clean() }
+        val body = rowsWithText.drop(headerAt + 1)
         fun column(names: List<String>) = names.firstNotNullOfOrNull { n -> header.indexOf(n).takeIf { it >= 0 } }
             ?: header.indexOfFirst { h -> names.any { n -> h.contains(n) && n.length > 3 } }.takeIf { it >= 0 }
+        /**
+         * A money column: one whose name fits and whose cells are mostly amounts. A name alone misleads:
+         * PhonePe's "Credit/debit instrument" holds "Paid by XXXX1234", which read as a debit of 1,234.
+         */
+        fun moneyColumn(names: List<String>): Int? {
+            fun numeric(i: Int): Boolean {
+                val cells = body.mapNotNull { it.getOrNull(i)?.trim()?.takeIf { c -> c.isNotEmpty() } }
+                if (cells.isEmpty()) return true
+                return cells.count { c -> parseAmount(c) != null && c.count(Char::isLetter) <= 3 } * 10 >= cells.size * 6
+            }
+            val exact = names.mapNotNull { n -> header.indexOf(n).takeIf { it >= 0 } }
+            val partial = header.indices.filter { i -> names.any { n -> header[i].contains(n) && n.length > 3 } }
+            return (exact + partial).distinct().firstOrNull(::numeric)
+        }
 
         val dateCol = column(dateNames) ?: return Parsed(emptyList(), 0, "Couldn't find a Date column.")
-        val amountCol = column(amountNames)
-        val debitCol = column(debitNames)
-        val creditCol = column(creditNames)
+        val amountCol = moneyColumn(amountNames)
+        val debitCol = moneyColumn(debitNames)
+        val creditCol = moneyColumn(creditNames)
         if (amountCol == null && debitCol == null && creditCol == null) return Parsed(emptyList(), 0, "Couldn't find an Amount, Debit or Credit column.")
         val typeCol = column(typeNames)
         val categoryCol = column(categoryNames)
@@ -70,7 +85,6 @@ object CsvImporter {
         val noteCols = noteNames.mapNotNull { n -> header.indexOf(n).takeIf { it >= 0 && it !in taken } }.distinct()
             .ifEmpty { listOfNotNull(column(noteNames)?.takeIf { it !in taken }) }
 
-        val body = rowsWithText.drop(headerAt + 1)
         val dayFirst = dayComesFirst(body.mapNotNull { it.getOrNull(dateCol) })
         var unreadable = 0
         var transfers = 0
@@ -80,8 +94,9 @@ object CsvImporter {
         val rows = body.mapNotNull { cells ->
             val date = cells.getOrNull(dateCol)?.let { parseDate(it, dayFirst) }
             val typeText = typeCol?.let { cells.getOrNull(it) }?.trim()?.lowercase().orEmpty()
+            val notes = noteCols.map { cells.getOrNull(it).orEmpty() }
             // A move between two of the user's own accounts isn't spending or income, whichever app exported it.
-            if (typeText.startsWith("transfer")) {
+            if (typeText.startsWith("transfer") || notes.any { ownTransfer.containsMatchIn(it) }) {
                 transfers++
                 return@mapNotNull null
             }
@@ -118,12 +133,19 @@ object CsvImporter {
                 amountMinor = kotlin.math.abs(signed),
                 type = type,
                 category = categoryCol?.let { cells.getOrNull(it) }?.trim()?.takeIf { it.isNotEmpty() },
-                note = noteOf(noteCols.map { cells.getOrNull(it).orEmpty() }, tagCol?.let { cells.getOrNull(it) }),
+                note = noteOf(notes.map(::payee), tagCol?.let { cells.getOrNull(it) }),
                 account = accountCol?.let { cells.getOrNull(it) }?.trim()?.takeIf { it.isNotEmpty() },
             )
         }
         return Parsed(rows, unreadable, transfers = transfers)
     }
+
+    /** "Transfer to XXXX1234", "Self transfer": money moved to the user's own account, which payment apps list like a payment. */
+    internal val ownTransfer = Regex("""^\s*(transfer to [x*]{2,}\d+|self[ -]?transfer|transfer to self|to self\b)""", RegexOption.IGNORE_CASE)
+
+    /** "Paid to LEONS" → "LEONS": who it was, as a note; payment apps start every line with how the money went. */
+    internal fun payee(text: String): String =
+        text.replace(Regex("""^\s*(paid to|payment to|sent to|money sent to|received from|money received from|paid for|bill paid to|recharge of)\s+""", RegexOption.IGNORE_CASE), "").trim()
 
     /** The note texts joined (repeats left out), then the tags as #tags, all within the editor's 120 characters. */
     internal fun noteOf(parts: List<String>, tags: String?): String {
