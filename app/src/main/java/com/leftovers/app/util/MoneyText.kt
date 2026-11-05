@@ -26,6 +26,20 @@ object MoneyText {
     /** The first amount in [text], in minor units (e.g. paise or cents), or null. */
     fun find(text: String): Long? = all(text).firstOrNull()
 
+    /** "Avl Bal Rs.12,000", "balance of Rs 10,000", "Available limit INR 50,000": an amount that isn't what was paid. */
+    private val balanceLabel = Regex("""\b(bal(ance)?|limit|avl|avail(able)?|outstanding)\b[^0-9]{0,16}$""", RegexOption.IGNORE_CASE)
+
+    /**
+     * The amount paid in a bank message: the first one not labelled as a balance or limit, so "Avl Bal Rs.12,000
+     * after debit of Rs.500" is 500. When every amount is labelled so, the first one.
+     */
+    fun paid(text: String): Long? {
+        val found = (before.findAll(text).map { it.range.first to it.groupValues[1] } + after.findAll(text).map { it.range.first to it.groupValues[1] })
+            .sortedBy { it.first }.toList()
+        val first = found.firstOrNull { (at, _) -> !balanceLabel.containsMatchIn(text.substring((at - 24).coerceAtLeast(0), at)) } ?: found.firstOrNull()
+        return first?.let { toMinor(it.second) }
+    }
+
     /** Every amount in [text], in the order they appear. */
     fun all(text: String): List<Long> =
         (before.findAll(text).map { it.range.first to it.groupValues[1] } + after.findAll(text).map { it.range.first to it.groupValues[1] })

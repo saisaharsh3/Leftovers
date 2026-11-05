@@ -25,10 +25,20 @@ object EmailParser {
     private val confirmed = Regex("""\b(debited|charged|paid|payment successful|order confirmed|order placed)\b""", RegexOption.IGNORE_CASE)
 
     /** An amount right after one of these words is the one that was paid. */
-    private val totalLabel = Regex(
-        """(?:order total|grand total|total paid|amount paid|total amount|amount|total)\s*[:\-]?""",
+    private val paidLabel = Regex(
+        """(?:grand total|order total|total paid|amount paid|total amount|amount charged|total charged|you paid|net amount|amount debited)\s*[:\-]?""",
         RegexOption.IGNORE_CASE,
     )
+    /** A plain "Total", not "Subtotal" or "Item total": a receipt's last one is what was paid. */
+    private val bareTotal = Regex("""(?<!item )\btotal\b(?!\s+(?:savings?|discount|saved|items?)\b)\s*[:\-]?""", RegexOption.IGNORE_CASE)
+    private val amountLabel = Regex("""\bamount\b\s*[:\-]?""", RegexOption.IGNORE_CASE)
+
+    /** What was paid: a paid-like label first, then a receipt's last plain Total, then "Amount", then the first amount. */
+    internal fun paidAmount(text: String): Long? =
+        MoneyText.after(paidLabel, text)
+            ?: bareTotal.findAll(text).toList().asReversed().firstNotNullOfOrNull { MoneyText.find(text.substring(it.range.last + 1).take(40)) }
+            ?: MoneyText.after(amountLabel, text)
+            ?: MoneyText.paid(text)
     private val merchantWords = Regex(
         """\b(?:at|to|towards|vpa|merchant:?)\s+([A-Za-z0-9@._&' -]{2,40}?)(?=\s+(?:on|via|ref\w*|upi|txn|avl|avail|from|using|for)\b|\s*[(\[]|[.,;]|$)""",
         RegexOption.IGNORE_CASE,
@@ -47,7 +57,7 @@ object EmailParser {
         if (promo.containsMatchIn(text) && !income && !confirmed.containsMatchIn(text)) return null
 
         // Any currency (see MoneyText); a total-like label wins over the first amount mentioned.
-        val minor = MoneyText.after(totalLabel, text) ?: MoneyText.find(text) ?: return null
+        val minor = paidAmount(text) ?: return null
 
         if (income) return Parsed(minor, SmsParser.payer(text), isIncome = true)
         val who = SmsParser.payee(text, merchantWords).ifEmpty { cleanSender(senderName).replaceFirstChar { it.uppercase() } }

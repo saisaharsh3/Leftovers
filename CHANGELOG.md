@@ -21,6 +21,7 @@ All notable changes to Leftovers. Download any version from
 - Dragging an account lifts a solid row, without a light outline
 - Activity search: typing fast no longer loses letters, several words find entries with all of them in any order ("rent 18000", "sam lunch"), account names are searched too, and a #tag filter stays on while searching
 - The PDF statement has a Money owed section: what was lent, borrowed and paid back in the month or year, as lending isn't spending and wasn't in it before; names only when notes are included
+- Reading bank SMS and emails: the amount paid, not the balance or card limit printed before it ("Avl Bal Rs.12,000 after debit of Rs.500" is ₹500); "transaction of", "payment of", "charged", "transferred" and "UPI txn" are understood; offers aren't suggested; autopay names who it's for; and receipts take the Total paid, not the Subtotal or Item total
 
 ## 1.9.0
 
