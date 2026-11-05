@@ -76,7 +76,7 @@ class AppContainer(private val context: Context) {
         database.accountDao(), database.transferDao(), database.transactionDao(), database.debtDao(),
         settings.settings.map { it.foreignRates }.distinctUntilChanged(),
     )
-    val sms = SmsRepository(database.smsDao(), database.transactionDao())
+    val sms = SmsRepository(database.smsDao(), database.transactionDao(), database.recurringDao())
     /** The WebDAV server's password, for Sync between devices. */
     val syncLogin = com.leftovers.app.util.SyncLogin(context)
     val backup = BackupManager(context, database, settings, com.leftovers.app.util.BackupPassword(context))

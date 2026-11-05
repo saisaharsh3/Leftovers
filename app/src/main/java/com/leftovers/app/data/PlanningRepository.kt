@@ -89,6 +89,14 @@ class PlanningRepository(private val database: AppDatabase) {
         }
     }
 
+    /**
+     * Whether [item] is [r]'s charge for [date], logged some other way: the same kind and amount, within three
+     * days of it, and in its category or with its name in the note. Then the subscription isn't logged again.
+     */
+    internal fun alreadyLogged(item: TransactionItem, r: Recurring, amount: Long, date: LocalDate): Boolean =
+        item.type == r.type && item.amountMinor == amount && kotlin.math.abs(item.epochDay - date.toEpochDay()) <= 3 &&
+            (item.categoryId == r.categoryId || (r.name.isNotBlank() && item.note.contains(r.name.trim(), ignoreCase = true)))
+
     /** Everything with [person] paid back in full. */
     suspend fun settle(person: String) = settleUp(person)
 
@@ -109,6 +117,8 @@ class PlanningRepository(private val database: AppDatabase) {
         val balances = database.accountDao().observeWithBalance().first().associate { it.id to it.balanceMinor }.toMutableMap()
         database.withTransaction {
             val currentMonth = YearMonth.from(today)
+            // Entries already there, to see whether a bill was logged some other way first.
+            val existing = transactionDao.getAll().toMutableList()
             recurringDao.getActive().forEach { r ->
                 var month = r.lastPostedMonth?.let { YearMonth.parse(it).plusMonths(1) } ?: YearMonth.parse(r.startMonth)
                 var lastPosted: YearMonth? = null
@@ -124,6 +134,12 @@ class PlanningRepository(private val database: AppDatabase) {
                     val amount = r.interestOn(into?.let { balances[it] } ?: 0L) ?: r.amountMinor
                     if (amount <= 0) {
                         // No balance, no interest this time.
+                        lastPosted = month
+                        month = month.plusMonths(1)
+                        continue
+                    }
+                    // Already logged by hand, or from its SMS or email, around its date: that's this month's.
+                    if (existing.any { alreadyLogged(it, r, amount, date) }) {
                         lastPosted = month
                         month = month.plusMonths(1)
                         continue

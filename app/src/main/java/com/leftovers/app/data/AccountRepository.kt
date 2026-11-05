@@ -62,7 +62,12 @@ class AccountRepository(
     suspend fun deleteTransfer(transfer: Transfer) = transferDao.delete(transfer)
 }
 
-class SmsRepository(private val dao: SmsDao, private val transactionDao: TransactionDao) {
+class SmsRepository(
+    private val dao: SmsDao,
+    private val transactionDao: TransactionDao,
+    /** Subscriptions, so a bill the app logged by itself isn't suggested again when its SMS arrives; null in tests. */
+    private val recurringDao: RecurringDao? = null,
+) {
     companion object {
         /** How long a seen message is remembered; far longer than any email check looks back. */
         const val SEEN_DAYS = 30L
@@ -84,8 +89,23 @@ class SmsRepository(private val dao: SmsDao, private val transactionDao: Transac
         val seen = dao.amountsBetween(from, to, suggestion.isIncome) + logged
         if (hash.isNotEmpty()) dao.markSeen(SeenMessage(hash, System.currentTimeMillis()))
         if (DuplicatePayments.isDuplicate(suggestion.amountMinor, suggestion.receivedAt, seen)) return false
+        if (subscriptionAlreadyLogged(suggestion)) return false
         dao.insert(suggestion)
         return true
+    }
+
+    /**
+     * The SMS of a bill the app already logged as a subscription: an active one with this amount, logged within
+     * three days, with its name as the note (as the app logs them).
+     */
+    private suspend fun subscriptionAlreadyLogged(s: SmsSuggestion): Boolean {
+        val subs = recurringDao?.getActive().orEmpty()
+            .filter { it.amountMinor == s.amountMinor && (it.type == TxType.INCOME) == s.isIncome }
+        if (subs.isEmpty()) return false
+        val names = subs.map { it.name.trim().lowercase() }.toSet()
+        return transactionDao.getAll().any { t ->
+            t.amountMinor == s.amountMinor && kotlin.math.abs(t.epochDay - s.epochDay) <= 3 && t.note.trim().lowercase() in names
+        }
     }
 
     /** Forgets seen messages older than any email check looks back. */
