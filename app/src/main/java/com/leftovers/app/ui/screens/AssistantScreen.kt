@@ -803,7 +803,8 @@ fun AssistantSetupSheet(onDismiss: () -> Unit, viewModel: AssistantSetupViewMode
 
             Text(if (current == null) "Connect" else "Switch AI", style = MaterialTheme.typography.labelMedium, color = c.textSecondary, modifier = Modifier.padding(start = 6.dp))
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                AiProvider.entries.forEach { p ->
+                // The phone's own AI only in builds that have it.
+                AiProvider.entries.filter { it != AiProvider.ON_DEVICE || com.leftovers.app.ai.OnDevice.inBuild }.forEach { p ->
                     Chip(p.label, {
                         if (p != provider) {
                             provider = p
@@ -815,6 +816,8 @@ fun AssistantSetupSheet(onDismiss: () -> Unit, viewModel: AssistantSetupViewMode
                 }
             }
             provider.note?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = c.warning, modifier = Modifier.padding(start = 6.dp)) }
+            val local = provider == AiProvider.ON_DEVICE
+            if (local) LocalModelStatus()
 
             if (provider.baseUrl == null) {
                 GlassTextField(
@@ -826,76 +829,80 @@ fun AssistantSetupSheet(onDismiss: () -> Unit, viewModel: AssistantSetupViewMode
             }
 
             val savedKey = current?.takeIf { it.provider == provider }?.apiKey
-            GlassTextField(
-                key, { key = it.trim().take(300) },
-                placeholder = if (savedKey != null) "Saved · leave empty to keep it" else provider.keyHint,
-                label = "${provider.label} API key",
-                password = true,
-            )
-            provider.keyUrl?.let { url ->
-                Text(
-                    "Get a ${provider.label} key ↗",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = c.accent,
-                    modifier = Modifier.padding(start = 6.dp).pressable({ uriHandler.openUri(url) }, pressedScale = 0.97f),
+            // No key, model list or answer style for the phone's own AI.
+            if (!local) {
+                GlassTextField(
+                    key, { key = it.trim().take(300) },
+                    placeholder = if (savedKey != null) "Saved · leave empty to keep it" else provider.keyHint,
+                    label = "${provider.label} API key",
+                    password = true,
                 )
-            }
-
-            Text("Model", style = MaterialTheme.typography.labelMedium, color = c.textSecondary, modifier = Modifier.padding(start = 6.dp))
-            val modelChoices = (provider.suggestedModels + loaded).distinct()
-            if (modelChoices.isNotEmpty()) {
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    modelChoices.take(40).forEach { m -> Chip(m, { model = m }, selected = model == m) }
+                provider.keyUrl?.let { url ->
+                    Text(
+                        "Get a ${provider.label} key ↗",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = c.accent,
+                        modifier = Modifier.padding(start = 6.dp).pressable({ uriHandler.openUri(url) }, pressedScale = 0.97f),
+                    )
                 }
-            }
-            GlassTextField(model, { model = it.trim().take(100) }, placeholder = provider.defaultModel.ifEmpty { "model name" }, keyboardType = androidx.compose.ui.text.input.KeyboardType.Ascii)
-            val keyForLoad = key.ifEmpty { savedKey.orEmpty() }
-            Text(
-                when {
-                    loading -> "Loading models…"
-                    loadError != null -> loadError!!
-                    loaded.isNotEmpty() -> "${loaded.size} models available to your key"
-                    else -> "Load models your key can use"
-                },
-                style = MaterialTheme.typography.labelLarge,
-                color = if (loadError != null) c.negative else c.accent,
-                modifier = Modifier.padding(start = 6.dp).pressable({
-                    if (!loading) {
-                        val base = provider.baseUrl ?: runCatching { requireHttps(customUrl) }.getOrNull()
-                        when {
-                            base == null -> loadError = "The server address must start with https://"
-                            keyForLoad.isEmpty() && provider != AiProvider.CUSTOM -> loadError = "Enter your API key first"
-                            else -> {
-                                loading = true
-                                loadError = null
-                                scope.launch {
-                                    runCatching { listModels(provider, base, keyForLoad) }
-                                        .onSuccess {
-                                            loaded = it
-                                            if (it.isEmpty()) loadError = "No chat models found for this key"
-                                        }
-                                        .onFailure { loadError = it.message ?: "Couldn't load models" }
-                                    loading = false
+
+                Text("Model", style = MaterialTheme.typography.labelMedium, color = c.textSecondary, modifier = Modifier.padding(start = 6.dp))
+                val modelChoices = (provider.suggestedModels + loaded).distinct()
+                if (modelChoices.isNotEmpty()) {
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        modelChoices.take(40).forEach { m -> Chip(m, { model = m }, selected = model == m) }
+                    }
+                }
+                GlassTextField(model, { model = it.trim().take(100) }, placeholder = provider.defaultModel.ifEmpty { "model name" }, keyboardType = androidx.compose.ui.text.input.KeyboardType.Ascii)
+                val keyForLoad = key.ifEmpty { savedKey.orEmpty() }
+                Text(
+                    when {
+                        loading -> "Loading models…"
+                        loadError != null -> loadError!!
+                        loaded.isNotEmpty() -> "${loaded.size} models available to your key"
+                        else -> "Load models your key can use"
+                    },
+                    style = MaterialTheme.typography.labelLarge,
+                    color = if (loadError != null) c.negative else c.accent,
+                    modifier = Modifier.padding(start = 6.dp).pressable({
+                        if (!loading) {
+                            val base = provider.baseUrl ?: runCatching { requireHttps(customUrl) }.getOrNull()
+                            when {
+                                base == null -> loadError = "The server address must start with https://"
+                                keyForLoad.isEmpty() && provider != AiProvider.CUSTOM -> loadError = "Enter your API key first"
+                                else -> {
+                                    loading = true
+                                    loadError = null
+                                    scope.launch {
+                                        runCatching { listModels(provider, base, keyForLoad) }
+                                            .onSuccess {
+                                                loaded = it
+                                                if (it.isEmpty()) loadError = "No chat models found for this key"
+                                            }
+                                            .onFailure { loadError = it.message ?: "Couldn't load models" }
+                                        loading = false
+                                    }
                                 }
                             }
                         }
-                    }
-                }, pressedScale = 0.97f),
-            )
+                    }, pressedScale = 0.97f),
+                )
 
-            Text("Answer style", style = MaterialTheme.typography.labelMedium, color = c.textSecondary, modifier = Modifier.padding(start = 6.dp))
-            SegmentedToggle(listOf(false, true), thorough, { if (it) "Thorough" else "Quick" }, {
-                thorough = it
-                if (current != null) viewModel.settings.setThorough(it)
-            }, Modifier.fillMaxWidth())
-            Text(
-                if (thorough) "The AI thinks longer before answering. Slower, and uses more of your credit." else "Fast replies for everyday questions and logging.",
-                style = MaterialTheme.typography.bodySmall,
-                color = c.textSecondary,
-                modifier = Modifier.padding(start = 6.dp),
-            )
+                Text("Answer style", style = MaterialTheme.typography.labelMedium, color = c.textSecondary, modifier = Modifier.padding(start = 6.dp))
+                SegmentedToggle(listOf(false, true), thorough, { if (it) "Thorough" else "Quick" }, {
+                    thorough = it
+                    if (current != null) viewModel.settings.setThorough(it)
+                }, Modifier.fillMaxWidth())
+                Text(
+                    if (thorough) "The AI thinks longer before answering. Slower, and uses more of your credit." else "Fast replies for everyday questions and logging.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = c.textSecondary,
+                    modifier = Modifier.padding(start = 6.dp),
+                )
+            }
 
             Text(
+                if (local) "It runs on this phone: your questions and data never leave it, and no key is needed. Changes still wait for your Apply." else
                 "Your key is encrypted on this phone and is only ever sent to ${provider.label}. " +
                     "When you ask something, your question and only the data needed to answer it are sent to ${provider.label} and handled under its privacy policy. " +
                     "Card numbers, UPI IDs, phone numbers and emails are hidden first. Saved receipt photos and SMS are never sent; a photo goes only when you attach it to a message. Chats aren't saved on the phone.",
@@ -913,7 +920,7 @@ fun AssistantSetupSheet(onDismiss: () -> Unit, viewModel: AssistantSetupViewMode
             val sameServer = provider.baseUrl != null || runCatching { requireHttps(customUrl) }.getOrNull() == current?.baseUrl
             val keepKey = savedKey != null && key.isEmpty() && sameServer
             // Custom servers may not need a key at all.
-            val keyOk = keepKey || key.length >= 10 || provider == AiProvider.CUSTOM
+            val keyOk = keepKey || key.length >= 10 || provider == AiProvider.CUSTOM || local
             PrimaryButton(
                 when {
                     current == null -> "Connect"
@@ -948,6 +955,33 @@ fun AssistantSetupSheet(onDismiss: () -> Unit, viewModel: AssistantSetupViewMode
                 }
             }
         }
+    }
+}
+
+/** Whether this phone has its own AI ready, with a way to get it when Android can download it. */
+@Composable
+private fun LocalModelStatus() {
+    val c = LocalAppColors.current
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    var status by remember { mutableStateOf<com.leftovers.app.ai.LocalStatus?>(null) }
+    var error by remember { mutableStateOf<String?>(null) }
+    androidx.compose.runtime.LaunchedEffect(Unit) { status = com.leftovers.app.ai.OnDevice.status() }
+    val text = when (status) {
+        null -> "Checking this phone…"
+        com.leftovers.app.ai.LocalStatus.READY -> "Ready on this phone."
+        com.leftovers.app.ai.LocalStatus.DOWNLOADING -> "Android is getting the AI ready. Try again in a few minutes."
+        com.leftovers.app.ai.LocalStatus.DOWNLOADABLE -> "This phone supports it; Android needs to fetch it first."
+        com.leftovers.app.ai.LocalStatus.UNAVAILABLE -> "This phone doesn't have its own AI, or Android hasn't set it up yet."
+    }
+    Text(error ?: text, style = MaterialTheme.typography.bodySmall, color = if (status == com.leftovers.app.ai.LocalStatus.READY && error == null) c.positive else c.textSecondary, modifier = Modifier.padding(start = 6.dp))
+    if (status == com.leftovers.app.ai.LocalStatus.DOWNLOADABLE) {
+        SecondaryButton("Get it", {
+            status = com.leftovers.app.ai.LocalStatus.DOWNLOADING
+            scope.launch {
+                runCatching { com.leftovers.app.ai.OnDevice.model?.download() }.onFailure { error = it.message ?: "Android couldn't fetch it." }
+                status = com.leftovers.app.ai.OnDevice.status()
+            }
+        }, Modifier.fillMaxWidth())
     }
 }
 

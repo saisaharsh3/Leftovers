@@ -68,7 +68,9 @@ jobs:
             echo "$SIGNING_KEYSTORE_BASE64" | base64 --decode > release.jks
             export SIGNING_STORE_FILE=release.jks
           fi
-          ./gradlew assembleDev -PdevNumber=${{ github.run_number }} --stacktrace
+          # Dev builds only: on-device AI with Gemini Nano, through Google's (closed) ML Kit library. Named here, not in
+          # a Gradle file, so release and F-Droid builds stay free of it.
+          ./gradlew assembleDev -PdevNumber=${{ github.run_number }} -PonDeviceAi=com.google.mlkit:genai-prompt:1.0.0-beta4 --stacktrace
           rm -f release.jks
 
       - name: Publish the Dev build pre-release

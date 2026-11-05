@@ -15,6 +15,13 @@ val signing = Properties().apply {
 }
 fun signingValue(key: String, env: String): String? = signing.getProperty(key) ?: System.getenv(env)
 
+/**
+ * On-device AI (Gemini Nano, which Android keeps on phones like the Pixel 9 and OnePlus 15R) for Dev builds only.
+ * Google's library for it isn't open source, so it's named on the build command (-PonDeviceAi=group:name:version)
+ * and never in this file: release and F-Droid builds don't have it, and its code in src/ondevice isn't compiled.
+ */
+val onDeviceAi: String? = providers.gradleProperty("onDeviceAi").orNull
+
 /** Fixed for every Dev build; see androidComponents below. */
 val DEV_VERSION_CODE = 21
 
@@ -111,6 +118,7 @@ android {
         // The Dev build shares the debug build's name and amber icon.
         getByName("dev").res.srcDir("src/debug/res")
         getByName("debug").assets.srcDir("$projectDir/schemas")
+        if (onDeviceAi != null) getByName("dev").kotlin.directories += "src/ondevice/java"
     }
 }
 
@@ -176,4 +184,5 @@ dependencies {
     // Email payment detection (IMAP over TLS). Only used when the user connects a mailbox.
     implementation(libs.angus.mail)
     implementation(libs.pdfbox.android)
+    onDeviceAi?.let { add("devImplementation", it) }
 }

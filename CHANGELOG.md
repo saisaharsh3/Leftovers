@@ -22,6 +22,7 @@ All notable changes to Leftovers. Download any version from
 - Activity search: typing fast no longer loses letters, several words find entries with all of them in any order ("rent 18000", "sam lunch"), account names are searched too, and a #tag filter stays on while searching
 - The PDF statement has a Money owed section: what was lent, borrowed and paid back in the month or year, as lending isn't spending and wasn't in it before; names only when notes are included
 - Reading bank SMS and emails: the amount paid, not the balance or card limit printed before it ("Avl Bal Rs.12,000 after debit of Rs.500" is ₹500); "transaction of", "payment of", "charged", "transferred" and "UPI txn" are understood; offers aren't suggested; autopay names who it's for; and receipts take the Total paid, not the Subtotal or Item total
+- Dev builds: the AI already on phones like the OnePlus 15R, Pixel 9 and 10 and Galaxy S26 (Gemini Nano), with no key and nothing leaving the phone. Pick "On this phone" in the AI assistant to ask questions and add or edit entries (each still waits for Apply); it also sums up a month in Insights, picks a category for a payment to somewhere new, and reads bank SMS and emails the rules can't. Release and F-Droid builds don't include it, as it needs Google's closed library
 
 ## 1.9.0
 

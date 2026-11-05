@@ -176,18 +176,23 @@ object EmailChecker {
                 .sortedByDescending { (it.receivedDate ?: it.sentDate).time }
                 .take(MAX_MESSAGES)
             onStats(found.size, bankMail.size)
-            return bankMail.mapNotNull { m -> runCatching { paymentIn(m, keywords) }.getOrNull() }
+            // The phone's own AI reads a few the rules couldn't, where there is one.
+            var askAi = if (com.leftovers.app.ai.OnDevice.inBuild) 5 else 0
+            return bankMail.mapNotNull { m -> runCatching { paymentIn(m, keywords, askAi-- > 0) }.getOrNull() }
         } finally {
             inbox.close(false)
         }
     }
 
-    private fun paymentIn(m: Message, keywords: Collection<String>): EmailPayment? {
+    private fun paymentIn(m: Message, keywords: Collection<String>, askAi: Boolean = false): EmailPayment? {
         val from = m.from?.firstOrNull() as? InternetAddress
         val senderName = from?.personal?.takeIf { it.isNotBlank() } ?: EmailParser.nameFromAddress(from?.address.orEmpty())
         val subject = m.subject.orEmpty()
         val body = textOf(m, 0).take(20_000)
-        val parsed = EmailParser.parse(subject, senderName, body, keywords) ?: return null
+        val parsed = EmailParser.parse(subject, senderName, body, keywords)
+            ?: (if (askAi) kotlinx.coroutines.runBlocking { com.leftovers.app.ai.OnDevice.readPayment(subject + "\n" + body) } else null)
+                ?.let { EmailParser.Parsed(it.amountMinor, it.merchant.ifEmpty { senderName.take(40) }, it.isIncome) }
+            ?: return null
         val sentAt = (m.sentDate ?: m.receivedDate)?.time ?: return null
         val key = (m as? MimeMessage)?.messageID ?: "${from?.address}|$sentAt|$subject"
         return EmailPayment(

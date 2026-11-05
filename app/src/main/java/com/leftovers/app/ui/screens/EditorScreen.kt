@@ -396,6 +396,13 @@ class EditorViewModel(
                 com.leftovers.app.util.MerchantMemory.categoryFor(note, type, past)?.let { remembered ->
                     if (categoryId == null) categoryId = remembered
                 }
+                // Somewhere new: the phone's own AI, where there is one, picks from the categories.
+                if (categoryId == null) {
+                    val options = repository.categories.first().filter { it.type == type }
+                    com.leftovers.app.ai.OnDevice.pickCategory(note, options.map { it.name })?.let { name ->
+                        if (categoryId == null) categoryId = options.firstOrNull { it.name == name }?.id
+                    }
+                }
             }
         }
     }

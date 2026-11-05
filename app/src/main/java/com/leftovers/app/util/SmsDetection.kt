@@ -149,7 +149,10 @@ class SmsReceiver : BroadcastReceiver() {
                 if (!s.smsDetection) return@launch
                 // The user's own keywords count too, for banks the built-in words miss.
                 val check = SmsParser.check(body, s.detectionKeywords)
-                val parsed = check.parsed
+                // One the rules couldn't read (not an OTP or offer they skipped): the phone's own AI tries, where there is
+                // one. Android lets it answer only while Leftovers is open.
+                val byAi = if (check.parsed == null && !check.reason.startsWith("Skipped")) com.leftovers.app.ai.OnDevice.readPayment(body) else null
+                val parsed = check.parsed ?: byAi
                 if (parsed != null) {
                     val added = container.sms.add(
                         SmsSuggestion(
@@ -168,7 +171,8 @@ class SmsReceiver : BroadcastReceiver() {
                         ),
                     )
                     val amount = (if (parsed.isIncome) "income " else "") + Money(s.currencyCode).format(parsed.amountMinor)
-                    DetectionLog.add(context, "SMS", sender, if (added) "Suggested $amount" else "$amount was already logged or suggested")
+                    val how = if (byAi != null) " (read by this phone's AI)" else ""
+                    DetectionLog.add(context, "SMS", sender, if (added) "Suggested $amount$how" else "$amount was already logged or suggested")
                 } else if (MoneyText.find(body) != null) {
                     // Only messages with an amount are worth noting; personal texts leave no trace.
                     DetectionLog.add(context, "SMS", sender, check.reason)

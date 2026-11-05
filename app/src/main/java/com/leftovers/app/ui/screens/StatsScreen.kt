@@ -41,6 +41,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.text.style.TextAlign
 import com.leftovers.app.ui.components.RowDivider
 import com.leftovers.app.util.friendlyLabel
@@ -273,6 +276,43 @@ fun StatsScreen(
                             leading = { com.leftovers.app.ui.components.IconTile(Lucide.MessageCircle, c.accent, size = 38.dp) },
                             trailing = { Icon(Lucide.ChevronRight, contentDescription = null, tint = c.textTertiary) },
                         )
+                    }
+                }
+            }
+
+            // The month in a sentence or two, written on the phone by its own AI where there is one; on a tap, not on
+            // its own, as Android limits how often an app can use it.
+            if (com.leftovers.app.ai.OnDevice.inBuild && isExpense && state.count > 0) {
+                item(key = "summary-${state.month}") {
+                    var ready by remember { mutableStateOf(false) }
+                    var summary by remember { mutableStateOf<String?>(null) }
+                    var writing by remember { mutableStateOf(false) }
+                    val summaryScope = rememberCoroutineScope()
+                    LaunchedEffect(Unit) { ready = com.leftovers.app.ai.OnDevice.status() == com.leftovers.app.ai.LocalStatus.READY }
+                    if (ready) {
+                        val facts = buildString {
+                            append("Month: $monthName ${state.month.year}\n")
+                            append("Spent: ${money.format(state.total)} in ${state.count} entries\n")
+                            if (state.previousTotal > 0) append("Spent the month before: ${money.format(state.previousTotal)}\n")
+                            if (state.budget > 0) append("Budget: ${money.format(state.budget)}\n")
+                            append("Biggest categories: " + state.categories.take(3).joinToString { "${it.name} ${money.format(it.totalMinor)}" } + "\n")
+                            state.max?.let { append("Biggest single spend: ${money.format(it.amountMinor)} on ${it.categoryName}\n") }
+                        }
+                        Glass(Modifier.fillMaxWidth().padding(top = 12.dp).appear(1), onClick = {
+                            if (!writing) {
+                                writing = true
+                                summaryScope.launch {
+                                    summary = com.leftovers.app.ai.OnDevice.summarise(facts) ?: "This phone's AI couldn't write it just now."
+                                    writing = false
+                                }
+                            }
+                        }) {
+                            com.leftovers.app.ui.components.ListRow(
+                                "Sum up $monthName",
+                                subtitle = summary ?: if (writing) "Writing it on this phone…" else "In a sentence or two, written on this phone",
+                                leading = { com.leftovers.app.ui.components.IconTile(Lucide.Sparkles, c.accent, size = 38.dp) },
+                            )
+                        }
                     }
                 }
             }
