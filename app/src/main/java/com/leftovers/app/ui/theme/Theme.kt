@@ -265,11 +265,14 @@ fun LeftoversTheme(
                 Backdrop.PLAIN -> t.copy(auroraA = Color.Transparent, auroraB = Color.Transparent, auroraC = Color.Transparent)
                 Backdrop.PHOTO -> when {
                     photo == null -> t
-                    darkTheme -> t.copy(photo = photo, photoDim = photoDim, frost = frost)
+                    // Over a photo, the softer greys would fade into the picture: secondary text is the main text
+                    // colour, only a little lighter, as phones do over a wallpaper.
+                    darkTheme -> t.copy(photo = photo, photoDim = photoDim, frost = frost, textSecondary = t.textPrimary.copy(alpha = 0.82f), textTertiary = t.textPrimary.copy(alpha = 0.68f))
                     // Light theme: the photo keeps its colour, like a phone's wallpaper. Text is dark with a soft light
                     // glow (see the typography below); cards are glass, lighter than what's behind them.
                     else -> t.copy(
                         photo = photo, photoDim = photoDim, frost = frost,
+                        textSecondary = t.textPrimary.copy(alpha = 0.8f), textTertiary = t.textPrimary.copy(alpha = 0.66f),
                         glass = Color.White.copy(alpha = 0.5f), glassStrong = Color.White.copy(alpha = 0.62f),
                         borderTop = Color.White.copy(alpha = 0.95f), borderBottom = Color.White.copy(alpha = 0.4f),
                         barTint = Color.White.copy(alpha = 0.7f),

@@ -71,7 +71,8 @@ object BackgroundPhoto {
      * way; a little softness keeps busy photos from fighting with it.
      */
     /** The background as drawn, and a far softer copy that glass in front of it shows through. */
-    class Loaded(val photo: ImageBitmap, val frost: ImageBitmap)
+    /** [bright]: a light photo, which reads best with black text. */
+    class Loaded(val photo: ImageBitmap, val frost: ImageBitmap, val bright: Boolean)
 
     fun loadWithFrost(context: Context, softness: Float): Loaded? = runCatching {
         val photo = load(context, softness) ?: return null
@@ -79,7 +80,10 @@ object BackgroundPhoto {
         val full = BitmapFactory.decodeFile(f.path, BitmapFactory.Options().apply { inSampleSize = 4 }) ?: return null
         val w = 120
         val small = Bitmap.createScaledBitmap(full, w, (full.height * w / full.width.toFloat()).toInt().coerceAtLeast(1), true)
-        Loaded(photo, blur(small, radius = 9).asImageBitmap())
+        // How bright the photo is on average (its perceived lightness), to choose black or white text.
+        val px = IntArray(small.width * small.height).also { small.getPixels(it, 0, small.width, 0, 0, small.width, small.height) }
+        val light = px.sumOf { c -> 0.2126 * ((c shr 16) and 255) + 0.7152 * ((c shr 8) and 255) + 0.0722 * (c and 255) } / (px.size * 255.0)
+        Loaded(photo, blur(small, radius = 9).asImageBitmap(), bright = light > 0.55)
     }.getOrNull()
 
     fun load(context: Context, softness: Float): ImageBitmap? = runCatching {

@@ -36,6 +36,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.leftovers.app.data.AppSettings
+import com.leftovers.app.ui.components.SegmentedToggle
 import com.leftovers.app.ui.components.pressable
 import com.leftovers.app.ui.icons.Lucide
 import com.leftovers.app.ui.theme.Backdrop
@@ -53,6 +54,7 @@ fun LooksPicker(
     onPhoto: (android.net.Uri) -> Unit,
     onDim: (Float) -> Unit,
     onBlur: (Float) -> Unit,
+    onText: (String) -> Unit,
     onAccent: (Long) -> Unit,
 ) {
     val c = LocalAppColors.current
@@ -90,6 +92,14 @@ fun LooksPicker(
             }
         }
         if (current == Backdrop.PHOTO) {
+            // The text colour sets the look over a photo (white: dark glass; black: light glass), in place of
+            // the light/dark theme above.
+            Text("Text on the photo", style = MaterialTheme.typography.labelMedium, color = c.textSecondary, modifier = Modifier.padding(start = 4.dp))
+            SegmentedToggle(listOf("AUTO", "WHITE", "BLACK"), s.photoText, { when (it) { "WHITE" -> "White"; "BLACK" -> "Black"; else -> "Auto" } }, onText, Modifier.fillMaxWidth())
+            Text(
+                if (s.photoText == "AUTO") "Picked by how bright your photo is. With a photo, this sets light or dark." else "With a photo, this sets light or dark.",
+                style = MaterialTheme.typography.bodySmall, color = c.textTertiary, modifier = Modifier.padding(start = 4.dp),
+            )
             // Saved when the finger lifts, so the photo isn't blurred again on every step of the drag.
             var blur by remember(s.photoBlur) { mutableFloatStateOf(s.photoBlur) }
             Row(verticalAlignment = Alignment.CenterVertically) {

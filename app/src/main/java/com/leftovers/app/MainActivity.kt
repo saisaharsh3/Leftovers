@@ -82,15 +82,10 @@ class MainActivity : FragmentActivity() {
             val scope = rememberCoroutineScope()
             val s = settings
             if (s != null && lockChecked) {
-                val dark = when (s.themeMode) {
+                val themeDark = when (s.themeMode) {
                     ThemeMode.SYSTEM -> isSystemInDarkTheme()
                     ThemeMode.LIGHT -> false
                     ThemeMode.DARK -> true
-                }
-                // Keep status/navigation bar icons readable when the app theme differs from the system theme.
-                LaunchedEffect(dark) {
-                    val style = if (dark) SystemBarStyle.dark(Color.TRANSPARENT) else SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT)
-                    enableEdgeToEdge(statusBarStyle = style, navigationBarStyle = style)
                 }
 
                 // With app lock on, or screenshots blocked, hide balances from the Recents preview and block screenshots.
@@ -113,6 +108,20 @@ class MainActivity : FragmentActivity() {
                     else kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
                         com.leftovers.app.ui.theme.BackgroundPhoto.loadWithFrost(this@MainActivity, s.photoBlur)
                     }
+                }
+                // Over a photo, the text colour decides the look, like labels on a phone's wallpaper: white text with
+                // dark glass, or black text with light glass. Auto picks by how bright the photo is.
+                val dark = photo?.let { p ->
+                    when (s.photoText) {
+                        "WHITE" -> true
+                        "BLACK" -> false
+                        else -> !p.bright
+                    }
+                } ?: themeDark
+                // Keep status/navigation bar icons readable when the app theme differs from the system theme.
+                LaunchedEffect(dark) {
+                    val style = if (dark) SystemBarStyle.dark(Color.TRANSPARENT) else SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT)
+                    enableEdgeToEdge(statusBarStyle = style, navigationBarStyle = style)
                 }
                 LeftoversTheme(
                     darkTheme = dark, dynamicColor = s.dynamicColor, glassEffects = s.glassEffects, pureBlack = s.pureBlack,
