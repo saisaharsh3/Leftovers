@@ -25,6 +25,10 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.layout.onPlaced
+import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.layout.findRootCoordinates
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -104,6 +108,37 @@ fun androidx.compose.ui.graphics.drawscope.DrawScope.drawAurora(c: AppColors) {
     blob(c.auroraC, w * (0.2f + 0.35f * drift), h * (0.98f - 0.1f * drift), w * 0.8f, 0.14f * strength)
 }
 
+/**
+ * Frosted glass in front of the user's photo: the card shows the photo's much softer copy, lined up with the
+ * photo behind it, then the same dimming. It moves with the card as it scrolls, as if the photo were behind
+ * glass, and costs one small image per card rather than a live blur.
+ */
+private fun Modifier.frosted(c: AppColors): Modifier = composed {
+    var at by remember { mutableStateOf(Offset.Zero) }
+    var root by remember { mutableStateOf(androidx.compose.ui.unit.IntSize.Zero) }
+    this
+        .then(
+            Modifier.onPlaced { coords ->
+                at = coords.positionInRoot()
+                root = coords.findRootCoordinates().size
+            },
+        )
+        .drawBehind {
+            val img = c.frost ?: return@drawBehind
+            if (root.width == 0) return@drawBehind
+            val scale = maxOf(root.width.toFloat() / img.width, root.height.toFloat() / img.height)
+            val w = img.width * scale
+            val h = img.height * scale
+            drawImage(
+                img,
+                dstOffset = androidx.compose.ui.unit.IntOffset(((root.width - w) / 2 - at.x).toInt(), ((root.height - h) / 2 - at.y).toInt()),
+                dstSize = androidx.compose.ui.unit.IntSize(w.toInt() + 1, h.toInt() + 1),
+                filterQuality = androidx.compose.ui.graphics.FilterQuality.High,
+            )
+            drawRect(c.background.copy(alpha = c.photoDim))
+        }
+}
+
 fun glassBorder(c: AppColors) = Brush.verticalGradient(listOf(c.borderTop, c.borderBottom))
 
 /** A see-through fill catches light at the top, like a pane of glass, in both themes; solid fills stay flat. */
@@ -126,6 +161,7 @@ fun Glass(
         modifier
             .then(if (onClick != null) Modifier.pressable(onClick) else Modifier)
             .clip(shape)
+            .then(if (c.frost != null) Modifier.frosted(c) else Modifier)
             .background(glassFill(tint ?: if (strong) c.glassStrong else c.glass))
             .border(1.dp, glassBorder(c), shape),
         content = content,

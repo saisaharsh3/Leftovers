@@ -106,16 +106,16 @@ class MainActivity : FragmentActivity() {
                 val showLock = s.appLock && locked
                 val backdrop = com.leftovers.app.ui.theme.Backdrop.of(s.backdrop)
                 // The background photo, loaded again when a new one is chosen.
-                var photo by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<androidx.compose.ui.graphics.ImageBitmap?>(null) }
+                var photo by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<com.leftovers.app.ui.theme.BackgroundPhoto.Loaded?>(null) }
                 androidx.compose.runtime.LaunchedEffect(s.photoVersion, backdrop, s.photoBlur) {
                     photo = if (backdrop != com.leftovers.app.ui.theme.Backdrop.PHOTO) null
                     else kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
-                        com.leftovers.app.ui.theme.BackgroundPhoto.load(this@MainActivity, s.photoBlur)
+                        com.leftovers.app.ui.theme.BackgroundPhoto.loadWithFrost(this@MainActivity, s.photoBlur)
                     }
                 }
                 LeftoversTheme(
                     darkTheme = dark, dynamicColor = s.dynamicColor, glassEffects = s.glassEffects, pureBlack = s.pureBlack,
-                    backdrop = backdrop, photo = photo, photoDim = s.photoDim.coerceAtLeast(0.4f),
+                    backdrop = backdrop, photo = photo?.photo, frost = photo?.frost, photoDim = s.photoDim.coerceAtLeast(0.4f),
                     accent = s.accentColor.takeIf { it != 0L }?.let { androidx.compose.ui.graphics.Color(it) },
                 ) {
                     CompositionLocalProvider(

@@ -70,6 +70,18 @@ object BackgroundPhoto {
      * The photo for drawing, as soft as [softness] says (0 sharp, 1 very soft). Dimming keeps text readable either
      * way; a little softness keeps busy photos from fighting with it.
      */
+    /** The background as drawn, and a far softer copy that glass in front of it shows through. */
+    class Loaded(val photo: ImageBitmap, val frost: ImageBitmap)
+
+    fun loadWithFrost(context: Context, softness: Float): Loaded? = runCatching {
+        val photo = load(context, softness) ?: return null
+        val f = file(context)
+        val full = BitmapFactory.decodeFile(f.path, BitmapFactory.Options().apply { inSampleSize = 4 }) ?: return null
+        val w = 120
+        val small = Bitmap.createScaledBitmap(full, w, (full.height * w / full.width.toFloat()).toInt().coerceAtLeast(1), true)
+        Loaded(photo, blur(small, radius = 9).asImageBitmap())
+    }.getOrNull()
+
     fun load(context: Context, softness: Float): ImageBitmap? = runCatching {
         val f = file(context)
         if (!f.exists()) return null

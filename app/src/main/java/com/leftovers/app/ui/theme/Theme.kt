@@ -54,6 +54,8 @@ data class AppColors(
     /** The user's own background photo (already tiny, so it draws blurred), and how much it's dimmed. */
     val photo: androidx.compose.ui.graphics.ImageBitmap? = null,
     val photoDim: Float = 0.55f,
+    /** A much softer copy of the photo that glass cards show through, like frosted glass in front of it. */
+    val frost: androidx.compose.ui.graphics.ImageBitmap? = null,
 )
 
 private val DarkTokens = AppColors(
@@ -242,6 +244,7 @@ fun LeftoversTheme(
     backdrop: Backdrop = Backdrop.AURORA,
     photo: androidx.compose.ui.graphics.ImageBitmap? = null,
     photoDim: Float = 0.55f,
+    frost: androidx.compose.ui.graphics.ImageBitmap? = null,
     /** A chosen accent colour; null for the default (or the wallpaper's, when that's on). */
     accent: Color? = null,
     content: @Composable () -> Unit,
@@ -252,7 +255,19 @@ fun LeftoversTheme(
             when (backdrop) {
                 Backdrop.AURORA -> t
                 Backdrop.PLAIN -> t.copy(auroraA = Color.Transparent, auroraB = Color.Transparent, auroraC = Color.Transparent)
-                Backdrop.PHOTO -> if (photo != null) t.copy(photo = photo, photoDim = photoDim) else t
+                Backdrop.PHOTO -> when {
+                    photo == null -> t
+                    darkTheme -> t.copy(photo = photo, photoDim = photoDim, frost = frost)
+                    // Light theme: the text is dark, so the photo is always washed light enough for it (0.65 at
+                    // the least). Cards are frosted glass over it: the softened photo shows through, under a white
+                    // frost that keeps them lighter than what's around them.
+                    else -> t.copy(
+                        photo = photo, photoDim = 0.45f + photoDim * 0.5f, frost = frost,
+                        glass = Color.White.copy(alpha = 0.5f), glassStrong = Color.White.copy(alpha = 0.62f),
+                        borderTop = Color.White.copy(alpha = 0.95f), borderBottom = Color.White.copy(alpha = 0.4f),
+                        barTint = Color.White.copy(alpha = 0.7f),
+                    )
+                }
                 // Lighter on the light theme, like the standard glow.
                 else -> if (darkTheme) t.copy(auroraA = backdrop.a, auroraB = backdrop.b, auroraC = backdrop.c)
                 else t.copy(auroraA = lerp(backdrop.a, Color.White, 0.35f), auroraB = lerp(backdrop.b, Color.White, 0.35f), auroraC = lerp(backdrop.c, Color.White, 0.35f))
