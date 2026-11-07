@@ -104,7 +104,16 @@ class MainActivity : FragmentActivity() {
                 val money = remember(s.currencyCode) { Money(s.currencyCode) }
                 val hazeState = rememberHazeState()
                 val showLock = s.appLock && locked
-                LeftoversTheme(darkTheme = dark, dynamicColor = s.dynamicColor, glassEffects = s.glassEffects, pureBlack = s.pureBlack) {
+                val backdrop = com.leftovers.app.ui.theme.Backdrop.of(s.backdrop)
+                // The background photo, loaded again when a new one is chosen.
+                val photo = remember(s.photoVersion, backdrop) {
+                    if (backdrop == com.leftovers.app.ui.theme.Backdrop.PHOTO) com.leftovers.app.ui.theme.BackgroundPhoto.load(this@MainActivity) else null
+                }
+                LeftoversTheme(
+                    darkTheme = dark, dynamicColor = s.dynamicColor, glassEffects = s.glassEffects, pureBlack = s.pureBlack,
+                    backdrop = backdrop, photo = photo, photoDim = s.photoDim,
+                    accent = s.accentColor.takeIf { it != 0L }?.let { androidx.compose.ui.graphics.Color(it) },
+                ) {
                     CompositionLocalProvider(
                         LocalMoney provides money,
                         com.leftovers.app.util.LocalUse24Hour provides when (s.timeFormat) {

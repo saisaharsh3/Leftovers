@@ -14,6 +14,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.ExperimentalTextApi
 import androidx.compose.ui.text.TextStyle
@@ -50,6 +51,9 @@ data class AppColors(
     val auroraC: Color,
     /** Bar tint applied over blurred content. */
     val barTint: Color,
+    /** The user's own background photo (already tiny, so it draws blurred), and how much it's dimmed. */
+    val photo: androidx.compose.ui.graphics.ImageBitmap? = null,
+    val photoDim: Float = 0.55f,
 )
 
 private val DarkTokens = AppColors(
@@ -234,10 +238,27 @@ fun LeftoversTheme(
     glassEffects: Boolean = true,
     /** Dark theme only: black background and no glow, for OLED screens. */
     pureBlack: Boolean = false,
+    /** What's behind every screen, and the photo for [Backdrop.PHOTO]. */
+    backdrop: Backdrop = Backdrop.AURORA,
+    photo: androidx.compose.ui.graphics.ImageBitmap? = null,
+    photoDim: Float = 0.55f,
+    /** A chosen accent colour; null for the default (or the wallpaper's, when that's on). */
+    accent: Color? = null,
     content: @Composable () -> Unit,
 ) {
     val black = darkTheme && pureBlack
-    val tokens = (if (darkTheme) DarkTokens else LightTokens).let { if (glassEffects) it else it.solid() }.let { if (black) it.pureBlack() else it }
+    val tokens = (if (darkTheme) DarkTokens else LightTokens)
+        .let { t ->
+            when (backdrop) {
+                Backdrop.AURORA -> t
+                Backdrop.PLAIN -> t.copy(auroraA = Color.Transparent, auroraB = Color.Transparent, auroraC = Color.Transparent)
+                Backdrop.PHOTO -> if (photo != null) t.copy(photo = photo, photoDim = photoDim) else t
+                // Lighter on the light theme, like the standard glow.
+                else -> if (darkTheme) t.copy(auroraA = backdrop.a, auroraB = backdrop.b, auroraC = backdrop.c)
+                else t.copy(auroraA = lerp(backdrop.a, Color.White, 0.35f), auroraB = lerp(backdrop.b, Color.White, 0.35f), auroraC = lerp(backdrop.c, Color.White, 0.35f))
+            }
+        }
+        .let { if (glassEffects) it else it.solid() }.let { if (black) it.pureBlack().copy(photo = null) else it }
     val scheme = when {
         dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
             val context = LocalContext.current
@@ -248,6 +269,8 @@ fun LeftoversTheme(
         darkTheme -> DarkScheme
         else -> LightScheme
     }.let { if (black) it.copy(background = Color.Black, surface = Color.Black, surfaceContainerLowest = Color.Black, inverseOnSurface = Color.Black) else it }
+        // A chosen accent wins over the wallpaper's.
+        .let { s -> accent?.let { themedAccent(it, darkTheme) }?.let { (a, on) -> s.copy(primary = a, onPrimary = on) } ?: s }
     val resolvedTokens = if (scheme.primary != tokens.accent) tokens.copy(accent = scheme.primary, onAccent = scheme.onPrimary) else tokens
     CompositionLocalProvider(LocalAppColors provides resolvedTokens) {
         MaterialTheme(colorScheme = scheme, typography = AppTypography, shapes = AppShapes, content = content)

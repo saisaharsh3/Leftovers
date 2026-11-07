@@ -3,6 +3,7 @@ package com.leftovers.app.data
 import android.content.Context
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
@@ -33,6 +34,13 @@ data class AppSettings(
     val glassEffects: Boolean,
     /** Black background for OLED screens, when the dark theme is in use. */
     val pureBlack: Boolean = false,
+    /** What's behind every screen ([com.leftovers.app.ui.theme.Backdrop] name). */
+    val backdrop: String = "AURORA",
+    /** How much the background photo is dimmed, 0.2 to 0.85; changes with each new photo too ([photoVersion]). */
+    val photoDim: Float = 0.55f,
+    val photoVersion: Long = 0L,
+    /** A chosen accent colour (ARGB), or 0 for the default. */
+    val accentColor: Long = 0L,
     val timeFormat: TimeFormat = TimeFormat.PHONE,
     val widgetStyle: WidgetStyle = WidgetStyle.GLASS,
     /** Last exchange rate used per currency in travel mode, e.g. "AED" to "22.7" (home currency per unit). */
@@ -117,6 +125,10 @@ class SettingsRepository(context: Context) {
             dynamicColor = p[DYNAMIC_COLOR] ?: false,
             glassEffects = p[GLASS_EFFECTS] ?: true,
             pureBlack = p[PURE_BLACK] ?: false,
+            backdrop = p[BACKDROP] ?: "AURORA",
+            photoDim = p[PHOTO_DIM] ?: 0.55f,
+            photoVersion = p[PHOTO_VERSION] ?: 0L,
+            accentColor = p[ACCENT_COLOR] ?: 0L,
             timeFormat = TimeFormat.entries.firstOrNull { it.name == p[TIME_FORMAT] } ?: TimeFormat.PHONE,
             widgetStyle = WidgetStyle.entries.firstOrNull { it.name == p[WIDGET_STYLE] } ?: WidgetStyle.GLASS,
             foreignRates = p[FOREIGN_RATES].orEmpty().split(';').mapNotNull { pair ->
@@ -198,6 +210,11 @@ class SettingsRepository(context: Context) {
     suspend fun setGlassEffects(enabled: Boolean) = store.edit { it[GLASS_EFFECTS] = enabled }
 
     suspend fun setPureBlack(enabled: Boolean) = store.edit { it[PURE_BLACK] = enabled }
+    suspend fun setBackdrop(name: String) = store.edit { it[BACKDROP] = name }
+    suspend fun setPhotoDim(value: Float) = store.edit { it[PHOTO_DIM] = value }
+    /** A new background photo was saved: shown with the photo background. */
+    suspend fun photoChanged() = store.edit { it[PHOTO_VERSION] = System.currentTimeMillis(); it[BACKDROP] = "PHOTO" }
+    suspend fun setAccentColor(argb: Long) = store.edit { it[ACCENT_COLOR] = argb }
 
     /** Remembers the rate last used for [code], so the next entry in that currency starts with it. */
     suspend fun setTimeFormat(format: TimeFormat) = store.edit { it[TIME_FORMAT] = format.name }
@@ -330,6 +347,10 @@ class SettingsRepository(context: Context) {
         val DYNAMIC_COLOR = booleanPreferencesKey("dynamic_color")
         val GLASS_EFFECTS = booleanPreferencesKey("glass_effects")
         val PURE_BLACK = booleanPreferencesKey("pure_black")
+        val BACKDROP = stringPreferencesKey("backdrop")
+        val PHOTO_DIM = floatPreferencesKey("photo_dim")
+        val PHOTO_VERSION = longPreferencesKey("photo_version")
+        val ACCENT_COLOR = longPreferencesKey("accent_color")
         val FOREIGN_RATES = stringPreferencesKey("foreign_rates")
         val TIME_FORMAT = stringPreferencesKey("time_format")
         val WIDGET_STYLE = stringPreferencesKey("widget_style")

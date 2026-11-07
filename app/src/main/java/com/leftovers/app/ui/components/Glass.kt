@@ -72,6 +72,21 @@ fun AuroraBackground(modifier: Modifier = Modifier) {
 /** Draws the aurora; also used for the copy of the screen the liquid tab bar bends. */
 fun androidx.compose.ui.graphics.drawscope.DrawScope.drawAurora(c: AppColors) {
     drawRect(c.background)
+    // The user's photo: filling the screen (cropped, not stretched), already blurred when it was loaded,
+    // and dimmed towards the background so text on it stays readable.
+    c.photo?.let { img ->
+        val scale = maxOf(size.width / img.width, size.height / img.height)
+        val w = img.width * scale
+        val h = img.height * scale
+        drawImage(
+            img,
+            dstOffset = androidx.compose.ui.unit.IntOffset(((size.width - w) / 2).toInt(), ((size.height - h) / 2).toInt()),
+            dstSize = androidx.compose.ui.unit.IntSize(w.toInt() + 1, h.toInt() + 1),
+            filterQuality = androidx.compose.ui.graphics.FilterQuality.High,
+        )
+        drawRect(c.background.copy(alpha = c.photoDim))
+        return
+    }
     val w = size.width
     val h = size.height
     val drift = 0.5f

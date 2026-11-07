@@ -71,7 +71,7 @@ object HelpGuide {
         Item("AI assistant", "Privacy", "Notes stay on the phone unless you share them; read-only mode stops all changes. Switch between AIs without typing a key again.", "Settings → AI assistant", Place.SETTINGS, "private key switch notes"),
 
         // Look, security and more
-        Item("Look, security and more", "Appearance", "Light, dark or automatic, accent from your wallpaper, glass effects and pure black.", "Settings → Appearance", Place.SETTINGS, "theme dark light colour amoled"),
+        Item("Look, security and more", "Appearance", "Light, dark or automatic; a background (the glow in several colours, plain, or your own photo, blurred) and an accent colour of your choice; glass effects and pure black.", "Settings → Appearance", Place.SETTINGS, "theme dark light colour amoled wallpaper background photo accent"),
         Item("Look, security and more", "Home screen widgets", "Glass, dark or light widgets for the phone's home screen, in any size.", "Settings → Appearance → Home screen widgets", Place.SETTINGS, "widget launcher"),
         Item("Look, security and more", "App lock and screenshots", "Lock with a PIN, password, fingerprint or face, and block screenshots.", "Settings → Security & reminders", Place.SETTINGS, "lock pin fingerprint secure privacy screenshot"),
         Item("Look, security and more", "Festival greetings", "A greeting on Home and a notification on the main festivals where you live, worked out on the phone from your currency.", "Settings → Security & reminders → Festival greetings", Place.SETTINGS, "diwali eid christmas holiday new year"),

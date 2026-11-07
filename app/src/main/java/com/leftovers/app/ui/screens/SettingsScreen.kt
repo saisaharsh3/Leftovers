@@ -287,6 +287,26 @@ class SettingsViewModel(
         viewModelScope.launch { settingsRepository.setPureBlack(enabled) }
     }
 
+    fun setBackdrop(b: com.leftovers.app.ui.theme.Backdrop) {
+        viewModelScope.launch { settingsRepository.setBackdrop(b.name) }
+    }
+
+    fun setPhotoDim(value: Float) {
+        viewModelScope.launch { settingsRepository.setPhotoDim(value) }
+    }
+
+    fun setAccentColor(argb: Long) {
+        viewModelScope.launch { settingsRepository.setAccentColor(argb) }
+    }
+
+    /** Keeps a copy of the chosen picture as the background; [onFailed] when it can't be read. */
+    fun setBackgroundPhoto(context: Context, uri: android.net.Uri, onFailed: () -> Unit) {
+        viewModelScope.launch {
+            val saved = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { com.leftovers.app.ui.theme.BackgroundPhoto.save(context, uri) }
+            if (saved) settingsRepository.photoChanged() else onFailed()
+        }
+    }
+
     fun setBudgetAlerts(enabled: Boolean) {
         viewModelScope.launch { settingsRepository.setBudgetAlerts(enabled) }
     }
@@ -640,6 +660,14 @@ fun SettingsScreen(
                         if (s.themeMode != ThemeMode.LIGHT) {
                             ToggleRow(Lucide.Moon, "Pure black (AMOLED)", s.pureBlack, viewModel::setPureBlack, inset = false)
                         }
+                        Spacer(Modifier.height(12.dp))
+                        LooksPicker(
+                            s,
+                            onBackdrop = viewModel::setBackdrop,
+                            onPhoto = { uri -> viewModel.setBackgroundPhoto(context, uri) { toast("Couldn't open that picture") } },
+                            onDim = viewModel::setPhotoDim,
+                            onAccent = viewModel::setAccentColor,
+                        )
                         Spacer(Modifier.height(10.dp))
                         Text("Time", style = MaterialTheme.typography.labelMedium, color = c.textSecondary, modifier = Modifier.padding(start = 4.dp, bottom = 8.dp))
                         SegmentedToggle(
