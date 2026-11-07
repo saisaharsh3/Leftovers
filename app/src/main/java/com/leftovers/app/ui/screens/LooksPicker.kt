@@ -105,10 +105,10 @@ fun LooksPicker(
             )
             Text("Photo dimming", style = MaterialTheme.typography.labelMedium, color = c.textSecondary, modifier = Modifier.padding(start = 4.dp))
             Slider(
-                value = s.photoDim.coerceIn(MIN_DIM, 0.9f),
+                value = s.photoDim.coerceIn(0f, 0.7f),
                 onValueChange = onDim,
-                // Never lighter than this: on a bright photo, text below it stops being readable.
-                valueRange = MIN_DIM..0.9f,
+                // From none: text keeps a soft halo over the photo, so dimming is a matter of taste.
+                valueRange = 0f..0.7f,
                 colors = SliderDefaults.colors(thumbColor = c.accent, activeTrackColor = c.accent, inactiveTrackColor = c.glassStrong),
                 modifier = Modifier.fillMaxWidth(),
             )
@@ -139,5 +139,3 @@ private fun Swatch(fill: Brush, selected: Boolean, name: String, onClick: () -> 
             .semantics { contentDescription = name },
     )
 }
-
-private const val MIN_DIM = 0.4f

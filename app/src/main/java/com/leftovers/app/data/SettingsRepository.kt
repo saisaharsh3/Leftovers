@@ -37,7 +37,7 @@ data class AppSettings(
     /** What's behind every screen ([com.leftovers.app.ui.theme.Backdrop] name). */
     val backdrop: String = "AURORA",
     /** How much the background photo is dimmed, 0.2 to 0.85; changes with each new photo too ([photoVersion]). */
-    val photoDim: Float = 0.55f,
+    val photoDim: Float = 0.1f,
     /** How soft the background photo is, 0 (sharp) to 1 (very soft). */
     val photoBlur: Float = 0.25f,
     val photoVersion: Long = 0L,
@@ -128,7 +128,7 @@ class SettingsRepository(context: Context) {
             glassEffects = p[GLASS_EFFECTS] ?: true,
             pureBlack = p[PURE_BLACK] ?: false,
             backdrop = p[BACKDROP] ?: "AURORA",
-            photoDim = p[PHOTO_DIM] ?: 0.55f,
+            photoDim = p[PHOTO_DIM] ?: 0.1f,
             photoBlur = p[PHOTO_BLUR] ?: 0.25f,
             photoVersion = p[PHOTO_VERSION] ?: 0L,
             accentColor = p[ACCENT_COLOR] ?: 0L,

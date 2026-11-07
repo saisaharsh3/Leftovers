@@ -76,15 +76,18 @@ import java.time.YearMonth
 /** Rounded square holding a line icon on a faint wash of its colour. */
 @Composable
 fun IconTile(icon: ImageVector, tint: Color, size: Dp = 44.dp, modifier: Modifier = Modifier) {
+    // Pale category colours (lavender, peach) fade on light glass: deepened a little on the light theme.
+    val c = com.leftovers.app.ui.theme.LocalAppColors.current
+    val shown = if (c.isDark) tint else androidx.compose.ui.graphics.lerp(tint, Color.Black, 0.3f)
     Box(
         modifier
             .size(size)
             .clip(RoundedCornerShape(size * 0.34f))
-            .background(tint.copy(alpha = 0.14f))
-            .border(1.dp, tint.copy(alpha = 0.16f), RoundedCornerShape(size * 0.34f)),
+            .background(shown.copy(alpha = 0.14f))
+            .border(1.dp, shown.copy(alpha = 0.16f), RoundedCornerShape(size * 0.34f)),
         contentAlignment = Alignment.Center,
     ) {
-        Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(size * 0.48f))
+        Icon(icon, contentDescription = null, tint = shown, modifier = Modifier.size(size * 0.48f))
     }
 }
 

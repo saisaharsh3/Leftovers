@@ -225,6 +225,14 @@ private val AppTypography = Typography(
     labelSmall = style(SemiBold, 11, 14, 0.4f),
 )
 
+private fun Typography.withShadow(s: androidx.compose.ui.graphics.Shadow) = Typography(
+    displayLarge = displayLarge.copy(shadow = s), displayMedium = displayMedium.copy(shadow = s), displaySmall = displaySmall.copy(shadow = s),
+    headlineLarge = headlineLarge.copy(shadow = s), headlineMedium = headlineMedium.copy(shadow = s), headlineSmall = headlineSmall.copy(shadow = s),
+    titleLarge = titleLarge.copy(shadow = s), titleMedium = titleMedium.copy(shadow = s), titleSmall = titleSmall.copy(shadow = s),
+    bodyLarge = bodyLarge.copy(shadow = s), bodyMedium = bodyMedium.copy(shadow = s), bodySmall = bodySmall.copy(shadow = s),
+    labelLarge = labelLarge.copy(shadow = s), labelMedium = labelMedium.copy(shadow = s), labelSmall = labelSmall.copy(shadow = s),
+)
+
 private val AppShapes = Shapes(
     extraSmall = RoundedCornerShape(10.dp),
     small = RoundedCornerShape(14.dp),
@@ -258,11 +266,10 @@ fun LeftoversTheme(
                 Backdrop.PHOTO -> when {
                     photo == null -> t
                     darkTheme -> t.copy(photo = photo, photoDim = photoDim, frost = frost)
-                    // Light theme: the text is dark, so the photo is always washed light enough for it (0.65 at
-                    // the least). Cards are frosted glass over it: the softened photo shows through, under a white
-                    // frost that keeps them lighter than what's around them.
+                    // Light theme: the photo keeps its colour, like a phone's wallpaper. Text is dark with a soft light
+                    // glow (see the typography below); cards are glass, lighter than what's behind them.
                     else -> t.copy(
-                        photo = photo, photoDim = 0.45f + photoDim * 0.5f, frost = frost,
+                        photo = photo, photoDim = photoDim, frost = frost,
                         glass = Color.White.copy(alpha = 0.5f), glassStrong = Color.White.copy(alpha = 0.62f),
                         borderTop = Color.White.copy(alpha = 0.95f), borderBottom = Color.White.copy(alpha = 0.4f),
                         barTint = Color.White.copy(alpha = 0.7f),
@@ -287,7 +294,12 @@ fun LeftoversTheme(
         // A chosen accent wins over the wallpaper's.
         .let { s -> accent?.let { themedAccent(it, darkTheme) }?.let { (a, on) -> s.copy(primary = a, onPrimary = on) } ?: s }
     val resolvedTokens = if (scheme.primary != tokens.accent) tokens.copy(accent = scheme.primary, onAccent = scheme.onPrimary) else tokens
+    // Over a photo, text gets a soft halo in the opposite tone, as phones do for text on a wallpaper: dark text a
+    // light glow, white text a dark shadow. It reads on any part of the picture without washing it out.
+    val typography = if (resolvedTokens.photo == null) AppTypography else AppTypography.withShadow(
+        androidx.compose.ui.graphics.Shadow(if (darkTheme) Color.Black.copy(alpha = 0.6f) else Color.White.copy(alpha = 0.85f), blurRadius = 12f),
+    )
     CompositionLocalProvider(LocalAppColors provides resolvedTokens) {
-        MaterialTheme(colorScheme = scheme, typography = AppTypography, shapes = AppShapes, content = content)
+        MaterialTheme(colorScheme = scheme, typography = typography, shapes = AppShapes, content = content)
     }
 }

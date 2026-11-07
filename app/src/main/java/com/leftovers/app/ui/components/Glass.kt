@@ -25,6 +25,10 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 import androidx.compose.ui.draw.clip
+import com.kyant.backdrop.drawBackdrop
+import com.kyant.backdrop.effects.blur
+import com.kyant.backdrop.effects.lens
+import com.kyant.backdrop.effects.vibrancy
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.layout.positionInRoot
@@ -146,6 +150,12 @@ internal fun glassFill(fill: Color): Brush =
     if (fill.alpha >= 0.9f) androidx.compose.ui.graphics.SolidColor(fill)
     else Brush.verticalGradient(listOf(fill.copy(alpha = (fill.alpha * 1.7f).coerceAtMost(1f)), fill))
 
+/**
+ * The background (the photo) recorded for glass in front of it, when cards can be liquid glass: a photo
+ * background, glass effects on, Android 13 or newer. Null otherwise, and cards are frosted instead.
+ */
+val LocalBackgroundBackdrop = staticCompositionLocalOf<com.kyant.backdrop.backdrops.LayerBackdrop?> { null }
+
 /** Translucent card with a hairline top-lit border. Clickable cards gently shrink when pressed. */
 @Composable
 fun Glass(
@@ -157,12 +167,34 @@ fun Glass(
     content: @Composable BoxScope.() -> Unit,
 ) {
     val c = LocalAppColors.current
+    val backdrop = LocalBackgroundBackdrop.current
     Box(
         modifier
             .then(if (onClick != null) Modifier.pressable(onClick) else Modifier)
+            .then(
+                if (backdrop != null) {
+                    // Liquid glass: the photo behind, lensed at the rounded edges with a little blur, under a thin
+                    // tint lighter or darker with the theme, so text on it reads while the picture stays clear.
+                    Modifier.drawBackdrop(
+                        backdrop = backdrop,
+                        shape = { shape },
+                        effects = {
+                            vibrancy()
+                            blur(3.dp.toPx())
+                            lens(14.dp.toPx(), 28.dp.toPx(), chromaticAberration = true)
+                        },
+                        onDrawSurface = {
+                            drawRect(tint ?: if (c.isDark) Color.Black.copy(alpha = if (strong) 0.32f else 0.24f) else Color.White.copy(alpha = if (strong) 0.42f else 0.32f))
+                        },
+                    )
+                } else {
+                    Modifier
+                        .clip(shape)
+                        .then(if (c.frost != null) Modifier.frosted(c) else Modifier)
+                        .background(glassFill(tint ?: if (strong) c.glassStrong else c.glass))
+                },
+            )
             .clip(shape)
-            .then(if (c.frost != null) Modifier.frosted(c) else Modifier)
-            .background(glassFill(tint ?: if (strong) c.glassStrong else c.glass))
             .border(1.dp, glassBorder(c), shape),
         content = content,
     )
