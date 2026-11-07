@@ -74,6 +74,8 @@ android {
             // Each Dev build is numbered (1.8.2-dev.57, from the CI run), so testers can tell them apart.
             versionNameSuffix = "-dev" + (providers.gradleProperty("devNumber").orNull?.let { ".$it" } ?: "")
             matchingFallbacks += listOf("release")
+            // Google's on-device AI library needs its parts kept whole (see proguard-ondevice.pro).
+            if (onDeviceAi != null) proguardFile("proguard-ondevice.pro")
         }
     }
 

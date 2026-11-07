@@ -48,6 +48,7 @@ object OnDevice {
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
         } catch (e: Throwable) {
+            runCatching { android.util.Log.w("Leftovers", "On-device AI status", e) }
             problem = m.explain(e)
             LocalStatus.UNAVAILABLE
         }
