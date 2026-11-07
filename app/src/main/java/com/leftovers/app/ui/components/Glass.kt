@@ -156,6 +156,12 @@ internal fun glassFill(fill: Color): Brush =
  */
 val LocalBackgroundBackdrop = staticCompositionLocalOf<com.kyant.backdrop.backdrops.LayerBackdrop?> { null }
 
+/**
+ * True inside a pop-up, sheet or dialog. What's behind its buttons and fields is the pop-up itself, not the
+ * background photo, so they're plain frosted glass there rather than windows onto the photo.
+ */
+val LocalInOverlay = staticCompositionLocalOf { false }
+
 /** Translucent card with a hairline top-lit border. Clickable cards gently shrink when pressed. */
 @Composable
 fun Glass(
@@ -186,7 +192,8 @@ fun Glass(
 @Composable
 fun Modifier.glassSurface(shape: Shape, strong: Boolean = false, tint: Color? = null, lens: Boolean = true): Modifier {
     val c = LocalAppColors.current
-    val backdrop = LocalBackgroundBackdrop.current
+    val overlay = LocalInOverlay.current
+    val backdrop = LocalBackgroundBackdrop.current.takeIf { !overlay }
     return if (backdrop != null) {
         drawBackdrop(
             backdrop = backdrop,
@@ -202,7 +209,7 @@ fun Modifier.glassSurface(shape: Shape, strong: Boolean = false, tint: Color? = 
         )
     } else {
         clip(shape)
-            .then(if (c.frost != null) Modifier.frosted(c) else Modifier)
+            .then(if (c.frost != null && !overlay) Modifier.frosted(c) else Modifier)
             .background(glassFill(tint ?: if (strong) c.glassStrong else c.glass))
     }
 }

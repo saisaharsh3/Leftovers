@@ -32,7 +32,9 @@ class PopupLayer {
     @Composable
     fun Content() {
         // Keyed, so each card keeps its own state (typed text, scroll) while others come and go.
-        cards.toList().forEach { (k, card) -> androidx.compose.runtime.key(k) { card() } }
+        androidx.compose.runtime.CompositionLocalProvider(LocalInOverlay provides true) {
+            cards.toList().forEach { (k, card) -> androidx.compose.runtime.key(k) { card() } }
+        }
     }
 }
 

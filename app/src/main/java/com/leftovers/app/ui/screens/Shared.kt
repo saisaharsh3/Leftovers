@@ -312,7 +312,7 @@ fun GlassAlertDialog(
         onDismissRequest = onDismissRequest,
         confirmButton = {
             BlurBehindDialog(blurs, appear)
-            confirmButton()
+            androidx.compose.runtime.CompositionLocalProvider(com.leftovers.app.ui.components.LocalInOverlay provides true) { confirmButton() }
         },
         dismissButton = dismissButton,
         title = title,
@@ -445,7 +445,9 @@ fun GlassSheet(onDismiss: () -> Unit, content: @Composable () -> Unit) {
         },
     ) {
         BlurBehindDialog(blurs)
-        Box(Modifier.navigationBarsPadding()) { content() }
+        Box(Modifier.navigationBarsPadding()) {
+            androidx.compose.runtime.CompositionLocalProvider(com.leftovers.app.ui.components.LocalInOverlay provides true) { content() }
+        }
     }
 }
 
@@ -587,7 +589,9 @@ fun MorphCard(
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
                 androidx.activity.compose.BackHandler { close() }
-                content { then -> close(then) }
+                androidx.compose.runtime.CompositionLocalProvider(com.leftovers.app.ui.components.LocalInOverlay provides true) {
+                    content { then -> close(then) }
+                }
             }
         }
     }
