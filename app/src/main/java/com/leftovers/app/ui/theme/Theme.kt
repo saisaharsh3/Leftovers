@@ -266,8 +266,9 @@ fun LeftoversTheme(
                         photo = photo, photoDim = photoDim, frost = frost,
                         textPrimary = ink, textSecondary = ink.copy(alpha = 0.78f), textTertiary = ink.copy(alpha = 0.62f),
                         // Red and green follow the text: deep with black text, light with white.
-                        negative = if (blackText) Color(0xFFC0262D) else Color(0xFFFF8F8F),
-                        positive = if (blackText) Color(0xFF15804B) else Color(0xFF86E2B0),
+                        // Far from mid-tones, so they stand out on any colour in the photo (even green on green).
+                        negative = if (blackText) Color(0xFF9B1219) else Color(0xFFFFC2C2),
+                        positive = if (blackText) Color(0xFF07502B) else Color(0xFFC2F7DA),
                         glass = Color.White.copy(alpha = 0.1f), glassStrong = Color.White.copy(alpha = 0.16f),
                         borderTop = Color.White.copy(alpha = 0.5f), borderBottom = Color.White.copy(alpha = 0.12f),
                         barTint = if (blackText) Color.White.copy(alpha = 0.6f) else Color(0xFF0E0E13).copy(alpha = 0.5f),
@@ -278,7 +279,8 @@ fun LeftoversTheme(
                 else t.copy(auroraA = lerp(backdrop.a, Color.White, 0.35f), auroraB = lerp(backdrop.b, Color.White, 0.35f), auroraC = lerp(backdrop.c, Color.White, 0.35f))
             }
         }
-        .let { if (glassEffects) it else it.solid() }.let { if (black) it.pureBlack().copy(photo = null) else it }
+        .let { if (glassEffects) it else it.solid() }// Pure black is for the glow backgrounds; a chosen photo is shown as it is, with its own text colour.
+        .let { if (black && it.photo == null) it.pureBlack() else it }
     val scheme = when {
         dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
             val context = LocalContext.current

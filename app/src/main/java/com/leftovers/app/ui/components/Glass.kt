@@ -37,6 +37,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
 import com.leftovers.app.ui.theme.AppColors
@@ -183,8 +184,12 @@ fun Glass(
                             blur(3.dp.toPx())
                             lens(14.dp.toPx(), 28.dp.toPx(), chromaticAberration = true)
                         },
-                        // Clear glass: the same light sheen in both themes, as Apple's clear Liquid Glass.
-                        onDrawSurface = { drawRect(tint ?: Color.White.copy(alpha = if (strong) 0.14f else 0.08f)) },
+                        // Clear glass with a faint tint the text needs, as Apple's Liquid Glass adapts: a little lighter
+                        // under black text, a little darker under white, so even red and green amounts read on any photo.
+                        onDrawSurface = {
+                            drawRect(tint ?: if (c.textPrimary.luminance() < 0.5f) Color.White.copy(alpha = if (strong) 0.26f else 0.2f)
+                            else Color.Black.copy(alpha = if (strong) 0.26f else 0.2f))
+                        },
                     )
                 } else {
                     Modifier
