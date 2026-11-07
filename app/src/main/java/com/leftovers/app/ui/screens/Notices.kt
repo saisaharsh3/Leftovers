@@ -19,6 +19,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.leftovers.app.ui.components.GlassScreen
@@ -28,6 +29,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import com.leftovers.app.ui.components.pressable
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.foundation.layout.fillMaxSize
 import com.leftovers.app.ui.components.Chip
 import com.leftovers.app.ui.components.Glass
 import com.leftovers.app.ui.components.IconTile
@@ -37,19 +42,41 @@ import com.leftovers.app.util.UpdateCheck
 import com.leftovers.app.util.WhatsNew
 
 /**
- * What's new in this version, once after an update, the way phones present an app's new features: a large title,
- * each change with its icon, a bold title and a line, and one button to carry on.
+ * What's new in this version, once after an update: a glass sheet, like the app's others, with the version large on
+ * top as phones show a new system version, then each change with its icon, title and line, and one button.
  */
 @Composable
 fun WhatsNewDialog(version: String, onClose: () -> Unit) {
     val c = LocalAppColors.current
-    MorphCard(from = null, onDismiss = onClose) { close ->
-        Column(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Text("What's New", style = MaterialTheme.typography.headlineMedium, color = c.textPrimary)
-            Text("in Leftovers ${version.substringBefore("-dev")}", style = MaterialTheme.typography.bodyMedium, color = c.textSecondary)
+    GlassSheet(onClose) {
+        Column(
+            Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 24.dp).padding(bottom = 20.dp),
+            verticalArrangement = Arrangement.spacedBy(22.dp),
+        ) {
+            VersionHero(version, compact = true)
+            Column(verticalArrangement = Arrangement.spacedBy(20.dp)) { WhatsNewNotes() }
+            com.leftovers.app.ui.components.PrimaryButton("Continue", onClose, Modifier.fillMaxWidth())
         }
-        Column(Modifier.padding(vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) { WhatsNewNotes() }
-        com.leftovers.app.ui.components.PrimaryButton("Continue", { close {} }, Modifier.fillMaxWidth())
+    }
+}
+
+/** The version as a phone's update page shows it: the number large, the app's name and build under it. */
+@Composable
+private fun VersionHero(version: String, compact: Boolean = false) {
+    val c = LocalAppColors.current
+    val number = version.substringBefore("-").split('.').take(2).joinToString(".")
+    Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(
+            number,
+            style = MaterialTheme.typography.displayLarge.copy(
+                fontSize = if (compact) 72.sp else 120.sp,
+                lineHeight = if (compact) 76.sp else 124.sp,
+                letterSpacing = (-4).sp,
+                brush = Brush.verticalGradient(listOf(c.textPrimary, c.accent)),
+            ),
+        )
+        Text(if (compact) "What's New in Leftovers" else "Leftovers", style = MaterialTheme.typography.titleLarge, color = c.textPrimary)
+        if (!compact) Text(version, style = MaterialTheme.typography.bodyMedium, color = c.textSecondary)
     }
 }
 
@@ -105,7 +132,10 @@ class NoticesViewModel(private val settings: com.leftovers.app.data.SettingsRepo
     }
 }
 
-/** Notices, from the bell on Home: a newer version when there is one, and what's new in this one. */
+/**
+ * Updates, from the bell on Home, laid out like a phone's software update page: the version large, and a glass card
+ * at the bottom saying whether it's up to date, with Highlights (what's new) and the full update notes.
+ */
 @Composable
 fun NoticesScreen(onBack: () -> Unit, viewModel: NoticesViewModel = androidx.lifecycle.viewmodel.compose.viewModel(factory = com.leftovers.app.ui.AppViewModelProvider.Factory)) {
     val c = LocalAppColors.current
@@ -116,61 +146,53 @@ fun NoticesScreen(onBack: () -> Unit, viewModel: NoticesViewModel = androidx.lif
     val version = remember { WhatsNew.version(context) }
     val update = remember(s?.updateAvailable) { UpdateCheck.decode(s?.updateAvailable)?.takeIf { UpdateCheck.isNewerThanInstalled(context, it) } }
     val checkOn = s?.updateCheck
+    var highlights by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
     LaunchedEffect(update) { update?.let(viewModel::seen) }
     // Leftovers Dev always looks, as testers want each new build; the app when its setting is on.
     LaunchedEffect(checkOn) { if ((checkOn == true || UpdateCheck.isDevBuild(context)) && update == null) viewModel.checkForUpdate(context) }
-    GlassScreen(title = "Notices", subtitle = "What's new, and new versions", onBack = onBack) { padding ->
+    fun open(url: String) = runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
+    // This version's notes: the Dev build's page, or the release's.
+    val notesUrl = if (UpdateCheck.isDevBuild(context)) "https://github.com/saisaharsh3/Leftovers/releases/tag/dev-build"
+    else "https://github.com/saisaharsh3/Leftovers/releases/tag/v${version.substringBefore("-")}"
+    GlassScreen(title = "Updates", onBack = onBack) { padding ->
         Column(
-            Modifier.verticalScroll(rememberScrollState())
-                .padding(start = 16.dp, end = 16.dp, top = padding.calculateTopPadding() + 12.dp, bottom = padding.calculateBottomPadding() + 16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            Modifier.fillMaxSize().verticalScroll(rememberScrollState())
+                .padding(start = 16.dp, end = 16.dp, top = padding.calculateTopPadding() + 40.dp, bottom = padding.calculateBottomPadding() + 24.dp),
         ) {
-            if (update != null) {
-                val dev = update.version.startsWith("Dev")
-                Glass(Modifier.fillMaxWidth(), strong = true, onClick = {
-                    runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(update.url))) }
-                }) {
-                    Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                        IconTile(Lucide.Download, c.accent, size = 40.dp)
-                        Spacer(Modifier.width(12.dp))
-                        Column(Modifier.weight(1f)) {
-                            Text(if (dev) "A new Dev build is out" else "Leftovers ${update.version} is out", style = MaterialTheme.typography.titleSmall, color = c.textPrimary)
-                            Text(if (dev) "${update.version} · tap to download it" else "Tap to download it", style = MaterialTheme.typography.bodySmall, color = c.textSecondary)
-                        }
-                        Icon(Lucide.ChevronRight, contentDescription = null, tint = c.textTertiary, modifier = Modifier.size(18.dp))
-                    }
-                }
-            } else if (checkOn != null) {
-                Glass(Modifier.fillMaxWidth()) {
-                    Row(Modifier.padding(start = 16.dp, end = 10.dp, top = 10.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            when {
-                                checking -> "Looking for a new version…"
-                                checkResult != null -> checkResult!!
-                                else -> "No new version found yet"
-                            },
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = c.textSecondary,
-                            modifier = Modifier.weight(1f),
-                        )
-                        if (!checking) Chip("Check now", { viewModel.checkForUpdate(context) }, icon = Lucide.Download)
-                    }
-                }
-            }
-            Glass(Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(16.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        IconTile(Lucide.Sparkles, c.accent, size = 40.dp)
-                        Spacer(Modifier.width(12.dp))
-                        Column {
-                            Text("What's new", style = MaterialTheme.typography.titleSmall, color = c.textPrimary)
-                            Text(version, style = MaterialTheme.typography.bodySmall, color = c.textSecondary)
+            VersionHero(version)
+            Spacer(Modifier.height(140.dp))
+            Glass(Modifier.fillMaxWidth(), strong = true, shape = androidx.compose.foundation.shape.RoundedCornerShape(30.dp)) {
+                Column(Modifier.padding(22.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    val dev = update?.version?.startsWith("Dev") == true
+                    Text(
+                        when {
+                            update != null -> if (dev) "A new Dev build is out" else "Leftovers ${update.version} is out"
+                            checking -> "Looking for a new version…"
+                            checkResult == "Couldn't check for a new version" -> "Couldn't check right now"
+                            else -> "Version up to date"
+                        },
+                        style = MaterialTheme.typography.titleLarge, color = c.textPrimary,
+                    )
+                    Text(update?.version?.takeIf { dev } ?: version, style = MaterialTheme.typography.bodyMedium, color = c.textSecondary)
+                    Spacer(Modifier.height(4.dp))
+                    if (update != null) {
+                        com.leftovers.app.ui.components.PrimaryButton("Download", { open(update.url) }, Modifier.fillMaxWidth())
+                        com.leftovers.app.ui.components.SecondaryButton("Highlights", { highlights = true }, Modifier.fillMaxWidth())
+                    } else {
+                        com.leftovers.app.ui.components.PrimaryButton("Highlights", { highlights = true }, Modifier.fillMaxWidth())
+                        com.leftovers.app.ui.components.SecondaryButton("View update notes", { open(notesUrl) }, Modifier.fillMaxWidth())
+                        if (!checking) {
+                            Text(
+                                "Check again",
+                                style = MaterialTheme.typography.labelLarge, color = c.accent,
+                                modifier = Modifier.align(Alignment.CenterHorizontally).padding(top = 4.dp)
+                                    .pressable({ viewModel.checkForUpdate(context) }, pressedScale = 0.95f),
+                            )
                         }
                     }
-                    Spacer(Modifier.height(16.dp))
-                    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) { WhatsNewNotes() }
                 }
             }
         }
     }
+    if (highlights) WhatsNewDialog(version) { highlights = false }
 }
