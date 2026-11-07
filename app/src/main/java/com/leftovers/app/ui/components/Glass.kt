@@ -190,10 +190,13 @@ fun Glass(
  * No blur on it: blurring every card as it scrolls made lists lag. Otherwise the usual see-through fill.
  */
 @Composable
-fun Modifier.glassSurface(shape: Shape, strong: Boolean = false, tint: Color? = null, lens: Boolean = true): Modifier {
+fun Modifier.glassSurface(shape: Shape, strong: Boolean = false, tint: Color? = null, lens: Boolean = true, live: Boolean = true): Modifier {
     val c = LocalAppColors.current
     val overlay = LocalInOverlay.current
-    val backdrop = LocalBackgroundBackdrop.current.takeIf { !overlay }
+    // [live] off (rows of long lists): on a phone without power to spare, the photo's ready-blurred copy instead of
+    // live glass, far cheaper per frame while scrolling. Strong phones keep live glass everywhere.
+    val strongPhone = if (live) true else isStrongPhone(androidx.compose.ui.platform.LocalContext.current)
+    val backdrop = LocalBackgroundBackdrop.current.takeIf { !overlay && (live || strongPhone) }
     return if (backdrop != null) {
         drawBackdrop(
             backdrop = backdrop,
@@ -210,7 +213,12 @@ fun Modifier.glassSurface(shape: Shape, strong: Boolean = false, tint: Color? = 
     } else {
         clip(shape)
             .then(if (c.frost != null && !overlay) Modifier.frosted(c) else Modifier)
-            .background(glassFill(tint ?: if (strong) c.glassStrong else c.glass))
+            .background(
+                // Over the photo, the same faint tint for the text as live glass has.
+                if (c.frost != null && !overlay && tint == null) androidx.compose.ui.graphics.SolidColor(
+                    if (c.textPrimary.luminance() < 0.5f) Color.White.copy(alpha = if (strong) 0.26f else 0.2f) else Color.Black.copy(alpha = if (strong) 0.26f else 0.2f),
+                ) else glassFill(tint ?: if (strong) c.glassStrong else c.glass),
+            )
     }
 }
 
@@ -243,4 +251,17 @@ fun Modifier.appear(index: Int = 0): Modifier = composed {
         alpha = 0.5f + 0.5f * progress
         translationY = (1f - progress) * 18.dp.toPx()
     }
+}
+
+private var strongPhoneCache: Boolean? = null
+
+/**
+ * Whether the phone has power to spare for live glass on every row of a long list: a flagship by Android's own
+ * performance class, or one with plenty of memory (mid-range phones mostly have 8 GB or less).
+ */
+fun isStrongPhone(context: android.content.Context): Boolean = strongPhoneCache ?: run {
+    val am = context.getSystemService(android.content.Context.ACTIVITY_SERVICE) as android.app.ActivityManager
+    val mem = android.app.ActivityManager.MemoryInfo().also { am.getMemoryInfo(it) }
+    val performanceClass = if (android.os.Build.VERSION.SDK_INT >= 31) android.os.Build.VERSION.MEDIA_PERFORMANCE_CLASS else 0
+    (!am.isLowRamDevice && (performanceClass >= 34 || mem.totalMem > 10_500_000_000L)).also { strongPhoneCache = it }
 }

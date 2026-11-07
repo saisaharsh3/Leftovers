@@ -590,7 +590,7 @@ private fun CardSlice(first: Boolean, last: Boolean, modifier: Modifier = Modifi
     Column(
         modifier
             .fillMaxWidth()
-            .glassSurface(shape, lens = false)
+            .glassSurface(shape, lens = false, live = false)
             .clip(shape)
             .drawWithContent {
                 drawContent()
