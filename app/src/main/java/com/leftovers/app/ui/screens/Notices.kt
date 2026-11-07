@@ -106,7 +106,8 @@ fun NoticesScreen(onBack: () -> Unit, viewModel: NoticesViewModel = androidx.lif
     val update = remember(s?.updateAvailable) { UpdateCheck.decode(s?.updateAvailable)?.takeIf { UpdateCheck.isNewerThanInstalled(context, it) } }
     val checkOn = s?.updateCheck
     LaunchedEffect(update) { update?.let(viewModel::seen) }
-    LaunchedEffect(checkOn) { if (checkOn == true && update == null) viewModel.checkForUpdate(context) }
+    // Leftovers Dev always looks, as testers want each new build; the app when its setting is on.
+    LaunchedEffect(checkOn) { if ((checkOn == true || UpdateCheck.isDevBuild(context)) && update == null) viewModel.checkForUpdate(context) }
     GlassScreen(title = "Notices", subtitle = "What's new, and new versions", onBack = onBack) { padding ->
         Column(
             Modifier.verticalScroll(rememberScrollState())

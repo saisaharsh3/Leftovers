@@ -273,7 +273,7 @@ fun StatsScreen(
                         com.leftovers.app.ui.components.ListRow(
                             "Ask AI about $monthName",
                             subtitle = if (isExpense) "What changed, and what to do about it" else "How your income compares",
-                            leading = { com.leftovers.app.ui.components.IconTile(Lucide.MessageCircle, c.accent, size = 38.dp) },
+                            leading = { com.leftovers.app.ui.components.IconTile(Lucide.BotMessageSquare, c.accent, size = 38.dp) },
                             trailing = { Icon(Lucide.ChevronRight, contentDescription = null, tint = c.textTertiary) },
                         )
                     }

@@ -15,6 +15,8 @@ object Lucide {
     val ArrowLeft: ImageVector by lazy { lucide("arrow-left", "m12 19-7-7 7-7", "M19 12H5") }
     val ArrowUp: ImageVector by lazy { lucide("arrow-up", "m5 12 7-7 7 7", "M12 19V5") }
     val MessageCircle: ImageVector by lazy { lucide("message-circle", "M7.9 20A9 9 0 1 0 4 16.1L2 22Z") }
+    /** The AI assistant: a chat bubble with a robot face, so it reads as AI rather than messages. */
+    val BotMessageSquare: ImageVector by lazy { lucide("bot-message-square", "M12 6V2H8", "m8 18-4 4V8a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2Z", "M2 12h2", "M9 11v2", "M15 11v2", "M20 12h2") }
     val Share2: ImageVector by lazy { lucide("share-2", "M15 5a3 3 0 1 0 6 0a3 3 0 1 0 -6 0", "M3 12a3 3 0 1 0 6 0a3 3 0 1 0 -6 0", "M15 19a3 3 0 1 0 6 0a3 3 0 1 0 -6 0", "m8.59 13.51 6.83 3.98", "m15.41 6.51-6.82 3.98") }
     val Mail: ImageVector by lazy { lucide("mail", "M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1 -2 2h-16a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2Z", "m22 7-8.991 5.727a2 2 0 0 1-2.009 0L2 7") }
     val RotateCcw: ImageVector by lazy { lucide("rotate-ccw", "M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8", "M3 3v5h5") }

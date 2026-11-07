@@ -756,7 +756,7 @@ fun SettingsScreen(
                 val assistant by viewModel.assistant.config.collectAsStateWithLifecycle()
                 Glass(Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(vertical = 6.dp)) {
-                        NavRow(Lucide.MessageCircle, "AI assistant", assistant?.let { "${it.provider.label} · connected" } ?: "Not connected") { showAssistant = true }
+                        NavRow(Lucide.BotMessageSquare, "AI assistant", assistant?.let { "${it.provider.label} · connected" } ?: "Not connected") { showAssistant = true }
                     }
                 }
             }

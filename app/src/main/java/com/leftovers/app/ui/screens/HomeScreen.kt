@@ -614,7 +614,7 @@ fun HomeScreen(
                         }
                     }
                     Spacer(Modifier.width(8.dp))
-                    RoundButton(Lucide.MessageCircle, "AI assistant", onOpenAssistant)
+                    RoundButton(Lucide.BotMessageSquare, "AI assistant", onOpenAssistant)
                     Spacer(Modifier.width(8.dp))
                     RoundButton(Lucide.Settings, "Settings", onOpenSettings)
                 }

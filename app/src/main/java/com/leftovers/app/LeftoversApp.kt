@@ -110,7 +110,19 @@ class AppContainer(private val context: Context) {
         settings.clearAll()
     }
 
+    /** Looks for a newer version on GitHub; one found goes to the bell and Notices. Returns it, or null. */
+    private suspend fun lookForUpdate(): com.leftovers.app.util.UpdateCheck.Release? =
+        com.leftovers.app.util.UpdateCheck.latest(com.leftovers.app.util.UpdateCheck.isDevBuild(context)).getOrNull()
+            ?.takeIf { com.leftovers.app.util.UpdateCheck.isNewerThanInstalled(context, it) }
+            ?.also { settings.setUpdateAvailable(com.leftovers.app.util.UpdateCheck.encode(it)) }
+
     fun start() {
+        // A newer version, when the app opens: always for Leftovers Dev (testers get it from GitHub, and a new build
+        // comes out most days), and for the app when "Tell me about new versions" is on. Otherwise only when asked.
+        scope.launch {
+            delay(STARTUP_QUIET_MS)
+            if (com.leftovers.app.util.UpdateCheck.isDevBuild(context) || settings.settings.first().updateCheck) lookForUpdate()
+        }
         // Housekeeping waits until the first screen is up, so it doesn't compete with drawing it.
         scope.launch {
             delay(STARTUP_QUIET_MS)
@@ -201,13 +213,9 @@ class AppContainer(private val context: Context) {
             if (emailAccount.connection.value == null) null else com.leftovers.app.util.EmailChecker.check(context)
         }
         val sync = scope.async { com.leftovers.app.util.DeviceSync.runIfOn(context) }
-        // A newer version too, when looking for them is turned on; found, it shows on the bell in Home.
-        val update = scope.async {
-            if (!settings.settings.first().updateCheck) return@async null
-            com.leftovers.app.util.UpdateCheck.latest(com.leftovers.app.util.UpdateCheck.isDevBuild(context)).getOrNull()
-                ?.takeIf { com.leftovers.app.util.UpdateCheck.isNewerThanInstalled(context, it) }
-                ?.also { settings.setUpdateAvailable(com.leftovers.app.util.UpdateCheck.encode(it)) }
-        }
+        // A newer version too: pulling down is asking, so it looks whatever the setting. Found, it shows on the bell
+        // in Home and in Notices.
+        val update = scope.async { lookForUpdate() }
         syncRecurring()
         val waitUntil = System.currentTimeMillis() + REFRESH_WAIT_MS
         suspend fun <T> kotlinx.coroutines.Deferred<T>.soon(): T? =
