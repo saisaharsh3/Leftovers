@@ -18,10 +18,14 @@ object HelpGuide {
         Item("Adding entries", "Lent or borrowed", "Money you lent or borrowed isn't spending: it goes to Money owed. You can save it without an amount, as a reminder.", "+ → Lent or borrowed", Place.ADD, "loan owe debt friend pending"),
         Item("Adding entries", "Repeat every month", "Turn an entry into a subscription or a regular payment that's logged for you.", "+ → Repeat (↻)", Place.ADD, "recurring rent bill monthly"),
         Item("Adding entries", "Receipt photo", "Attach a photo of the bill to an entry. With the AI assistant connected, it can read the bill and fill the entry in.", "+ → Attach receipt", Place.ADD, "bill camera scan invoice picture"),
+        Item("Adding entries", "Tags", "Add #tags like #goa or #work to an entry, then search or filter by them, or give a trip its own budget.", "+ → Tags", Place.ADD, "hashtag label trip"),
         Item("Adding entries", "Undo and deleted entries", "Deleting shows Undo for a few seconds. Deleted entries are kept, to put back later.", "Settings → Data → Deleted entries", Place.DELETED, "restore recover trash bin removed"),
 
         // Seeing your money
         Item("Seeing your money", "Home", "What's left to spend today and this month, balances, upcoming bills, money owed and recent entries. Pull down to check email, sync and updates.", "The Home tab", Place.HOME, "dashboard safe to spend refresh"),
+        Item("Seeing your money", "Safe to spend today", "The big number on Home: what you can spend today and stay on budget, or how far over you are. Tap it for the month's budget.", "Home, at the top", Place.BUDGET, "over budget left daily limit"),
+        Item("Seeing your money", "Detected payments", "Payments found in your SMS, email or payment apps wait on Home: tap one to check and add it, or ✕ to dismiss it.", "Home → Detected payments", Place.HOME, "suggested pending review sms"),
+        Item("Seeing your money", "One month or all time", "See one month at a time or every entry ever, newest first or by amount.", "Activity → By month / All time, and the filter button", Place.ACTIVITY, "sort highest lowest history everything"),
         Item("Seeing your money", "Search and filters", "Search notes, categories, accounts, #tags or amounts; several words find entries with all of them. Filter by account, category or #tag.", "Activity → search or filter buttons", Place.ACTIVITY, "find look up tag hashtag"),
         Item("Seeing your money", "Calendar view", "Each day's spending on a calendar; tap a day to see its entries.", "Activity → calendar button", Place.ACTIVITY, "month days"),
         Item("Seeing your money", "Charts and trends", "Spending and income by category and day, compared with the month before.", "The Insights tab", Place.INSIGHTS, "stats graph analysis report"),
@@ -45,6 +49,7 @@ object HelpGuide {
 
         // Bills, goals and money owed
         Item("Bills, goals and money owed", "Subscriptions and bills", "Regular payments and income, logged for you on their day, with a reminder before bills.", "Plan → Subscriptions", Place.SUBSCRIPTIONS, "netflix rent recurring salary emi"),
+        Item("Bills, goals and money owed", "Regular income", "Salary or rent you receive, added on its day like a subscription.", "Plan → Subscriptions → Income", Place.SUBSCRIPTIONS, "salary paycheck recurring income"),
         Item("Bills, goals and money owed", "Savings goals", "Save towards something by a date: see what's needed each month. Add shop links to follow its price.", "Plan → Savings goals", Place.GOALS, "goal save target price"),
         Item("Bills, goals and money owed", "Money owed", "Who owes you and whom you owe. Mark one entry or everything with a person as received or settled.", "Home → Money owed, or Plan → More", Place.DEBTS, "lend borrow settle received friends"),
 
@@ -70,11 +75,22 @@ object HelpGuide {
         Item("Look, security and more", "Home screen widgets", "Glass, dark or light widgets for the phone's home screen, in any size.", "Settings → Appearance → Home screen widgets", Place.SETTINGS, "widget launcher"),
         Item("Look, security and more", "App lock and screenshots", "Lock with a PIN, password, fingerprint or face, and block screenshots.", "Settings → Security & reminders", Place.SETTINGS, "lock pin fingerprint secure privacy screenshot"),
         Item("Look, security and more", "Reminders and alerts", "A daily reminder to log, reminders before bills, and budget alerts.", "Settings → Security & reminders", Place.SETTINGS, "notification remind alert"),
+        Item("Look, security and more", "Split bills as one entry", "Show a split bill as one entry with its parts under it, or every part on its own.", "Settings → General → Show a split bill as one entry", Place.SETTINGS, "split parts list"),
         Item("Look, security and more", "Currency", "The currency your amounts are shown in.", "Settings → General → Currency", Place.SETTINGS, "rupee dollar symbol"),
         Item("Look, security and more", "Updates and feedback", "Check for a new version, or report a problem and suggest an idea.", "Settings, at the bottom", Place.SETTINGS, "update version bug github feedback"),
     )
 
     val sections: List<String> get() = items.map { it.section }.distinct()
+
+    /** The guide's answer for the AI assistant: the closest entries to [query], each with where to find it. */
+    fun forAssistant(query: String, limit: Int = 6): List<Item> {
+        val exact = search(query)
+        if (exact.isNotEmpty()) return exact.take(limit)
+        // No entry has every word: rank by how many of them it has.
+        val words = query.lowercase().split(Regex("""\W+""")).filter { it.length > 2 }
+        return items.map { i -> i to words.count { "${i.title} ${i.text} ${i.where} ${i.words}".lowercase().contains(it) } }
+            .filter { it.second > 0 }.sortedByDescending { it.second }.take(limit).map { it.first }
+    }
 
     /** Items with every word of [query] in their title, text, path or search words; all of them for a blank query. */
     fun search(query: String): List<Item> {

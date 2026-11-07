@@ -943,17 +943,22 @@ private fun TodayCard(state: HomeUiState, onClick: () -> Unit, modifier: Modifie
                 Icon(Lucide.ChevronRight, contentDescription = null, tint = c.textTertiary, modifier = Modifier.size(18.dp))
             }
             Spacer(Modifier.height(2.dp))
-            RollingText(
-                text = money.formatWhole(
-                    when {
-                        budget == null -> state.spentToday
-                        usedUp -> abs(budget.monthLeft)
-                        else -> abs(budget.leftToday)
-                    },
-                ),
-                style = MaterialTheme.typography.displayLarge,
-                color = if (over) c.negative else c.textPrimary,
+            val heroText = money.formatWhole(
+                when {
+                    budget == null -> state.spentToday
+                    usedUp -> abs(budget.monthLeft)
+                    else -> abs(budget.leftToday)
+                },
             )
+            // A long amount ("₹10,17,989") shrinks just enough to fit the width instead of running off the screen.
+            androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxWidth()) {
+                val full = MaterialTheme.typography.displayLarge
+                val measurer = androidx.compose.ui.text.rememberTextMeasurer()
+                val width = remember(heroText, full) { measurer.measure(heroText, full).size.width }
+                val room = constraints.maxWidth
+                val style = if (width > room && width > 0) full.copy(fontSize = full.fontSize * (room.toFloat() / width * 0.97f)) else full
+                RollingText(text = heroText, style = style, color = if (over) c.negative else c.textPrimary)
+            }
             Spacer(Modifier.height(14.dp))
             if (budget != null) {
                 ProgressLine(budget.usedFraction)

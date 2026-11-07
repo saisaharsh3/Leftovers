@@ -15,6 +15,13 @@ class HelpGuideTest {
         assertTrue(titles("zzz nothing").isEmpty())
     }
 
+    @Test fun theAssistantGetsTheClosestAnswer() {
+        // Questions in the user's words, not the guide's.
+        assertEquals("Transfer between accounts", HelpGuide.forAssistant("how do I move money to my credit card account").first().title)
+        assertTrue(HelpGuide.forAssistant("where can I download a PDF").any { it.title == "PDF statement" })
+        assertTrue(HelpGuide.forAssistant("qwerty zxcv").isEmpty())
+    }
+
     @Test fun everyEntryIsComplete() {
         assertEquals(HelpGuide.items.size, HelpGuide.search("  ").size)
         HelpGuide.items.forEach { assertTrue(it.title, it.text.isNotBlank() && it.where.isNotBlank()) }
