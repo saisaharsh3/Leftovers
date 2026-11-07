@@ -5,6 +5,10 @@ All notable changes to Leftovers. Download any version from
 
 ## Unreleased
 
+- Bank statement PDFs that print the currency against the amount ("+ PKR1,000.00", "- Rs.250") import, from banks in Pakistan, Bangladesh, Sri Lanka and elsewhere
+- Checking for new versions: on opening, at most every three hours (GitHub limits how often), and when it can't check, it says why
+- Your background photo is kept: its swatch shows it, so going to Aurora and back needs no new pick
+- Updates has its own artwork behind the version, like a phone's update page, with a glass card, a bright Highlights button and Check again at the top
 - With a photo background: Activity's cards are glass too, bars are nearly clear, scrolling is smoother (no blur on every card), Pure black and turning glass off are hidden, Blur and dimming have a Reset, and a text colour that fights the photo says so
 - What's new after an update is a glass sheet with the version large on top, each change with its icon, title and line, and Continue
 - The bell opens Updates, laid out like a phone's software update page: the version large, and a glass card saying whether it's up to date, with Highlights and the update notes (or Download when a new version is out)

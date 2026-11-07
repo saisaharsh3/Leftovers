@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -60,6 +61,9 @@ fun LooksPicker(
     val c = LocalAppColors.current
     val current = Backdrop.of(s.backdrop)
     val pick = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri -> uri?.let(onPhoto) }
+    // The photo chosen before stays, so going to Aurora and back keeps it; shown on its swatch.
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val saved = remember(s.photoVersion) { com.leftovers.app.ui.theme.BackgroundPhoto.thumbnail(context) }
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text("Background", style = MaterialTheme.typography.labelMedium, color = c.textSecondary, modifier = Modifier.padding(start = 4.dp))
         Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -70,8 +74,8 @@ fun LooksPicker(
                         Modifier
                             .size(width = 56.dp, height = 72.dp)
                             .pressable({
-                                // The photo option asks for a picture, also to change it when it's already chosen.
-                                if (b == Backdrop.PHOTO) pick.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                                // Your photo: back to the one chosen before; tapped again (or with none yet), pick a picture.
+                                if (b == Backdrop.PHOTO && (saved == null || current == Backdrop.PHOTO)) pick.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
                                 else onBackdrop(b)
                             }, pressedScale = 0.94f)
                             .clip(RoundedCornerShape(14.dp))
@@ -85,9 +89,12 @@ fun LooksPicker(
                             .border(if (selected) 2.dp else 1.dp, if (selected) c.accent else c.borderTop, RoundedCornerShape(14.dp)),
                         contentAlignment = Alignment.Center,
                     ) {
-                        if (b == Backdrop.PHOTO) Icon(Lucide.Camera, contentDescription = null, tint = c.textPrimary, modifier = Modifier.size(20.dp))
+                        if (b == Backdrop.PHOTO) {
+                            if (saved != null) androidx.compose.foundation.Image(saved, contentDescription = null, contentScale = androidx.compose.ui.layout.ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                            else Icon(Lucide.Camera, contentDescription = null, tint = c.textPrimary, modifier = Modifier.size(20.dp))
+                        }
                     }
-                    Text(b.label, style = MaterialTheme.typography.labelSmall, color = if (selected) c.textPrimary else c.textSecondary, modifier = Modifier.padding(top = 4.dp))
+                    Text(if (b == Backdrop.PHOTO && saved != null && b == current) "Change" else b.label, style = MaterialTheme.typography.labelSmall, color = if (selected) c.textPrimary else c.textSecondary, modifier = Modifier.padding(top = 4.dp))
                 }
             }
         }

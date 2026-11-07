@@ -46,8 +46,13 @@ object PdfStatement {
 
     private data class Line(val date: String, val text: String, val amounts: List<Pair<Long, String?>>, val extra: MutableList<String> = mutableListOf())
 
+    /** Currencies printed against their number ("PKR1,000.00", "Rs.250"), split off so the amount reads on its own. */
+    private val gluedCurrency = Regex(
+        """(?<![A-Za-z])(PKR|INR|Rs\.?|USD|EUR|GBP|AED|SAR|QAR|KWD|OMR|BHD|BDT|Tk\.?|LKR|NPR|MYR|SGD|IDR|PHP|THB|NGN|KES|ZAR|₹|\$|€|£|৳|₨)(?=\d)""",
+    )
+
     fun parse(text: String): CsvImporter.Parsed {
-        val lines = text.lines().map { it.trim() }.filter { it.isNotEmpty() }
+        val lines = text.lines().map { gluedCurrency.replace(it.trim(), "$1 ") }.filter { it.isNotEmpty() }
         // Payment apps (PhonePe, Paytm, Google Pay...) print each payment as a block, with no running balance;
         // banks print a line each with one. Both are read, and whichever finds more is the one.
         val blocks = parseBlocks(lines)
@@ -118,7 +123,7 @@ object PdfStatement {
     }
 
     /** An amount with its currency, as payment apps print it: "₹40", "₹3,923.03", "Rs. 250", "INR 1,200". */
-    private val currencyAmount = Regex("""(?:₹|\bRs\.?|\bINR)\s*(\d{1,3}(?:,\d{2,3})+(?:\.\d{1,2})?|\d+(?:\.\d{1,2})?)""")
+    private val currencyAmount = Regex("""(?:₹|৳|₨|\$|€|£|\bRs\.?|\b(?:INR|PKR|BDT|Tk|LKR|NPR|USD|EUR|GBP|AED|SAR))\s*(\d{1,3}(?:,\d{2,3})+(?:\.\d{1,2})?|\d+(?:\.\d{1,2})?)""")
     private val blockOut = Regex("""\b(debit|debited|dr|paid to|payment to|sent to|paid for|bill paid|recharge)\b""", RegexOption.IGNORE_CASE)
     private val blockIn = Regex("""\b(credit|credited|cr|received from|refund|cashback|reversal)\b""", RegexOption.IGNORE_CASE)
     /** Lines in a block that aren't its description: times, IDs, the card or account used, page furniture. */

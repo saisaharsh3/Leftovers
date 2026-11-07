@@ -86,6 +86,13 @@ object BackgroundPhoto {
         Loaded(photo, blur(small, radius = 9).asImageBitmap(), bright = light > 0.55)
     }.getOrNull()
 
+    /** A small copy of the saved photo for its swatch, or null when none was chosen. */
+    fun thumbnail(context: Context): ImageBitmap? = runCatching {
+        val f = file(context)
+        if (!f.exists()) return null
+        BitmapFactory.decodeFile(f.path, BitmapFactory.Options().apply { inSampleSize = 8 })?.asImageBitmap()
+    }.getOrNull()
+
     /** Whether the photo is light (black text reads best), dark, or null when there's none. */
     fun isBright(context: Context): Boolean? = runCatching {
         val f = file(context)

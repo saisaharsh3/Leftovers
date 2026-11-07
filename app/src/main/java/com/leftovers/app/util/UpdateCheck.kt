@@ -78,13 +78,27 @@ object UpdateCheck {
         wm.enqueueUniquePeriodicWork(WORK_NAME, ExistingPeriodicWorkPolicy.KEEP, request)
     }
 
+    /**
+     * Whether an automatic check (on opening the app or Updates) is due: at most every three hours, so it never
+     * runs into GitHub's limit. Asking (pulling down, Check again) always checks.
+     */
+    fun autoCheckDue(context: Context): Boolean {
+        val prefs = context.getSharedPreferences("updates", Context.MODE_PRIVATE)
+        val now = System.currentTimeMillis()
+        if (now - prefs.getLong("last_auto", 0L) < 3 * 60 * 60 * 1000L) return false
+        prefs.edit().putLong("last_auto", now).apply()
+        return true
+    }
+
     /** The latest release on GitHub. */
     suspend fun latest(dev: Boolean = false): Result<Release> = withContext(Dispatchers.IO) {
         runCatching {
             val client = OkHttpClient.Builder().connectTimeout(15, TimeUnit.SECONDS).readTimeout(15, TimeUnit.SECONDS).build()
             val request = Request.Builder().url(if (dev) DEV else LATEST).header("Accept", "application/vnd.github+json").build()
             client.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) error("GitHub said ${response.code}")
+                // GitHub answers 60 checks an hour per network without an account; past that it says 403 or 429.
+                if (response.code == 403 || response.code == 429) error("GitHub's limit for checks was reached. Try again in an hour.")
+                if (!response.isSuccessful) error("GitHub didn't answer (${response.code}). Try again later.")
                 val json = JSONObject(response.body?.string().orEmpty())
                 val published = runCatching { java.time.Instant.parse(json.getString("published_at")).toEpochMilli() }.getOrDefault(0L)
                 // The Dev build's name says when it was built: "Dev build 29 Oct 14:35 UTC".

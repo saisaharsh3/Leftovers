@@ -122,7 +122,9 @@ class AppContainer(private val context: Context) {
         // comes out most days), and for the app when "Tell me about new versions" is on. Otherwise only when asked.
         scope.launch {
             delay(STARTUP_QUIET_MS)
-            if (com.leftovers.app.util.UpdateCheck.isDevBuild(context) || settings.settings.first().updateCheck) lookForUpdate()
+            if ((com.leftovers.app.util.UpdateCheck.isDevBuild(context) || settings.settings.first().updateCheck) &&
+                com.leftovers.app.util.UpdateCheck.autoCheckDue(context)
+            ) lookForUpdate()
         }
         // Housekeeping waits until the first screen is up, so it doesn't compete with drawing it.
         scope.launch {

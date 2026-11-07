@@ -29,6 +29,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.graphics.luminance
+import com.kyant.backdrop.backdrops.layerBackdrop
+import com.leftovers.app.ui.components.RoundButton
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.border
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import com.leftovers.app.ui.components.pressable
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.graphics.Brush
@@ -60,6 +69,56 @@ fun WhatsNewDialog(version: String, onClose: () -> Unit) {
     }
 }
 
+/** A button as a phone's update page has them: a bright pill for the main action, a glass one for the other. */
+@Composable
+private fun PillButton(text: String, filled: Boolean, onClick: () -> Unit) {
+    val c = LocalAppColors.current
+    val shape = androidx.compose.foundation.shape.CircleShape
+    Box(
+        Modifier.fillMaxWidth().height(52.dp)
+            .pressable(onClick, pressedScale = 0.97f)
+            .clip(shape)
+            .background(if (filled) c.textPrimary.copy(alpha = 0.92f) else c.textPrimary.copy(alpha = 0.1f))
+            .border(1.dp, c.textPrimary.copy(alpha = if (filled) 0f else 0.18f), shape),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(text, style = MaterialTheme.typography.titleSmall, color = if (filled) c.background else c.textPrimary)
+    }
+}
+
+/**
+ * The update page's artwork: a deep wash with large soft orbs and a sweep of colour from the app's accent and glow
+ * colours, light on the light theme and dark on the dark one, so the version and the card always read.
+ */
+@Composable
+private fun UpdateArtwork(modifier: Modifier) {
+    val c = LocalAppColors.current
+    // Light artwork under dark text, dark under light text, whatever the theme (over a photo they can differ).
+    val dark = c.textPrimary.luminance() > 0.5f
+    androidx.compose.foundation.Canvas(modifier) {
+        val w = size.width
+        val h = size.height
+        drawRect(Brush.verticalGradient(if (dark) listOf(Color(0xFF0B0A1F), Color(0xFF15102E), Color(0xFF0A0A14)) else listOf(Color(0xFFF4F2FF), Color(0xFFE9E4FA), Color(0xFFF6F4FB))))
+        fun orb(color: Color, x: Float, y: Float, r: Float, a: Float) = drawCircle(
+            Brush.radialGradient(listOf(color.copy(alpha = a), color.copy(alpha = a * 0.45f), Color.Transparent), center = androidx.compose.ui.geometry.Offset(x, y), radius = r),
+            radius = r, center = androidx.compose.ui.geometry.Offset(x, y),
+        )
+        val glow = if (dark) 1f else 0.7f
+        orb(c.auroraA, w * 0.15f, h * 0.18f, w * 0.9f, 0.55f * glow)
+        // A sweep of colour across the middle, like light through glass.
+        val sweep = androidx.compose.ui.graphics.Path().apply {
+            moveTo(-w * 0.1f, h * 0.62f)
+            cubicTo(w * 0.3f, h * 0.48f, w * 0.65f, h * 0.72f, w * 1.1f, h * 0.55f)
+            lineTo(w * 1.1f, h * 0.68f)
+            cubicTo(w * 0.65f, h * 0.84f, w * 0.3f, h * 0.6f, -w * 0.1f, h * 0.76f)
+            close()
+        }
+        drawPath(sweep, Brush.horizontalGradient(listOf(c.accent.copy(alpha = 0.0f), c.accent.copy(alpha = 0.55f * glow), c.auroraB.copy(alpha = 0.5f * glow), c.auroraB.copy(alpha = 0f))))
+        orb(c.accent, w * 0.85f, h * 0.55f, w * 0.7f, 0.45f * glow)
+        orb(c.auroraB, w * 0.05f, h * 0.9f, w * 0.75f, 0.4f * glow)
+    }
+}
+
 /** The version as a phone's update page shows it: the number large, the app's name and build under it. */
 @Composable
 private fun VersionHero(version: String, compact: Boolean = false) {
@@ -72,7 +131,7 @@ private fun VersionHero(version: String, compact: Boolean = false) {
                 fontSize = if (compact) 72.sp else 120.sp,
                 lineHeight = if (compact) 76.sp else 124.sp,
                 letterSpacing = (-4).sp,
-                brush = Brush.verticalGradient(listOf(c.textPrimary, c.accent)),
+                brush = Brush.verticalGradient(listOf(c.textPrimary, c.textPrimary.copy(alpha = 0.78f))),
             ),
         )
         Text(if (compact) "What's New in Leftovers" else "Leftovers", style = MaterialTheme.typography.titleLarge, color = c.textPrimary)
@@ -125,7 +184,7 @@ class NoticesViewModel(private val settings: com.leftovers.app.data.SettingsRepo
                     if (UpdateCheck.isNewerThanInstalled(context, release)) settings.setUpdateAvailable(UpdateCheck.encode(release))
                     else checkResult.value = "You have the latest version"
                 },
-                { checkResult.value = "Couldn't check for a new version" },
+                { checkResult.value = "Couldn't check: " + (it.message?.takeIf { m -> m.startsWith("GitHub") } ?: "no connection. Try again when you're online.") },
             )
             checking.value = false
         }
@@ -149,45 +208,57 @@ fun NoticesScreen(onBack: () -> Unit, viewModel: NoticesViewModel = androidx.lif
     var highlights by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
     LaunchedEffect(update) { update?.let(viewModel::seen) }
     // Leftovers Dev always looks, as testers want each new build; the app when its setting is on.
-    LaunchedEffect(checkOn) { if ((checkOn == true || UpdateCheck.isDevBuild(context)) && update == null) viewModel.checkForUpdate(context) }
+    LaunchedEffect(checkOn) { if ((checkOn == true || UpdateCheck.isDevBuild(context)) && update == null && UpdateCheck.autoCheckDue(context)) viewModel.checkForUpdate(context) }
     fun open(url: String) = runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
     // This version's notes: the Dev build's page, or the release's.
     val notesUrl = if (UpdateCheck.isDevBuild(context)) "https://github.com/saisaharsh3/Leftovers/releases/tag/dev-build"
     else "https://github.com/saisaharsh3/Leftovers/releases/tag/v${version.substringBefore("-")}"
-    GlassScreen(title = "Updates", onBack = onBack) { padding ->
-        Column(
-            Modifier.fillMaxSize().verticalScroll(rememberScrollState())
-                .padding(start = 16.dp, end = 16.dp, top = padding.calculateTopPadding() + 40.dp, bottom = padding.calculateBottomPadding() + 24.dp),
+    // The page's own artwork, whatever the app's background: soft colour behind a large version, as a phone's
+    // update page has. The glass card shows it through (Android 13+), recorded here for it.
+    val art = com.kyant.backdrop.backdrops.rememberLayerBackdrop()
+    Box(Modifier.fillMaxSize()) {
+        UpdateArtwork(Modifier.fillMaxSize().layerBackdrop(art))
+        CompositionLocalProvider(
+            com.leftovers.app.ui.components.LocalBackgroundBackdrop provides (if (android.os.Build.VERSION.SDK_INT >= 33) art else null),
         ) {
-            VersionHero(version)
-            Spacer(Modifier.height(140.dp))
-            Glass(Modifier.fillMaxWidth(), strong = true, shape = androidx.compose.foundation.shape.RoundedCornerShape(30.dp)) {
-                Column(Modifier.padding(22.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    val dev = update?.version?.startsWith("Dev") == true
-                    Text(
-                        when {
-                            update != null -> if (dev) "A new Dev build is out" else "Leftovers ${update.version} is out"
-                            checking -> "Looking for a new version…"
-                            checkResult == "Couldn't check for a new version" -> "Couldn't check right now"
-                            else -> "Version up to date"
-                        },
-                        style = MaterialTheme.typography.titleLarge, color = c.textPrimary,
-                    )
-                    Text(update?.version?.takeIf { dev } ?: version, style = MaterialTheme.typography.bodyMedium, color = c.textSecondary)
-                    Spacer(Modifier.height(4.dp))
-                    if (update != null) {
-                        com.leftovers.app.ui.components.PrimaryButton("Download", { open(update.url) }, Modifier.fillMaxWidth())
-                        com.leftovers.app.ui.components.SecondaryButton("Highlights", { highlights = true }, Modifier.fillMaxWidth())
-                    } else {
-                        com.leftovers.app.ui.components.PrimaryButton("Highlights", { highlights = true }, Modifier.fillMaxWidth())
-                        com.leftovers.app.ui.components.SecondaryButton("View update notes", { open(notesUrl) }, Modifier.fillMaxWidth())
-                        if (!checking) {
+            GlassScreen(
+                title = "Updates",
+                onBack = onBack,
+                actions = {
+                    if (update == null && !checking) RoundButton(Lucide.RotateCcw, "Check again", { viewModel.checkForUpdate(context) })
+                },
+            ) { padding ->
+                Column(
+                    Modifier.fillMaxSize().verticalScroll(rememberScrollState())
+                        .padding(start = 16.dp, end = 16.dp, top = padding.calculateTopPadding() + 56.dp, bottom = padding.calculateBottomPadding() + 24.dp),
+                ) {
+                    VersionHero(version)
+                    Spacer(Modifier.height(200.dp))
+                    Glass(Modifier.fillMaxWidth(), strong = true, shape = androidx.compose.foundation.shape.RoundedCornerShape(32.dp)) {
+                        Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            val dev = update?.version?.startsWith("Dev") == true
                             Text(
-                                "Check again",
-                                style = MaterialTheme.typography.labelLarge, color = c.accent,
-                                modifier = Modifier.align(Alignment.CenterHorizontally).padding(top = 4.dp)
-                                    .pressable({ viewModel.checkForUpdate(context) }, pressedScale = 0.95f),
+                                when {
+                                    update != null -> if (dev) "A new Dev build is out" else "Leftovers ${update.version} is out"
+                                    checking -> "Looking for a new version…"
+                                    checkResult?.startsWith("Couldn't check") == true -> "Couldn't check right now"
+                                    else -> "Version up to date"
+                                },
+                                style = MaterialTheme.typography.titleLarge, color = c.textPrimary,
                             )
+                            Text(update?.version?.takeIf { dev } ?: version, style = MaterialTheme.typography.bodyMedium, color = c.textSecondary)
+                            // Why a check didn't work, in a line.
+                            checkResult?.takeIf { update == null && it.startsWith("Couldn't check") }?.let {
+                                Text(it.removePrefix("Couldn't check: ").replaceFirstChar { ch -> ch.uppercase() }, style = MaterialTheme.typography.bodySmall, color = c.warning)
+                            }
+                            Spacer(Modifier.height(6.dp))
+                            if (update != null) {
+                                PillButton("Download", filled = true) { open(update.url) }
+                                PillButton("Highlights", filled = false) { highlights = true }
+                            } else {
+                                PillButton("Highlights", filled = true) { highlights = true }
+                                PillButton("View update notes", filled = false) { open(notesUrl) }
+                            }
                         }
                     }
                 }
