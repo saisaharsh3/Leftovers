@@ -31,11 +31,22 @@ internal class OnDeviceSession(
 
     private suspend fun reply(): ModelTurn {
         val m = model() ?: throw AiException("This phone's AI isn't in this build.")
-        if (m.status() != LocalStatus.READY) throw AiException("This phone's AI isn't ready. Check it in Settings → AI assistant.")
+        val status = try {
+            m.status()
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Throwable) {
+            throw AiException("This phone's AI isn't ready: ${OnDevice.failed(e)}")
+        }
+        if (status != LocalStatus.READY) {
+            throw AiException("This phone's AI isn't ready" + (OnDevice.problem?.let { ": $it" } ?: ". Check it in the AI assistant's settings."))
+        }
         val answer = try {
             m.generate(prompt(m.tokenLimit()), MAX_OUT).trim()
-        } catch (e: Exception) {
-            throw AiException("This phone's AI couldn't answer: ${e.message ?: "it stopped"}. It only works while Leftovers is open.")
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Throwable) {
+            throw AiException("This phone's AI couldn't answer: ${OnDevice.failed(e)}")
         }
         val call = parseCall(answer, tools.map { it.name }.toSet())
         // A few lookups per question at most, so a confused small model can't loop.

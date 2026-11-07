@@ -9,7 +9,7 @@ import java.math.BigDecimal
 object MoneyText {
     /** Symbols and codes, longest first so "US$" wins over "$" and "R$" over "R". */
     private val marks = listOf(
-        "rs.", "rs", "inr", "₹", "us\$", "usd", "\$", "eur", "€", "gbp", "£", "aed", "sar", "qar", "kwd", "bhd", "omr",
+        "rs.", "rs", "inr", "₹", "tk.", "tk", "us\$", "usd", "\$", "eur", "€", "gbp", "£", "aed", "sar", "qar", "kwd", "bhd", "omr",
         "sgd", "s\$", "aud", "a\$", "cad", "c\$", "nzd", "hkd", "jpy", "cny", "rmb", "¥", "krw", "₩", "myr", "rm",
         "php", "₱", "thb", "฿", "idr", "rp", "vnd", "₫", "bdt", "৳", "pkr", "lkr", "npr", "₨", "kes", "ksh", "ngn",
         "₦", "zar", "brl", "r\$", "mxn", "chf", "₺", "rub", "₽", "egp", "ghs", "₵", "uah", "₴", "pln", "zł",

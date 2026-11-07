@@ -15,6 +15,8 @@ interface LocalModel {
     suspend fun generate(prompt: String, maxOutputTokens: Int): String
     /** What a prompt and its answer can add up to, in tokens. */
     suspend fun tokenLimit(): Int
+    /** Why [e] happened, in plain words, from Android's own error code. */
+    fun explain(e: Throwable): String = e.message?.takeIf { it.isNotBlank() } ?: e.javaClass.simpleName
 }
 
 /**
@@ -35,13 +37,30 @@ object OnDevice {
     /** This build can use the phone's AI, whether or not this phone has it. */
     val inBuild: Boolean get() = current() != null
 
-    suspend fun status(): LocalStatus = current()?.let { runCatching { it.status() }.getOrDefault(LocalStatus.UNAVAILABLE) } ?: LocalStatus.UNAVAILABLE
+    /** Why the phone's AI last said no, for the settings sheet and the chat; null when it last worked. */
+    @Volatile var problem: String? = null
+        private set
+
+    suspend fun status(): LocalStatus {
+        val m = current() ?: return LocalStatus.UNAVAILABLE
+        return try {
+            m.status().also { if (it == LocalStatus.READY) problem = null }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Throwable) {
+            problem = m.explain(e)
+            LocalStatus.UNAVAILABLE
+        }
+    }
+
+    /** Remembers why a request failed, and returns the reason. */
+    internal fun failed(e: Throwable): String = (current()?.explain(e) ?: e.message ?: e.javaClass.simpleName).also { problem = it }
 
     /** The answer to [prompt], or null when the phone's AI isn't there or can't answer (Android allows it in the foreground only). */
     suspend fun ask(prompt: String, maxOutputTokens: Int = 200): String? {
         val m = current() ?: return null
         if (status() != LocalStatus.READY) return null
-        return runCatching { m.generate(prompt, maxOutputTokens).trim() }.getOrNull()?.takeIf { it.isNotEmpty() }
+        return runCatching { m.generate(prompt, maxOutputTokens).trim() }.onFailure { failed(it) }.getOrNull()?.takeIf { it.isNotEmpty() }
     }
 
     /**

@@ -3,6 +3,7 @@ package com.leftovers.app.ai
 import androidx.annotation.Keep
 import com.google.mlkit.genai.common.DownloadStatus
 import com.google.mlkit.genai.common.FeatureStatus
+import com.google.mlkit.genai.common.GenAiException
 import com.google.mlkit.genai.prompt.Generation
 import com.google.mlkit.genai.prompt.TextPart
 import com.google.mlkit.genai.prompt.generateContentRequest
@@ -37,4 +38,21 @@ class NanoModel : LocalModel {
     }
 
     override suspend fun tokenLimit(): Int = runCatching { client.getTokenLimit() }.getOrDefault(4_000)
+
+    override fun explain(e: Throwable): String {
+        val code = (e as? GenAiException ?: e.cause as? GenAiException)?.errorCode
+            ?: return "${e.javaClass.simpleName}${e.message?.let { ": $it" }.orEmpty()}"
+        val why = when (code) {
+            GenAiException.ErrorCode.AICORE_INCOMPATIBLE -> "Android AICore on this phone is missing or too old. Update \"Android AICore\" in the Play Store, then try again."
+            GenAiException.ErrorCode.NEEDS_SYSTEM_UPDATE -> "it needs a system update: check Settings → System → Software update."
+            GenAiException.ErrorCode.NOT_AVAILABLE -> "Android hasn't turned it on for this phone yet. It's also off on phones with an unlocked bootloader."
+            GenAiException.ErrorCode.NOT_SUPPORTED -> "Android says this phone doesn't support it."
+            GenAiException.ErrorCode.NOT_ENOUGH_DISK_SPACE -> "there isn't enough free storage for the model."
+            GenAiException.ErrorCode.BACKGROUND_USE_BLOCKED -> "Android only lets it answer while Leftovers is open."
+            GenAiException.ErrorCode.BUSY, GenAiException.ErrorCode.PER_APP_BATTERY_USE_QUOTA_EXCEEDED -> "it's busy or has been used a lot; try again in a while."
+            GenAiException.ErrorCode.REQUEST_TOO_LARGE -> "the question was too long for it."
+            else -> e.message?.takeIf { it.isNotBlank() } ?: "it stopped"
+        }
+        return "$why (code $code)"
+    }
 }

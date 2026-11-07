@@ -70,6 +70,21 @@ class OnDeviceTest {
         assertTrue(last.contains("""Result of summarize: {"spent": 2800}"""))
     }
 
+    @Test fun aFailedCheckSaysWhy() = runBlocking {
+        val broken = object : LocalModel {
+            override suspend fun status(): LocalStatus = throw IllegalStateException()
+            override suspend fun download() {}
+            override suspend fun generate(prompt: String, maxOutputTokens: Int) = ""
+            override suspend fun tokenLimit() = 4_000
+            override fun explain(e: Throwable) = "Android AICore is missing (code -101)"
+        }
+        OnDevice.override = broken
+        assertEquals(LocalStatus.UNAVAILABLE, OnDevice.status())
+        assertEquals("Android AICore is missing (code -101)", OnDevice.problem)
+        val e = runCatching { OnDeviceSession("Facts.", emptyList()) { broken }.sendUser("Hi") }.exceptionOrNull()
+        assertTrue(e is AiException && e.message!!.contains("code -101"))
+    }
+
     @Test fun unknownToolsAreJustText() {
         assertNull(OnDeviceSession.parseCall("""CALL {"tool": "wipe_phone", "args": {}}""", setOf("summarize")))
         assertNull(OnDeviceSession.parseCall("You spent ₹500.", setOf("summarize")))

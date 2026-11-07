@@ -23,7 +23,7 @@ object SmsParser {
     private val debitWords = Regex(
         // "Dr. from A/C" is Bank of Baroda's "debited".
         // "Transaction of", "payment of", "charged", "transferred" and "UPI txn" are how cards, billers and some banks say it.
-        """\b(debited|spent|paid|sent|withdrawn|purchase|txn of|transaction of|payment of|debit|charged|transferred|upi txn|thank you for using|used at|used for)\b|\bdr\.?\s+(from|to)\b""",
+        """\b(debited|spent|paid|sent|withdrawn|purchase|txn of|transaction of|payment of|debit|charged|transferred|upi txn|send money|cash ?out|thank you for using|used at|used for)\b|\bdr\.?\s+(from|to)\b""",
         RegexOption.IGNORE_CASE,
     )
     private val creditOnly = Regex("""\b(credited|received|refund|cashback)\b""", RegexOption.IGNORE_CASE)
@@ -77,6 +77,8 @@ object SmsParser {
         return candidates.filterNotNull().map { m ->
             m.groupValues[1].trim()
                 .substringBefore('@')
+                // bKash: "to 01XXXXXXXXX successful", "to Merchant is successful".
+                .replace(Regex("""\s+(is\s+)?successful\w*$""", RegexOption.IGNORE_CASE), "")
                 .replace(Regex("""^(vpa|upi|merchant)\s+""", RegexOption.IGNORE_CASE), "")
                 .replace(Regex("""\s+"""), " ")
         }.firstOrNull {
@@ -109,7 +111,9 @@ object SmsParser {
     /** [extraWords] are the user's own keywords that also mark a message as a payment. */
     fun parse(body: String, extraWords: Collection<String> = emptyList()): Parsed? = check(body, extraWords).parsed
 
-    fun check(body: String, extraWords: Collection<String> = emptyList()): Check {
+    fun check(message: String, extraWords: Collection<String> = emptyList()): Check {
+        // bKash writes "Tk. 100to Merchant": the amount runs into the next word.
+        val body = message.replace(Regex("""(\d)(to|from)\b""", RegexOption.IGNORE_CASE), "$1 $2")
         ignore.find(body)?.let { return Check(null, "Skipped: it says \"${it.value}\", like an OTP, a reminder or a failed payment.") }
         // "credited" or "received" without "debited" is money coming in, suggested as income.
         val income = creditOnly.containsMatchIn(body) && !Regex("debited", RegexOption.IGNORE_CASE).containsMatchIn(body)

@@ -973,7 +973,32 @@ private fun LocalModelStatus() {
         com.leftovers.app.ai.LocalStatus.DOWNLOADABLE -> "This phone supports it; Android needs to fetch it first."
         com.leftovers.app.ai.LocalStatus.UNAVAILABLE -> "This phone doesn't have its own AI, or Android hasn't set it up yet."
     }
-    Text(error ?: text, style = MaterialTheme.typography.bodySmall, color = if (status == com.leftovers.app.ai.LocalStatus.READY && error == null) c.positive else c.textSecondary, modifier = Modifier.padding(start = 6.dp))
+    // Gemini Nano reaches apps through Google's Android AICore app: say so when it's missing or switched off.
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val aiCore = remember {
+        runCatching { context.packageManager.getApplicationInfo("com.google.android.aicore", 0).enabled }.getOrNull()
+    }
+    val reason = com.leftovers.app.ai.OnDevice.problem.takeIf { status == com.leftovers.app.ai.LocalStatus.UNAVAILABLE }
+    val shown = error ?: when {
+        status == com.leftovers.app.ai.LocalStatus.READY || status == null -> text
+        aiCore == null -> "Apps reach it through Google's \"Android AICore\", which isn't on this phone. The AI in the phone's own settings, or in other apps, can't be shared with apps."
+        aiCore == false -> "\"Android AICore\" is turned off on this phone. Turn it on in Settings → Apps."
+        reason != null -> "Not ready: $reason"
+        else -> text
+    }
+    Text(shown, style = MaterialTheme.typography.bodySmall, color = if (status == com.leftovers.app.ai.LocalStatus.READY && error == null) c.positive else c.textSecondary, modifier = Modifier.padding(start = 6.dp))
+    if (status != null && status != com.leftovers.app.ai.LocalStatus.READY && aiCore != true) {
+        Text(
+            "Get Android AICore ↗",
+            style = MaterialTheme.typography.labelLarge,
+            color = c.accent,
+            modifier = Modifier.padding(start = 6.dp).pressable({
+                runCatching {
+                    context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://play.google.com/store/apps/details?id=com.google.android.aicore")))
+                }
+            }, pressedScale = 0.97f),
+        )
+    }
     // Every phone Google lists, so people can check theirs before connecting.
     var showPhones by rememberSaveable { mutableStateOf(false) }
     Text(

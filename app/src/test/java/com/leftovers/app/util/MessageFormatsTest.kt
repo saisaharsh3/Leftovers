@@ -30,6 +30,23 @@ class MessageFormatsTest {
         assertEquals("Netflix", sms("Rs 649.00 auto-debited from A/c XX1234 for NETFLIX mandate on 07-10-26").merchant)
     }
 
+    @Test fun bKash() {
+        // Made-up messages in bKash's format (#51).
+        val cashOut = sms("Cash Out Tk 500.0 to 01XXXXXXXXX successful. Fee Tk 9.25. Balance Tk 100. TrxID AB12CD34EF at 05/11/2026 23:07.")
+        assertEquals(500_00L, cashOut.amountMinor)
+        assertEquals(false, cashOut.isIncome)
+        assertEquals("", cashOut.merchant)
+        val received = sms("You have received Tk 200.00 from 01XXXXXXXXX. Ref 0. Fee Tk 0.00. Balance Tk 212.74. TrxID AB12CD34EF at 05/11/2026 22:56")
+        assertEquals(200_00L, received.amountMinor)
+        assertEquals(true, received.isIncome)
+        val payment = sms("Payment of Tk. 100to Merchant is successful. Balance Tk 46.72. TrxID AB12CD34EF at 23/10/2026 22:14")
+        assertEquals(100_00L, payment.amountMinor)
+        assertEquals("Merchant", payment.merchant)
+        val sent = sms("Send Money Tk 200.00 to 01XXXXXXXXX successful. Ref 1. Fee Tk 0.00. Balance Tk 3.72. TrxID AB12CD34EF at 21/10/2026 20:58")
+        assertEquals(200_00L, sent.amountMinor)
+        assertEquals(false, sent.isIncome)
+    }
+
     @Test fun offersAreNotPayments() {
         assertNull(SmsParser.parse("Get up to Rs 500 cashback on your next recharge! Use code SAVE. T&C apply"))
         assertTrue(SmsParser.check("Flat 50% off on orders above Rs 299. Order now").reason.startsWith("Skipped"))
