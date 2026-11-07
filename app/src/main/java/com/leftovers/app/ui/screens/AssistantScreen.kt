@@ -248,10 +248,12 @@ class AssistantViewModel(private val container: AppContainer, private val assist
     /** Runs one exchange with the model; named so it can never resolve to Kotlin's scope function `run`. */
     private fun runTurn(step: suspend () -> ModelTurn) {
         busy = true
-        job = viewModelScope.launch {
+        // Started only once it's the current job: an answer can come back at once (the phone's own AI), and its
+        // finally below must see itself as the job to clear "busy", or the dots stay forever.
+        val turn = viewModelScope.launch(start = kotlinx.coroutines.CoroutineStart.LAZY) {
             try {
-                var turn = step()
-                while (!handle(turn)) turn = session!!.sendToolResults(takeResults())
+                var reply = step()
+                while (!handle(reply)) reply = session!!.sendToolResults(takeResults())
             } catch (e: CancellationException) {
                 throw e // Stopped by the user; stop() already tidied up.
             } catch (e: AiException) {
@@ -268,6 +270,8 @@ class AssistantViewModel(private val container: AppContainer, private val assist
                 }
             }
         }
+        job = turn
+        turn.start()
     }
 
     /** Shows the reply and answers its lookups. Returns true when the turn is over or waiting on the user. */
@@ -791,6 +795,21 @@ fun AssistantSetupSheet(onDismiss: () -> Unit, viewModel: AssistantSetupViewMode
                             Spacer(Modifier.height(8.dp))
                             Text(text, style = MaterialTheme.typography.bodySmall, color = if (ok) c.positive else c.negative)
                         }
+                        // One tap between the AIs with a key already saved, and the phone's own: nothing to type again.
+                        val others = viewModel.settings.ready().filter { it != current.provider }
+                        if (others.isNotEmpty()) {
+                            Spacer(Modifier.height(8.dp))
+                            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                others.forEach { p ->
+                                    Chip("Switch to ${p.label}", {
+                                        viewModel.settings.switchTo(p)
+                                        provider = p
+                                        model = viewModel.settings.lastModel(p)
+                                        tested = null
+                                    }, icon = Lucide.Repeat)
+                                }
+                            }
+                        }
                         Spacer(Modifier.height(8.dp))
                         SecondaryButton("Disconnect and delete key", {
                             viewModel.settings.disconnect()
@@ -828,7 +847,7 @@ fun AssistantSetupSheet(onDismiss: () -> Unit, viewModel: AssistantSetupViewMode
                 )
             }
 
-            val savedKey = current?.takeIf { it.provider == provider }?.apiKey
+            val savedKey = viewModel.settings.savedKey(provider)
             // No key, model list or answer style for the phone's own AI.
             if (!local) {
                 GlassTextField(

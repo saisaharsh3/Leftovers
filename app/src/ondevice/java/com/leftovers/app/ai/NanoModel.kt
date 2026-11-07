@@ -4,7 +4,9 @@ import androidx.annotation.Keep
 import com.google.mlkit.genai.common.DownloadStatus
 import com.google.mlkit.genai.common.FeatureStatus
 import com.google.mlkit.genai.common.GenAiException
+import com.google.mlkit.genai.prompt.GenerateContentRequest
 import com.google.mlkit.genai.prompt.Generation
+import com.google.mlkit.genai.prompt.ImagePart
 import com.google.mlkit.genai.prompt.TextPart
 import com.google.mlkit.genai.prompt.generateContentRequest
 
@@ -27,13 +29,15 @@ class NanoModel : LocalModel {
         client.download().collect { if (it is DownloadStatus.DownloadFailed) throw it.e }
     }
 
-    override suspend fun generate(prompt: String, maxOutputTokens: Int): String {
-        val response = client.generateContent(
-            generateContentRequest(TextPart(prompt)) {
-                temperature = 0.2f
-                this.maxOutputTokens = maxOutputTokens
-            },
-        )
+    override suspend fun generate(prompt: String, maxOutputTokens: Int, image: ByteArray?): String {
+        val text = TextPart(prompt)
+        val settings: GenerateContentRequest.Builder.() -> Unit = {
+            temperature = 0.2f
+            this.maxOutputTokens = maxOutputTokens
+        }
+        // A photo, such as a bill, goes first, then what to do with it.
+        val request = if (image != null) generateContentRequest(ImagePart(image), text, settings) else generateContentRequest(text, settings)
+        val response = client.generateContent(request)
         return response.candidates.firstOrNull()?.text.orEmpty()
     }
 

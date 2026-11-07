@@ -17,10 +17,12 @@ internal class OnDeviceSession(
     private val facts = system.substringBefore("\n\n").take(1_500)
     private val turns = mutableListOf<String>()
     private var calls = 0
+    /** The photo sent with the latest message, read again with each step of the answer to it. */
+    private var photo: ByteArray? = null
 
     override suspend fun sendUser(text: String, image: ImageInput?): ModelTurn {
-        if (image != null) return ModelTurn("Photos need an online AI: the one on this phone reads text only.", emptyList())
-        turns += "User: ${text.trim()}"
+        photo = image?.let { java.util.Base64.getDecoder().decode(it.base64) }
+        turns += "User: ${text.trim()}" + if (photo != null) " [photo attached]" else ""
         return reply()
     }
 
@@ -42,7 +44,7 @@ internal class OnDeviceSession(
             throw AiException("This phone's AI isn't ready" + (OnDevice.problem?.let { ": $it" } ?: ". Check it in the AI assistant's settings."))
         }
         val answer = try {
-            m.generate(prompt(m.tokenLimit()), MAX_OUT).trim()
+            m.generate(prompt(m.tokenLimit()), MAX_OUT, photo).trim()
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
         } catch (e: Throwable) {
@@ -56,6 +58,7 @@ internal class OnDeviceSession(
             return ModelTurn("", listOf(call))
         }
         calls = 0
+        photo = null
         val text = answer.substringBefore("CALL").trim().ifEmpty { "Sorry, I couldn't work that out. Try asking more simply." }
         turns += "Assistant: $text"
         return ModelTurn(text, emptyList())
@@ -74,7 +77,12 @@ internal class OnDeviceSession(
             }
             append("\nTo use a tool, reply with one line only: CALL {\"tool\": \"name\", \"args\": {...}} (* marks required args). ")
             append("Look up amounts, dates and ids with the tools; never make them up. Changes are shown to the user to Apply, so call them directly. ")
-            append("Otherwise answer the user briefly in plain words.\n\n")
+            append("Otherwise answer the user briefly in plain words, writing money with its currency symbol (₹1,250, not 1250 INR).\n")
+            if (photo != null) {
+                append("The photo is a bill or receipt: read the total actually paid, the date and the shop, then add it with add_entry, ")
+                append("or add_split_bill if its items belong to different categories. Use the date on the bill.\n")
+            }
+            append('\n')
         }
         // About 3.5 characters to a token; the answer needs its share.
         val room = ((limit - MAX_OUT) * 3.5).toInt() - head.length

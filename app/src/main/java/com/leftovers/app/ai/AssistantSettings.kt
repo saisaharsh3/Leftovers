@@ -105,7 +105,28 @@ class AssistantSettings(context: Context) {
     /** Last provider/model chosen, so the setup sheet remembers them after a disconnect. */
     val lastProvider: AiProvider get() = AiProvider.entries.firstOrNull { it.name == prefs.getString(PROVIDER, null) } ?: AiProvider.CLAUDE
     fun lastModel(provider: AiProvider): String =
-        prefs.getString(MODEL, null)?.takeIf { lastProvider == provider } ?: provider.defaultModel
+        prefs.getString("$MODEL.${provider.name}", null)
+            ?: prefs.getString(MODEL, null)?.takeIf { lastProvider == provider }
+            ?: provider.defaultModel
+
+    /**
+     * Each provider keeps its own key, so switching to the phone's AI and back to Gemini needs no key typed again.
+     * Null when none is saved for [provider].
+     */
+    fun savedKey(provider: AiProvider): String? =
+        (prefs.getString("$KEY.${provider.name}", null) ?: prefs.getString(KEY, null)?.takeIf { lastProvider == provider })
+            ?.let(KeyVault::decrypt)?.takeIf { it.isNotEmpty() || provider == AiProvider.ON_DEVICE || provider == AiProvider.CUSTOM }
+
+    /** The providers that can be switched to in one tap: a key is saved for them, or they need none. */
+    fun ready(): List<AiProvider> = AiProvider.entries.filter {
+        if (it == AiProvider.ON_DEVICE) OnDevice.inBuild else savedKey(it) != null && (it.baseUrl != null || lastCustomUrl.isNotEmpty())
+    }
+
+    /** Switches to [provider] with its saved key and model. */
+    fun switchTo(provider: AiProvider) {
+        val key = savedKey(provider) ?: if (provider == AiProvider.ON_DEVICE) "" else return
+        connect(provider, lastModel(provider), key, lastCustomUrl)
+    }
     val lastCustomUrl: String get() = prefs.getString(BASE_URL, null).orEmpty()
     val thorough: Boolean get() = prefs.getBoolean(THOROUGH, false)
 
@@ -131,23 +152,33 @@ class AssistantSettings(context: Context) {
     /** [customUrl] is required for [AiProvider.CUSTOM] and must be HTTPS. */
     fun connect(provider: AiProvider, model: String, apiKey: String, customUrl: String = "") {
         val url = provider.baseUrl ?: requireHttps(customUrl)
+        val sealed = KeyVault.encrypt(apiKey.trim())
+        val chosen = model.trim().ifEmpty { provider.defaultModel }
         prefs.edit()
             .putString(PROVIDER, provider.name)
-            .putString(MODEL, model.trim().ifEmpty { provider.defaultModel })
-            .putString(KEY, KeyVault.encrypt(apiKey.trim()))
-            .putString(BASE_URL, url)
+            .putString(MODEL, chosen)
+            .putString("$MODEL.${provider.name}", chosen)
+            .putString(KEY, sealed)
+            .putString("$KEY.${provider.name}", sealed)
+            .apply {
+                // The phone's own AI has no server; the custom server's address stays for switching back to it.
+                if (provider != AiProvider.ON_DEVICE) putString(BASE_URL, url)
+            }
             .apply()
         _config.value = load()
     }
 
+    /** Disconnects and deletes the connected provider's key; keys saved for the others stay. */
     fun disconnect() {
-        prefs.edit().remove(KEY).apply()
+        prefs.edit().remove(KEY).remove("$KEY.$lastProvider").apply()
         _config.value = null
     }
 
     private fun load(): AssistantConfig? {
         val provider = AiProvider.entries.firstOrNull { it.name == prefs.getString(PROVIDER, null) } ?: return null
         val key = prefs.getString(KEY, null)?.let(KeyVault::decrypt) ?: return null
+        // Keys saved before each provider kept its own: filed under the provider they were for.
+        if (!prefs.contains("$KEY.${provider.name}")) prefs.getString(KEY, null)?.let { prefs.edit().putString("$KEY.${provider.name}", it).apply() }
         val url = provider.baseUrl ?: prefs.getString(BASE_URL, null) ?: return null
         return AssistantConfig(provider, prefs.getString(MODEL, null) ?: provider.defaultModel, key, url, prefs.getBoolean(THOROUGH, false))
     }

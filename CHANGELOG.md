@@ -24,6 +24,10 @@ All notable changes to Leftovers. Download any version from
 - Reading bank SMS and emails: the amount paid, not the balance or card limit printed before it ("Avl Bal Rs.12,000 after debit of Rs.500" is ₹500); "transaction of", "payment of", "charged", "transferred" and "UPI txn" are understood; offers aren't suggested; autopay names who it's for; and receipts take the Total paid, not the Subtotal or Item total
 - bKash messages from Bangladesh are read: Send Money, Cash Out, Payment and money received, in Tk (#51)
 - Dev builds: the AI Android already keeps on 68 phones and tablets (Gemini Nano: Pixel 9, 10 and 11, Galaxy S26 and the latest Folds and Flips, OnePlus 13 and 15, recent Xiaomi, POCO, OPPO, vivo, iQOO, realme, Honor, Motorola, Sony, Sharp and Lenovo models; the full list is in the AI assistant's settings), with no key and nothing leaving the phone. Pick "On this phone" in the AI assistant to ask questions and add or edit entries (each still waits for Apply); it also sums up a month in Insights, picks a category for a payment to somewhere new, and reads bank SMS and emails the rules can't. Release and F-Droid builds don't include it, as it needs Google's closed library
+- On this phone reads photos of bills too (the camera button and photos in the chat), on phones whose built-in AI can see images
+- AI assistant: each AI keeps its own key, so switching to On this phone and back to Gemini or Claude needs no key typed again, with one-tap Switch buttons in its settings
+- AI assistant: it can make a PDF statement of a month or year, export entries to CSV, and create savings goals, from the chat
+- The assistant no longer keeps showing its dots after an instant answer
 
 ## 1.9.0
 

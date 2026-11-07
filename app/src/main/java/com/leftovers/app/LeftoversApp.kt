@@ -54,6 +54,9 @@ class LeftoversApp : Application() {
 
 /** Simple manual dependency container shared by the whole app. */
 class AppContainer(private val context: Context) {
+    /** The app's context, for work that makes files to share (the assistant's PDF and CSV). */
+    val appContext: Context get() = context
+
     private companion object {
         /** How long start-up housekeeping (rescheduling, clean-up) waits for the first screen. */
         const val STARTUP_QUIET_MS = 2_000L

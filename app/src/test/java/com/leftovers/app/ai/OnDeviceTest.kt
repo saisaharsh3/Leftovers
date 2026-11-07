@@ -14,8 +14,10 @@ class OnDeviceTest {
         val prompts = mutableListOf<String>()
         override suspend fun status() = if (ready) LocalStatus.READY else LocalStatus.UNAVAILABLE
         override suspend fun download() {}
-        override suspend fun generate(prompt: String, maxOutputTokens: Int): String {
+        val images = mutableListOf<ByteArray?>()
+        override suspend fun generate(prompt: String, maxOutputTokens: Int, image: ByteArray?): String {
             prompts += prompt
+            images += image
             return queue.removeFirstOrNull() ?: ""
         }
         override suspend fun tokenLimit() = 4_000
@@ -74,7 +76,7 @@ class OnDeviceTest {
         val broken = object : LocalModel {
             override suspend fun status(): LocalStatus = throw IllegalStateException()
             override suspend fun download() {}
-            override suspend fun generate(prompt: String, maxOutputTokens: Int) = ""
+            override suspend fun generate(prompt: String, maxOutputTokens: Int, image: ByteArray?) = ""
             override suspend fun tokenLimit() = 4_000
             override fun explain(e: Throwable) = "Android AICore is missing (code -101)"
         }
@@ -83,6 +85,22 @@ class OnDeviceTest {
         assertEquals("Android AICore is missing (code -101)", OnDevice.problem)
         val e = runCatching { OnDeviceSession("Facts.", emptyList()) { broken }.sendUser("Hi") }.exceptionOrNull()
         assertTrue(e is AiException && e.message!!.contains("code -101"))
+    }
+
+    @Test fun aBillPhotoGoesToTheModel() = runBlocking {
+        val tools = listOf(ToolSpec("add_entry", "Add an entry.", listOf(Param("amount", "number", "Amount", required = true)), changesData = true))
+        val fake = Fake("""CALL {"tool": "add_entry", "args": {"amount": 3879.03}}""", "Added it.")
+        val session = OnDeviceSession("Facts.", tools) { fake }
+        val bytes = byteArrayOf(1, 2, 3)
+        val first = session.sendUser("Add this", ImageInput("image/jpeg", java.util.Base64.getEncoder().encodeToString(bytes)))
+        assertEquals("add_entry", first.calls.single().name)
+        assertTrue(fake.prompts.last().contains("The photo is a bill"))
+        // The photo stays with every step of the answer to it, and goes once it's answered.
+        session.sendToolResults(listOf(ToolOutcome(first.calls.single(), "Applied")))
+        assertTrue(fake.images.all { it.contentEquals(bytes) })
+        fake.queue.add("Nothing else.")
+        session.sendUser("Thanks")
+        assertNull(fake.images.last())
     }
 
     @Test fun unknownToolsAreJustText() {

@@ -12,7 +12,8 @@ interface LocalModel {
     suspend fun status(): LocalStatus
     /** Asks Android to fetch the model when the phone supports it but hasn't got it yet. */
     suspend fun download()
-    suspend fun generate(prompt: String, maxOutputTokens: Int): String
+    /** [image] is a photo (JPEG or PNG bytes) to read along with the prompt, such as a bill. */
+    suspend fun generate(prompt: String, maxOutputTokens: Int, image: ByteArray? = null): String
     /** What a prompt and its answer can add up to, in tokens. */
     suspend fun tokenLimit(): Int
     /** Why [e] happened, in plain words, from Android's own error code. */
