@@ -34,7 +34,8 @@ internal class OnDeviceSession(
     private suspend fun reply(): ModelTurn {
         val m = model() ?: throw AiException("This phone's AI isn't in this build.")
         val status = try {
-            m.status()
+            // Right after the app opens, Android may still be starting its AI: wait for it rather than give up.
+            if (m === (OnDevice.override ?: OnDevice.model)) OnDevice.awaitReady() else m.status()
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
         } catch (e: Throwable) {

@@ -57,7 +57,7 @@ enum class AiProvider(
     // The phone's own model (Gemini Nano): no key, nothing leaves the phone. Shown only in builds that have it.
     ON_DEVICE("On this phone", ApiStyle.ON_DEVICE, "on-device", "gemini-nano",
         listOf("gemini-nano"), "", null,
-        note = "Runs on the phone with the AI Android keeps there. Nothing leaves the phone. It's small: best for short questions and simple changes, and only while Leftovers is open."),
+        note = "Runs on the phone with the AI Android keeps there. Nothing leaves the phone. It's small: best for short questions and simple changes, and only while Leftovers is open. The first time after opening Leftovers, it can take a few seconds to start."),
     CUSTOM("Custom", ApiStyle.OPENAI, null, "",
         emptyList(), "API key (if the server needs one)", null,
         note = "Any OpenAI-compatible server over HTTPS, e.g. one you host yourself. Only connect to servers you trust."),

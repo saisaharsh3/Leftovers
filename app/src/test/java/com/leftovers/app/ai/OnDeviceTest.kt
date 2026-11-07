@@ -23,7 +23,28 @@ class OnDeviceTest {
         override suspend fun tokenLimit() = 4_000
     }
 
-    @After fun reset() { OnDevice.override = null }
+    @org.junit.Before fun quick() { OnDevice.startupMs = 0 }
+
+    @After fun reset() {
+        OnDevice.override = null
+        OnDevice.startupMs = 15_000
+    }
+
+    @Test fun waitsForThePhonesAiToStart() = runBlocking {
+        // Android says "not available" for a moment after the app opens, then it's ready.
+        var asked = 0
+        OnDevice.override = object : LocalModel {
+            override suspend fun status() = if (++asked < 3) LocalStatus.UNAVAILABLE else LocalStatus.READY
+            override suspend fun download() {}
+            override suspend fun generate(prompt: String, maxOutputTokens: Int, image: ByteArray?) = "Groceries"
+            override suspend fun tokenLimit() = 4_000
+        }
+        OnDevice.startupMs = 5_000
+        var told = false
+        assertEquals(LocalStatus.READY, OnDevice.awaitReady { told = true })
+        assertTrue(told)
+        assertEquals(3, asked)
+    }
 
     @Test fun readsAPaymentButNeverInventsTheAmount() = runBlocking {
         val msg = "Acct 1234: INR 640.00 gone via NEFT to RAVI TRADERS on 07-10-26"

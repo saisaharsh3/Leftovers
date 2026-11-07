@@ -18,6 +18,8 @@ interface LocalModel {
     suspend fun tokenLimit(): Int
     /** Why [e] happened, in plain words, from Android's own error code. */
     fun explain(e: Throwable): String = e.message?.takeIf { it.isNotBlank() } ?: e.javaClass.simpleName
+    /** Loads the model ahead of the first question, so it answers sooner. */
+    suspend fun warmup() {}
 }
 
 /**
@@ -55,13 +57,38 @@ object OnDevice {
         }
     }
 
+    /** How long the phone's AI may take to start after Leftovers opens: Android loads it on first use. */
+    internal var startupMs = 15_000L
+
+    /**
+     * The status once Android has had time to start its AI. Right after Leftovers opens, Android's AICore can
+     * answer "not available" for a few seconds while it loads the model; this asks again until it's ready, or the
+     * time runs out. [onWaiting] is told while it waits, to say "Starting…" instead of "not ready".
+     */
+    suspend fun awaitReady(onWaiting: () -> Unit = {}): LocalStatus {
+        val until = System.currentTimeMillis() + startupMs
+        var s = status()
+        while (s == LocalStatus.UNAVAILABLE && current() != null && System.currentTimeMillis() < until) {
+            onWaiting()
+            kotlinx.coroutines.delay(1_000)
+            s = status()
+        }
+        return s
+    }
+
+    /** Starts the phone's AI in the background, so it's ready by the first question. */
+    suspend fun warmUp() {
+        val m = current() ?: return
+        if (awaitReady() == LocalStatus.READY) runCatching { m.warmup() }
+    }
+
     /** Remembers why a request failed, and returns the reason. */
     internal fun failed(e: Throwable): String = (current()?.explain(e) ?: e.message ?: e.javaClass.simpleName).also { problem = it }
 
     /** The answer to [prompt], or null when the phone's AI isn't there or can't answer (Android allows it in the foreground only). */
     suspend fun ask(prompt: String, maxOutputTokens: Int = 200): String? {
         val m = current() ?: return null
-        if (status() != LocalStatus.READY) return null
+        if (awaitReady() != LocalStatus.READY) return null
         return runCatching { m.generate(prompt, maxOutputTokens).trim() }.onFailure { failed(it) }.getOrNull()?.takeIf { it.isNotEmpty() }
     }
 

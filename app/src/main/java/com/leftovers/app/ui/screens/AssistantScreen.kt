@@ -146,6 +146,11 @@ class AssistantViewModel(private val container: AppContainer, private val assist
     private var job: Job? = null
 
     init {
+        // The phone's own AI takes a few seconds to start after the app opens: begin now, so it's ready by the
+        // first question.
+        viewModelScope.launch {
+            config.collect { if (it?.provider == AiProvider.ON_DEVICE) com.leftovers.app.ai.OnDevice.warmUp() }
+        }
         // A new provider, key or privacy setting starts a fresh conversation.
         viewModelScope.launch {
             combine(config, privacy) { c, p -> c to p }.drop(1).collect {
@@ -767,60 +772,82 @@ fun AssistantSetupSheet(onDismiss: () -> Unit, viewModel: AssistantSetupViewMode
             val current = config
             if (current != null) {
                 Glass(Modifier.fillMaxWidth(), tint = c.positive.copy(alpha = 0.12f)) {
-                    Column(Modifier.padding(16.dp)) {
-                        Text("Connected to ${current.provider.label}", style = MaterialTheme.typography.titleSmall, color = c.textPrimary)
-                        Text(current.model, style = MaterialTheme.typography.bodySmall, color = c.textSecondary)
-                        Spacer(Modifier.height(12.dp))
-                        // Sends one short message, so the key, the model and the network are checked together.
-                        SecondaryButton(if (testing) "Testing…" else "Test connection", {
-                            if (!testing) {
-                                testing = true
-                                tested = null
-                                scope.launch {
-                                    tested = try {
-                                        val ms = testConnection(current)
-                                        true to "Working. ${current.model} answered in ${String.format(java.util.Locale.ROOT, "%.1f", ms / 1000.0)} s."
-                                    } catch (e: CancellationException) {
-                                        throw e
-                                    } catch (e: Exception) {
-                                        // Already in that setting, so not "check it in Settings".
-                                        false to (e.message?.removeSuffix(" Check it in Settings → AI assistant.") ?: "The test failed.")
-                                    } finally {
-                                        testing = false
-                                    }
-                                }
+                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        // Who's connected, with a quick check beside it: the one thing to know, then the one thing to do.
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(Modifier.size(8.dp).clip(CircleShape).background(c.positive))
+                            Spacer(Modifier.width(10.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(current.provider.label, style = MaterialTheme.typography.titleSmall, color = c.textPrimary)
+                                Text(current.model, style = MaterialTheme.typography.bodySmall, color = c.textSecondary)
                             }
-                        }, Modifier.fillMaxWidth())
+                            // Sends one short message, so the key, the model and the network are checked together.
+                            Text(
+                                if (testing) "Testing…" else "Test",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = c.accent,
+                                modifier = Modifier.pressable({
+                                    if (!testing) {
+                                        testing = true
+                                        tested = null
+                                        scope.launch {
+                                            tested = try {
+                                                val ms = testConnection(current)
+                                                true to "Working. ${current.model} answered in ${String.format(java.util.Locale.ROOT, "%.1f", ms / 1000.0)} s."
+                                            } catch (e: CancellationException) {
+                                                throw e
+                                            } catch (e: Exception) {
+                                                // Already in that setting, so not "check it in Settings".
+                                                false to (e.message?.removeSuffix(" Check it in Settings → AI assistant.") ?: "The test failed.")
+                                            } finally {
+                                                testing = false
+                                            }
+                                        }
+                                    }
+                                }, pressedScale = 0.95f).padding(horizontal = 8.dp, vertical = 6.dp),
+                            )
+                        }
                         tested?.let { (ok, text) ->
-                            Spacer(Modifier.height(8.dp))
                             Text(text, style = MaterialTheme.typography.bodySmall, color = if (ok) c.positive else c.negative)
                         }
                         // One tap between the AIs with a key already saved, and the phone's own: nothing to type again.
                         val others = viewModel.settings.ready().filter { it != current.provider }
                         if (others.isNotEmpty()) {
-                            Spacer(Modifier.height(8.dp))
-                            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                others.forEach { p ->
-                                    Chip("Switch to ${p.label}", {
-                                        viewModel.settings.switchTo(p)
-                                        provider = p
-                                        model = viewModel.settings.lastModel(p)
-                                        tested = null
-                                    }, icon = Lucide.Repeat)
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text("Switch to", style = MaterialTheme.typography.labelMedium, color = c.textSecondary)
+                                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    others.forEach { p ->
+                                        Chip(
+                                            if (p == AiProvider.ON_DEVICE) "This phone" else p.label,
+                                            {
+                                                viewModel.settings.switchTo(p)
+                                                provider = p
+                                                model = viewModel.settings.lastModel(p)
+                                                tested = null
+                                            },
+                                            icon = if (p == AiProvider.ON_DEVICE) Lucide.Smartphone else Lucide.Sparkles,
+                                        )
+                                    }
                                 }
                             }
                         }
-                        Spacer(Modifier.height(8.dp))
-                        SecondaryButton("Disconnect and delete key", {
-                            viewModel.settings.disconnect()
-                            key = ""
-                            agreed = false
-                        }, Modifier.fillMaxWidth())
+                        // Destructive, so quiet: red text at the end, not a button as big as Test.
+                        Text(
+                            if (current.provider == AiProvider.ON_DEVICE) "Disconnect" else "Disconnect and delete key",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = c.negative,
+                            modifier = Modifier.pressable({
+                                viewModel.settings.disconnect()
+                                key = ""
+                                agreed = false
+                                tested = null
+                            }, pressedScale = 0.97f).padding(vertical = 4.dp),
+                        )
                     }
                 }
             }
 
-            Text(if (current == null) "Connect" else "Switch AI", style = MaterialTheme.typography.labelMedium, color = c.textSecondary, modifier = Modifier.padding(start = 6.dp))
+            Text(if (current == null) "Connect" else "Set up another AI", style = MaterialTheme.typography.labelMedium, color = c.textSecondary, modifier = Modifier.padding(start = 6.dp))
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 // The phone's own AI only in builds that have it.
                 AiProvider.entries.filter { it != AiProvider.ON_DEVICE || com.leftovers.app.ai.OnDevice.inBuild }.forEach { p ->
@@ -984,9 +1011,17 @@ private fun LocalModelStatus() {
     val scope = androidx.compose.runtime.rememberCoroutineScope()
     var status by remember { mutableStateOf<com.leftovers.app.ai.LocalStatus?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
-    androidx.compose.runtime.LaunchedEffect(Unit) { status = com.leftovers.app.ai.OnDevice.status() }
+    // Android can take a few seconds to start its AI after the app opens: say so while waiting, not "not ready".
+    var starting by remember { mutableStateOf(false) }
+    val appContext = androidx.compose.ui.platform.LocalContext.current
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        // Without Android AICore there's nothing to wait for: say why at once.
+        val hasAiCore = runCatching { appContext.packageManager.getApplicationInfo("com.google.android.aicore", 0).enabled }.getOrDefault(false)
+        status = if (hasAiCore) com.leftovers.app.ai.OnDevice.awaitReady { starting = true } else com.leftovers.app.ai.OnDevice.status()
+        starting = false
+    }
     val text = when (status) {
-        null -> "Checking this phone…"
+        null -> if (starting) "Starting the phone's AI… this can take a few seconds the first time." else "Checking this phone…"
         com.leftovers.app.ai.LocalStatus.READY -> "Ready on this phone."
         com.leftovers.app.ai.LocalStatus.DOWNLOADING -> "Android is getting the AI ready. Try again in a few minutes."
         com.leftovers.app.ai.LocalStatus.DOWNLOADABLE -> "This phone supports it; Android needs to fetch it first."

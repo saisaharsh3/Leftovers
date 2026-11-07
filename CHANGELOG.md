@@ -7,6 +7,8 @@ All notable changes to Leftovers. Download any version from
 
 - Help & features, at the bottom of Settings: every feature in a line or two and where to find it, with a search ("transfer", "PDF", "backup") and a way to open each one
 - The AI assistant answers "how do I…" and "where is…" from the same guide, with the path to each feature
+- On this phone: right after the app opens, it waits for Android to start its AI ("Starting the phone's AI…") instead of saying it isn't ready, and starts it as soon as the assistant opens
+- AI assistant settings: the connected AI with Test beside it, one-tap Switch to, and Disconnect as quiet red text
 - A long amount at the top of Home shrinks to fit instead of running off the screen
 - Accounts can be put in any order: tap Reorder in Accounts and drag them by finger. There are more icons to choose for one, too (#47)
 - Envelope budgets: a Dates budget can count only the entries chosen for it, those with a #tag like #trip and/or from one account, so rent and other spending in the same dates leave it be, in Safe to spend, the bars and the alerts too (#42)

@@ -41,6 +41,10 @@ class NanoModel : LocalModel {
         return response.candidates.firstOrNull()?.text.orEmpty()
     }
 
+    override suspend fun warmup() {
+        client.warmup()
+    }
+
     override suspend fun tokenLimit(): Int = runCatching { client.getTokenLimit() }.getOrDefault(4_000)
 
     override fun explain(e: Throwable): String {
