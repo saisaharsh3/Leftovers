@@ -508,6 +508,7 @@ fun SettingsScreen(
     onManageCategories: () -> Unit,
     onOpenAccounts: () -> Unit,
     onOpenDeleted: () -> Unit,
+    onOpenHelp: () -> Unit = {},
     viewModel: SettingsViewModel = viewModel(factory = AppViewModelProvider.Factory),
 ) {
     val settings by viewModel.settings.collectAsStateWithLifecycle()
@@ -952,6 +953,9 @@ fun SettingsScreen(
                 val uriHandler = LocalUriHandler.current
                 Glass(Modifier.fillMaxWidth().padding(top = 24.dp)) {
                     Column(Modifier.padding(vertical = 6.dp)) {
+                        // Every feature and where it is, searchable.
+                        NavRow(Lucide.Search, "Help & features", "Find anything", onOpenHelp)
+                        RowDivider()
                         // Opens GitHub's issue forms (bug report or feature request) in the browser.
                         NavRow(Lucide.MessageCircle, "Report a problem or suggest an idea", "GitHub") {
                             uriHandler.openUri("https://github.com/saisaharsh3/Leftovers/issues/new/choose")

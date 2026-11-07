@@ -5,6 +5,7 @@ All notable changes to Leftovers. Download any version from
 
 ## Unreleased
 
+- Help & features, at the bottom of Settings: every feature in a line or two and where to find it, with a search ("transfer", "PDF", "backup") and a way to open each one
 - Accounts can be put in any order: tap Reorder in Accounts and drag them by finger. There are more icons to choose for one, too (#47)
 - Envelope budgets: a Dates budget can count only the entries chosen for it, those with a #tag like #trip and/or from one account, so rent and other spending in the same dates leave it be, in Safe to spend, the bars and the alerts too (#42)
 - The budget's spent figures leave out accounts kept out of the budget, as Safe to spend already did (#33)

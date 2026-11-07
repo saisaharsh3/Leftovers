@@ -132,6 +132,7 @@ private object Routes {
     const val SETTINGS = "settings"
     const val NOTICES = "notices"
     const val CATEGORIES = "categories"
+    const val HELP = "help"
     const val ASSISTANT = "assistant?ask={ask}"
     /** Opens the assistant; a non-empty [ask] is sent as the first question. */
     fun assistant(ask: String = "") = "assistant?ask=" + android.net.Uri.encode(ask)
@@ -429,7 +430,31 @@ fun LeftoversNavHost(openAdd: Boolean = false, onOpenAddHandled: () -> Unit = {}
                             onManageCategories = { nav.navigate(Routes.CATEGORIES) },
                             onOpenAccounts = { nav.navigate(Routes.ACCOUNTS) },
                             onOpenDeleted = { nav.navigate(Routes.DELETED) },
+                            onOpenHelp = { nav.navigate(Routes.HELP) },
                         )
+                    }
+                    screen(Routes.HELP) {
+                        com.leftovers.app.ui.screens.HelpScreen(onBack = back) { place ->
+                            when (place) {
+                                // The tabs open as tabs, with the tab bar; everything else on top of the guide.
+                                com.leftovers.app.util.HelpGuide.Place.HOME -> nav.switchTab(Routes.HOME)
+                                com.leftovers.app.util.HelpGuide.Place.ACTIVITY -> nav.switchTab(Routes.ACTIVITY)
+                                com.leftovers.app.util.HelpGuide.Place.INSIGHTS -> nav.switchTab(Routes.INSIGHTS)
+                                com.leftovers.app.util.HelpGuide.Place.PLAN -> nav.switchTab(Routes.PLAN)
+                                com.leftovers.app.util.HelpGuide.Place.ADD -> nav.navigate(Routes.add())
+                                com.leftovers.app.util.HelpGuide.Place.ACCOUNTS -> nav.navigate(Routes.ACCOUNTS)
+                                com.leftovers.app.util.HelpGuide.Place.BUDGET -> nav.navigate(Routes.BUDGET)
+                                com.leftovers.app.util.HelpGuide.Place.BUDGET_PLAN -> nav.navigate(Routes.BUDGET_PLAN)
+                                com.leftovers.app.util.HelpGuide.Place.SUBSCRIPTIONS -> nav.navigate(Routes.subscriptions())
+                                com.leftovers.app.util.HelpGuide.Place.GOALS -> nav.navigate(Routes.GOALS)
+                                com.leftovers.app.util.HelpGuide.Place.DEBTS -> nav.navigate(Routes.DEBTS)
+                                com.leftovers.app.util.HelpGuide.Place.CATEGORIES -> nav.navigate(Routes.CATEGORIES)
+                                com.leftovers.app.util.HelpGuide.Place.SETTINGS -> back()
+                                com.leftovers.app.util.HelpGuide.Place.DELETED -> nav.navigate(Routes.DELETED)
+                                com.leftovers.app.util.HelpGuide.Place.ASSISTANT -> nav.navigate(Routes.assistant())
+                                com.leftovers.app.util.HelpGuide.Place.NOTICES -> nav.navigate(Routes.NOTICES)
+                            }
+                        }
                     }
                     screen(Routes.CATEGORIES) { CategoriesScreen(onBack = back) }
                 }
