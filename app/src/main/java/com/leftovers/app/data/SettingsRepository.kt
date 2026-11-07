@@ -65,6 +65,10 @@ data class AppSettings(
     val autoBackupError: String? = null,
     /** Notify the day before a subscription is charged. */
     val billReminders: Boolean = true,
+    /** A greeting on the main festivals where the user lives (from their currency). */
+    val festivalGreetings: Boolean = true,
+    /** A short note on the week's spending, Sunday evenings. */
+    val weeklyNotes: Boolean = true,
     /** Subscription suggestions the user said no to. */
     val dismissedSuggestions: Set<String> = emptySet(),
     /** How long deleted entries are kept for restoring, in days; 0 means forever. */
@@ -157,6 +161,8 @@ class SettingsRepository(context: Context) {
             autoBackupLast = p[AUTO_BACKUP_LAST] ?: 0L,
             autoBackupError = p[AUTO_BACKUP_ERROR],
             billReminders = p[BILL_REMINDERS] ?: true,
+            festivalGreetings = p[FESTIVAL_GREETINGS] ?: true,
+            weeklyNotes = p[WEEKLY_NOTES] ?: true,
             dismissedSuggestions = p[DISMISSED_SUGGESTIONS].orEmpty(),
             deletedKeepDays = p[DELETED_KEEP_DAYS] ?: 90,
             homeAccountId = p[HOME_ACCOUNT],
@@ -262,6 +268,8 @@ class SettingsRepository(context: Context) {
     }
     suspend fun setAutoBackupError(message: String?) = store.edit { if (message == null) it.remove(AUTO_BACKUP_ERROR) else it[AUTO_BACKUP_ERROR] = message }
     suspend fun setBillReminders(enabled: Boolean) = store.edit { it[BILL_REMINDERS] = enabled }
+    suspend fun setFestivalGreetings(enabled: Boolean) = store.edit { it[FESTIVAL_GREETINGS] = enabled }
+    suspend fun setWeeklyNotes(enabled: Boolean) = store.edit { it[WEEKLY_NOTES] = enabled }
     suspend fun setHomeAccount(id: Long?) = store.edit { if (id == null) it.remove(HOME_ACCOUNT) else it[HOME_ACCOUNT] = id }
     suspend fun setAutoBackupDays(days: Int) = store.edit { it[AUTO_BACKUP_DAYS] = days }
     suspend fun setAutoBackupKeep(count: Int) = store.edit { it[AUTO_BACKUP_KEEP] = count }
@@ -381,6 +389,8 @@ class SettingsRepository(context: Context) {
         val AUTO_BACKUP_LAST = longPreferencesKey("auto_backup_last")
         val AUTO_BACKUP_ERROR = stringPreferencesKey("auto_backup_error")
         val BILL_REMINDERS = booleanPreferencesKey("bill_reminders")
+        val FESTIVAL_GREETINGS = booleanPreferencesKey("festival_greetings")
+        val WEEKLY_NOTES = booleanPreferencesKey("weekly_notes")
 
         fun defaultCurrencyCode(): String =
             runCatching { Currency.getInstance(Locale.getDefault()).currencyCode }.getOrNull() ?: "USD"

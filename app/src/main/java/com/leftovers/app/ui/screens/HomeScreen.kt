@@ -603,7 +603,9 @@ fun HomeScreen(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Column(Modifier.weight(1f)) {
-                        Text(greeting() + " · " + LocalDate.now().format(greetingDate), style = MaterialTheme.typography.bodyMedium, color = c.textSecondary, maxLines = 1)
+                        // On a festival where the user lives, the greeting says so: "Happy Diwali 🪔 · Sun, 8 Nov".
+                        val festival = remember(money) { com.leftovers.app.util.Festivals.on(LocalDate.now(), money.currency.currencyCode) }
+                        Text((festival?.greeting ?: greeting()) + " · " + LocalDate.now().format(greetingDate), style = MaterialTheme.typography.bodyMedium, color = c.textSecondary, maxLines = 1)
                         Text(state.month.label(), style = MaterialTheme.typography.headlineLarge, color = c.textPrimary)
                     }
                     // Notices: what's new, and a newer version when there is one. A red dot says one is out, until Notices is opened.

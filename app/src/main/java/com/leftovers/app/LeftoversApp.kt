@@ -47,6 +47,7 @@ class LeftoversApp : Application() {
         container.budgetAlerts.createChannel()
         Reminders.createChannel(this)
         BillReminders.createChannel(this)
+        com.leftovers.app.util.Greetings.createChannel(this)
         com.leftovers.app.util.UpdateCheck.createChannel(this)
         container.start()
     }
@@ -186,6 +187,13 @@ class AppContainer(private val context: Context) {
                     com.leftovers.app.util.DeviceSync.schedule(context, on)
                     if (on) com.leftovers.app.util.DeviceSync.runIfOn(context)
                 }
+        }
+        // Festival greetings and the Sunday note, as their switches say.
+        scope.launch {
+            delay(STARTUP_QUIET_MS)
+            settings.settings.map { it.festivalGreetings to it.weeklyNotes }
+                .distinctUntilChanged()
+                .collect { (festivals, weekly) -> com.leftovers.app.util.Greetings.schedule(context, festivals, weekly) }
         }
         scope.launch {
             delay(STARTUP_QUIET_MS)

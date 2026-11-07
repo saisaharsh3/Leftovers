@@ -5,6 +5,8 @@ All notable changes to Leftovers. Download any version from
 
 ## Unreleased
 
+- Festival greetings: on the main festivals where you live (worked out on the phone from your currency), Home says so ("Happy Diwali 🪔") and a notification comes that morning. Settings → Security & reminders
+- A note on your week: Sunday evenings, a short note when there's something to say, such as spending down on last week, a category that changed, or no-spend days. Settings → Security & reminders
 - Help & features, at the bottom of Settings: every feature in a line or two and where to find it, with a search ("transfer", "PDF", "backup") and a way to open each one
 - The AI assistant answers "how do I…" and "where is…" from the same guide, with the path to each feature
 - On this phone: right after the app opens, it waits for Android to start its AI ("Starting the phone's AI…") instead of saying it isn't ready, and starts it as soon as the assistant opens

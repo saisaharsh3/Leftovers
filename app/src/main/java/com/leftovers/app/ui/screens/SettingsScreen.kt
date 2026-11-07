@@ -335,6 +335,14 @@ class SettingsViewModel(
         viewModelScope.launch { settingsRepository.setBillReminders(enabled) }
     }
 
+    fun setFestivalGreetings(enabled: Boolean) {
+        viewModelScope.launch { settingsRepository.setFestivalGreetings(enabled) }
+    }
+
+    fun setWeeklyNotes(enabled: Boolean) {
+        viewModelScope.launch { settingsRepository.setWeeklyNotes(enabled) }
+    }
+
     /** Remembers [tree] for weekly backups and makes the first one straight away. */
     fun enableAutoBackup(context: Context, tree: Uri, onResult: (String) -> Unit) {
         viewModelScope.launch {
@@ -687,6 +695,16 @@ fun SettingsScreen(
                         ToggleRow(Lucide.Repeat, "Remind me before bills", s.billReminders, { on ->
                             if (on && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
                             viewModel.setBillReminders(on)
+                        })
+                        RowDivider()
+                        ToggleRow(Lucide.PartyPopper, "Festival greetings", s.festivalGreetings, { on ->
+                            if (on && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+                            viewModel.setFestivalGreetings(on)
+                        })
+                        RowDivider()
+                        ToggleRow(Lucide.TrendingDown, "A note on my week", s.weeklyNotes, { on ->
+                            if (on && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+                            viewModel.setWeeklyNotes(on)
                         })
                         RowDivider()
                         ToggleRow(Lucide.Bell, "Daily reminder", s.reminderEnabled, { on ->
