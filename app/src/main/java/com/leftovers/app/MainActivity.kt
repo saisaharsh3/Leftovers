@@ -109,23 +109,24 @@ class MainActivity : FragmentActivity() {
                         com.leftovers.app.ui.theme.BackgroundPhoto.loadWithFrost(this@MainActivity, s.photoBlur)
                     }
                 }
-                // Over a photo, the text colour decides the look, like labels on a phone's wallpaper: white text with
-                // dark glass, or black text with light glass. Auto picks by how bright the photo is.
-                val dark = photo?.let { p ->
+                val dark = themeDark
+                // Over a photo, only the text changes: white or black, picked by how bright the photo is unless chosen.
+                val blackText = photo?.let { p ->
                     when (s.photoText) {
-                        "WHITE" -> true
-                        "BLACK" -> false
-                        else -> !p.bright
+                        "WHITE" -> false
+                        "BLACK" -> true
+                        else -> p.bright
                     }
-                } ?: themeDark
-                // Keep status/navigation bar icons readable when the app theme differs from the system theme.
-                LaunchedEffect(dark) {
-                    val style = if (dark) SystemBarStyle.dark(Color.TRANSPARENT) else SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT)
+                }
+                // Keep status/navigation bar icons readable: they follow the text over a photo, else the theme.
+                val lightBars = blackText ?: !dark
+                LaunchedEffect(lightBars) {
+                    val style = if (!lightBars) SystemBarStyle.dark(Color.TRANSPARENT) else SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT)
                     enableEdgeToEdge(statusBarStyle = style, navigationBarStyle = style)
                 }
                 LeftoversTheme(
                     darkTheme = dark, dynamicColor = s.dynamicColor, glassEffects = s.glassEffects, pureBlack = s.pureBlack,
-                    backdrop = backdrop, photo = photo?.photo, frost = photo?.frost, photoDim = s.photoDim,
+                    backdrop = backdrop, photo = photo?.photo, frost = photo?.frost, blackText = blackText == true, photoDim = s.photoDim,
                     accent = s.accentColor.takeIf { it != 0L }?.let { androidx.compose.ui.graphics.Color(it) },
                 ) {
                     // Cards are liquid glass over a photo where the phone can draw it (Android 13+), with glass on.

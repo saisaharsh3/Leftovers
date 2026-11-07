@@ -183,9 +183,8 @@ fun Glass(
                             blur(3.dp.toPx())
                             lens(14.dp.toPx(), 28.dp.toPx(), chromaticAberration = true)
                         },
-                        onDrawSurface = {
-                            drawRect(tint ?: if (c.isDark) Color.Black.copy(alpha = if (strong) 0.32f else 0.24f) else Color.White.copy(alpha = if (strong) 0.42f else 0.32f))
-                        },
+                        // Clear glass: the same light sheen in both themes, as Apple's clear Liquid Glass.
+                        onDrawSurface = { drawRect(tint ?: Color.White.copy(alpha = if (strong) 0.14f else 0.08f)) },
                     )
                 } else {
                     Modifier

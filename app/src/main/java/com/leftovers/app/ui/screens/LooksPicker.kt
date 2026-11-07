@@ -97,7 +97,7 @@ fun LooksPicker(
             Text("Text on the photo", style = MaterialTheme.typography.labelMedium, color = c.textSecondary, modifier = Modifier.padding(start = 4.dp))
             SegmentedToggle(listOf("AUTO", "WHITE", "BLACK"), s.photoText, { when (it) { "WHITE" -> "White"; "BLACK" -> "Black"; else -> "Auto" } }, onText, Modifier.fillMaxWidth())
             Text(
-                if (s.photoText == "AUTO") "Picked by how bright your photo is. With a photo, this sets light or dark." else "With a photo, this sets light or dark.",
+                if (s.photoText == "AUTO") "Picked by how bright your photo is: black on light photos, white on dark ones." else "Only the text changes; cards stay clear glass.",
                 style = MaterialTheme.typography.bodySmall, color = c.textTertiary, modifier = Modifier.padding(start = 4.dp),
             )
             // Saved when the finger lifts, so the photo isn't blurred again on every step of the drag.

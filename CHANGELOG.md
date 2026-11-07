@@ -5,7 +5,7 @@ All notable changes to Leftovers. Download any version from
 
 ## Unreleased
 
-- Choose the app's background: the glow in Aurora, Ocean, Sunset, Forest or Rose, plain, or a photo of your own, shown in its own colours, with how soft and how dimmed it is up to you. Over a photo, cards are liquid glass that bends the picture at their edges (Android 13 and newer; frosted glass before that), and text gets a soft halo so it reads on any part of it. Over a photo, the text colour sets the look: white text with dark glass, or black text with light glass, picked by how bright the photo is, or chosen yourself. Settings → Appearance
+- Choose the app's background: the glow in Aurora, Ocean, Sunset, Forest or Rose, plain, or a photo of your own, shown in its own colours, with how soft and how dimmed it is up to you. Over a photo, cards are liquid glass that bends the picture at their edges (Android 13 and newer; frosted glass before that), like Apple's clear Liquid Glass, the same in light and dark. The text over a photo is white or black, picked by how bright the photo is or chosen yourself; only the text changes. Settings → Appearance
 - Choose an accent colour for buttons, switches and highlights; on the light theme it's deepened so text in it stays readable. Settings → Appearance
 - Festival greetings: on the main festivals where you live (worked out on the phone from your currency), Home says so ("Happy Diwali 🪔") and a notification comes that morning. Settings → Security & reminders
 - A note on your week: Sunday evenings, a short note when there's something to say, such as spending down on last week, a category that changed, or no-spend days. Settings → Security & reminders
