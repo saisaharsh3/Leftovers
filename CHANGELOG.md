@@ -5,7 +5,7 @@ All notable changes to Leftovers. Download any version from
 
 ## Unreleased
 
-- Choose the app's background: the glow in Aurora, Ocean, Sunset, Forest or Rose, plain, or a photo of your own, softly blurred and dimmed so everything stays readable. Settings → Appearance
+- Choose the app's background: the glow in Aurora, Ocean, Sunset, Forest or Rose, plain, or a photo of your own, with how soft (sharp to very soft) and how dimmed it is up to you; it's never so light that text stops being readable. Settings → Appearance
 - Choose an accent colour for buttons, switches and highlights; on the light theme it's deepened so text in it stays readable. Settings → Appearance
 - Festival greetings: on the main festivals where you live (worked out on the phone from your currency), Home says so ("Happy Diwali 🪔") and a notification comes that morning. Settings → Security & reminders
 - A note on your week: Sunday evenings, a short note when there's something to say, such as spending down on last week, a category that changed, or no-spend days. Settings → Security & reminders

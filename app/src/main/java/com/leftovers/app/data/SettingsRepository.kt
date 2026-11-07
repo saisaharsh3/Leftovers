@@ -38,6 +38,8 @@ data class AppSettings(
     val backdrop: String = "AURORA",
     /** How much the background photo is dimmed, 0.2 to 0.85; changes with each new photo too ([photoVersion]). */
     val photoDim: Float = 0.55f,
+    /** How soft the background photo is, 0 (sharp) to 1 (very soft). */
+    val photoBlur: Float = 0.25f,
     val photoVersion: Long = 0L,
     /** A chosen accent colour (ARGB), or 0 for the default. */
     val accentColor: Long = 0L,
@@ -127,6 +129,7 @@ class SettingsRepository(context: Context) {
             pureBlack = p[PURE_BLACK] ?: false,
             backdrop = p[BACKDROP] ?: "AURORA",
             photoDim = p[PHOTO_DIM] ?: 0.55f,
+            photoBlur = p[PHOTO_BLUR] ?: 0.25f,
             photoVersion = p[PHOTO_VERSION] ?: 0L,
             accentColor = p[ACCENT_COLOR] ?: 0L,
             timeFormat = TimeFormat.entries.firstOrNull { it.name == p[TIME_FORMAT] } ?: TimeFormat.PHONE,
@@ -212,6 +215,7 @@ class SettingsRepository(context: Context) {
     suspend fun setPureBlack(enabled: Boolean) = store.edit { it[PURE_BLACK] = enabled }
     suspend fun setBackdrop(name: String) = store.edit { it[BACKDROP] = name }
     suspend fun setPhotoDim(value: Float) = store.edit { it[PHOTO_DIM] = value }
+    suspend fun setPhotoBlur(value: Float) = store.edit { it[PHOTO_BLUR] = value }
     /** A new background photo was saved: shown with the photo background. */
     suspend fun photoChanged() = store.edit { it[PHOTO_VERSION] = System.currentTimeMillis(); it[BACKDROP] = "PHOTO" }
     suspend fun setAccentColor(argb: Long) = store.edit { it[ACCENT_COLOR] = argb }
@@ -349,6 +353,7 @@ class SettingsRepository(context: Context) {
         val PURE_BLACK = booleanPreferencesKey("pure_black")
         val BACKDROP = stringPreferencesKey("backdrop")
         val PHOTO_DIM = floatPreferencesKey("photo_dim")
+        val PHOTO_BLUR = floatPreferencesKey("photo_blur")
         val PHOTO_VERSION = longPreferencesKey("photo_version")
         val ACCENT_COLOR = longPreferencesKey("accent_color")
         val FOREIGN_RATES = stringPreferencesKey("foreign_rates")

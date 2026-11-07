@@ -67,17 +67,18 @@ object BackgroundPhoto {
     }
 
     /**
-     * The photo for drawing, softly blurred: text stays readable on it, and it's small, so it costs almost nothing
-     * to draw behind every screen.
+     * The photo for drawing, as soft as [softness] says (0 sharp, 1 very soft). Dimming keeps text readable either
+     * way; a little softness keeps busy photos from fighting with it.
      */
-    fun load(context: Context): ImageBitmap? = runCatching {
+    fun load(context: Context, softness: Float): ImageBitmap? = runCatching {
         val f = file(context)
         if (!f.exists()) return null
-        val full = BitmapFactory.decodeFile(f.path, BitmapFactory.Options().apply { inSampleSize = 4 }) ?: return null
-        // A small copy, blurred properly (three box passes look like a Gaussian), made once.
-        val w = 160
-        val small = Bitmap.createScaledBitmap(full, w, (full.height * w / full.width.toFloat()).toInt().coerceAtLeast(1), true)
-        blur(small, radius = 6).asImageBitmap()
+        val full = BitmapFactory.decodeFile(f.path) ?: return null
+        // Sharp keeps the photo's detail; softer blurs a smaller copy (three box passes look like a Gaussian).
+        val w = 540
+        val copy = Bitmap.createScaledBitmap(full, w, (full.height * w / full.width.toFloat()).toInt().coerceAtLeast(1), true)
+        val radius = Math.round(softness.coerceIn(0f, 1f) * 18)
+        (if (radius == 0) copy else blur(copy, radius)).asImageBitmap()
     }.getOrNull()
 
     /** Box blur, three passes each way, over [src]'s pixels. */

@@ -295,6 +295,10 @@ class SettingsViewModel(
         viewModelScope.launch { settingsRepository.setPhotoDim(value) }
     }
 
+    fun setPhotoBlur(value: Float) {
+        viewModelScope.launch { settingsRepository.setPhotoBlur(value) }
+    }
+
     fun setAccentColor(argb: Long) {
         viewModelScope.launch { settingsRepository.setAccentColor(argb) }
     }
@@ -666,6 +670,7 @@ fun SettingsScreen(
                             onBackdrop = viewModel::setBackdrop,
                             onPhoto = { uri -> viewModel.setBackgroundPhoto(context, uri) { toast("Couldn't open that picture") } },
                             onDim = viewModel::setPhotoDim,
+                            onBlur = viewModel::setPhotoBlur,
                             onAccent = viewModel::setAccentColor,
                         )
                         Spacer(Modifier.height(10.dp))

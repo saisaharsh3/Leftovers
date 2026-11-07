@@ -22,6 +22,10 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -48,6 +52,7 @@ fun LooksPicker(
     onBackdrop: (Backdrop) -> Unit,
     onPhoto: (android.net.Uri) -> Unit,
     onDim: (Float) -> Unit,
+    onBlur: (Float) -> Unit,
     onAccent: (Long) -> Unit,
 ) {
     val c = LocalAppColors.current
@@ -85,11 +90,25 @@ fun LooksPicker(
             }
         }
         if (current == Backdrop.PHOTO) {
+            // Saved when the finger lifts, so the photo isn't blurred again on every step of the drag.
+            var blur by remember(s.photoBlur) { mutableFloatStateOf(s.photoBlur) }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Blur", style = MaterialTheme.typography.labelMedium, color = c.textSecondary, modifier = Modifier.padding(start = 4.dp).weight(1f))
+                Text(if (blur < 0.05f) "Sharp" else if (blur < 0.5f) "Soft" else "Very soft", style = MaterialTheme.typography.labelMedium, color = c.textTertiary)
+            }
+            Slider(
+                value = blur,
+                onValueChange = { blur = it },
+                onValueChangeFinished = { onBlur(blur) },
+                colors = SliderDefaults.colors(thumbColor = c.accent, activeTrackColor = c.accent, inactiveTrackColor = c.glassStrong),
+                modifier = Modifier.fillMaxWidth(),
+            )
             Text("Photo dimming", style = MaterialTheme.typography.labelMedium, color = c.textSecondary, modifier = Modifier.padding(start = 4.dp))
             Slider(
-                value = s.photoDim,
+                value = s.photoDim.coerceIn(MIN_DIM, 0.9f),
                 onValueChange = onDim,
-                valueRange = 0.2f..0.85f,
+                // Never lighter than this: on a bright photo, text below it stops being readable.
+                valueRange = MIN_DIM..0.9f,
                 colors = SliderDefaults.colors(thumbColor = c.accent, activeTrackColor = c.accent, inactiveTrackColor = c.glassStrong),
                 modifier = Modifier.fillMaxWidth(),
             )
@@ -120,3 +139,5 @@ private fun Swatch(fill: Brush, selected: Boolean, name: String, onClick: () -> 
             .semantics { contentDescription = name },
     )
 }
+
+private const val MIN_DIM = 0.4f
