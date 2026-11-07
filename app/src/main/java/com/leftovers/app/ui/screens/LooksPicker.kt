@@ -96,15 +96,33 @@ fun LooksPicker(
             // the light/dark theme above.
             Text("Text on the photo", style = MaterialTheme.typography.labelMedium, color = c.textSecondary, modifier = Modifier.padding(start = 4.dp))
             SegmentedToggle(listOf("AUTO", "WHITE", "BLACK"), s.photoText, { when (it) { "WHITE" -> "White"; "BLACK" -> "Black"; else -> "Auto" } }, onText, Modifier.fillMaxWidth())
+            // A text colour that fights the photo (black on a dark one) is allowed, but said so.
+            val context = androidx.compose.ui.platform.LocalContext.current
+            val bright = remember(s.photoVersion) { com.leftovers.app.ui.theme.BackgroundPhoto.isBright(context) }
+            val clash = (s.photoText == "BLACK" && bright == false) || (s.photoText == "WHITE" && bright == true)
             Text(
-                if (s.photoText == "AUTO") "Picked by how bright your photo is: black on light photos, white on dark ones." else "Only the text changes; cards stay clear glass.",
-                style = MaterialTheme.typography.bodySmall, color = c.textTertiary, modifier = Modifier.padding(start = 4.dp),
+                when {
+                    clash -> if (bright == false) "This photo is dark: white text, or Auto, reads better on it." else "This photo is light: black text, or Auto, reads better on it."
+                    s.photoText == "AUTO" -> "Picked by how bright your photo is: black on light photos, white on dark ones."
+                    else -> "Only the text changes; cards stay clear glass."
+                },
+                style = MaterialTheme.typography.bodySmall, color = if (clash) c.warning else c.textTertiary, modifier = Modifier.padding(start = 4.dp),
             )
             // Saved when the finger lifts, so the photo isn't blurred again on every step of the drag.
             var blur by remember(s.photoBlur) { mutableFloatStateOf(s.photoBlur) }
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Blur", style = MaterialTheme.typography.labelMedium, color = c.textSecondary, modifier = Modifier.padding(start = 4.dp).weight(1f))
-                Text(if (blur < 0.05f) "Sharp" else if (blur < 0.5f) "Soft" else "Very soft", style = MaterialTheme.typography.labelMedium, color = c.textTertiary)
+                Text("Blur", style = MaterialTheme.typography.labelMedium, color = c.textSecondary, modifier = Modifier.padding(start = 4.dp))
+                Text(" · " + if (blur < 0.05f) "Sharp" else if (blur < 0.5f) "Soft" else "Very soft", style = MaterialTheme.typography.labelMedium, color = c.textTertiary, modifier = Modifier.weight(1f))
+                // Back to how the photo looked when it was chosen.
+                if (kotlin.math.abs(s.photoBlur - DEFAULT_BLUR) > 0.01f || kotlin.math.abs(s.photoDim - DEFAULT_DIM) > 0.01f) {
+                    Row(
+                        Modifier.pressable({ blur = DEFAULT_BLUR; onBlur(DEFAULT_BLUR); onDim(DEFAULT_DIM) }, pressedScale = 0.95f).padding(horizontal = 6.dp, vertical = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(Lucide.RotateCcw, contentDescription = null, tint = c.accent, modifier = Modifier.size(14.dp))
+                        Text(" Reset", style = MaterialTheme.typography.labelMedium, color = c.accent)
+                    }
+                }
             }
             Slider(
                 value = blur,
@@ -149,3 +167,6 @@ private fun Swatch(fill: Brush, selected: Boolean, name: String, onClick: () -> 
             .semantics { contentDescription = name },
     )
 }
+
+private const val DEFAULT_BLUR = 0.25f
+private const val DEFAULT_DIM = 0.1f

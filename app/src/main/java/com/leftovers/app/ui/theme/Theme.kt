@@ -271,7 +271,8 @@ fun LeftoversTheme(
                         positive = if (blackText) Color(0xFF07502B) else Color(0xFFC2F7DA),
                         glass = Color.White.copy(alpha = 0.1f), glassStrong = Color.White.copy(alpha = 0.16f),
                         borderTop = Color.White.copy(alpha = 0.5f), borderBottom = Color.White.copy(alpha = 0.12f),
-                        barTint = if (blackText) Color.White.copy(alpha = 0.6f) else Color(0xFF0E0E13).copy(alpha = 0.5f),
+                        // Bars stay nearly clear over a photo, like the cards: just enough tint for their text.
+                        barTint = if (blackText) Color.White.copy(alpha = 0.22f) else Color(0xFF0E0E13).copy(alpha = 0.2f),
                     )
                 }
                 // Lighter on the light theme, like the standard glow.

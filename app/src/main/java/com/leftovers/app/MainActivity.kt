@@ -125,13 +125,13 @@ class MainActivity : FragmentActivity() {
                     enableEdgeToEdge(statusBarStyle = style, navigationBarStyle = style)
                 }
                 LeftoversTheme(
-                    darkTheme = dark, dynamicColor = s.dynamicColor, glassEffects = s.glassEffects, pureBlack = s.pureBlack,
+                    darkTheme = dark, dynamicColor = s.dynamicColor, glassEffects = s.glassEffects || photo != null, pureBlack = s.pureBlack,
                     backdrop = backdrop, photo = photo?.photo, frost = photo?.frost, blackText = blackText == true, photoDim = s.photoDim,
                     accent = s.accentColor.takeIf { it != 0L }?.let { androidx.compose.ui.graphics.Color(it) },
                 ) {
                     // Cards are liquid glass over a photo where the phone can draw it (Android 13+), with glass on.
                     val bgBackdrop = com.kyant.backdrop.backdrops.rememberLayerBackdrop()
-                    val liquidCards = photo != null && s.glassEffects && android.os.Build.VERSION.SDK_INT >= 33
+                    val liquidCards = photo != null && android.os.Build.VERSION.SDK_INT >= 33
                     CompositionLocalProvider(
                         com.leftovers.app.ui.components.LocalBackgroundBackdrop provides (if (liquidCards) bgBackdrop else null),
                         LocalMoney provides money,

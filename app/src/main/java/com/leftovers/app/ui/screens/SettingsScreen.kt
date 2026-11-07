@@ -662,10 +662,12 @@ fun SettingsScreen(
                             Spacer(Modifier.height(8.dp))
                             ToggleRow(Lucide.Palette, "Accent from wallpaper", s.dynamicColor, viewModel::setDynamicColor, inset = false)
                         }
+                        // Over a photo, cards are always glass and the photo is the background, so these two are hidden.
+                        val photoBackground = s.backdrop == com.leftovers.app.ui.theme.Backdrop.PHOTO.name
                         // Off: solid bars, cards, dialogs and sheets, with no blur (also a little easier on the battery).
-                        ToggleRow(Lucide.Droplet, "Glass effects", s.glassEffects, viewModel::setGlassEffects, inset = false)
+                        if (!photoBackground) ToggleRow(Lucide.Droplet, "Glass effects", s.glassEffects, viewModel::setGlassEffects, inset = false)
                         // Only means something with the dark theme, so it's hidden when the app is always light.
-                        if (s.themeMode != ThemeMode.LIGHT) {
+                        if (s.themeMode != ThemeMode.LIGHT && !photoBackground) {
                             ToggleRow(Lucide.Moon, "Pure black (AMOLED)", s.pureBlack, viewModel::setPureBlack, inset = false)
                         }
                         Spacer(Modifier.height(12.dp))

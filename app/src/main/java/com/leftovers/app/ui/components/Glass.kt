@@ -26,7 +26,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 import androidx.compose.ui.draw.clip
 import com.kyant.backdrop.drawBackdrop
-import com.kyant.backdrop.effects.blur
 import com.kyant.backdrop.effects.lens
 import com.kyant.backdrop.effects.vibrancy
 import androidx.compose.ui.draw.drawBehind
@@ -168,40 +167,44 @@ fun Glass(
     content: @Composable BoxScope.() -> Unit,
 ) {
     val c = LocalAppColors.current
-    val backdrop = LocalBackgroundBackdrop.current
     Box(
         modifier
             .then(if (onClick != null) Modifier.pressable(onClick) else Modifier)
-            .then(
-                if (backdrop != null) {
-                    // Liquid glass: the photo behind, lensed at the rounded edges with a little blur, under a thin
-                    // tint lighter or darker with the theme, so text on it reads while the picture stays clear.
-                    Modifier.drawBackdrop(
-                        backdrop = backdrop,
-                        shape = { shape },
-                        effects = {
-                            vibrancy()
-                            blur(3.dp.toPx())
-                            lens(14.dp.toPx(), 28.dp.toPx(), chromaticAberration = true)
-                        },
-                        // Clear glass with a faint tint the text needs, as Apple's Liquid Glass adapts: a little lighter
-                        // under black text, a little darker under white, so even red and green amounts read on any photo.
-                        onDrawSurface = {
-                            drawRect(tint ?: if (c.textPrimary.luminance() < 0.5f) Color.White.copy(alpha = if (strong) 0.26f else 0.2f)
-                            else Color.Black.copy(alpha = if (strong) 0.26f else 0.2f))
-                        },
-                    )
-                } else {
-                    Modifier
-                        .clip(shape)
-                        .then(if (c.frost != null) Modifier.frosted(c) else Modifier)
-                        .background(glassFill(tint ?: if (strong) c.glassStrong else c.glass))
-                },
-            )
+            .glassSurface(shape, strong, tint)
             .clip(shape)
             .border(1.dp, glassBorder(c), shape),
         content = content,
     )
+}
+
+/**
+ * A card's glass, the same everywhere so cards look alike on every screen. Over a photo (Android 13+): liquid glass,
+ * the photo behind bent at the rounded edges ([lens]; off for pieces of one card, whose inner edges join up), under
+ * a faint tint for the text: a little lighter under black text, darker under white, as Apple's Liquid Glass adapts.
+ * No blur on it: blurring every card as it scrolls made lists lag. Otherwise the usual see-through fill.
+ */
+@Composable
+fun Modifier.glassSurface(shape: Shape, strong: Boolean = false, tint: Color? = null, lens: Boolean = true): Modifier {
+    val c = LocalAppColors.current
+    val backdrop = LocalBackgroundBackdrop.current
+    return if (backdrop != null) {
+        drawBackdrop(
+            backdrop = backdrop,
+            shape = { shape },
+            effects = {
+                vibrancy()
+                if (lens) lens(14.dp.toPx(), 28.dp.toPx(), chromaticAberration = true)
+            },
+            onDrawSurface = {
+                drawRect(tint ?: if (c.textPrimary.luminance() < 0.5f) Color.White.copy(alpha = if (strong) 0.26f else 0.2f)
+                else Color.Black.copy(alpha = if (strong) 0.26f else 0.2f))
+            },
+        )
+    } else {
+        clip(shape)
+            .then(if (c.frost != null) Modifier.frosted(c) else Modifier)
+            .background(glassFill(tint ?: if (strong) c.glassStrong else c.glass))
+    }
 }
 
 /** Click handling with a springy press-down scale instead of a ripple. */

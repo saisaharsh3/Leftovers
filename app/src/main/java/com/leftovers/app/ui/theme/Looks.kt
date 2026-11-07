@@ -86,6 +86,15 @@ object BackgroundPhoto {
         Loaded(photo, blur(small, radius = 9).asImageBitmap(), bright = light > 0.55)
     }.getOrNull()
 
+    /** Whether the photo is light (black text reads best), dark, or null when there's none. */
+    fun isBright(context: Context): Boolean? = runCatching {
+        val f = file(context)
+        if (!f.exists()) return null
+        val b = BitmapFactory.decodeFile(f.path, BitmapFactory.Options().apply { inSampleSize = 16 }) ?: return null
+        val px = IntArray(b.width * b.height).also { b.getPixels(it, 0, b.width, 0, 0, b.width, b.height) }
+        px.sumOf { c -> 0.2126 * ((c shr 16) and 255) + 0.7152 * ((c shr 8) and 255) + 0.0722 * (c and 255) } / (px.size * 255.0) > 0.55
+    }.getOrNull()
+
     fun load(context: Context, softness: Float): ImageBitmap? = runCatching {
         val f = file(context)
         if (!f.exists()) return null

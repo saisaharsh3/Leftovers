@@ -90,6 +90,7 @@ import com.leftovers.app.ui.components.Chip
 import com.leftovers.app.ui.components.DockClearance
 import com.leftovers.app.ui.components.EmptyState
 import com.leftovers.app.ui.components.Glass
+import com.leftovers.app.ui.components.glassSurface
 import com.leftovers.app.ui.components.GlassScreen
 import com.leftovers.app.ui.components.MonthSwitcher
 import com.leftovers.app.ui.components.RollingText
@@ -589,8 +590,8 @@ private fun CardSlice(first: Boolean, last: Boolean, modifier: Modifier = Modifi
     Column(
         modifier
             .fillMaxWidth()
+            .glassSurface(shape, lens = false)
             .clip(shape)
-            .background(c.glass)
             .drawWithContent {
                 drawContent()
                 val w = 1.dp.toPx()
