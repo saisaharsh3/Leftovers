@@ -92,8 +92,19 @@ fun IconTile(icon: ImageVector, tint: Color, size: Dp = 44.dp, modifier: Modifie
 }
 
 @Composable
-fun CategoryIcon(key: String, color: Long, size: Dp = 44.dp, modifier: Modifier = Modifier) =
-    IconTile(CategoryIcons[key], Color(color), size, modifier)
+fun CategoryIcon(key: String, color: Long, size: Dp = 44.dp, modifier: Modifier = Modifier) {
+    // An icon made from the user's own picture fills the tile; the rest are line icons in the category's colour.
+    val custom = if (com.leftovers.app.util.CustomIcons.isCustom(key)) {
+        val context = androidx.compose.ui.platform.LocalContext.current
+        remember(key) { com.leftovers.app.util.CustomIcons.load(context, key) }
+    } else null
+    if (custom != null) {
+        androidx.compose.foundation.Image(
+            custom, contentDescription = null, contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+            modifier = modifier.size(size).clip(RoundedCornerShape(size * 0.34f)),
+        )
+    } else IconTile(CategoryIcons[key], Color(color), size, modifier)
+}
 
 @Composable
 fun RoundButton(

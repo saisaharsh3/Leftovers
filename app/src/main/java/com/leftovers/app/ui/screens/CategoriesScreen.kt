@@ -252,6 +252,8 @@ private fun CategoryEditor(initial: Category, onDismiss: () -> Unit, onSave: (Ca
 
             Text("Icon", style = MaterialTheme.typography.labelMedium, color = c.textSecondary, modifier = Modifier.padding(start = 6.dp))
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                // First: an icon from a picture of your own, such as a shop's logo.
+                OwnIcons(icon, color) { icon = it }
                 CategoryIcons.keys.forEach { key ->
                     val selected = key == icon
                     val bg by animateColorAsState(if (selected) Color(color).copy(alpha = 0.22f) else c.glass, label = "iconBg")

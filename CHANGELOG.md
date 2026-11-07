@@ -5,6 +5,9 @@ All notable changes to Leftovers. Download any version from
 
 ## Unreleased
 
+- Your own icons: make one from any picture (a shop's logo, say) for a category, account or goal, framed with a drag and a pinch. They're kept on your phone to use again, go into backups, and a long press deletes one
+- Festival greetings and the Sunday note come with notifications, without switches of their own
+- The AI assistant's replies are glass like the cards, tinted enough to read over any photo
 - Bank statement PDFs that print the currency against the amount ("+ PKR1,000.00", "- Rs.250") import, from banks in Pakistan, Bangladesh, Sri Lanka and elsewhere
 - Checking for new versions: on opening, at most every three hours (GitHub limits how often), and when it can't check, it says why
 - Your background photo is kept: its swatch shows it, so going to Aurora and back needs no new pick
@@ -15,8 +18,8 @@ All notable changes to Leftovers. Download any version from
 - AI assistant settings: how to check whether your phone has the AI built in, step by step
 - Choose the app's background: the glow in Aurora, Ocean, Sunset, Forest or Rose, plain, or a photo of your own, shown in its own colours, with how soft and how dimmed it is up to you. Over a photo, cards are liquid glass that bends the picture at their edges (Android 13 and newer; frosted glass before that), like Apple's clear Liquid Glass, the same in light and dark. The text over a photo is white or black, picked by how bright the photo is or chosen yourself; only the text changes. Settings → Appearance
 - Choose an accent colour for buttons, switches and highlights; on the light theme it's deepened so text in it stays readable. Settings → Appearance
-- Festival greetings: on the main festivals where you live (worked out on the phone from your currency), Home says so ("Happy Diwali 🪔") and a notification comes that morning. Settings → Security & reminders
-- A note on your week: Sunday evenings, a short note when there's something to say, such as spending down on last week, a category that changed, or no-spend days. Settings → Security & reminders
+- Festival greetings: on the main festivals where you live (worked out on the phone from your currency), Home says so ("Happy Diwali 🪔") and a notification comes that morning
+- A note on your week: Sunday evenings, a short note when there's something to say, such as spending down on last week, a category that changed, or no-spend days
 - Help & features, at the bottom of Settings: every feature in a line or two and where to find it, with a search ("transfer", "PDF", "backup") and a way to open each one
 - The AI assistant answers "how do I…" and "where is…" from the same guide, with the path to each feature
 - On this phone: right after the app opens, it waits for Android to start its AI ("Starting the phone's AI…") instead of saying it isn't ready, and starts it as soon as the assistant opens

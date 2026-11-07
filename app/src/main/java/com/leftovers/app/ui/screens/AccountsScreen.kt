@@ -623,6 +623,8 @@ private fun AccountEditor(
                 modifier = Modifier.padding(start = 6.dp),
             )
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                // First: an icon from a picture of your own, such as your bank's logo.
+                OwnIcons(icon, color) { icon = it }
                 accountIcons.forEach { key ->
                     val selected = key == icon
                     val bg by animateColorAsState(if (selected) Color(color).copy(alpha = 0.22f) else c.glass, label = "accIcon")

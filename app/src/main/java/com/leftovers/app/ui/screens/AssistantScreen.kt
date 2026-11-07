@@ -7,6 +7,7 @@ import kotlinx.coroutines.Job
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -63,6 +64,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.graphics.luminance
+import com.leftovers.app.ui.components.glassSurface
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
@@ -592,7 +595,7 @@ private fun Bubble(text: String, mine: Boolean) {
         Box(
             Modifier
                 .widthIn(max = 300.dp)
-                .background(if (mine) c.accent else c.glassStrong, shape)
+                .then(if (mine) Modifier.background(c.accent, shape) else Modifier.replyGlass(shape))
                 .padding(horizontal = 14.dp, vertical = 10.dp),
         ) {
             Text(
@@ -602,6 +605,18 @@ private fun Bubble(text: String, mine: Boolean) {
             )
         }
     }
+}
+
+/**
+ * The AI's side of the chat: glass like the cards, with a deeper tint than theirs, since a reply is paragraphs of
+ * text that must read over any photo.
+ */
+@Composable
+private fun Modifier.replyGlass(shape: androidx.compose.ui.graphics.Shape): Modifier {
+    val c = LocalAppColors.current
+    val darkText = c.textPrimary.luminance() < 0.5f
+    return glassSurface(shape, strong = true, tint = if (darkText) androidx.compose.ui.graphics.Color.White.copy(alpha = 0.55f) else androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.42f))
+        .then(androidx.compose.foundation.BorderStroke(1.dp, com.leftovers.app.ui.components.glassBorder(c)).let { Modifier.border(it, shape) })
 }
 
 @Composable
@@ -621,7 +636,7 @@ private fun TypingBubble() {
     val pulse = androidx.compose.animation.core.rememberInfiniteTransition(label = "typing")
     Box(
         Modifier
-            .background(c.glassStrong, RoundedCornerShape(20.dp, 20.dp, 20.dp, 6.dp))
+            .replyGlass(RoundedCornerShape(20.dp, 20.dp, 20.dp, 6.dp))
             .semantics { contentDescription = "Thinking" }
             .padding(horizontal = 16.dp, vertical = 14.dp),
     ) {

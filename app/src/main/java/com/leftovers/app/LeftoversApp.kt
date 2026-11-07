@@ -190,12 +190,11 @@ class AppContainer(private val context: Context) {
                     if (on) com.leftovers.app.util.DeviceSync.runIfOn(context)
                 }
         }
-        // Festival greetings and the Sunday note, as their switches say.
+        // Festival greetings and the Sunday note come with notifications; no switches of their own (Android's
+        // notification settings turn them off, by their channel).
         scope.launch {
             delay(STARTUP_QUIET_MS)
-            settings.settings.map { it.festivalGreetings to it.weeklyNotes }
-                .distinctUntilChanged()
-                .collect { (festivals, weekly) -> com.leftovers.app.util.Greetings.schedule(context, festivals, weekly) }
+            com.leftovers.app.util.Greetings.schedule(context, festivals = true, weekly = true)
         }
         scope.launch {
             delay(STARTUP_QUIET_MS)

@@ -186,7 +186,6 @@ object Greetings {
 class FestivalWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result {
         val s = (applicationContext as LeftoversApp).container.settings.settings.first()
-        if (!s.festivalGreetings) return Result.success()
         val today = LocalDate.now()
         val festival = Festivals.on(today, s.currencyCode) ?: return Result.success()
         // Once a festival, even if the work runs twice that day.
@@ -203,7 +202,6 @@ class WeeklyNoteWorker(context: Context, params: WorkerParameters) : CoroutineWo
     override suspend fun doWork(): Result {
         val container = (applicationContext as LeftoversApp).container
         val s = container.settings.settings.first()
-        if (!s.weeklyNotes) return Result.success()
         val money = Money(s.currencyCode)
         val text = WeeklyNote.note(container.repository.getAllTransactions(), LocalDate.now(), money::formatWhole) ?: return Result.success()
         Greetings.post(applicationContext, 72, "Your week", text)

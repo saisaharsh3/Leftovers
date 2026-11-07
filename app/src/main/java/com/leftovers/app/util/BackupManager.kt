@@ -103,6 +103,9 @@ class BackupManager(
                         .put("addsToBudget", c.addsToBudget)
                         .put("bucket", c.bucket ?: JSONObject.NULL)
                 }))
+                // Icons made from the user's own pictures: small, so always included.
+                CustomIcons.export(context, dao.categories().map { it.emoji } + dao.accounts().map { it.icon } + dao.goals().map { it.emoji })
+                    .takeIf { it.length() > 0 }?.let { put("icons", it) }
                 put("accounts", JSONArray(dao.accounts().map { a ->
                     JSONObject().put("id", a.id).put("name", a.name).put("icon", a.icon).put("color", a.color)
                         .put("opening", a.openingMinor).put("createdAt", a.createdAt).put("smsDigits", a.smsDigits ?: JSONObject.NULL)
@@ -201,6 +204,7 @@ class BackupManager(
             if (json.optString("app") !in setOf("leftovers", "cash-tracker")) throw NotABackupException()
 
             fun JSONObject.longOrNull(key: String) = if (isNull(key)) null else getLong(key)
+            CustomIcons.restore(context, json.optJSONObject("icons"))
             // Photos saved in the backup, written back to private storage on demand.
             val savedPhotos = json.optJSONObject("photos")
             val restoredPhotos = mutableMapOf<String, String>()

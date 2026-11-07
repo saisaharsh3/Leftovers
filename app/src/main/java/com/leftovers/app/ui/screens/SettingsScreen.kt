@@ -737,16 +737,6 @@ fun SettingsScreen(
                             viewModel.setBillReminders(on)
                         })
                         RowDivider()
-                        ToggleRow(Lucide.PartyPopper, "Festival greetings", s.festivalGreetings, { on ->
-                            if (on && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
-                            viewModel.setFestivalGreetings(on)
-                        })
-                        RowDivider()
-                        ToggleRow(Lucide.TrendingDown, "A note on my week", s.weeklyNotes, { on ->
-                            if (on && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
-                            viewModel.setWeeklyNotes(on)
-                        })
-                        RowDivider()
                         ToggleRow(Lucide.Bell, "Daily reminder", s.reminderEnabled, { on ->
                             if (on && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
                             viewModel.setReminder(on, s.reminderMinutes)
