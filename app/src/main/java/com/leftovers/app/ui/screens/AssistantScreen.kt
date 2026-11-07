@@ -1076,6 +1076,27 @@ private fun LocalModelStatus() {
             Text("Google's list for apps, November 2026. More phones may get it with Android updates.", style = MaterialTheme.typography.labelSmall, color = c.textTertiary)
         }
     }
+    // How to check a phone, step by step, for anyone unsure why it isn't ready.
+    var showHow by rememberSaveable { mutableStateOf(false) }
+    Text(
+        if (showHow) "Hide the steps" else "How to check your phone ›",
+        style = MaterialTheme.typography.labelLarge,
+        color = c.accent,
+        modifier = Modifier.padding(start = 6.dp).pressable({ showHow = !showHow }, pressedScale = 0.97f),
+    )
+    if (showHow) {
+        Column(Modifier.padding(start = 6.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            com.leftovers.app.ai.onDeviceSteps.forEachIndexed { i, (title, detail) ->
+                Row {
+                    Text("${i + 1}", style = MaterialTheme.typography.labelLarge, color = c.accent, modifier = Modifier.width(20.dp))
+                    Column {
+                        Text(title, style = MaterialTheme.typography.titleSmall, color = c.textPrimary)
+                        Text(detail, style = MaterialTheme.typography.bodySmall, color = c.textSecondary)
+                    }
+                }
+            }
+        }
+    }
     if (status == com.leftovers.app.ai.LocalStatus.DOWNLOADABLE) {
         SecondaryButton("Get it", {
             status = com.leftovers.app.ai.LocalStatus.DOWNLOADING

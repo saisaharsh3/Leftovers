@@ -68,6 +68,7 @@ object HelpGuide {
         // AI assistant
         Item("AI assistant", "Ask and log by chat", "Ask about your money or tell it what to log. Every change waits for your Apply. Connect it with your own key for Claude, ChatGPT, Gemini and others.", "Home → chat button", Place.ASSISTANT, "ai chat claude chatgpt gemini ask"),
         Item("AI assistant", "Bills, statements and goals by chat", "Send a photo of a bill to add it, ask for a PDF statement or a CSV export, or create a savings goal.", "Home → chat button", Place.ASSISTANT, "photo receipt pdf csv goal"),
+        Item("AI assistant", "The AI on your phone", "Some phones have an AI built in that works offline with nothing sent anywhere (Dev builds). Check if yours does: \"How to check your phone\" under On this phone.", "Settings → AI assistant → On this phone", Place.SETTINGS, "on device offline gemini nano aicore local"),
         Item("AI assistant", "Privacy", "Notes stay on the phone unless you share them; read-only mode stops all changes. Switch between AIs without typing a key again.", "Settings → AI assistant", Place.SETTINGS, "private key switch notes"),
 
         // Look, security and more

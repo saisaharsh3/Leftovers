@@ -84,6 +84,15 @@ val onDevicePhones: List<Pair<String, List<String>>> = listOf(
     "Lenovo" to listOf("Idea Tab Pro Gen 2", "Legion Tab Gen 5 (8.8\")"),
 )
 
+/** How to check whether a phone has the AI built in that apps can use, in a few steps. */
+val onDeviceSteps: List<Pair<String, String>> = listOf(
+    "Find your phone in the list" to "Tap \"Phones it works on\" above. If yours isn't there, it doesn't have it yet; more phones get it with updates.",
+    "Check Android AICore" to "Settings → Apps → See all apps → AICore (show system apps if needed). With the AI in place it uses a few GB of storage. If it's missing, tap \"Get Android AICore\".",
+    "Update it all" to "In the Play Store, update Android AICore and Private Compute Services, then install any system update in Settings → System.",
+    "Look here" to "This page asks Android directly. \"Ready on this phone\" means it works; otherwise it says why. Right after opening the app it can take a few seconds to start.",
+    "Good to know" to "The AI in your phone's own settings (OnePlus, Samsung, Xiaomi) and in apps like Google AI Edge Gallery can't be used by other apps. It's also off on phones with an unlocked bootloader.",
+)
+
 /** [thorough] trades speed for more careful answers (more model "thinking"). */
 data class AssistantConfig(
     val provider: AiProvider,
