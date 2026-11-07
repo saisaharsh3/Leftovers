@@ -7,14 +7,19 @@ import android.content.Context
  * keep them to the few changes worth telling, and rewrite them with each update.
  */
 object WhatsNew {
-    val notes = listOf(
-        "Split bills: one entry, with where the money went and each person's share in Money owed",
-        "Money owed: save it before you know the amount, and pay back one entry on its own",
-        "50/30/20 budgeting, and a budget for dates you choose, like a trip",
-        "The budget month can start on payday, and income can be interest",
-        "Home screen widgets in Glass, Dark or Light, at any size",
-        "The bell on Home keeps what's new, and tells you about new versions",
+    /** One change: an icon (a [com.leftovers.app.ui.icons.Lucide] name), a short title and a line about it. */
+    data class Note(val icon: String, val title: String, val text: String)
+
+    val items = listOf(
+        Note("palette", "Make it yours", "A background of your choice, even your own photo behind liquid glass, and an accent colour."),
+        Note("party", "Greetings and a weekly note", "Festival wishes where you live, and a short note on your week every Sunday."),
+        Note("search", "Help & features", "Find any feature and where it is, in Settings, or just ask the AI assistant."),
+        Note("receipt", "Better statement imports", "Payment app statements read right, and an import can be undone or removed."),
+        Note("bot", "A smarter assistant", "PDF statements, CSV exports and goals from the chat, and switch AIs without a new key."),
     )
+
+    /** The changes in a line each, for the AI assistant. */
+    val notes: List<String> get() = items.map { "${it.title}: ${it.text}" }
 
     fun version(context: Context): String =
         runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull().orEmpty()

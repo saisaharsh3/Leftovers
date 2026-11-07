@@ -36,34 +36,45 @@ import com.leftovers.app.ui.theme.LocalAppColors
 import com.leftovers.app.util.UpdateCheck
 import com.leftovers.app.util.WhatsNew
 
-/** What's new in this version, as a pop-up once after an update: liquid glass, like the app's other pop-ups. */
+/**
+ * What's new in this version, once after an update, the way phones present an app's new features: a large title,
+ * each change with its icon, a bold title and a line, and one button to carry on.
+ */
 @Composable
 fun WhatsNewDialog(version: String, onClose: () -> Unit) {
     val c = LocalAppColors.current
     MorphCard(from = null, onDismiss = onClose) { close ->
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            IconTile(Lucide.Sparkles, c.accent, size = 40.dp)
-            Spacer(Modifier.width(12.dp))
-            Column {
-                Text("What's new", style = MaterialTheme.typography.titleLarge, color = c.textPrimary)
-                Text(version, style = MaterialTheme.typography.bodySmall, color = c.textSecondary)
-            }
+        Column(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Text("What's New", style = MaterialTheme.typography.headlineMedium, color = c.textPrimary)
+            Text("in Leftovers ${version.substringBefore("-dev")}", style = MaterialTheme.typography.bodyMedium, color = c.textSecondary)
         }
-        Column { WhatsNewNotes() }
-        com.leftovers.app.ui.components.PrimaryButton("Got it", { close {} }, Modifier.fillMaxWidth())
+        Column(Modifier.padding(vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) { WhatsNewNotes() }
+        com.leftovers.app.ui.components.PrimaryButton("Continue", { close {} }, Modifier.fillMaxWidth())
     }
 }
 
 @Composable
 private fun WhatsNewNotes() {
     val c = LocalAppColors.current
-    WhatsNew.notes.forEach { note ->
-        Row(Modifier.padding(top = 4.dp)) {
-            Text("•", style = MaterialTheme.typography.bodyMedium, color = c.accent)
-            Spacer(Modifier.width(8.dp))
-            Text(note, style = MaterialTheme.typography.bodyMedium, color = c.textSecondary)
+    WhatsNew.items.forEach { note ->
+        Row(verticalAlignment = Alignment.Top) {
+            Icon(noteIcon(note.icon), contentDescription = null, tint = c.accent, modifier = Modifier.padding(top = 2.dp).size(30.dp))
+            Spacer(Modifier.width(16.dp))
+            Column(Modifier.weight(1f)) {
+                Text(note.title, style = MaterialTheme.typography.titleSmall, color = c.textPrimary)
+                Text(note.text, style = MaterialTheme.typography.bodyMedium, color = c.textSecondary)
+            }
         }
     }
+}
+
+private fun noteIcon(name: String) = when (name) {
+    "palette" -> Lucide.Palette
+    "party" -> Lucide.PartyPopper
+    "search" -> Lucide.Search
+    "receipt" -> Lucide.ReceiptText
+    "bot" -> Lucide.BotMessageSquare
+    else -> Lucide.Sparkles
 }
 
 /** The Notices page's state: a newer version the last check found, and the check itself. */
@@ -156,8 +167,8 @@ fun NoticesScreen(onBack: () -> Unit, viewModel: NoticesViewModel = androidx.lif
                             Text(version, style = MaterialTheme.typography.bodySmall, color = c.textSecondary)
                         }
                     }
-                    Spacer(Modifier.height(8.dp))
-                    WhatsNewNotes()
+                    Spacer(Modifier.height(16.dp))
+                    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) { WhatsNewNotes() }
                 }
             }
         }
