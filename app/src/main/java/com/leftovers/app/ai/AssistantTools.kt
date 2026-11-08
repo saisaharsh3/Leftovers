@@ -182,6 +182,7 @@ class AssistantTools(private val container: AppContainer, private val privacy: A
                     Param("to_account", "string", "Account the money goes to", required = true),
                     Param("amount", "number", "Amount", required = true),
                     Param("note", "string", "Short note"),
+                    Param("date", "string", "YYYY-MM-DD, defaults to today"),
                 ),
                 changesData = true,
             ))
@@ -577,8 +578,10 @@ class AssistantTools(private val container: AppContainer, private val privacy: A
             require(from.id != to.id) { "Pick two different accounts" }
             val amount = positiveMinor(a, "amount")
             val note = a.optString("note").trim().take(60)
-            ProposedChange(ChangeKind.TRANSFER, "Move ${money.format(amount)} from ${from.name} to ${to.name}") {
-                container.accounts.saveTransfer(Transfer(fromAccountId = from.id, toAccountId = to.id, amountMinor = amount, epochDay = LocalDate.now().toEpochDay(), note = note))
+            val day = date(a, "date") ?: LocalDate.now()
+            val on = if (day == LocalDate.now()) "" else " on ${day.friendlyLabel()}"
+            ProposedChange(ChangeKind.TRANSFER, "Move ${money.format(amount)} from ${from.name} to ${to.name}$on") {
+                container.accounts.saveTransfer(Transfer(fromAccountId = from.id, toAccountId = to.id, amountMinor = amount, epochDay = day.toEpochDay(), note = note))
                 "Transfer added"
             }
         }

@@ -132,7 +132,10 @@ internal fun searchMatches(item: TransactionItem, query: String, accountName: St
 enum class TypeFilter(val label: String) { ALL("All"), EXPENSE("Spent"), INCOME("Income") }
 
 /** A day's entries; with [label], one list in another order (by amount) instead of a day. */
-data class DayGroup(val date: LocalDate, val items: List<TransactionItem>, val label: String? = null)
+data class DayGroup(val date: LocalDate, val items: List<TransactionItem>, val label: String? = null, val transfers: List<TransferLine> = emptyList())
+
+/** Money moved between two of your accounts that day; [sign] is −1 or +1 for the account Activity is showing, else 0. */
+data class TransferLine(val transfer: com.leftovers.app.data.Transfer, val from: String, val to: String, val sign: Int)
 
 /** Narrows the list to one account, one category and/or one #tag. A tag looks across all months. */
 /** [allTime]: every entry instead of one month's (#29); it isn't a filter, so it doesn't make the list "filtered". */
@@ -200,9 +203,9 @@ class HistoryViewModel(
 
     val state: StateFlow<HistoryUiState> =
         combine(
-            combine(repository.allTransactions, accountRepository.accounts, settings.settings.map { it.splitsAsOneBill }.distinctUntilChanged(), planning.debts) { a, b, c, d -> Books(a, b, c, d) },
+            combine(repository.allTransactions, accountRepository.accounts, settings.settings.map { it.splitsAsOneBill }.distinctUntilChanged(), planning.debts, accountRepository.transfers) { a, b, c, d, e -> Books(a, b, c, d, e) },
             month, filter, query, filters,
-        ) { (all, accountList, oneBill, debts), m, f, q, fl ->
+        ) { (all, accountList, oneBill, debts, transfers), m, f, q, fl ->
             val monthItems = all.filter { YearMonth.from(it.date) == m }
             val scoped = if (q.isNotBlank()) {
                 val accountNames = accountList.associate { it.id to it.name }
@@ -222,12 +225,33 @@ class HistoryViewModel(
                 TypeFilter.EXPENSE -> narrowed.filter { it.type == TxType.EXPENSE }
                 TypeFilter.INCOME -> narrowed.filter { it.type == TxType.INCOME }
             }
+            // Transfers between your own accounts, on their day (#55): not spending or income, so only in the full
+            // list by day, never in the totals; filtered to an account, the ones in or out of it.
+            val names = accountList.associate { it.id to it.name }
+            val words = q.lowercase().split(' ').filter { it.isNotBlank() }
+            val moved = if (fl.sort != ActivitySort.NEWEST || f != TypeFilter.ALL || fl.categoryId != null || fl.tag != null) emptyList()
+            else transfers.asSequence()
+                .filter { if (q.isNotBlank() || fl.allTime) true else YearMonth.from(LocalDate.ofEpochDay(it.epochDay)) == m }
+                .filter { fl.accountId == null || it.fromAccountId == fl.accountId || it.toAccountId == fl.accountId }
+                .map { t ->
+                    TransferLine(
+                        t, names[t.fromAccountId] ?: "?", names[t.toAccountId] ?: "?",
+                        when (fl.accountId) { null -> 0; t.fromAccountId -> -1; else -> 1 },
+                    )
+                }
+                .filter { line -> words.all { w -> "transfer ${line.from} ${line.to} ${line.transfer.note}".lowercase().contains(w) } }
+                .sortedByDescending { it.transfer.createdAt }
+                .toList()
             HistoryUiState(
                 month = m,
                 filter = f,
                 query = q,
                 groups = if (fl.sort == ActivitySort.NEWEST) {
-                    filtered.groupBy { it.epochDay }.map { (day, items) -> DayGroup(LocalDate.ofEpochDay(day), items) }
+                    val byDay = filtered.groupBy { it.epochDay }
+                    val movedByDay = moved.groupBy { it.transfer.epochDay }
+                    (byDay.keys + movedByDay.keys).distinct().sortedDescending().map { day ->
+                        DayGroup(LocalDate.ofEpochDay(day), byDay[day].orEmpty(), transfers = movedByDay[day].orEmpty())
+                    }
                 } else {
                     // By amount: one list. A split bill counts as its whole amount and keeps its parts under it.
                     val ids = filtered.map { it.id }.toSet()
@@ -456,7 +480,8 @@ fun HistoryScreen(
                     }
                 }
                 // Each split bill on a card of its own: the entry, its parts, and who owes for it (#36).
-                billCards(group.items, state.shares, state.oneBill).forEachIndexed { cardIndex, card ->
+                val cards = billCards(group.items, state.shares, state.oneBill)
+                cards.forEachIndexed { cardIndex, card ->
                     // A split bill is its row and where its money went; its parts and shares aren't rows of their own.
                     val bill = card.drop(1).any { it.under() }
                     card.forEachIndexed { i, line ->
@@ -486,6 +511,22 @@ fun HistoryScreen(
                                     )
                                 }
                             }
+                        }
+                    }
+                }
+                // The day's transfers, on a card of their own after its entries.
+                group.transfers.forEachIndexed { i, line ->
+                    item(key = "transfer-${line.transfer.id}") {
+                        CardSlice(
+                            first = i == 0,
+                            last = i == group.transfers.lastIndex,
+                            modifier = Modifier
+                                .animateItem(fadeInSpec = tween(220), placementSpec = listMotion, fadeOutSpec = tween(160))
+                                .padding(top = if (i == 0 && cards.isNotEmpty()) 10.dp else 0.dp)
+                                .appear(groupIndex + 1),
+                        ) {
+                            if (i > 0) RowDivider(inset = 74.dp)
+                            TransferRow(line)
                         }
                     }
                 }
@@ -590,7 +631,7 @@ private fun CardSlice(first: Boolean, last: Boolean, modifier: Modifier = Modifi
     Column(
         modifier
             .fillMaxWidth()
-            .glassSurface(shape, lens = false, live = false)
+            .glassSurface(shape, lens = false)
             .clip(shape)
             .drawWithContent {
                 drawContent()
@@ -754,4 +795,21 @@ private data class Books(
     val accounts: List<com.leftovers.app.data.AccountWithBalance>,
     val oneBill: Boolean,
     val debts: List<com.leftovers.app.data.Debt>,
+    val transfers: List<com.leftovers.app.data.Transfer>,
 )
+
+/** A transfer in Activity: neutral, neither spending nor income; signed only when one account is shown. */
+@Composable
+private fun TransferRow(line: TransferLine) {
+    val c = LocalAppColors.current
+    val money = LocalMoney.current
+    com.leftovers.app.ui.components.ListRow(
+        title = "${line.from} → ${line.to}",
+        subtitle = listOf("Transfer", line.transfer.note).filter { it.isNotBlank() }.joinToString(" · "),
+        leading = { com.leftovers.app.ui.components.IconTile(Lucide.Repeat, c.textSecondary, size = 42.dp) },
+        trailing = {
+            val sign = when (line.sign) { -1 -> "−"; 1 -> "+"; else -> "" }
+            Text(sign + money.format(line.transfer.amountMinor), style = MaterialTheme.typography.titleSmall, color = c.textSecondary)
+        },
+    )
+}

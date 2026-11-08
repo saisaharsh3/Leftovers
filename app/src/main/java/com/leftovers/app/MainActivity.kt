@@ -131,7 +131,7 @@ class MainActivity : FragmentActivity() {
                 ) {
                     // Cards are liquid glass over a photo where the phone can draw it (Android 13+), with glass on.
                     val bgBackdrop = com.kyant.backdrop.backdrops.rememberLayerBackdrop()
-                    val liquidCards = photo != null && android.os.Build.VERSION.SDK_INT >= 33
+                    val liquidCards = photo != null && android.os.Build.VERSION.SDK_INT >= 33 && s.liquidGlass
                     CompositionLocalProvider(
                         com.leftovers.app.ui.components.LocalBackgroundBackdrop provides (if (liquidCards) bgBackdrop else null),
                         LocalMoney provides money,

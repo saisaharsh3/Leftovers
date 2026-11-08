@@ -436,11 +436,12 @@ fun LeftoversNavHost(openAdd: Boolean = false, onOpenAddHandled: () -> Unit = {}
                     screen(Routes.HELP) {
                         com.leftovers.app.ui.screens.HelpScreen(onBack = back) { place ->
                             when (place) {
-                                // The tabs open as tabs, with the tab bar; everything else on top of the guide.
-                                com.leftovers.app.util.HelpGuide.Place.HOME -> nav.switchTab(Routes.HOME)
-                                com.leftovers.app.util.HelpGuide.Place.ACTIVITY -> nav.switchTab(Routes.ACTIVITY)
-                                com.leftovers.app.util.HelpGuide.Place.INSIGHTS -> nav.switchTab(Routes.INSIGHTS)
-                                com.leftovers.app.util.HelpGuide.Place.PLAN -> nav.switchTab(Routes.PLAN)
+                                // Everything opens on top of the guide, tabs too, so going back always returns here.
+                                // (Switching tabs would clear the guide away, or, for Home, put it straight back.)
+                                com.leftovers.app.util.HelpGuide.Place.HOME -> nav.navigate(Routes.HOME)
+                                com.leftovers.app.util.HelpGuide.Place.ACTIVITY -> nav.navigate(Routes.ACTIVITY)
+                                com.leftovers.app.util.HelpGuide.Place.INSIGHTS -> nav.navigate(Routes.INSIGHTS)
+                                com.leftovers.app.util.HelpGuide.Place.PLAN -> nav.navigate(Routes.PLAN)
                                 com.leftovers.app.util.HelpGuide.Place.ADD -> nav.navigate(Routes.add())
                                 com.leftovers.app.util.HelpGuide.Place.ACCOUNTS -> nav.navigate(Routes.ACCOUNTS)
                                 com.leftovers.app.util.HelpGuide.Place.BUDGET -> nav.navigate(Routes.BUDGET)

@@ -34,6 +34,8 @@ data class AppSettings(
     val glassEffects: Boolean,
     /** Black background for OLED screens, when the dark theme is in use. */
     val pureBlack: Boolean = false,
+    /** Over a photo: liquid glass that bends the picture, or frosted glass, lighter on slower phones. */
+    val liquidGlass: Boolean = true,
     /** What's behind every screen ([com.leftovers.app.ui.theme.Backdrop] name). */
     val backdrop: String = "AURORA",
     /** How much the background photo is dimmed, 0.2 to 0.85; changes with each new photo too ([photoVersion]). */
@@ -129,6 +131,7 @@ class SettingsRepository(context: Context) {
             dynamicColor = p[DYNAMIC_COLOR] ?: false,
             glassEffects = p[GLASS_EFFECTS] ?: true,
             pureBlack = p[PURE_BLACK] ?: false,
+            liquidGlass = p[LIQUID_GLASS] ?: true,
             backdrop = p[BACKDROP] ?: "AURORA",
             photoDim = p[PHOTO_DIM] ?: 0.1f,
             photoBlur = p[PHOTO_BLUR] ?: 0.25f,
@@ -216,6 +219,7 @@ class SettingsRepository(context: Context) {
     suspend fun setGlassEffects(enabled: Boolean) = store.edit { it[GLASS_EFFECTS] = enabled }
 
     suspend fun setPureBlack(enabled: Boolean) = store.edit { it[PURE_BLACK] = enabled }
+    suspend fun setLiquidGlass(enabled: Boolean) = store.edit { it[LIQUID_GLASS] = enabled }
     suspend fun setBackdrop(name: String) = store.edit { it[BACKDROP] = name }
     suspend fun setPhotoDim(value: Float) = store.edit { it[PHOTO_DIM] = value }
     suspend fun setPhotoBlur(value: Float) = store.edit { it[PHOTO_BLUR] = value }
@@ -355,6 +359,7 @@ class SettingsRepository(context: Context) {
         val DYNAMIC_COLOR = booleanPreferencesKey("dynamic_color")
         val GLASS_EFFECTS = booleanPreferencesKey("glass_effects")
         val PURE_BLACK = booleanPreferencesKey("pure_black")
+        val LIQUID_GLASS = booleanPreferencesKey("liquid_glass")
         val BACKDROP = stringPreferencesKey("backdrop")
         val PHOTO_DIM = floatPreferencesKey("photo_dim")
         val PHOTO_BLUR = floatPreferencesKey("photo_blur")

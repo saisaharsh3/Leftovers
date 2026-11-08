@@ -35,7 +35,7 @@ object HelpGuide {
 
         // Accounts
         Item("Accounts", "Accounts and balances", "Bank, cash, cards and wallets, each with its balance. Tap one to see its entries.", "Home → Total balance card", Place.ACCOUNTS, "bank wallet card cash balance"),
-        Item("Accounts", "Transfer between accounts", "Move money between your own accounts, such as paying a card bill from the bank. It isn't spending or income.", "Home → Total balance card → Transfer", Place.ACCOUNTS, "move money pay card bill withdraw"),
+        Item("Accounts", "Transfer between accounts", "Move money between your own accounts, such as paying a card bill from the bank, today or on an earlier day. It isn't spending or income, but it shows in Activity on its day.", "Home → Total balance card → Transfer", Place.ACCOUNTS, "move money pay card bill withdraw"),
         Item("Accounts", "Accounts in another currency", "An account can be in its own currency; entries in it are converted for your totals.", "Accounts → an account → Currency", Place.ACCOUNTS, "foreign dollar euro travel"),
         Item("Accounts", "Leave an account out", "Keep an account out of the total balance and/or the budget, e.g. savings, or money that isn't yours such as a friend's spends on your card.", "Accounts → an account", Place.ACCOUNTS, "exclude hide savings reimbursement external"),
         Item("Accounts", "Put accounts in order", "Drag accounts into the order you want.", "Accounts → Reorder", Place.ACCOUNTS, "sort arrange drag"),
@@ -73,7 +73,7 @@ object HelpGuide {
         Item("AI assistant", "Privacy", "Notes stay on the phone unless you share them; read-only mode stops all changes. Switch between AIs without typing a key again.", "Settings → AI assistant", Place.SETTINGS, "private key switch notes"),
 
         // Look, security and more
-        Item("Look, security and more", "Appearance", "Light, dark or automatic; a background (the glow in several colours, plain, or your own photo, blurred) and an accent colour of your choice; glass effects and pure black.", "Settings → Appearance", Place.SETTINGS, "theme dark light colour amoled wallpaper background photo accent"),
+        Item("Look, security and more", "Appearance", "Light, dark or automatic; a background (the glow in several colours, plain, or your own photo, blurred) and an accent colour of your choice; glass effects and pure black. Over a photo, liquid or frosted glass: frosted is lighter if scrolling isn't smooth.", "Settings → Appearance", Place.SETTINGS, "theme dark light colour amoled wallpaper background photo accent liquid frosted lag slow smooth"),
         Item("Look, security and more", "Home screen widgets", "Glass, dark or light widgets for the phone's home screen, in any size.", "Settings → Appearance → Home screen widgets", Place.SETTINGS, "widget launcher"),
         Item("Look, security and more", "App lock and screenshots", "Lock with a PIN, password, fingerprint or face, and block screenshots.", "Settings → Security & reminders", Place.SETTINGS, "lock pin fingerprint secure privacy screenshot"),
         Item("Look, security and more", "Festival greetings", "A greeting on Home and a notification on the main festivals where you live, worked out on the phone from your currency. They come with notifications on.", "Home, on the day", Place.HOME, "diwali eid christmas holiday new year"),

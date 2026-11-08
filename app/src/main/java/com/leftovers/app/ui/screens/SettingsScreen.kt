@@ -287,6 +287,10 @@ class SettingsViewModel(
         viewModelScope.launch { settingsRepository.setPureBlack(enabled) }
     }
 
+    fun setLiquidGlass(enabled: Boolean) {
+        viewModelScope.launch { settingsRepository.setLiquidGlass(enabled) }
+    }
+
     fun setBackdrop(b: com.leftovers.app.ui.theme.Backdrop) {
         viewModelScope.launch { settingsRepository.setBackdrop(b.name) }
     }
@@ -666,6 +670,56 @@ fun SettingsScreen(
                         val photoBackground = s.backdrop == com.leftovers.app.ui.theme.Backdrop.PHOTO.name
                         // Off: solid bars, cards, dialogs and sheets, with no blur (also a little easier on the battery).
                         if (!photoBackground) ToggleRow(Lucide.Droplet, "Glass effects", s.glassEffects, viewModel::setGlassEffects, inset = false)
+                        // Over a photo, in its place: which glass. Liquid bends the photo (Android 13 and newer); frosted
+                        // is lighter, for smooth scrolling on any phone.
+                        if (photoBackground && Build.VERSION.SDK_INT >= 33) {
+                            Spacer(Modifier.height(8.dp))
+                            // Switching to liquid asks first: it's the heavier of the two.
+                            var askLiquid by remember { mutableStateOf(false) }
+                            SegmentedToggle(
+                                listOf(true, false), s.liquidGlass, { if (it) "Liquid glass" else "Frosted glass" },
+                                { liquid -> if (liquid && !s.liquidGlass) askLiquid = true else viewModel.setLiquidGlass(liquid) },
+                                Modifier.fillMaxWidth(),
+                            )
+                            if (askLiquid) {
+                                GlassAlertDialog(
+                                    onDismissRequest = { askLiquid = false },
+                                    text = {
+                                        Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+                                            com.leftovers.app.ui.components.IconTile(Lucide.Droplet, c.accent, size = 56.dp)
+                                            Spacer(Modifier.height(16.dp))
+                                            Text("Liquid glass", style = MaterialTheme.typography.headlineSmall, color = c.textPrimary)
+                                            Spacer(Modifier.height(8.dp))
+                                            Text(
+                                                "Cards bend your photo at their edges, like real glass.",
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                color = c.textSecondary,
+                                                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                                            )
+                                            Spacer(Modifier.height(20.dp))
+                                            Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                                LiquidCost(Lucide.BatteryMedium, "Uses more battery")
+                                                LiquidCost(Lucide.Zap, "Works your phone harder, so scrolling can stutter on some phones")
+                                            }
+                                        }
+                                    },
+                                    confirmButton = {
+                                        Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                            com.leftovers.app.ui.components.PrimaryButton("Use liquid glass", { askLiquid = false; viewModel.setLiquidGlass(true) }, Modifier.fillMaxWidth())
+                                            com.leftovers.app.ui.components.SecondaryButton("Keep frosted", { askLiquid = false }, Modifier.fillMaxWidth())
+                                        }
+                                    },
+                                )
+                            }
+                            if (s.liquidGlass) {
+                                Text(
+                                    "Uses more battery and graphics power. If scrolling isn't smooth on your phone, Frosted glass is lighter.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = c.textSecondary,
+                                    modifier = Modifier.padding(start = 6.dp, top = 6.dp),
+                                )
+                            }
+                        }
                         // Only means something with the dark theme, so it's hidden when the app is always light.
                         if (s.themeMode != ThemeMode.LIGHT && !photoBackground) {
                             ToggleRow(Lucide.Moon, "Pure black (AMOLED)", s.pureBlack, viewModel::setPureBlack, inset = false)
@@ -1625,5 +1679,16 @@ private fun PaymentAppsSheet(onDismiss: () -> Unit) {
                 color = c.textSecondary,
             )
         }
+    }
+}
+
+/** One thing liquid glass costs, as a line with its icon. */
+@Composable
+private fun LiquidCost(icon: androidx.compose.ui.graphics.vector.ImageVector, text: String) {
+    val c = LocalAppColors.current
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Icon(icon, contentDescription = null, tint = c.textSecondary, modifier = Modifier.size(20.dp))
+        Spacer(Modifier.width(12.dp))
+        Text(text, style = MaterialTheme.typography.bodyMedium, color = c.textPrimary)
     }
 }

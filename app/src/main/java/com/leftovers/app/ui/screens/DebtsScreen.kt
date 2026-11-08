@@ -430,12 +430,27 @@ fun DebtEditor(
                 })
             }
             if (onDelete != null) {
+                // Asked first: it can't be undone (its photos go with it).
+                var askDelete by remember { mutableStateOf(false) }
                 Text(
                     "Delete",
                     style = MaterialTheme.typography.labelLarge,
                     color = c.negative,
-                    modifier = Modifier.align(Alignment.CenterHorizontally).pressable(onDelete),
+                    modifier = Modifier.align(Alignment.CenterHorizontally).pressable({ askDelete = true }),
                 )
+                if (askDelete) {
+                    GlassAlertDialog(
+                        onDismissRequest = { askDelete = false },
+                        title = { Text("Delete this entry?") },
+                        text = { Text("It can't be brought back${if (photos.isNotEmpty()) ", and its photos go with it" else ""}.", color = c.textSecondary) },
+                        confirmButton = {
+                            androidx.compose.material3.TextButton(onClick = { askDelete = false; onDelete() }) { Text("Delete", color = c.negative) }
+                        },
+                        dismissButton = {
+                            androidx.compose.material3.TextButton(onClick = { askDelete = false }) { Text("Cancel", color = c.textSecondary) }
+                        },
+                    )
+                }
             }
         }
     }

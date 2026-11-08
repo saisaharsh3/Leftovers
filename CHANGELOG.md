@@ -5,8 +5,12 @@ All notable changes to Leftovers. Download any version from
 
 ## Unreleased
 
+- Transfers between your accounts show in Activity on their day, neutral and left out of Spent and Income; with one account picked, the ones in and out of it, signed
+- A transfer can be dated earlier than today, for catching up; the AI assistant can date one too
+- Deleting a lent or borrowed entry asks first, as it can't be undone
+- Help & features: Open on Home, Activity, Insights or Plan opens it, and going back always returns to Help
 - Automatic backups keep the last ones you chose: each has the time in its name, so a second backup the same day no longer replaces the first
-- With a photo background, scrolling Activity is smoother on phones without power to spare (its rows use frosted glass there); stronger phones keep liquid glass
+- With a photo background, choose liquid or frosted glass (Settings → Appearance): frosted is lighter, for smooth scrolling on any phone; switching to liquid says what it costs first
 - With a photo background, buttons and fields inside pop-ups and sheets are frosted like the pop-up, not windows onto the photo
 - Your own icons: make one from any picture (a shop's logo, say) for a category, account or goal, framed with a drag and a pinch. They're kept on your phone to use again, go into backups, and a long press deletes one
 - Festival greetings and the Sunday note come with notifications, without switches of their own

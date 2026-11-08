@@ -194,9 +194,9 @@ class AccountsViewModel(
         viewModelScope.launch { repository.setAccount(ids, backTo) }
     }
 
-    fun transfer(from: Long, to: Long, amount: Long, note: String) {
+    fun transfer(from: Long, to: Long, amount: Long, note: String, day: LocalDate = LocalDate.now()) {
         viewModelScope.launch {
-            repository.saveTransfer(Transfer(fromAccountId = from, toAccountId = to, amountMinor = amount, epochDay = LocalDate.now().toEpochDay(), note = note))
+            repository.saveTransfer(Transfer(fromAccountId = from, toAccountId = to, amountMinor = amount, epochDay = day.toEpochDay(), note = note))
         }
     }
 
@@ -485,8 +485,8 @@ fun AccountsScreen(
     }
 
     if (transferring && accounts.size >= 2) {
-        TransferSheet(accounts, onDismiss = { transferring = false }) { from, to, amount, note ->
-            viewModel.transfer(from, to, amount, note)
+        TransferSheet(accounts, onDismiss = { transferring = false }) { from, to, amount, note, day ->
+            viewModel.transfer(from, to, amount, note, day)
             transferring = false
         }
     }
@@ -706,10 +706,13 @@ private fun AccountEditor(
 private fun TransferSheet(
     accounts: List<AccountWithBalance>,
     onDismiss: () -> Unit,
-    onSave: (Long, Long, Long, String) -> Unit,
+    onSave: (Long, Long, Long, String, LocalDate) -> Unit,
 ) {
     val c = LocalAppColors.current
     var from by rememberSaveable { mutableStateOf(accounts[0].id) }
+    // The day it happened: today unless it's being caught up on later (#54).
+    var day by rememberSaveable { mutableStateOf(LocalDate.now().toEpochDay()) }
+    var picking by remember { mutableStateOf(false) }
     var to by rememberSaveable { mutableStateOf(accounts[1].id) }
     var amount by rememberSaveable { mutableStateOf("") }
     var note by rememberSaveable { mutableStateOf("") }
@@ -731,9 +734,31 @@ private fun TransferSheet(
                 accounts.filter { it.id != from }.forEach { a -> Chip(a.name, onClick = { to = a.id }, icon = CategoryIcons[a.icon], iconTint = Color(a.color), selected = to == a.id) }
             }
             MoneyField(amount, { amount = it }, label = "Amount", large = true)
+            Chip(LocalDate.ofEpochDay(day).friendlyLabel(), onClick = { picking = true }, icon = com.leftovers.app.ui.icons.Lucide.Calendar)
             GlassTextField(note, { note = it.take(60) }, placeholder = "e.g. ATM withdrawal", label = "Note (optional)")
-            PrimaryButton("Transfer", { onSave(from, to, minor, note.trim()) }, Modifier.fillMaxWidth(), enabled = minor > 0 && from != to)
+            PrimaryButton("Transfer", { onSave(from, to, minor, note.trim(), LocalDate.ofEpochDay(day)) }, Modifier.fillMaxWidth(), enabled = minor > 0 && from != to)
         }
+    }
+    if (picking) {
+        val utc = java.time.ZoneOffset.UTC
+        val todayUtc = LocalDate.now().atStartOfDay(utc).toInstant().toEpochMilli()
+        val state = androidx.compose.material3.rememberDatePickerState(
+            initialSelectedDateMillis = LocalDate.ofEpochDay(day).atStartOfDay(utc).toInstant().toEpochMilli(),
+            // A transfer that hasn't happened yet would move a balance early, so up to today only.
+            selectableDates = object : androidx.compose.material3.SelectableDates {
+                override fun isSelectableDate(utcTimeMillis: Long) = utcTimeMillis <= todayUtc
+            },
+        )
+        GlassDatePickerDialog(
+            onDismissRequest = { picking = false },
+            confirmButton = {
+                androidx.compose.material3.TextButton(onClick = {
+                    state.selectedDateMillis?.let { day = java.time.Instant.ofEpochMilli(it).atZone(utc).toLocalDate().toEpochDay() }
+                    picking = false
+                }) { Text("Done", color = c.textPrimary) }
+            },
+            dismissButton = { androidx.compose.material3.TextButton(onClick = { picking = false }) { Text("Cancel", color = c.textSecondary) } },
+        ) { androidx.compose.material3.DatePicker(state) }
     }
 }
 
