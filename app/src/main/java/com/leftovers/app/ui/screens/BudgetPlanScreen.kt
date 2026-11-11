@@ -437,7 +437,7 @@ fun BudgetPlanScreen(
                                 )
                             }
                             Text(
-                                "Which categories are needs or wants: Settings → Categories.",
+                                "Which categories are needs or wants: Settings → General → Categories.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = c.textTertiary,
                                 modifier = Modifier.padding(start = 4.dp),

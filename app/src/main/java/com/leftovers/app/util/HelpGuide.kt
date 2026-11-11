@@ -19,12 +19,12 @@ object HelpGuide {
         Item("Adding entries", "Repeat every month", "Turn an entry into a subscription or a regular payment that's logged for you.", "+ → Repeat (↻)", Place.ADD, "recurring rent bill monthly"),
         Item("Adding entries", "Receipt photo", "Attach a photo of the bill to an entry. With the AI assistant connected, it can read the bill and fill the entry in.", "+ → Attach receipt", Place.ADD, "bill camera scan invoice picture"),
         Item("Adding entries", "Tags", "Add #tags like #goa or #work to an entry, then search or filter by them, or give a trip its own budget.", "+ → Tags", Place.ADD, "hashtag label trip"),
-        Item("Adding entries", "Undo and deleted entries", "Deleting shows Undo for a few seconds. Deleted entries are kept, to put back later.", "Settings → Data → Deleted entries", Place.DELETED, "restore recover trash bin removed"),
+        Item("Adding entries", "Undo and deleted entries", "Deleting shows Undo for a few seconds. Deleted entries are kept, to put back later.", "Settings → Backup & data → Deleted entries", Place.DELETED, "restore recover trash bin removed"),
 
         // Seeing your money
         Item("Seeing your money", "Home", "What's left to spend today and this month, balances, upcoming bills, money owed and recent entries. Pull down to check email, sync and updates.", "The Home tab", Place.HOME, "dashboard safe to spend refresh"),
         Item("Seeing your money", "Safe to spend today", "The big number on Home: what you can spend today and stay on budget, or how far over you are. Tap it for the month's budget.", "Home, at the top", Place.BUDGET, "over budget left daily limit"),
-        Item("Seeing your money", "Add small payments automatically", "With bank SMS on, spending up to an amount you choose is added right away, under the category that place had last time. Bigger payments, money coming in, and paybacks still wait for you on Home.", "Settings → Security & reminders → Add small payments automatically", Place.SETTINGS, "auto automatic small sms limit threshold"),
+        Item("Seeing your money", "Add small payments automatically", "With bank SMS on, spending up to an amount you choose is added right away, under the category that place had last time. Bigger payments, money coming in, and paybacks still wait for you on Home.", "Settings → Payment detection → Add small payments automatically", Place.SETTINGS, "auto automatic small sms limit threshold"),
         Item("Seeing your money", "Detected payments", "Payments found in your SMS, email or payment apps wait on Home: tap one to check and add it, or ✕ to dismiss it.", "Home → Detected payments", Place.HOME, "suggested pending review sms"),
         Item("Seeing your money", "One month or all time", "See one month at a time or every entry ever, newest first or by amount. Transfers between your accounts show on their day: tap one to change or delete it.", "Activity → By month / All time, and the filter button", Place.ACTIVITY, "sort highest lowest history everything transfer"),
         Item("Seeing your money", "Search and filters", "Search notes, categories, accounts, #tags or amounts; several words find entries with all of them. Filter by account, category or #tag.", "Activity → search or filter buttons", Place.ACTIVITY, "find look up tag hashtag"),
@@ -59,15 +59,15 @@ object HelpGuide {
         Item("Bills, goals and money owed", "Send it to a friend's Leftovers", "Remind (the bell) sends a message with a link. A friend who also uses Leftovers taps it and what they owe you is added to their Money owed, never twice. The amounts travel in the link itself, not through a server.", "Money owed → a person → bell", Place.DEBTS, "share split link friend send sync together"),
 
         // Detecting payments
-        Item("Detecting payments", "Bank SMS", "Payments in your bank's text messages are suggested on Home, to add with one tap. Only a fingerprint of each message is kept.", "Settings → Security & reminders → Detect bank SMS", Place.SETTINGS, "sms message auto upi"),
-        Item("Detecting payments", "Payment app notifications", "Read payments from apps like Google Pay, PhonePe or Paytm, only the apps you choose.", "Settings → Security & reminders → Detect payment apps", Place.SETTINGS, "notification gpay phonepe paytm"),
-        Item("Detecting payments", "Email", "Find payments in bank and shop emails, over a secure connection to your mailbox.", "Settings → Security & reminders → Detect payments in email", Place.SETTINGS, "gmail mail inbox"),
-        Item("Detecting payments", "Your bank's words", "If your bank's messages aren't picked up, add the word it uses, and test a message to see what the app makes of it.", "Settings → Security & reminders → Detection keywords", Place.SETTINGS, "keyword test message missing"),
+        Item("Detecting payments", "Bank SMS", "Payments in your bank's text messages are suggested on Home, to add with one tap. Only a fingerprint of each message is kept.", "Settings → Payment detection → Detect bank SMS", Place.SETTINGS, "sms message auto upi"),
+        Item("Detecting payments", "Payment app notifications", "Read payments from apps like Google Pay, PhonePe or Paytm, only the apps you choose.", "Settings → Payment detection → Detect payment apps", Place.SETTINGS, "notification gpay phonepe paytm"),
+        Item("Detecting payments", "Email", "Find payments in bank and shop emails, over a secure connection to your mailbox.", "Settings → Payment detection → Detect payments in email", Place.SETTINGS, "gmail mail inbox"),
+        Item("Detecting payments", "Your bank's words", "If your bank's messages aren't picked up, add the word it uses, and test a message to see what the app makes of it.", "Settings → Payment detection → Detection keywords", Place.SETTINGS, "keyword test message missing"),
 
         // Import, export and backup
-        Item("Import, export and backup", "Import entries", "Bank statements (PDF or CSV), payment app statements, and other apps' exports. You check them before they're added; a wrong import can be removed in one go.", "Settings → Data → Import entries", Place.SETTINGS, "import statement csv pdf phonepe bank other app"),
-        Item("Import, export and backup", "Export to CSV", "Every entry as a spreadsheet, for Excel or Sheets.", "Settings → Data → Export to CSV", Place.SETTINGS, "excel sheets spreadsheet"),
-        Item("Import, export and backup", "Backups", "Back up and restore, automatically every week to a folder you choose, with a password and photos if you like.", "Settings → Data", Place.SETTINGS, "backup restore save folder password"),
+        Item("Import, export and backup", "Import entries", "Bank statements (PDF or CSV), payment app statements, and other apps' exports. You check them before they're added; a wrong import can be removed in one go.", "Settings → Backup & data → Import entries", Place.SETTINGS, "import statement csv pdf phonepe bank other app"),
+        Item("Import, export and backup", "Export to CSV", "Every entry as a spreadsheet, for Excel or Sheets.", "Settings → Backup & data → Export to CSV", Place.SETTINGS, "excel sheets spreadsheet"),
+        Item("Import, export and backup", "Backups", "Back up and restore, automatically every week to a folder you choose, with a password and photos if you like.", "Settings → Backup & data", Place.SETTINGS, "backup restore save folder password"),
         Item("Import, export and backup", "Sync between devices", "Keep two phones in step through a shared folder or your own WebDAV server.", "Settings → Sync", Place.SETTINGS, "sync nextcloud webdav two phones"),
 
         // AI assistant
@@ -79,13 +79,13 @@ object HelpGuide {
         // Look, security and more
         Item("Look, security and more", "Appearance", "Light, dark or automatic; a background (the glow in several colours, plain, or your own photo, blurred) and an accent colour of your choice; glass effects and pure black. Over a photo, liquid or frosted glass: frosted is lighter if scrolling isn't smooth.", "Settings → Appearance", Place.SETTINGS, "theme dark light colour amoled wallpaper background photo accent liquid frosted lag slow smooth"),
         Item("Look, security and more", "Home screen widgets", "Glass, dark or light widgets for the phone's home screen, in any size.", "Settings → Appearance → Home screen widgets", Place.SETTINGS, "widget launcher"),
-        Item("Look, security and more", "App lock and screenshots", "Lock with a PIN, password, fingerprint or face, and block screenshots.", "Settings → Security & reminders", Place.SETTINGS, "lock pin fingerprint secure privacy screenshot"),
+        Item("Look, security and more", "App lock and screenshots", "Lock with a PIN, password, fingerprint or face, and block screenshots.", "Settings → Security", Place.SETTINGS, "lock pin fingerprint secure privacy screenshot"),
         Item("Look, security and more", "Festival greetings", "A greeting on Home and a notification on the main festivals where you live, worked out on the phone from your currency. They come with notifications on.", "Home, on the day", Place.HOME, "diwali eid christmas holiday new year"),
         Item("Look, security and more", "A note on your week", "Sunday evenings, a short note when there's something to say: spending down, a category that changed, no-spend days. It comes with notifications on.", "Your phone's notifications", null, "weekly summary notification sunday"),
-        Item("Look, security and more", "Reminders and alerts", "A daily reminder to log, reminders before bills, and budget alerts.", "Settings → Security & reminders", Place.SETTINGS, "notification remind alert"),
+        Item("Look, security and more", "Reminders and alerts", "A daily reminder to log, reminders before bills, and budget alerts.", "Settings → Reminders & alerts", Place.SETTINGS, "notification remind alert"),
         Item("Look, security and more", "Split bills as one entry", "Show a split bill as one entry with its parts under it, or every part on its own.", "Settings → General → Show a split bill as one entry", Place.SETTINGS, "split parts list"),
         Item("Look, security and more", "Currency", "The currency your amounts are shown in.", "Settings → General → Currency", Place.SETTINGS, "rupee dollar symbol"),
-        Item("Look, security and more", "Updates and feedback", "Check for a new version, or report a problem and suggest an idea.", "Settings, at the bottom", Place.SETTINGS, "update version bug github feedback"),
+        Item("Look, security and more", "Updates and feedback", "Check for a new version, or report a problem and suggest an idea.", "Settings → About", Place.SETTINGS, "update version bug github feedback"),
     )
 
     val sections: List<String> get() = items.map { it.section }.distinct()

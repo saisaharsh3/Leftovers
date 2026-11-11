@@ -1504,7 +1504,7 @@ fun EditorScreen(
             title = { Text("Delete this entry?") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text("You can restore it later from Settings → Deleted entries.", color = c.textSecondary)
+                    Text("You can restore it later from Settings → Backup & data → Deleted entries.", color = c.textSecondary)
                     linked?.let { r ->
                         Row(
                             Modifier.fillMaxWidth().pressable({ stopRepeating = !stopRepeating }, pressedScale = 0.98f),
