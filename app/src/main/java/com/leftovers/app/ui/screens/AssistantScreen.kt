@@ -7,6 +7,7 @@ import kotlinx.coroutines.Job
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -63,6 +64,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.graphics.luminance
+import com.leftovers.app.ui.components.glassSurface
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
@@ -146,6 +149,11 @@ class AssistantViewModel(private val container: AppContainer, private val assist
     private var job: Job? = null
 
     init {
+        // The phone's own AI takes a few seconds to start after the app opens: begin now, so it's ready by the
+        // first question.
+        viewModelScope.launch {
+            config.collect { if (it?.provider == AiProvider.ON_DEVICE) com.leftovers.app.ai.OnDevice.warmUp() }
+        }
         // A new provider, key or privacy setting starts a fresh conversation.
         viewModelScope.launch {
             combine(config, privacy) { c, p -> c to p }.drop(1).collect {
@@ -248,10 +256,12 @@ class AssistantViewModel(private val container: AppContainer, private val assist
     /** Runs one exchange with the model; named so it can never resolve to Kotlin's scope function `run`. */
     private fun runTurn(step: suspend () -> ModelTurn) {
         busy = true
-        job = viewModelScope.launch {
+        // Started only once it's the current job: an answer can come back at once (the phone's own AI), and its
+        // finally below must see itself as the job to clear "busy", or the dots stay forever.
+        val turn = viewModelScope.launch(start = kotlinx.coroutines.CoroutineStart.LAZY) {
             try {
-                var turn = step()
-                while (!handle(turn)) turn = session!!.sendToolResults(takeResults())
+                var reply = step()
+                while (!handle(reply)) reply = session!!.sendToolResults(takeResults())
             } catch (e: CancellationException) {
                 throw e // Stopped by the user; stop() already tidied up.
             } catch (e: AiException) {
@@ -268,6 +278,8 @@ class AssistantViewModel(private val container: AppContainer, private val assist
                 }
             }
         }
+        job = turn
+        turn.start()
     }
 
     /** Shows the reply and answers its lookups. Returns true when the turn is over or waiting on the user. */
@@ -531,7 +543,7 @@ fun AssistantScreen(
 private fun ConnectPrompt(modifier: Modifier, onConnect: () -> Unit) {
     val c = LocalAppColors.current
     Column(modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
-        IconTile(Lucide.MessageCircle, c.accent, size = 64.dp)
+        IconTile(Lucide.BotMessageSquare, c.accent, size = 64.dp)
         Spacer(Modifier.height(16.dp))
         Text("Ask about your money, or tell it what to log", style = MaterialTheme.typography.titleLarge, color = c.textPrimary, textAlign = TextAlign.Center)
         Spacer(Modifier.height(8.dp))
@@ -583,7 +595,7 @@ private fun Bubble(text: String, mine: Boolean) {
         Box(
             Modifier
                 .widthIn(max = 300.dp)
-                .background(if (mine) c.accent else c.glassStrong, shape)
+                .then(if (mine) Modifier.background(c.accent, shape) else Modifier.replyGlass(shape))
                 .padding(horizontal = 14.dp, vertical = 10.dp),
         ) {
             Text(
@@ -593,6 +605,18 @@ private fun Bubble(text: String, mine: Boolean) {
             )
         }
     }
+}
+
+/**
+ * The AI's side of the chat: glass like the cards, with a deeper tint than theirs, since a reply is paragraphs of
+ * text that must read over any photo.
+ */
+@Composable
+private fun Modifier.replyGlass(shape: androidx.compose.ui.graphics.Shape): Modifier {
+    val c = LocalAppColors.current
+    val darkText = c.textPrimary.luminance() < 0.5f
+    return glassSurface(shape, strong = true, tint = if (darkText) androidx.compose.ui.graphics.Color.White.copy(alpha = 0.55f) else androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.42f))
+        .then(androidx.compose.foundation.BorderStroke(1.dp, com.leftovers.app.ui.components.glassBorder(c)).let { Modifier.border(it, shape) })
 }
 
 @Composable
@@ -612,7 +636,7 @@ private fun TypingBubble() {
     val pulse = androidx.compose.animation.core.rememberInfiniteTransition(label = "typing")
     Box(
         Modifier
-            .background(c.glassStrong, RoundedCornerShape(20.dp, 20.dp, 20.dp, 6.dp))
+            .replyGlass(RoundedCornerShape(20.dp, 20.dp, 20.dp, 6.dp))
             .semantics { contentDescription = "Thinking" }
             .padding(horizontal = 16.dp, vertical = 14.dp),
     ) {
@@ -763,46 +787,84 @@ fun AssistantSetupSheet(onDismiss: () -> Unit, viewModel: AssistantSetupViewMode
             val current = config
             if (current != null) {
                 Glass(Modifier.fillMaxWidth(), tint = c.positive.copy(alpha = 0.12f)) {
-                    Column(Modifier.padding(16.dp)) {
-                        Text("Connected to ${current.provider.label}", style = MaterialTheme.typography.titleSmall, color = c.textPrimary)
-                        Text(current.model, style = MaterialTheme.typography.bodySmall, color = c.textSecondary)
-                        Spacer(Modifier.height(12.dp))
-                        // Sends one short message, so the key, the model and the network are checked together.
-                        SecondaryButton(if (testing) "Testing…" else "Test connection", {
-                            if (!testing) {
-                                testing = true
-                                tested = null
-                                scope.launch {
-                                    tested = try {
-                                        val ms = testConnection(current)
-                                        true to "Working. ${current.model} answered in ${String.format(java.util.Locale.ROOT, "%.1f", ms / 1000.0)} s."
-                                    } catch (e: CancellationException) {
-                                        throw e
-                                    } catch (e: Exception) {
-                                        // Already in that setting, so not "check it in Settings".
-                                        false to (e.message?.removeSuffix(" Check it in Settings → AI assistant.") ?: "The test failed.")
-                                    } finally {
-                                        testing = false
+                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        // Who's connected, with a quick check beside it: the one thing to know, then the one thing to do.
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(Modifier.size(8.dp).clip(CircleShape).background(c.positive))
+                            Spacer(Modifier.width(10.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(current.provider.label, style = MaterialTheme.typography.titleSmall, color = c.textPrimary)
+                                Text(current.model, style = MaterialTheme.typography.bodySmall, color = c.textSecondary)
+                            }
+                            // Sends one short message, so the key, the model and the network are checked together.
+                            Text(
+                                if (testing) "Testing…" else "Test",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = c.accent,
+                                modifier = Modifier.pressable({
+                                    if (!testing) {
+                                        testing = true
+                                        tested = null
+                                        scope.launch {
+                                            tested = try {
+                                                val ms = testConnection(current)
+                                                true to "Working. ${current.model} answered in ${String.format(java.util.Locale.ROOT, "%.1f", ms / 1000.0)} s."
+                                            } catch (e: CancellationException) {
+                                                throw e
+                                            } catch (e: Exception) {
+                                                // Already in that setting, so not "check it in Settings".
+                                                false to (e.message?.removeSuffix(" Check it in Settings → AI assistant.") ?: "The test failed.")
+                                            } finally {
+                                                testing = false
+                                            }
+                                        }
+                                    }
+                                }, pressedScale = 0.95f).padding(horizontal = 8.dp, vertical = 6.dp),
+                            )
+                        }
+                        tested?.let { (ok, text) ->
+                            Text(text, style = MaterialTheme.typography.bodySmall, color = if (ok) c.positive else c.negative)
+                        }
+                        // One tap between the AIs with a key already saved, and the phone's own: nothing to type again.
+                        val others = viewModel.settings.ready().filter { it != current.provider }
+                        if (others.isNotEmpty()) {
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text("Switch to", style = MaterialTheme.typography.labelMedium, color = c.textSecondary)
+                                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    others.forEach { p ->
+                                        Chip(
+                                            if (p == AiProvider.ON_DEVICE) "This phone" else p.label,
+                                            {
+                                                viewModel.settings.switchTo(p)
+                                                provider = p
+                                                model = viewModel.settings.lastModel(p)
+                                                tested = null
+                                            },
+                                            icon = if (p == AiProvider.ON_DEVICE) Lucide.Smartphone else Lucide.Sparkles,
+                                        )
                                     }
                                 }
                             }
-                        }, Modifier.fillMaxWidth())
-                        tested?.let { (ok, text) ->
-                            Spacer(Modifier.height(8.dp))
-                            Text(text, style = MaterialTheme.typography.bodySmall, color = if (ok) c.positive else c.negative)
                         }
-                        Spacer(Modifier.height(8.dp))
-                        SecondaryButton("Disconnect and delete key", {
-                            viewModel.settings.disconnect()
-                            key = ""
-                            agreed = false
-                        }, Modifier.fillMaxWidth())
+                        // Destructive, so quiet: red text at the end, not a button as big as Test.
+                        Text(
+                            if (current.provider == AiProvider.ON_DEVICE) "Disconnect" else "Disconnect and delete key",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = c.negative,
+                            modifier = Modifier.pressable({
+                                viewModel.settings.disconnect()
+                                key = ""
+                                agreed = false
+                                tested = null
+                            }, pressedScale = 0.97f).padding(vertical = 4.dp),
+                        )
                     }
                 }
             }
 
-            Text(if (current == null) "Connect" else "Switch AI", style = MaterialTheme.typography.labelMedium, color = c.textSecondary, modifier = Modifier.padding(start = 6.dp))
+            Text(if (current == null) "Connect" else "Set up another AI", style = MaterialTheme.typography.labelMedium, color = c.textSecondary, modifier = Modifier.padding(start = 6.dp))
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                // The phone's own AI is offered in every build; one without it says where to get the version that has it.
                 AiProvider.entries.forEach { p ->
                     Chip(p.label, {
                         if (p != provider) {
@@ -815,6 +877,10 @@ fun AssistantSetupSheet(onDismiss: () -> Unit, viewModel: AssistantSetupViewMode
                 }
             }
             provider.note?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = c.warning, modifier = Modifier.padding(start = 6.dp)) }
+            val local = provider == AiProvider.ON_DEVICE
+            // This build doesn't have it (F-Droid's, or the plain APK): the GitHub one with it installs over this one.
+            val missing = local && !com.leftovers.app.ai.OnDevice.inBuild
+            if (missing) OnDeviceElsewhere() else if (local) LocalModelStatus()
 
             if (provider.baseUrl == null) {
                 GlassTextField(
@@ -825,84 +891,89 @@ fun AssistantSetupSheet(onDismiss: () -> Unit, viewModel: AssistantSetupViewMode
                 )
             }
 
-            val savedKey = current?.takeIf { it.provider == provider }?.apiKey
-            GlassTextField(
-                key, { key = it.trim().take(300) },
-                placeholder = if (savedKey != null) "Saved · leave empty to keep it" else provider.keyHint,
-                label = "${provider.label} API key",
-                password = true,
-            )
-            provider.keyUrl?.let { url ->
-                Text(
-                    "Get a ${provider.label} key ↗",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = c.accent,
-                    modifier = Modifier.padding(start = 6.dp).pressable({ uriHandler.openUri(url) }, pressedScale = 0.97f),
+            val savedKey = viewModel.settings.savedKey(provider)
+            // No key, model list or answer style for the phone's own AI.
+            if (!local) {
+                GlassTextField(
+                    key, { key = it.trim().take(300) },
+                    placeholder = if (savedKey != null) "Saved · leave empty to keep it" else provider.keyHint,
+                    label = "${provider.label} API key",
+                    password = true,
                 )
-            }
-
-            Text("Model", style = MaterialTheme.typography.labelMedium, color = c.textSecondary, modifier = Modifier.padding(start = 6.dp))
-            val modelChoices = (provider.suggestedModels + loaded).distinct()
-            if (modelChoices.isNotEmpty()) {
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    modelChoices.take(40).forEach { m -> Chip(m, { model = m }, selected = model == m) }
+                provider.keyUrl?.let { url ->
+                    Text(
+                        "Get a ${provider.label} key ↗",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = c.accent,
+                        modifier = Modifier.padding(start = 6.dp).pressable({ uriHandler.openUri(url) }, pressedScale = 0.97f),
+                    )
                 }
-            }
-            GlassTextField(model, { model = it.trim().take(100) }, placeholder = provider.defaultModel.ifEmpty { "model name" }, keyboardType = androidx.compose.ui.text.input.KeyboardType.Ascii)
-            val keyForLoad = key.ifEmpty { savedKey.orEmpty() }
-            Text(
-                when {
-                    loading -> "Loading models…"
-                    loadError != null -> loadError!!
-                    loaded.isNotEmpty() -> "${loaded.size} models available to your key"
-                    else -> "Load models your key can use"
-                },
-                style = MaterialTheme.typography.labelLarge,
-                color = if (loadError != null) c.negative else c.accent,
-                modifier = Modifier.padding(start = 6.dp).pressable({
-                    if (!loading) {
-                        val base = provider.baseUrl ?: runCatching { requireHttps(customUrl) }.getOrNull()
-                        when {
-                            base == null -> loadError = "The server address must start with https://"
-                            keyForLoad.isEmpty() && provider != AiProvider.CUSTOM -> loadError = "Enter your API key first"
-                            else -> {
-                                loading = true
-                                loadError = null
-                                scope.launch {
-                                    runCatching { listModels(provider, base, keyForLoad) }
-                                        .onSuccess {
-                                            loaded = it
-                                            if (it.isEmpty()) loadError = "No chat models found for this key"
-                                        }
-                                        .onFailure { loadError = it.message ?: "Couldn't load models" }
-                                    loading = false
+
+                Text("Model", style = MaterialTheme.typography.labelMedium, color = c.textSecondary, modifier = Modifier.padding(start = 6.dp))
+                val modelChoices = (provider.suggestedModels + loaded).distinct()
+                if (modelChoices.isNotEmpty()) {
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        modelChoices.take(40).forEach { m -> Chip(m, { model = m }, selected = model == m) }
+                    }
+                }
+                GlassTextField(model, { model = it.trim().take(100) }, placeholder = provider.defaultModel.ifEmpty { "model name" }, keyboardType = androidx.compose.ui.text.input.KeyboardType.Ascii)
+                val keyForLoad = key.ifEmpty { savedKey.orEmpty() }
+                Text(
+                    when {
+                        loading -> "Loading models…"
+                        loadError != null -> loadError!!
+                        loaded.isNotEmpty() -> "${loaded.size} models available to your key"
+                        else -> "Load models your key can use"
+                    },
+                    style = MaterialTheme.typography.labelLarge,
+                    color = if (loadError != null) c.negative else c.accent,
+                    modifier = Modifier.padding(start = 6.dp).pressable({
+                        if (!loading) {
+                            val base = provider.baseUrl ?: runCatching { requireHttps(customUrl) }.getOrNull()
+                            when {
+                                base == null -> loadError = "The server address must start with https://"
+                                keyForLoad.isEmpty() && provider != AiProvider.CUSTOM -> loadError = "Enter your API key first"
+                                else -> {
+                                    loading = true
+                                    loadError = null
+                                    scope.launch {
+                                        runCatching { listModels(provider, base, keyForLoad) }
+                                            .onSuccess {
+                                                loaded = it
+                                                if (it.isEmpty()) loadError = "No chat models found for this key"
+                                            }
+                                            .onFailure { loadError = it.message ?: "Couldn't load models" }
+                                        loading = false
+                                    }
                                 }
                             }
                         }
-                    }
-                }, pressedScale = 0.97f),
-            )
+                    }, pressedScale = 0.97f),
+                )
 
-            Text("Answer style", style = MaterialTheme.typography.labelMedium, color = c.textSecondary, modifier = Modifier.padding(start = 6.dp))
-            SegmentedToggle(listOf(false, true), thorough, { if (it) "Thorough" else "Quick" }, {
-                thorough = it
-                if (current != null) viewModel.settings.setThorough(it)
-            }, Modifier.fillMaxWidth())
-            Text(
-                if (thorough) "The AI thinks longer before answering. Slower, and uses more of your credit." else "Fast replies for everyday questions and logging.",
-                style = MaterialTheme.typography.bodySmall,
-                color = c.textSecondary,
-                modifier = Modifier.padding(start = 6.dp),
-            )
+                Text("Answer style", style = MaterialTheme.typography.labelMedium, color = c.textSecondary, modifier = Modifier.padding(start = 6.dp))
+                SegmentedToggle(listOf(false, true), thorough, { if (it) "Thorough" else "Quick" }, {
+                    thorough = it
+                    if (current != null) viewModel.settings.setThorough(it)
+                }, Modifier.fillMaxWidth())
+                Text(
+                    if (thorough) "The AI thinks longer before answering. Slower, and uses more of your credit." else "Fast replies for everyday questions and logging.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = c.textSecondary,
+                    modifier = Modifier.padding(start = 6.dp),
+                )
+            }
 
-            Text(
+            // Nothing to agree to or connect when this build can't run it: only the card above, pointing to GitHub.
+            if (!missing) Text(
+                if (local) "It runs on this phone: your questions and data never leave it, and no key is needed. Changes still wait for your Apply." else
                 "Your key is encrypted on this phone and is only ever sent to ${provider.label}. " +
                     "When you ask something, your question and only the data needed to answer it are sent to ${provider.label} and handled under its privacy policy. " +
                     "Card numbers, UPI IDs, phone numbers and emails are hidden first. Saved receipt photos and SMS are never sent; a photo goes only when you attach it to a message. Chats aren't saved on the phone.",
                 style = MaterialTheme.typography.bodySmall,
                 color = c.textSecondary,
             )
-            Chip(
+            if (!missing) Chip(
                 "I understand",
                 { agreed = !agreed },
                 icon = if (agreed) Lucide.CircleCheck else Lucide.Plus,
@@ -913,8 +984,8 @@ fun AssistantSetupSheet(onDismiss: () -> Unit, viewModel: AssistantSetupViewMode
             val sameServer = provider.baseUrl != null || runCatching { requireHttps(customUrl) }.getOrNull() == current?.baseUrl
             val keepKey = savedKey != null && key.isEmpty() && sameServer
             // Custom servers may not need a key at all.
-            val keyOk = keepKey || key.length >= 10 || provider == AiProvider.CUSTOM
-            PrimaryButton(
+            val keyOk = keepKey || key.length >= 10 || provider == AiProvider.CUSTOM || local
+            if (!missing) PrimaryButton(
                 when {
                     current == null -> "Connect"
                     keepKey -> "Save"
@@ -926,7 +997,7 @@ fun AssistantSetupSheet(onDismiss: () -> Unit, viewModel: AssistantSetupViewMode
                     onDismiss()
                 },
                 Modifier.fillMaxWidth(),
-                enabled = model.isNotBlank() && urlOk && keyOk && (keepKey || agreed),
+                enabled = !missing && model.isNotBlank() && urlOk && keyOk && (keepKey || agreed),
             )
             if (provider.baseUrl == null && customUrl.isNotBlank() && !urlOk) {
                 Text("The address must start with https://", style = MaterialTheme.typography.bodySmall, color = c.negative, modifier = Modifier.padding(start = 6.dp))
@@ -948,6 +1019,145 @@ fun AssistantSetupSheet(onDismiss: () -> Unit, viewModel: AssistantSetupViewMode
                 }
             }
         }
+    }
+}
+
+/** Whether this phone has its own AI ready, with a way to get it when Android can download it. */
+@Composable
+private fun OnDeviceElsewhere() {
+    val c = LocalAppColors.current
+    val uri = androidx.compose.ui.platform.LocalUriHandler.current
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(22.dp))
+            .background(c.glass)
+            .border(1.dp, c.glassStrong, RoundedCornerShape(22.dp))
+            .padding(horizontal = 18.dp, vertical = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Text("Not in this version of Leftovers", style = MaterialTheme.typography.titleSmall, color = c.textPrimary)
+        Text(
+            "The phone's own AI (Gemini Nano, on phones like the Pixel 9 and OnePlus 15R) uses a Google library that " +
+                "isn't open source, so F-Droid can't include it. The same app with it built in is on GitHub: download " +
+                "the file ending in \"-ai.apk\" from the latest release. It installs over this one and keeps your data.",
+            style = MaterialTheme.typography.bodySmall,
+            color = c.textSecondary,
+        )
+        Text(
+            "F-Droid's updates are the version without it, so update that one from GitHub (Obtainium can do it for you).",
+            style = MaterialTheme.typography.bodySmall,
+            color = c.textSecondary,
+        )
+        PrimaryButton(
+            "Get it from GitHub",
+            { uri.openUri("https://github.com/saisaharsh3/Leftovers/releases/latest") },
+            Modifier.fillMaxWidth(),
+            icon = Lucide.ArrowUpRight,
+        )
+    }
+}
+
+@Composable
+private fun LocalModelStatus() {
+    val c = LocalAppColors.current
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    var status by remember { mutableStateOf<com.leftovers.app.ai.LocalStatus?>(null) }
+    var error by remember { mutableStateOf<String?>(null) }
+    // Android can take a few seconds to start its AI after the app opens: say so while waiting, not "not ready".
+    var starting by remember { mutableStateOf(false) }
+    val appContext = androidx.compose.ui.platform.LocalContext.current
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        // Without Android AICore there's nothing to wait for: say why at once.
+        val hasAiCore = runCatching { appContext.packageManager.getApplicationInfo("com.google.android.aicore", 0).enabled }.getOrDefault(false)
+        status = if (hasAiCore) com.leftovers.app.ai.OnDevice.awaitReady { starting = true } else com.leftovers.app.ai.OnDevice.status()
+        starting = false
+    }
+    val text = when (status) {
+        null -> if (starting) "Starting the phone's AI… this can take a few seconds the first time." else "Checking this phone…"
+        com.leftovers.app.ai.LocalStatus.READY -> "Ready on this phone."
+        com.leftovers.app.ai.LocalStatus.DOWNLOADING -> "Android is getting the AI ready. Try again in a few minutes."
+        com.leftovers.app.ai.LocalStatus.DOWNLOADABLE -> "This phone supports it; Android needs to fetch it first."
+        com.leftovers.app.ai.LocalStatus.UNAVAILABLE -> "This phone doesn't have its own AI, or Android hasn't set it up yet."
+    }
+    // Gemini Nano reaches apps through Google's Android AICore app: say so when it's missing or switched off.
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val aiCore = remember {
+        runCatching { context.packageManager.getApplicationInfo("com.google.android.aicore", 0).enabled }.getOrNull()
+    }
+    val reason = com.leftovers.app.ai.OnDevice.problem.takeIf { status == com.leftovers.app.ai.LocalStatus.UNAVAILABLE }
+    val shown = error ?: when {
+        status == com.leftovers.app.ai.LocalStatus.READY || status == null -> text
+        aiCore == null -> "Apps reach it through Google's \"Android AICore\", which isn't on this phone. The AI in the phone's own settings, or in other apps, can't be shared with apps."
+        aiCore == false -> "\"Android AICore\" is turned off on this phone. Turn it on in Settings → Apps."
+        reason != null -> "Not ready: $reason"
+        else -> text
+    }
+    Text(shown, style = MaterialTheme.typography.bodySmall, color = if (status == com.leftovers.app.ai.LocalStatus.READY && error == null) c.positive else c.textSecondary, modifier = Modifier.padding(start = 6.dp))
+    if (status != null && status != com.leftovers.app.ai.LocalStatus.READY && aiCore != true) {
+        Text(
+            "Get Android AICore ↗",
+            style = MaterialTheme.typography.labelLarge,
+            color = c.accent,
+            modifier = Modifier.padding(start = 6.dp).pressable({
+                runCatching {
+                    context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://play.google.com/store/apps/details?id=com.google.android.aicore")))
+                }
+            }, pressedScale = 0.97f),
+        )
+    }
+    // Every phone Google lists, so people can check theirs before connecting.
+    var showPhones by rememberSaveable { mutableStateOf(false) }
+    Text(
+        if (showPhones) "Hide the list" else "Phones it works on (${com.leftovers.app.ai.onDevicePhones.sumOf { it.second.size }}) ›",
+        style = MaterialTheme.typography.labelLarge,
+        color = c.accent,
+        modifier = Modifier.padding(start = 6.dp).pressable({ showPhones = !showPhones }, pressedScale = 0.97f),
+    )
+    if (showPhones) {
+        Column(Modifier.padding(start = 6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            com.leftovers.app.ai.onDevicePhones.forEach { (brand, models) ->
+                Text(
+                    buildAnnotatedString {
+                        withStyle(SpanStyle(fontWeight = FontWeight.SemiBold, color = c.textPrimary)) { append(brand) }
+                        append("  " + models.joinToString(", "))
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = c.textSecondary,
+                )
+            }
+            Text("Google's list for apps, November 2026. More phones may get it with Android updates.", style = MaterialTheme.typography.labelSmall, color = c.textTertiary)
+        }
+    }
+    // How to check a phone, step by step, for anyone unsure why it isn't ready.
+    var showHow by rememberSaveable { mutableStateOf(false) }
+    Text(
+        if (showHow) "Hide the steps" else "How to check your phone ›",
+        style = MaterialTheme.typography.labelLarge,
+        color = c.accent,
+        modifier = Modifier.padding(start = 6.dp).pressable({ showHow = !showHow }, pressedScale = 0.97f),
+    )
+    if (showHow) {
+        Column(Modifier.padding(start = 6.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            com.leftovers.app.ai.onDeviceSteps.forEachIndexed { i, (title, detail) ->
+                Row {
+                    Text("${i + 1}", style = MaterialTheme.typography.labelLarge, color = c.accent, modifier = Modifier.width(20.dp))
+                    Column {
+                        Text(title, style = MaterialTheme.typography.titleSmall, color = c.textPrimary)
+                        Text(detail, style = MaterialTheme.typography.bodySmall, color = c.textSecondary)
+                    }
+                }
+            }
+        }
+    }
+    if (status == com.leftovers.app.ai.LocalStatus.DOWNLOADABLE) {
+        SecondaryButton("Get it", {
+            status = com.leftovers.app.ai.LocalStatus.DOWNLOADING
+            scope.launch {
+                runCatching { com.leftovers.app.ai.OnDevice.model?.download() }.onFailure { error = it.message ?: "Android couldn't fetch it." }
+                status = com.leftovers.app.ai.OnDevice.status()
+            }
+        }, Modifier.fillMaxWidth())
     }
 }
 

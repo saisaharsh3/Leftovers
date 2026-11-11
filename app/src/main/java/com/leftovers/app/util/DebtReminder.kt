@@ -23,6 +23,16 @@ object DebtReminder {
         return "Hi $name, a quick reminder about ${format(balance.netMinor)}$what. Thanks!"
     }
 
+    /**
+     * The reminder with a link under it: a friend who also uses Leftovers taps it and the entries are added to
+     * their Money owed, the other way round. The entries travel in the link itself, not through a server.
+     */
+    suspend fun withLink(context: Context, balance: PersonBalance, currency: String, format: (Long) -> String): String {
+        val device = (context.applicationContext as com.leftovers.app.LeftoversApp).container.settings.syncDevice()
+        val link = SharedOwed.link(device, currency, balance.entries) ?: return message(balance, format)
+        return message(balance, format) + "\n\nUse Leftovers too? Tap to add this to yours:\n" + link
+    }
+
     /** Opens the share sheet with [text]; nothing is sent until the user picks an app and sends it there. */
     fun share(context: Context, text: String, person: String) {
         val send = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, text)

@@ -74,6 +74,28 @@ class StatementPdfTest {
         assertEquals("2026", s.title)
     }
 
+    @Test fun moneyOwedInTheMonth() {
+        fun day(d: Int, m: Int = 10) = LocalDate.of(2026, m, d).toEpochDay()
+        val debts = listOf(
+            com.leftovers.app.data.Debt(person = "Sam ", amountMinor = 1_000_00, epochDay = day(2)),
+            com.leftovers.app.data.Debt(person = "Sam", amountMinor = -1_000_00, epochDay = day(9), repayment = true, settled = true),
+            com.leftovers.app.data.Debt(person = "Asha", amountMinor = -400_00, epochDay = day(4)),
+            com.leftovers.app.data.Debt(person = "Asha", amountMinor = 400_00, epochDay = day(12), repayment = true),
+            // Another month, and an amount not known yet: neither is in October's.
+            com.leftovers.app.data.Debt(person = "Ravi", amountMinor = 50_00, epochDay = day(2, 9)),
+            com.leftovers.app.data.Debt(person = "Ravi", amountMinor = 0, epochDay = day(5), pending = 1),
+        )
+        val s = StatementPdf.build(oct, 2026, items, BudgetPlan(), emptyList(), today, debts)
+        assertEquals(
+            listOf(StatementPdf.OwedKind.LENT, StatementPdf.OwedKind.BORROWED, StatementPdf.OwedKind.PAID_TO_YOU, StatementPdf.OwedKind.YOU_PAID),
+            s.owed.map { it.kind },
+        )
+        assertEquals(listOf(1_000_00L, 400_00L, 1_000_00L, 400_00L), s.owed.map { it.amountMinor })
+        assertEquals("Sam", s.owed.first().person)
+        // Lending isn't spending.
+        assertEquals(2_800_00L, s.spentMinor)
+    }
+
     @Test fun emptyMonthHasNothingToCompare() {
         val s = StatementPdf.build(YearMonth.of(2026, 3), 2026, items, BudgetPlan(), emptyList(), today)
         assertEquals(0L, s.spentMinor)

@@ -47,6 +47,7 @@ class LeftoversApp : Application() {
         container.budgetAlerts.createChannel()
         Reminders.createChannel(this)
         BillReminders.createChannel(this)
+        com.leftovers.app.util.Greetings.createChannel(this)
         com.leftovers.app.util.UpdateCheck.createChannel(this)
         container.start()
     }
@@ -54,9 +55,14 @@ class LeftoversApp : Application() {
 
 /** Simple manual dependency container shared by the whole app. */
 class AppContainer(private val context: Context) {
+    /** The app's context, for work that makes files to share (the assistant's PDF and CSV). */
+    val appContext: Context get() = context
+
     private companion object {
         /** How long start-up housekeeping (rescheduling, clean-up) waits for the first screen. */
         const val STARTUP_QUIET_MS = 2_000L
+        /** How long pulling down on Home waits for email, sync and updates before letting go. */
+        const val REFRESH_WAIT_MS = 4_000L
     }
 
     private val database = AppDatabase.build(context)
@@ -65,13 +71,16 @@ class AppContainer(private val context: Context) {
     val settings = SettingsRepository(context)
     /** Entries deleted or changed here, which Sync between devices removes on the other phones. */
     val syncRemoved = com.leftovers.app.util.SyncRemoved(java.io.File(context.filesDir, "sync-removed.json"))
-    val repository = TransactionRepository(database.transactionDao(), database.categoryDao(), database.recurringDao(), database.deletedDao(), syncRemoved)
+    val repository = TransactionRepository(
+        database.transactionDao(), database.categoryDao(), database.recurringDao(), database.deletedDao(), syncRemoved,
+        settings.settings.map { it.plan }.distinctUntilChanged(),
+    )
     val planning = PlanningRepository(database)
     val accounts = AccountRepository(
         database.accountDao(), database.transferDao(), database.transactionDao(), database.debtDao(),
         settings.settings.map { it.foreignRates }.distinctUntilChanged(),
     )
-    val sms = SmsRepository(database.smsDao(), database.transactionDao())
+    val sms = SmsRepository(database.smsDao(), database.transactionDao(), database.recurringDao())
     /** The WebDAV server's password, for Sync between devices. */
     val syncLogin = com.leftovers.app.util.SyncLogin(context)
     val backup = BackupManager(context, database, settings, com.leftovers.app.util.BackupPassword(context))
@@ -102,7 +111,21 @@ class AppContainer(private val context: Context) {
         settings.clearAll()
     }
 
+    /** Looks for a newer version on GitHub; one found goes to the bell and Notices. Returns it, or null. */
+    private suspend fun lookForUpdate(): com.leftovers.app.util.UpdateCheck.Release? =
+        com.leftovers.app.util.UpdateCheck.latest(com.leftovers.app.util.UpdateCheck.isDevBuild(context)).getOrNull()
+            ?.takeIf { com.leftovers.app.util.UpdateCheck.isNewerThanInstalled(context, it) }
+            ?.also { settings.setUpdateAvailable(com.leftovers.app.util.UpdateCheck.encode(it)) }
+
     fun start() {
+        // A newer version, when the app opens: always for Leftovers Dev (testers get it from GitHub, and a new build
+        // comes out most days), and for the app when "Tell me about new versions" is on. Otherwise only when asked.
+        scope.launch {
+            delay(STARTUP_QUIET_MS)
+            if ((com.leftovers.app.util.UpdateCheck.isDevBuild(context) || settings.settings.first().updateCheck) &&
+                com.leftovers.app.util.UpdateCheck.autoCheckDue(context)
+            ) lookForUpdate()
+        }
         // Housekeeping waits until the first screen is up, so it doesn't compete with drawing it.
         scope.launch {
             delay(STARTUP_QUIET_MS)
@@ -167,6 +190,12 @@ class AppContainer(private val context: Context) {
                     if (on) com.leftovers.app.util.DeviceSync.runIfOn(context)
                 }
         }
+        // Festival greetings and the Sunday note come with notifications; no switches of their own (Android's
+        // notification settings turn them off, by their channel).
+        scope.launch {
+            delay(STARTUP_QUIET_MS)
+            com.leftovers.app.util.Greetings.schedule(context, festivals = true, weekly = true)
+        }
         scope.launch {
             delay(STARTUP_QUIET_MS)
             settings.settings.map { it.billReminders }
@@ -186,34 +215,36 @@ class AppContainer(private val context: Context) {
      * Home's pull to refresh: every check that can run on demand (subscriptions that have come due, the email
      * account if one is connected, Sync between devices if it's on), and a few words on what it found.
      */
-    suspend fun refreshNow(): String = coroutineScope {
-        val email = async {
+    suspend fun refreshNow(): String {
+        // The checks run in the app's own scope: the pull waits a few seconds at most, and a slow server
+        // finishes in the background instead of holding the spinner (anything it finds still shows up).
+        val email = scope.async {
             if (emailAccount.connection.value == null) null else com.leftovers.app.util.EmailChecker.check(context)
         }
-        val sync = async { com.leftovers.app.util.DeviceSync.runIfOn(context) }
-        // A newer version too, when looking for them is turned on; found, it shows on the bell in Home.
-        val update = async {
-            if (!settings.settings.first().updateCheck) return@async null
-            com.leftovers.app.util.UpdateCheck.latest(com.leftovers.app.util.UpdateCheck.isDevBuild(context)).getOrNull()
-                ?.takeIf { com.leftovers.app.util.UpdateCheck.isNewerThanInstalled(context, it) }
-                ?.also { settings.setUpdateAvailable(com.leftovers.app.util.UpdateCheck.encode(it)) }
-        }
+        val sync = scope.async { com.leftovers.app.util.DeviceSync.runIfOn(context) }
+        // A newer version too: pulling down is asking, so it looks whatever the setting. Found, it shows on the bell
+        // in Home and in Notices.
+        val update = scope.async { lookForUpdate() }
         syncRecurring()
+        val waitUntil = System.currentTimeMillis() + REFRESH_WAIT_MS
+        suspend fun <T> kotlinx.coroutines.Deferred<T>.soon(): T? =
+            kotlinx.coroutines.withTimeoutOrNull((waitUntil - System.currentTimeMillis()).coerceAtLeast(1)) { await() }
+        val slow = listOf(email, sync, update)
         val parts = buildList {
-            email.await()?.fold(
+            email.soon()?.fold(
                 { found -> if (found > 0) add("$found new ${if (found == 1) "payment" else "payments"} from email") },
                 { add("Couldn't check email") },
             )
-            sync.await()?.fold(
+            sync.soon()?.fold(
                 { o ->
                     val changed = o.added + o.removed
                     if (changed > 0) add("$changed ${if (changed == 1) "change" else "changes"} from your other phones")
                 },
                 { add("Couldn't sync") },
             )
-            update.await()?.let { add(if (com.leftovers.app.util.UpdateCheck.isDevBuild(context)) "A new Dev build is out" else "Leftovers ${it.version} is out") }
+            update.soon()?.let { add(if (com.leftovers.app.util.UpdateCheck.isDevBuild(context)) "A new Dev build is out" else "Leftovers ${it.version} is out") }
         }
-        parts.joinToString(" · ").ifEmpty { "Up to date" }
+        return parts.joinToString(" · ").ifEmpty { if (slow.any { it.isActive }) "Still checking in the background" else "Up to date" }
     }
 
     /** Logs subscriptions/recurring income that have come due, then checks budgets. */

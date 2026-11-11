@@ -41,6 +41,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.text.style.TextAlign
 import com.leftovers.app.ui.components.RowDivider
 import com.leftovers.app.util.friendlyLabel
@@ -128,7 +131,7 @@ class StatsViewModel(
                 type = t,
                 total = current.totalOf(t),
                 previousTotal = all.filter { YearMonth.from(it.date) == m.minusMonths(1) }.totalOf(t),
-                budget = if (s.plan.isSet) s.plan.budgetFor(m, all) else 0L,
+                budget = if (s.plan.isSet && s.plan.cycle(m).start == m.atDay(1)) s.plan.budgetFor(m, all) else 0L,
                 categories = current.categoryTotals(t),
                 daily = daily.toList(),
                 count = ofType.size,
@@ -147,7 +150,7 @@ class StatsViewModel(
             val s = settings.settings.first()
             val m = chosen
             val statement = kotlinx.coroutines.withContext(Dispatchers.Default) {
-                com.leftovers.app.util.StatementPdf.build(if (yearly) null else m, m.year, all, s.plan, planning.recurring.first())
+                com.leftovers.app.util.StatementPdf.build(if (yearly) null else m, m.year, all, s.plan, planning.recurring.first(), debts = planning.debts.first())
             }
             val uri = com.leftovers.app.util.StatementPdf.write(context, statement, Money(s.currencyCode), notes, entries)
             onReady(uri, statement.title)
@@ -163,6 +166,7 @@ fun StatsScreen(
     onOpenTransaction: (Long) -> Unit,
     /** Opens the assistant with this question; the row only shows when an AI is connected. */
     onAskAi: (String) -> Unit = {},
+    onOpenSettings: () -> Unit = {},
     viewModel: StatsViewModel = viewModel(factory = AppViewModelProvider.Factory)) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val c = LocalAppColors.current
@@ -196,6 +200,7 @@ fun StatsScreen(
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 RoundButton(Lucide.Download, "Statement as a PDF", { showStatement = true })
                 RoundButton(Lucide.Sparkles, "Monthly recap", { onOpenRecap(state.month) })
+                RoundButton(Lucide.Settings, "Settings", onOpenSettings)
             }
         },
     ) { padding ->
@@ -270,9 +275,46 @@ fun StatsScreen(
                         com.leftovers.app.ui.components.ListRow(
                             "Ask AI about $monthName",
                             subtitle = if (isExpense) "What changed, and what to do about it" else "How your income compares",
-                            leading = { com.leftovers.app.ui.components.IconTile(Lucide.MessageCircle, c.accent, size = 38.dp) },
+                            leading = { com.leftovers.app.ui.components.IconTile(Lucide.BotMessageSquare, c.accent, size = 38.dp) },
                             trailing = { Icon(Lucide.ChevronRight, contentDescription = null, tint = c.textTertiary) },
                         )
+                    }
+                }
+            }
+
+            // The month in a sentence or two, written on the phone by its own AI where there is one; on a tap, not on
+            // its own, as Android limits how often an app can use it.
+            if (com.leftovers.app.ai.OnDevice.inBuild && isExpense && state.count > 0) {
+                item(key = "summary-${state.month}") {
+                    var ready by remember { mutableStateOf(false) }
+                    var summary by remember { mutableStateOf<String?>(null) }
+                    var writing by remember { mutableStateOf(false) }
+                    val summaryScope = rememberCoroutineScope()
+                    LaunchedEffect(Unit) { ready = com.leftovers.app.ai.OnDevice.status() == com.leftovers.app.ai.LocalStatus.READY }
+                    if (ready) {
+                        val facts = buildString {
+                            append("Month: $monthName ${state.month.year}\n")
+                            append("Spent: ${money.format(state.total)} in ${state.count} entries\n")
+                            if (state.previousTotal > 0) append("Spent the month before: ${money.format(state.previousTotal)}\n")
+                            if (state.budget > 0) append("Budget: ${money.format(state.budget)}\n")
+                            append("Biggest categories: " + state.categories.take(3).joinToString { "${it.name} ${money.format(it.totalMinor)}" } + "\n")
+                            state.max?.let { append("Biggest single spend: ${money.format(it.amountMinor)} on ${it.categoryName}\n") }
+                        }
+                        Glass(Modifier.fillMaxWidth().padding(top = 12.dp).appear(1), onClick = {
+                            if (!writing) {
+                                writing = true
+                                summaryScope.launch {
+                                    summary = com.leftovers.app.ai.OnDevice.summarise(facts) ?: "This phone's AI couldn't write it just now."
+                                    writing = false
+                                }
+                            }
+                        }) {
+                            com.leftovers.app.ui.components.ListRow(
+                                "Sum up $monthName",
+                                subtitle = summary ?: if (writing) "Writing it on this phone…" else "In a sentence or two, written on this phone",
+                                leading = { com.leftovers.app.ui.components.IconTile(Lucide.Sparkles, c.accent, size = 38.dp) },
+                            )
+                        }
                     }
                 }
             }
@@ -284,7 +326,7 @@ fun StatsScreen(
                             state.trends.forEach { t ->
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Icon(
-                                        Lucide.TrendingUp,
+                                        if (t.down) Lucide.TrendingDown else Lucide.TrendingUp,
                                         contentDescription = null,
                                         tint = when (t.good) {
                                             true -> c.positive

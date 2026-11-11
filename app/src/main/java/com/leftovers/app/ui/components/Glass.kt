@@ -25,10 +25,18 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 import androidx.compose.ui.draw.clip
+import com.kyant.backdrop.drawBackdrop
+import com.kyant.backdrop.effects.lens
+import com.kyant.backdrop.effects.vibrancy
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.layout.onPlaced
+import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.layout.findRootCoordinates
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
 import com.leftovers.app.ui.theme.AppColors
@@ -72,6 +80,21 @@ fun AuroraBackground(modifier: Modifier = Modifier) {
 /** Draws the aurora; also used for the copy of the screen the liquid tab bar bends. */
 fun androidx.compose.ui.graphics.drawscope.DrawScope.drawAurora(c: AppColors) {
     drawRect(c.background)
+    // The user's photo: filling the screen (cropped, not stretched), already blurred when it was loaded,
+    // and dimmed towards the background so text on it stays readable.
+    c.photo?.let { img ->
+        val scale = maxOf(size.width / img.width, size.height / img.height)
+        val w = img.width * scale
+        val h = img.height * scale
+        drawImage(
+            img,
+            dstOffset = androidx.compose.ui.unit.IntOffset(((size.width - w) / 2).toInt(), ((size.height - h) / 2).toInt()),
+            dstSize = androidx.compose.ui.unit.IntSize(w.toInt() + 1, h.toInt() + 1),
+            filterQuality = androidx.compose.ui.graphics.FilterQuality.High,
+        )
+        drawRect(c.background.copy(alpha = c.photoDim))
+        return
+    }
     val w = size.width
     val h = size.height
     val drift = 0.5f
@@ -89,12 +112,55 @@ fun androidx.compose.ui.graphics.drawscope.DrawScope.drawAurora(c: AppColors) {
     blob(c.auroraC, w * (0.2f + 0.35f * drift), h * (0.98f - 0.1f * drift), w * 0.8f, 0.14f * strength)
 }
 
+/**
+ * Frosted glass in front of the user's photo: the card shows the photo's much softer copy, lined up with the
+ * photo behind it, then the same dimming. It moves with the card as it scrolls, as if the photo were behind
+ * glass, and costs one small image per card rather than a live blur.
+ */
+private fun Modifier.frosted(c: AppColors): Modifier = composed {
+    var at by remember { mutableStateOf(Offset.Zero) }
+    var root by remember { mutableStateOf(androidx.compose.ui.unit.IntSize.Zero) }
+    this
+        .then(
+            Modifier.onPlaced { coords ->
+                at = coords.positionInRoot()
+                root = coords.findRootCoordinates().size
+            },
+        )
+        .drawBehind {
+            val img = c.frost ?: return@drawBehind
+            if (root.width == 0) return@drawBehind
+            val scale = maxOf(root.width.toFloat() / img.width, root.height.toFloat() / img.height)
+            val w = img.width * scale
+            val h = img.height * scale
+            drawImage(
+                img,
+                dstOffset = androidx.compose.ui.unit.IntOffset(((root.width - w) / 2 - at.x).toInt(), ((root.height - h) / 2 - at.y).toInt()),
+                dstSize = androidx.compose.ui.unit.IntSize(w.toInt() + 1, h.toInt() + 1),
+                filterQuality = androidx.compose.ui.graphics.FilterQuality.High,
+            )
+            drawRect(c.background.copy(alpha = c.photoDim))
+        }
+}
+
 fun glassBorder(c: AppColors) = Brush.verticalGradient(listOf(c.borderTop, c.borderBottom))
 
 /** A see-through fill catches light at the top, like a pane of glass, in both themes; solid fills stay flat. */
 internal fun glassFill(fill: Color): Brush =
     if (fill.alpha >= 0.9f) androidx.compose.ui.graphics.SolidColor(fill)
     else Brush.verticalGradient(listOf(fill.copy(alpha = (fill.alpha * 1.7f).coerceAtMost(1f)), fill))
+
+/**
+ * The background (the photo) recorded for glass in front of it, when cards can be liquid glass: a photo
+ * background, glass effects on, Android 13 or newer. Null otherwise, and cards are frosted instead.
+ */
+val LocalBackgroundBackdrop = staticCompositionLocalOf<com.kyant.backdrop.backdrops.LayerBackdrop?> { null }
+
+/**
+ * True inside a pop-up, sheet or dialog. What's behind its buttons and fields is the pop-up itself, not the
+ * background photo, so they're plain frosted glass there rather than windows onto the photo.
+ */
+val LocalInOverlay = staticCompositionLocalOf { false }
 
 /** Translucent card with a hairline top-lit border. Clickable cards gently shrink when pressed. */
 @Composable
@@ -110,11 +176,48 @@ fun Glass(
     Box(
         modifier
             .then(if (onClick != null) Modifier.pressable(onClick) else Modifier)
+            .glassSurface(shape, strong, tint)
             .clip(shape)
-            .background(glassFill(tint ?: if (strong) c.glassStrong else c.glass))
             .border(1.dp, glassBorder(c), shape),
         content = content,
     )
+}
+
+/**
+ * A card's glass, the same everywhere so cards look alike on every screen. Over a photo (Android 13+): liquid glass,
+ * the photo behind bent at the rounded edges ([lens]; off for pieces of one card, whose inner edges join up), under
+ * a faint tint for the text: a little lighter under black text, darker under white, as Apple's Liquid Glass adapts.
+ * No blur on it: blurring every card as it scrolls made lists lag. Otherwise the usual see-through fill.
+ */
+@Composable
+fun Modifier.glassSurface(shape: Shape, strong: Boolean = false, tint: Color? = null, lens: Boolean = true): Modifier {
+    val c = LocalAppColors.current
+    val overlay = LocalInOverlay.current
+    // Frosted glass (chosen in Appearance) leaves no backdrop: the photo's ready-blurred copy instead.
+    val backdrop = LocalBackgroundBackdrop.current.takeIf { !overlay }
+    return if (backdrop != null) {
+        drawBackdrop(
+            backdrop = backdrop,
+            shape = { shape },
+            effects = {
+                vibrancy()
+                if (lens) lens(14.dp.toPx(), 28.dp.toPx(), chromaticAberration = true)
+            },
+            onDrawSurface = {
+                drawRect(tint ?: if (c.textPrimary.luminance() < 0.5f) Color.White.copy(alpha = if (strong) 0.26f else 0.2f)
+                else Color.Black.copy(alpha = if (strong) 0.26f else 0.2f))
+            },
+        )
+    } else {
+        clip(shape)
+            .then(if (c.frost != null && !overlay) Modifier.frosted(c) else Modifier)
+            .background(
+                // Over the photo, the same faint tint for the text as live glass has.
+                if (c.frost != null && !overlay && tint == null) androidx.compose.ui.graphics.SolidColor(
+                    if (c.textPrimary.luminance() < 0.5f) Color.White.copy(alpha = if (strong) 0.26f else 0.2f) else Color.Black.copy(alpha = if (strong) 0.26f else 0.2f),
+                ) else glassFill(tint ?: if (strong) c.glassStrong else c.glass),
+            )
+    }
 }
 
 /** Click handling with a springy press-down scale instead of a ripple. */

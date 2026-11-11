@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The release's "-ai" APK only (built with -PonDeviceAi): lets the AI assistant's settings see whether Google's
+     Android AICore, which gives apps the phone's own AI (Gemini Nano), is installed and switched on. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <queries>
+        <package android:name="com.google.android.aicore" />
+    </queries>
+</manifest>

@@ -3,6 +3,7 @@ package com.leftovers.app.data
 import android.content.Context
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
@@ -33,6 +34,19 @@ data class AppSettings(
     val glassEffects: Boolean,
     /** Black background for OLED screens, when the dark theme is in use. */
     val pureBlack: Boolean = false,
+    /** Over a photo: liquid glass that bends the picture, or frosted glass, lighter on slower phones. */
+    val liquidGlass: Boolean = true,
+    /** What's behind every screen ([com.leftovers.app.ui.theme.Backdrop] name). */
+    val backdrop: String = "AURORA",
+    /** How much the background photo is dimmed, 0.2 to 0.85; changes with each new photo too ([photoVersion]). */
+    val photoDim: Float = 0.1f,
+    /** Text over a photo background: "AUTO" (by how bright the photo is), "WHITE" or "BLACK". */
+    val photoText: String = "AUTO",
+    /** How soft the background photo is, 0 (sharp) to 1 (very soft). */
+    val photoBlur: Float = 0.25f,
+    val photoVersion: Long = 0L,
+    /** A chosen accent colour (ARGB), or 0 for the default. */
+    val accentColor: Long = 0L,
     val timeFormat: TimeFormat = TimeFormat.PHONE,
     val widgetStyle: WidgetStyle = WidgetStyle.GLASS,
     /** Last exchange rate used per currency in travel mode, e.g. "AED" to "22.7" (home currency per unit). */
@@ -41,16 +55,23 @@ data class AppSettings(
     val budgetAlerts: Boolean,
     /** A split bill shows as one entry with its parts under it; off, each part is listed on its own. */
     val splitsAsOneBill: Boolean = true,
+    /** Activity shows every entry rather than one month's: the last choice, kept (#41). */
+    val activityAllTime: Boolean = false,
     val defaultAccountId: Long,
     val reminderEnabled: Boolean,
     /** Minutes after midnight for the daily reminder. */
     val reminderMinutes: Int,
     val appLock: Boolean,
+    /** No screenshots or screen recording, and a blank preview in Recents (#44); always so with [appLock]. */
+    val blockScreenshots: Boolean = false,
     /** How long the app can be away before it locks again: 0 is straight away. */
     val lockAfterSeconds: Int = 0,
     /** With an app PIN or password, fingerprint or face can unlock too. */
     val lockFingerprint: Boolean = true,
     val smsDetection: Boolean,
+    /** Small spending from bank SMS added straight away, up to [smsAutoMaxMinor], instead of waiting to be checked. */
+    val smsAutoAdd: Boolean = false,
+    val smsAutoMaxMinor: Long = 20_000,
     /** Read payment apps' notifications (FamApp, Google Pay, PhonePe...) for payments; needs notification access. */
     val appNotifications: Boolean = false,
     /** Month (yyyy-MM) whose recap the user has already opened or dismissed. */
@@ -63,6 +84,10 @@ data class AppSettings(
     val autoBackupError: String? = null,
     /** Notify the day before a subscription is charged. */
     val billReminders: Boolean = true,
+    /** A greeting on the main festivals where the user lives (from their currency). */
+    val festivalGreetings: Boolean = true,
+    /** A short note on the week's spending, Sunday evenings. */
+    val weeklyNotes: Boolean = true,
     /** Subscription suggestions the user said no to. */
     val dismissedSuggestions: Set<String> = emptySet(),
     /** How long deleted entries are kept for restoring, in days; 0 means forever. */
@@ -71,6 +96,8 @@ data class AppSettings(
     val homeAccountId: Long? = null,
     /** Extra words that mark a bank message as a payment, for banks the built-in rules miss. */
     val detectionKeywords: Set<String> = emptySet(),
+    /** The balance each account's bank last reported in an SMS, by account id (#59). Only the number and when. */
+    val bankBalances: Map<Long, BankFigure> = emptyMap(),
     /** Days between automatic backups: 1, 7 or 30. */
     val autoBackupDays: Int = 7,
     /** How many automatic backup files to keep; older ones are removed. */
@@ -111,6 +138,13 @@ class SettingsRepository(context: Context) {
             dynamicColor = p[DYNAMIC_COLOR] ?: false,
             glassEffects = p[GLASS_EFFECTS] ?: true,
             pureBlack = p[PURE_BLACK] ?: false,
+            liquidGlass = p[LIQUID_GLASS] ?: true,
+            backdrop = p[BACKDROP] ?: "AURORA",
+            photoDim = p[PHOTO_DIM] ?: 0.1f,
+            photoBlur = p[PHOTO_BLUR] ?: 0.25f,
+            photoText = p[PHOTO_TEXT] ?: "AUTO",
+            photoVersion = p[PHOTO_VERSION] ?: 0L,
+            accentColor = p[ACCENT_COLOR] ?: 0L,
             timeFormat = TimeFormat.entries.firstOrNull { it.name == p[TIME_FORMAT] } ?: TimeFormat.PHONE,
             widgetStyle = WidgetStyle.entries.firstOrNull { it.name == p[WIDGET_STYLE] } ?: WidgetStyle.GLASS,
             foreignRates = p[FOREIGN_RATES].orEmpty().split(';').mapNotNull { pair ->
@@ -131,28 +165,40 @@ class SettingsRepository(context: Context) {
                 buckets = p[BUCKETS] ?: false,
                 bucketIncome = p[BUCKET_INCOME] ?: 0L,
                 bucketPicker = p[BUCKET_PICKER] ?: false,
+                periodMinor = p[PERIOD_BUDGET] ?: 0L,
+                periodDays = p[PERIOD_DAYS] ?: 14,
+                periodFrom = p[PERIOD_FROM]?.let { runCatching { java.time.LocalDate.parse(it) }.getOrNull() },
+                rangeTag = p[RANGE_TAG],
+                rangeAccount = p[RANGE_ACCOUNT],
                 rangeFrom = p[RANGE_FROM]?.let { runCatching { java.time.LocalDate.parse(it) }.getOrNull() },
                 rangeTo = p[RANGE_TO]?.let { runCatching { java.time.LocalDate.parse(it) }.getOrNull() },
             ),
             budgetAlerts = p[BUDGET_ALERTS] ?: true,
             splitsAsOneBill = p[SPLITS_ONE_BILL] ?: true,
+            activityAllTime = p[ACTIVITY_ALL_TIME] ?: false,
             defaultAccountId = p[DEFAULT_ACCOUNT] ?: 1L,
             reminderEnabled = p[REMINDER] ?: false,
             reminderMinutes = p[REMINDER_TIME] ?: (21 * 60),
             appLock = p[APP_LOCK] ?: false,
+            blockScreenshots = p[BLOCK_SCREENSHOTS] ?: false,
             lockAfterSeconds = p[LOCK_AFTER] ?: 0,
             lockFingerprint = p[LOCK_FINGERPRINT] ?: true,
             smsDetection = p[SMS] ?: false,
+            smsAutoAdd = p[SMS_AUTO_ADD] ?: false,
+            smsAutoMaxMinor = p[SMS_AUTO_MAX] ?: 20_000,
             appNotifications = p[APP_NOTIFICATIONS] ?: false,
             recapSeen = p[RECAP_SEEN].orEmpty(),
             autoBackupDir = p[AUTO_BACKUP_DIR],
             autoBackupLast = p[AUTO_BACKUP_LAST] ?: 0L,
             autoBackupError = p[AUTO_BACKUP_ERROR],
             billReminders = p[BILL_REMINDERS] ?: true,
+            festivalGreetings = p[FESTIVAL_GREETINGS] ?: true,
+            weeklyNotes = p[WEEKLY_NOTES] ?: true,
             dismissedSuggestions = p[DISMISSED_SUGGESTIONS].orEmpty(),
             deletedKeepDays = p[DELETED_KEEP_DAYS] ?: 90,
             homeAccountId = p[HOME_ACCOUNT],
             detectionKeywords = p[DETECTION_KEYWORDS].orEmpty(),
+            bankBalances = BankFigure.decode(p[BANK_BALANCES]),
             backupPhotos = p[BACKUP_PHOTOS] ?: false,
             autoBackupDays = p[AUTO_BACKUP_DAYS] ?: 7,
             autoBackupKeep = p[AUTO_BACKUP_KEEP] ?: 4,
@@ -184,6 +230,14 @@ class SettingsRepository(context: Context) {
     suspend fun setGlassEffects(enabled: Boolean) = store.edit { it[GLASS_EFFECTS] = enabled }
 
     suspend fun setPureBlack(enabled: Boolean) = store.edit { it[PURE_BLACK] = enabled }
+    suspend fun setLiquidGlass(enabled: Boolean) = store.edit { it[LIQUID_GLASS] = enabled }
+    suspend fun setBackdrop(name: String) = store.edit { it[BACKDROP] = name }
+    suspend fun setPhotoDim(value: Float) = store.edit { it[PHOTO_DIM] = value }
+    suspend fun setPhotoBlur(value: Float) = store.edit { it[PHOTO_BLUR] = value }
+    suspend fun setPhotoText(value: String) = store.edit { it[PHOTO_TEXT] = value }
+    /** A new background photo was saved: shown with the photo background. */
+    suspend fun photoChanged() = store.edit { it[PHOTO_VERSION] = System.currentTimeMillis(); it[BACKDROP] = "PHOTO" }
+    suspend fun setAccentColor(argb: Long) = store.edit { it[ACCENT_COLOR] = argb }
 
     /** Remembers the rate last used for [code], so the next entry in that currency starts with it. */
     suspend fun setTimeFormat(format: TimeFormat) = store.edit { it[TIME_FORMAT] = format.name }
@@ -208,6 +262,11 @@ class SettingsRepository(context: Context) {
         it[BUCKETS] = plan.buckets
         it[BUCKET_INCOME] = plan.bucketIncome
         it[BUCKET_PICKER] = plan.bucketPicker
+        it[PERIOD_BUDGET] = plan.periodMinor
+        it[PERIOD_DAYS] = plan.periodDays
+        if (plan.periodFrom == null) it.remove(PERIOD_FROM) else it[PERIOD_FROM] = plan.periodFrom.toString()
+        if (plan.rangeTag == null) it.remove(RANGE_TAG) else it[RANGE_TAG] = plan.rangeTag
+        if (plan.rangeAccount == null) it.remove(RANGE_ACCOUNT) else it[RANGE_ACCOUNT] = plan.rangeAccount
         if (plan.rangeFrom == null) it.remove(RANGE_FROM) else it[RANGE_FROM] = plan.rangeFrom.toString()
         if (plan.rangeTo == null) it.remove(RANGE_TO) else it[RANGE_TO] = plan.rangeTo.toString()
         if (plan.carryChoices.isNotEmpty()) it[CARRY_CHOICES] = BudgetPlan.encodeChoices(plan.carryChoices)
@@ -227,17 +286,28 @@ class SettingsRepository(context: Context) {
     }
     suspend fun setBudgetAlerts(enabled: Boolean) = store.edit { it[BUDGET_ALERTS] = enabled }
     suspend fun setSplitsAsOneBill(enabled: Boolean) = store.edit { it[SPLITS_ONE_BILL] = enabled }
+
+    /** Keeps what [accountId]'s bank said its balance was, as of [at]; only a newer figure replaces it. */
+    suspend fun setBankBalance(accountId: Long, minor: Long, at: Long) = store.edit {
+        val all = BankFigure.decode(it[BANK_BALANCES]).toMutableMap()
+        if ((all[accountId]?.at ?: 0L) <= at) all[accountId] = BankFigure(minor, at)
+        it[BANK_BALANCES] = BankFigure.encode(all)
+    }
+    suspend fun setActivityAllTime(allTime: Boolean) = store.edit { it[ACTIVITY_ALL_TIME] = allTime }
     suspend fun setDefaultAccount(id: Long) = store.edit { it[DEFAULT_ACCOUNT] = id }
     suspend fun setReminder(enabled: Boolean, minutes: Int) = store.edit {
         it[REMINDER] = enabled
         it[REMINDER_TIME] = minutes
     }
     suspend fun setAppLock(enabled: Boolean) = store.edit { it[APP_LOCK] = enabled }
+    suspend fun setBlockScreenshots(enabled: Boolean) = store.edit { it[BLOCK_SCREENSHOTS] = enabled }
 
     suspend fun setLockAfter(seconds: Int) = store.edit { it[LOCK_AFTER] = seconds }
 
     suspend fun setLockFingerprint(enabled: Boolean) = store.edit { it[LOCK_FINGERPRINT] = enabled }
     suspend fun setSmsDetection(enabled: Boolean) = store.edit { it[SMS] = enabled }
+    suspend fun setSmsAutoAdd(enabled: Boolean) = store.edit { it[SMS_AUTO_ADD] = enabled }
+    suspend fun setSmsAutoMax(minor: Long) = store.edit { it[SMS_AUTO_MAX] = minor }
 
     suspend fun setAppNotifications(enabled: Boolean) = store.edit { it[APP_NOTIFICATIONS] = enabled }
     suspend fun setRecapSeen(month: String) = store.edit { it[RECAP_SEEN] = month }
@@ -248,6 +318,8 @@ class SettingsRepository(context: Context) {
     }
     suspend fun setAutoBackupError(message: String?) = store.edit { if (message == null) it.remove(AUTO_BACKUP_ERROR) else it[AUTO_BACKUP_ERROR] = message }
     suspend fun setBillReminders(enabled: Boolean) = store.edit { it[BILL_REMINDERS] = enabled }
+    suspend fun setFestivalGreetings(enabled: Boolean) = store.edit { it[FESTIVAL_GREETINGS] = enabled }
+    suspend fun setWeeklyNotes(enabled: Boolean) = store.edit { it[WEEKLY_NOTES] = enabled }
     suspend fun setHomeAccount(id: Long?) = store.edit { if (id == null) it.remove(HOME_ACCOUNT) else it[HOME_ACCOUNT] = id }
     suspend fun setAutoBackupDays(days: Int) = store.edit { it[AUTO_BACKUP_DAYS] = days }
     suspend fun setAutoBackupKeep(count: Int) = store.edit { it[AUTO_BACKUP_KEEP] = count }
@@ -308,6 +380,13 @@ class SettingsRepository(context: Context) {
         val DYNAMIC_COLOR = booleanPreferencesKey("dynamic_color")
         val GLASS_EFFECTS = booleanPreferencesKey("glass_effects")
         val PURE_BLACK = booleanPreferencesKey("pure_black")
+        val LIQUID_GLASS = booleanPreferencesKey("liquid_glass")
+        val BACKDROP = stringPreferencesKey("backdrop")
+        val PHOTO_DIM = floatPreferencesKey("photo_dim")
+        val PHOTO_BLUR = floatPreferencesKey("photo_blur")
+        val PHOTO_TEXT = stringPreferencesKey("photo_text")
+        val PHOTO_VERSION = longPreferencesKey("photo_version")
+        val ACCENT_COLOR = longPreferencesKey("accent_color")
         val FOREIGN_RATES = stringPreferencesKey("foreign_rates")
         val TIME_FORMAT = stringPreferencesKey("time_format")
         val WIDGET_STYLE = stringPreferencesKey("widget_style")
@@ -323,12 +402,19 @@ class SettingsRepository(context: Context) {
         val BUCKETS = booleanPreferencesKey("buckets_503020")
         val BUCKET_INCOME = longPreferencesKey("bucket_income")
         val BUCKET_PICKER = booleanPreferencesKey("bucket_picker")
+        val PERIOD_BUDGET = longPreferencesKey("period_budget")
+        val PERIOD_DAYS = intPreferencesKey("period_days")
+        val PERIOD_FROM = stringPreferencesKey("period_from")
+        val RANGE_TAG = stringPreferencesKey("range_tag")
+        val RANGE_ACCOUNT = longPreferencesKey("range_account")
         val RANGE_FROM = stringPreferencesKey("range_from")
         val RANGE_TO = stringPreferencesKey("range_to")
         val CARRY_CHOICES = stringPreferencesKey("carry_choices")
         val CARRY_FROM = stringPreferencesKey("carry_from")
         val BUDGET_ALERTS = booleanPreferencesKey("budget_alerts")
         val SPLITS_ONE_BILL = booleanPreferencesKey("splits_one_bill")
+        val BANK_BALANCES = stringPreferencesKey("bank_balances")
+        val ACTIVITY_ALL_TIME = booleanPreferencesKey("activity_all_time")
         val SENT_ALERTS = stringSetPreferencesKey("sent_alerts")
         val DISMISSED_SUGGESTIONS = stringSetPreferencesKey("dismissed_suggestions")
         val DELETED_KEEP_DAYS = intPreferencesKey("deleted_keep_days")
@@ -352,17 +438,39 @@ class SettingsRepository(context: Context) {
         val REMINDER = booleanPreferencesKey("reminder")
         val REMINDER_TIME = intPreferencesKey("reminder_time")
         val APP_LOCK = booleanPreferencesKey("app_lock")
+        val BLOCK_SCREENSHOTS = booleanPreferencesKey("block_screenshots")
         val LOCK_AFTER = androidx.datastore.preferences.core.intPreferencesKey("lock_after_seconds")
         val LOCK_FINGERPRINT = booleanPreferencesKey("lock_fingerprint")
         val SMS = booleanPreferencesKey("sms_detection")
+        val SMS_AUTO_ADD = booleanPreferencesKey("sms_auto_add")
+        val SMS_AUTO_MAX = longPreferencesKey("sms_auto_max")
         val APP_NOTIFICATIONS = booleanPreferencesKey("app_notifications")
         val RECAP_SEEN = stringPreferencesKey("recap_seen")
         val AUTO_BACKUP_DIR = stringPreferencesKey("auto_backup_dir")
         val AUTO_BACKUP_LAST = longPreferencesKey("auto_backup_last")
         val AUTO_BACKUP_ERROR = stringPreferencesKey("auto_backup_error")
         val BILL_REMINDERS = booleanPreferencesKey("bill_reminders")
+        val FESTIVAL_GREETINGS = booleanPreferencesKey("festival_greetings")
+        val WEEKLY_NOTES = booleanPreferencesKey("weekly_notes")
 
         fun defaultCurrencyCode(): String =
             runCatching { Currency.getInstance(Locale.getDefault()).currencyCode }.getOrNull() ?: "USD"
+    }
+}
+
+/** A balance an account's bank reported, in minor units, and when the message came ([at], epoch millis). */
+data class BankFigure(val minor: Long, val at: Long) {
+    companion object {
+        /** "id:minor:at" pairs, comma separated. */
+        fun encode(all: Map<Long, BankFigure>): String = all.entries.joinToString(",") { (id, f) -> "$id:${f.minor}:${f.at}" }
+
+        fun decode(raw: String?): Map<Long, BankFigure> = raw.orEmpty().split(',').mapNotNull { part ->
+            val bits = part.split(':')
+            if (bits.size != 3) return@mapNotNull null
+            val id = bits[0].toLongOrNull() ?: return@mapNotNull null
+            val minor = bits[1].toLongOrNull() ?: return@mapNotNull null
+            val at = bits[2].toLongOrNull() ?: return@mapNotNull null
+            id to BankFigure(minor, at)
+        }.toMap()
     }
 }

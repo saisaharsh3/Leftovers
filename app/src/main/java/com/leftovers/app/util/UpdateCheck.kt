@@ -78,13 +78,27 @@ object UpdateCheck {
         wm.enqueueUniquePeriodicWork(WORK_NAME, ExistingPeriodicWorkPolicy.KEEP, request)
     }
 
+    /**
+     * Whether an automatic check (on opening the app or Updates) is due: at most every three hours, so it never
+     * runs into GitHub's limit. Asking (pulling down, Check again) always checks.
+     */
+    fun autoCheckDue(context: Context): Boolean {
+        val prefs = context.getSharedPreferences("updates", Context.MODE_PRIVATE)
+        val now = System.currentTimeMillis()
+        if (now - prefs.getLong("last_auto", 0L) < 3 * 60 * 60 * 1000L) return false
+        prefs.edit().putLong("last_auto", now).apply()
+        return true
+    }
+
     /** The latest release on GitHub. */
     suspend fun latest(dev: Boolean = false): Result<Release> = withContext(Dispatchers.IO) {
         runCatching {
             val client = OkHttpClient.Builder().connectTimeout(15, TimeUnit.SECONDS).readTimeout(15, TimeUnit.SECONDS).build()
             val request = Request.Builder().url(if (dev) DEV else LATEST).header("Accept", "application/vnd.github+json").build()
             client.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) error("GitHub said ${response.code}")
+                // GitHub answers 60 checks an hour per network without an account; past that it says 403 or 429.
+                if (response.code == 403 || response.code == 429) error("GitHub's limit for checks was reached. Try again in an hour.")
+                if (!response.isSuccessful) error("GitHub didn't answer (${response.code}). Try again later.")
                 val json = JSONObject(response.body?.string().orEmpty())
                 val published = runCatching { java.time.Instant.parse(json.getString("published_at")).toEpochMilli() }.getOrDefault(0L)
                 // The Dev build's name says when it was built: "Dev build 29 Oct 14:35 UTC".
@@ -94,15 +108,19 @@ object UpdateCheck {
         }
     }
 
-    /** The version this app is, without "-dev". */
+    /** The version this app is, without "-dev" (a pre-release keeps its "-rc1", so the full release counts as newer). */
     fun installed(context: Context): String =
-        runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull().orEmpty().substringBefore('-')
+        runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull().orEmpty().substringBefore("-dev")
 
-    /** Whether [candidate] ("1.9.0") is newer than [current] ("1.8.1"). */
+    /**
+     * Whether [candidate] ("1.9.0") is newer than [current] ("1.8.1"). A full release is newer than its own
+     * pre-release ("1.10.0" after "1.10.0-rc1"), and a pre-release isn't newer than the full release it leads to.
+     */
     fun isNewer(candidate: String, current: String): Boolean {
-        fun parts(v: String) = v.trim().split('.').map { it.takeWhile(Char::isDigit).toIntOrNull() ?: 0 }
+        fun parts(v: String) = v.trim().substringBefore('-').split('.').map { it.takeWhile(Char::isDigit).toIntOrNull() ?: 0 }
         val a = parts(candidate)
         val b = parts(current)
+        if (a.zip(b).all { (x, y) -> x == y } && a.size == b.size) return '-' !in candidate.trim() && '-' in current.trim()
         for (i in 0 until maxOf(a.size, b.size)) {
             val x = a.getOrElse(i) { 0 }
             val y = b.getOrElse(i) { 0 }

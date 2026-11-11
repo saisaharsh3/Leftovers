@@ -73,7 +73,9 @@ object CategoryIcons {
     val keys: List<String> = icons.keys.toList()
 
     /** Unknown keys (e.g. emoji from very old data) fall back to a neutral icon. */
-    operator fun get(key: String): ImageVector = (icons[key] ?: icons.getValue("sparkles"))()
+    // A picture of the user's own ("img:…") is drawn by CategoryIcon; where only a line icon fits (chips), a tag.
+    operator fun get(key: String): ImageVector =
+        if (key.startsWith(com.leftovers.app.util.CustomIcons.PREFIX)) Lucide.Tag else (icons[key] ?: icons.getValue("sparkles"))()
 
     val goalKeys = listOf(
         "monitor", "laptop", "smartphone", "gamepad", "car", "bike", "plane", "house",

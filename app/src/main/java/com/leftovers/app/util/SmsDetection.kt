@@ -1,5 +1,6 @@
 package com.leftovers.app.util
 
+import com.leftovers.app.data.openBalances
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -22,7 +23,8 @@ import java.time.LocalDate
 object SmsParser {
     private val debitWords = Regex(
         // "Dr. from A/C" is Bank of Baroda's "debited".
-        """\b(debited|spent|paid|sent|withdrawn|purchase|txn of|debit|thank you for using|used at|used for)\b|\bdr\.?\s+(from|to)\b""",
+        // "Transaction of", "payment of", "charged", "transferred" and "UPI txn" are how cards, billers and some banks say it.
+        """\b(debited|spent|paid|sent|withdrawn|purchase|txn of|transaction of|payment of|debit|charged|transferred|upi txn|send money|cash ?out|thank you for using|used at|used for)\b|\bdr\.?\s+(from|to)\b""",
         RegexOption.IGNORE_CASE,
     )
     private val creditOnly = Regex("""\b(credited|received|refund|cashback)\b""", RegexOption.IGNORE_CASE)
@@ -36,6 +38,9 @@ object SmsParser {
             """\bdue (date|on)\b|\b(declined|failed|unsuccessful)\b)""",
         RegexOption.IGNORE_CASE,
     )
+    /** Offers mention amounts too ("get Rs 100 cashback"): skipped unless the money actually moved. */
+    private val promo = Regex("""(\d+\s?% off|\boffers?\b|\bsale\b|\bcoupon|\bvoucher|\bwin\b|\bup ?to\b|\bapply now\b|\bpre-?approved\b|\beligible\b)""", RegexOption.IGNORE_CASE)
+    private val moved = Regex("""\b(debited|credited|spent|paid|sent|received|withdrawn|charged|transferred)\b""", RegexOption.IGNORE_CASE)
     /** "debited by 500.0" (SBI and others write the amount with no currency); Union Bank writes "Rs:200.00". */
     private val bareAmount = Regex(
         """\b(?:debited|spent|paid|sent|withdrawn|credited|received)\s+(?:by|with|for|of)?\s*(?:rs[.:]?|inr[.:]?|₹)?\s*([0-9][0-9,]*(?:\.[0-9]{1,2})?)\b""",
@@ -56,9 +61,11 @@ object SmsParser {
     )
     /** The payee in a UPI narration: "UPI/P2A/971133155005/DHULIPALA S N V S K" or "UPI/DR/123456/SWIGGY/YESB". */
     private val upiNarration = Regex("""\bUPI/(?:[A-Z0-9]{1,6}/)*\d{6,}/([A-Za-z][A-Za-z0-9 .&'-]{1,40}?)\s*(?=/|\n|$|\s{2}|\s+(?:on|via|ref\w*|avl|avail)\b|[,;]|\.\s)""", RegexOption.IGNORE_CASE)
+    /** An autopay names who it's for: "auto-debited ... for NETFLIX mandate". */
+    private val mandate = Regex("""\bfor\s+([A-Za-z][A-Za-z0-9 .&'-]{1,30}?)\s+(?:mandate|autopay|auto-?pay|subscription|standing instruction)\b""", RegexOption.IGNORE_CASE)
     /** "to block UPI", "to report", "at your branch": footer phrases, not a payee. */
     private val notPayee = Regex(
-        """^(block|report|avoid|know|view|check|call|contact|dial|sms|visit|reach|login|log|unsubscribe|update|change|help|keep|protect|ensure|receive|stop|your|you|us|our|the|this|be|any|all|bank|branch)\b|^\+?\d{6,}""",
+        """^(block|report|avoid|know|view|check|call|contact|dial|sms|visit|reach|login|log|unsubscribe|update|change|help|keep|protect|ensure|receive|stop|your|you|us|our|the|this|be|any|all|bank|branch|upi|card|wallet|credit|debit)\b|^\+?\d{6,}""",
         RegexOption.IGNORE_CASE,
     )
 
@@ -67,10 +74,12 @@ object SmsParser {
      * skipping footer phrases. Empty when nobody is named.
      */
     fun payee(text: String, words: Regex = merchant): String {
-        val candidates = sequenceOf(upiNarration.find(text)) + words.findAll(text)
+        val candidates = sequenceOf(upiNarration.find(text), mandate.find(text)) + words.findAll(text)
         return candidates.filterNotNull().map { m ->
             m.groupValues[1].trim()
                 .substringBefore('@')
+                // bKash: "to 01XXXXXXXXX successful", "to Merchant is successful".
+                .replace(Regex("""\s+(is\s+)?successful\w*$""", RegexOption.IGNORE_CASE), "")
                 .replace(Regex("""^(vpa|upi|merchant)\s+""", RegexOption.IGNORE_CASE), "")
                 .replace(Regex("""\s+"""), " ")
         }.firstOrNull {
@@ -103,16 +112,22 @@ object SmsParser {
     /** [extraWords] are the user's own keywords that also mark a message as a payment. */
     fun parse(body: String, extraWords: Collection<String> = emptyList()): Parsed? = check(body, extraWords).parsed
 
-    fun check(body: String, extraWords: Collection<String> = emptyList()): Check {
+    fun check(message: String, extraWords: Collection<String> = emptyList()): Check {
+        // bKash writes "Tk. 100to Merchant": the amount runs into the next word.
+        val body = message.replace(Regex("""(\d)(to|from)\b""", RegexOption.IGNORE_CASE), "$1 $2")
         ignore.find(body)?.let { return Check(null, "Skipped: it says \"${it.value}\", like an OTP, a reminder or a failed payment.") }
         // "credited" or "received" without "debited" is money coming in, suggested as income.
         val income = creditOnly.containsMatchIn(body) && !Regex("debited", RegexOption.IGNORE_CASE).containsMatchIn(body)
         val custom = extraWords.firstOrNull { it.isNotBlank() && body.contains(it.trim(), ignoreCase = true) }
+        if (promo.containsMatchIn(body) && !moved.containsMatchIn(body)) {
+            return Check(null, "Skipped: it reads like an offer, not money that moved.")
+        }
         if (!income && !debitWords.containsMatchIn(body) && custom == null) {
             return Check(null, "Not a payment: no word like \"debited\", \"spent\", \"paid\" or \"credited\". If your bank uses another word, add it as a keyword.")
         }
         // Any currency, symbol or code, before or after the number (see MoneyText).
-        val minor = MoneyText.find(body)
+        // Not the balance or the card's limit: "Avl Bal Rs.12,000 after debit of Rs.500" is 500.
+        val minor = MoneyText.paid(body)
             ?: bareAmount.find(body)?.groupValues?.get(1)?.let(MoneyText::toMinor)
             ?: return Check(null, "No amount found. It needs a currency next to the number, like Rs 250, $12.50 or 45 AED.")
         if (income) return Check(Parsed(minor, payer(body), isIncome = true), "Money in")
@@ -124,6 +139,38 @@ object SmsParser {
 
 private fun fingerprint(text: String): String =
     java.security.MessageDigest.getInstance("SHA-256").digest(text.toByteArray()).joinToString("") { "%02x".format(it) }
+
+/**
+ * Adds a just-detected payment as an entry when it's small enough to add without asking (see [AutoAdd]), and takes
+ * its suggestion off Home. Returns whether it did.
+ */
+private suspend fun autoAdd(
+    container: com.leftovers.app.AppContainer,
+    s: com.leftovers.app.data.AppSettings,
+    parsed: SmsParser.Parsed,
+    body: String,
+    suggestionId: Long,
+): Boolean {
+    val owed = container.planning.debts.first().openBalances().filter { it.netMinor != 0L }
+    if (!AutoAdd.allowed(s.smsAutoAdd, s.smsAutoMaxMinor, parsed.amountMinor, parsed.isIncome, parsed.merchant, owed)) return false
+    val past = container.repository.getAllTransactions().map { MerchantMemory.Past(it.note, it.type, it.categoryId, it.epochDay, it.createdAt) }
+    val category = AutoAdd.category(parsed.merchant, past, container.repository.categories.first()) ?: return false
+    val account = container.accounts.accounts.first().let { list -> list.matchFor(body)?.id ?: list.firstOrNull { it.id == s.defaultAccountId }?.id }
+    val day = LocalDate.now()
+    container.repository.saveTransaction(
+        com.leftovers.app.data.Transaction(
+            amountMinor = parsed.amountMinor,
+            type = com.leftovers.app.data.TxType.EXPENSE,
+            categoryId = category,
+            epochDay = day.toEpochDay(),
+            note = parsed.merchant,
+            accountId = account,
+        ),
+    )
+    container.sms.dismiss(suggestionId)
+    runCatching { container.budgetAlerts.checkAfterExpense(day, category) }
+    return true
+}
 
 class SmsReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
@@ -137,11 +184,21 @@ class SmsReceiver : BroadcastReceiver() {
             try {
                 val s = container.settings.settings.first()
                 if (!s.smsDetection) return@launch
+                // The balance the bank reports, for the account the message is about (#59): only the number is
+                // kept, and only for an account in the app's own currency, as the message's amounts are.
+                BankBalance.read(body)?.let { balance ->
+                    container.accounts.accounts.first().matchFor(body)?.takeIf { it.currency == null }?.let { account ->
+                        container.settings.setBankBalance(account.id, balance, System.currentTimeMillis())
+                    }
+                }
                 // The user's own keywords count too, for banks the built-in words miss.
                 val check = SmsParser.check(body, s.detectionKeywords)
-                val parsed = check.parsed
+                // One the rules couldn't read (not an OTP or offer they skipped): the phone's own AI tries, where there is
+                // one. Android lets it answer only while Leftovers is open.
+                val byAi = if (check.parsed == null && !check.reason.startsWith("Skipped")) com.leftovers.app.ai.OnDevice.readPayment(body) else null
+                val parsed = check.parsed ?: byAi
                 if (parsed != null) {
-                    val added = container.sms.add(
+                    val suggestionId = container.sms.addReturningId(
                         SmsSuggestion(
                             amountMinor = parsed.amountMinor,
                             merchant = parsed.merchant,
@@ -157,8 +214,12 @@ class SmsReceiver : BroadcastReceiver() {
                             accountId = container.accounts.accounts.first().matchFor(body)?.id,
                         ),
                     )
+                    val added = suggestionId != null
+                    // Switched on: small spending is added now instead of waiting on Home to be checked.
+                    val auto = added && autoAdd(container, s, parsed, body, suggestionId!!)
                     val amount = (if (parsed.isIncome) "income " else "") + Money(s.currencyCode).format(parsed.amountMinor)
-                    DetectionLog.add(context, "SMS", sender, if (added) "Suggested $amount" else "$amount was already logged or suggested")
+                    val how = if (byAi != null) " (read by this phone's AI)" else ""
+                    DetectionLog.add(context, "SMS", sender, if (auto) "Added $amount automatically$how" else if (added) "Suggested $amount$how" else "$amount was already logged or suggested")
                 } else if (MoneyText.find(body) != null) {
                     // Only messages with an amount are worth noting; personal texts leave no trace.
                     DetectionLog.add(context, "SMS", sender, check.reason)

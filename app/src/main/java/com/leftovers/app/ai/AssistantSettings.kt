@@ -14,7 +14,7 @@ import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
 /** How a provider's API is called. Most providers speak the OpenAI Chat Completions format. */
-enum class ApiStyle { CLAUDE, OPENAI, GEMINI }
+enum class ApiStyle { CLAUDE, OPENAI, GEMINI, ON_DEVICE }
 
 /**
  * The AI services the assistant can talk to. Users bring their own API key. Model names change
@@ -54,10 +54,44 @@ enum class AiProvider(
     OPENROUTER("OpenRouter", ApiStyle.OPENAI, "https://openrouter.ai/api/v1", "openrouter/auto",
         listOf("openrouter/auto"), "sk-or-…", "https://openrouter.ai/keys",
         note = "One key for many models. OpenRouter passes your request on to the model's own provider, so both handle it."),
+    // The phone's own model (Gemini Nano): no key, nothing leaves the phone. Shown only in builds that have it.
+    ON_DEVICE("On this phone", ApiStyle.ON_DEVICE, "on-device", "gemini-nano",
+        listOf("gemini-nano"), "", null,
+        note = "Runs on the phone with the AI Android keeps there. Nothing leaves the phone. It's small: best for short questions and simple changes, and only while Leftovers is open. The first time after opening Leftovers, it can take a few seconds to start."),
     CUSTOM("Custom", ApiStyle.OPENAI, null, "",
         emptyList(), "API key (if the server needs one)", null,
         note = "Any OpenAI-compatible server over HTTPS, e.g. one you host yourself. Only connect to servers you trust."),
 }
+
+/**
+ * The phones and tablets Google lists for apps using Gemini Nano this way (ML Kit's Prompt API), by brand, as of
+ * November 2026. Others may follow with Android updates; the setup sheet also checks the phone itself.
+ */
+val onDevicePhones: List<Pair<String, List<String>>> = listOf(
+    "Google" to listOf("Pixel 9", "Pixel 9 Pro", "Pixel 9 Pro XL", "Pixel 9 Pro Fold", "Pixel 10", "Pixel 10 Pro", "Pixel 10 Pro XL", "Pixel 10 Pro Fold", "Pixel 11", "Pixel 11 Pro", "Pixel 11 Pro XL", "Pixel 11 Pro Fold"),
+    "Samsung" to listOf("Galaxy S26", "Galaxy S26+", "Galaxy S26 Ultra", "Galaxy Z Fold7", "Galaxy Z TriFold", "Galaxy Z Flip8", "Galaxy Z Fold8", "Galaxy Z Fold8 Ultra"),
+    "OnePlus" to listOf("OnePlus 13", "OnePlus 13s", "OnePlus 15", "OnePlus 15R"),
+    "Xiaomi" to listOf("Xiaomi 14T Pro", "Xiaomi 15", "Xiaomi 15T", "Xiaomi 15T Pro", "Xiaomi 15 Ultra", "Xiaomi 17", "Xiaomi 17 Ultra", "Xiaomi Pad Mini"),
+    "POCO" to listOf("POCO F7 Ultra", "POCO F8 Pro", "POCO F8 Ultra", "POCO X7 Pro", "POCO X8 Pro"),
+    "OPPO" to listOf("Find N5", "Find X8", "Find X8 Pro", "Find X9", "Find X9 Pro", "Reno 14 Pro 5G", "Reno 15 Pro 5G", "Reno 15 Pro Mini 5G", "Reno 15 Pro Max 5G"),
+    "vivo" to listOf("vivo X200", "vivo X200 Pro", "vivo X200 FE", "vivo X200T", "vivo X300", "vivo X300 Pro", "vivo T4 Ultra"),
+    "iQOO" to listOf("iQOO 13", "iQOO 15"),
+    "realme" to listOf("realme GT 7 Pro", "realme GT 7T"),
+    "Honor" to listOf("Magic 7", "Magic 7 Pro", "Magic V5", "Magic 8 Pro"),
+    "Motorola" to listOf("Razr 60 Ultra", "Razr Ultra 2025", "Signature"),
+    "Sony" to listOf("Xperia 1 VIII"),
+    "Sharp" to listOf("AQUOS R11"),
+    "Lenovo" to listOf("Idea Tab Pro Gen 2", "Legion Tab Gen 5 (8.8\")"),
+)
+
+/** How to check whether a phone has the AI built in that apps can use, in a few steps. */
+val onDeviceSteps: List<Pair<String, String>> = listOf(
+    "Find your phone in the list" to "Tap \"Phones it works on\" above. If yours isn't there, it doesn't have it yet; more phones get it with updates.",
+    "Check Android AICore" to "Settings → Apps → See all apps → AICore (show system apps if needed). With the AI in place it uses a few GB of storage. If it's missing, tap \"Get Android AICore\".",
+    "Update it all" to "In the Play Store, update Android AICore and Private Compute Services, then install any system update in Settings → System.",
+    "Look here" to "This page asks Android directly. \"Ready on this phone\" means it works; otherwise it says why. Right after opening the app it can take a few seconds to start.",
+    "Good to know" to "The AI in your phone's own settings (OnePlus, Samsung, Xiaomi) and in apps like Google AI Edge Gallery can't be used by other apps. It's also off on phones with an unlocked bootloader.",
+)
 
 /** [thorough] trades speed for more careful answers (more model "thinking"). */
 data class AssistantConfig(
@@ -80,7 +114,28 @@ class AssistantSettings(context: Context) {
     /** Last provider/model chosen, so the setup sheet remembers them after a disconnect. */
     val lastProvider: AiProvider get() = AiProvider.entries.firstOrNull { it.name == prefs.getString(PROVIDER, null) } ?: AiProvider.CLAUDE
     fun lastModel(provider: AiProvider): String =
-        prefs.getString(MODEL, null)?.takeIf { lastProvider == provider } ?: provider.defaultModel
+        prefs.getString("$MODEL.${provider.name}", null)
+            ?: prefs.getString(MODEL, null)?.takeIf { lastProvider == provider }
+            ?: provider.defaultModel
+
+    /**
+     * Each provider keeps its own key, so switching to the phone's AI and back to Gemini needs no key typed again.
+     * Null when none is saved for [provider].
+     */
+    fun savedKey(provider: AiProvider): String? =
+        (prefs.getString("$KEY.${provider.name}", null) ?: prefs.getString(KEY, null)?.takeIf { lastProvider == provider })
+            ?.let(KeyVault::decrypt)?.takeIf { it.isNotEmpty() || provider == AiProvider.ON_DEVICE || provider == AiProvider.CUSTOM }
+
+    /** The providers that can be switched to in one tap: a key is saved for them, or they need none. */
+    fun ready(): List<AiProvider> = AiProvider.entries.filter {
+        if (it == AiProvider.ON_DEVICE) OnDevice.inBuild else savedKey(it) != null && (it.baseUrl != null || lastCustomUrl.isNotEmpty())
+    }
+
+    /** Switches to [provider] with its saved key and model. */
+    fun switchTo(provider: AiProvider) {
+        val key = savedKey(provider) ?: if (provider == AiProvider.ON_DEVICE) "" else return
+        connect(provider, lastModel(provider), key, lastCustomUrl)
+    }
     val lastCustomUrl: String get() = prefs.getString(BASE_URL, null).orEmpty()
     val thorough: Boolean get() = prefs.getBoolean(THOROUGH, false)
 
@@ -106,23 +161,33 @@ class AssistantSettings(context: Context) {
     /** [customUrl] is required for [AiProvider.CUSTOM] and must be HTTPS. */
     fun connect(provider: AiProvider, model: String, apiKey: String, customUrl: String = "") {
         val url = provider.baseUrl ?: requireHttps(customUrl)
+        val sealed = KeyVault.encrypt(apiKey.trim())
+        val chosen = model.trim().ifEmpty { provider.defaultModel }
         prefs.edit()
             .putString(PROVIDER, provider.name)
-            .putString(MODEL, model.trim().ifEmpty { provider.defaultModel })
-            .putString(KEY, KeyVault.encrypt(apiKey.trim()))
-            .putString(BASE_URL, url)
+            .putString(MODEL, chosen)
+            .putString("$MODEL.${provider.name}", chosen)
+            .putString(KEY, sealed)
+            .putString("$KEY.${provider.name}", sealed)
+            .apply {
+                // The phone's own AI has no server; the custom server's address stays for switching back to it.
+                if (provider != AiProvider.ON_DEVICE) putString(BASE_URL, url)
+            }
             .apply()
         _config.value = load()
     }
 
+    /** Disconnects and deletes the connected provider's key; keys saved for the others stay. */
     fun disconnect() {
-        prefs.edit().remove(KEY).apply()
+        prefs.edit().remove(KEY).remove("$KEY.$lastProvider").apply()
         _config.value = null
     }
 
     private fun load(): AssistantConfig? {
         val provider = AiProvider.entries.firstOrNull { it.name == prefs.getString(PROVIDER, null) } ?: return null
         val key = prefs.getString(KEY, null)?.let(KeyVault::decrypt) ?: return null
+        // Keys saved before each provider kept its own: filed under the provider they were for.
+        if (!prefs.contains("$KEY.${provider.name}")) prefs.getString(KEY, null)?.let { prefs.edit().putString("$KEY.${provider.name}", it).apply() }
         val url = provider.baseUrl ?: prefs.getString(BASE_URL, null) ?: return null
         return AssistantConfig(provider, prefs.getString(MODEL, null) ?: provider.defaultModel, key, url, prefs.getBoolean(THOROUGH, false))
     }

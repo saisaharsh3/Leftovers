@@ -1,5 +1,7 @@
 package com.leftovers.app.ui.screens
 
+import com.leftovers.app.data.openBalances
+import com.leftovers.app.ui.components.LocalUndo
 import com.leftovers.app.ui.components.Haptics
 import com.leftovers.app.ui.components.toggleHaptic
 import androidx.compose.foundation.gestures.transformable
@@ -176,6 +178,39 @@ class EditorViewModel(
     /** 50/30/20 with its picker on: an expense's category is chosen by Needs, Wants or Savings first (#39). */
     val pickByBucket: StateFlow<Boolean> = settings.settings.map { it.plan.buckets && it.plan.bucketPicker }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+
+    /** What's open with each person, to spot an entry that is really someone paying back. */
+    val openOwed: StateFlow<List<com.leftovers.app.data.PersonBalance>> = planning.debts.map { d -> d.openBalances().filter { it.netMinor != 0L } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /**
+     * This entry as someone paying you back (income) or you paying them (spending): settled in Money owed instead
+     * of saved as an entry. [onDone] gets what to say and the Undo.
+     */
+    fun recordPayback(match: com.leftovers.app.util.Payback.Match, onDone: (String, suspend () -> Unit) -> Unit) {
+        val amount = amountMinor
+        if (amount <= 0) return
+        val income = type == TxType.INCOME
+        viewModelScope.launch {
+            val undo = planning.recordPayback(match.person, amount, accountId, date.toEpochDay())
+            if (smsId > 0) sms.dismiss(smsId)
+            onDone(if (income) "${match.person} paid you back" else "Paid ${match.person} back", undo)
+        }
+    }
+
+    /** The budget's envelope, when it counts entries by a #tag (#57): with its dates, to offer it only on those days. */
+    val envelope: StateFlow<com.leftovers.app.data.BudgetPlan?> = settings.settings.map { it.plan.takeIf { p -> p.envelopeTag != null } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    /** Whether this entry counts in the envelope: it carries the envelope's tag. */
+    fun inEnvelope(tag: String): Boolean = tag in com.leftovers.app.data.hashtags(note)
+
+    /** Counts this entry in the envelope or takes it out, by adding or removing its tag, so nobody has to type it. */
+    fun setInEnvelope(tag: String, on: Boolean) {
+        val words = com.leftovers.app.data.noteText(note)
+        val others = com.leftovers.app.data.hashtags(note).filter { it != tag }
+        note = com.leftovers.app.data.withTags(words, if (on) others + tag else others)
+    }
     var readingReceipt by mutableStateOf(false)
         private set
     /** What happened when the photo was read: filled in, or why not. */
@@ -196,7 +231,7 @@ class EditorViewModel(
         viewModelScope.launch {
             runCatching {
                 val image = com.leftovers.app.ai.ImagePrep.prepare(app, Uri.fromFile(File(path)))
-                val cats = categories.value
+                val cats = categories.value.filter { !it.hidden }
                 com.leftovers.app.ai.ReceiptReader.read(
                     config,
                     image,
@@ -392,9 +427,18 @@ class EditorViewModel(
             }
             // A detected payment to somewhere filed before opens under the same category again.
             if (smsId > 0 && categoryId == null && note.isNotBlank()) {
-                val past = repository.getAllTransactions().map { com.leftovers.app.util.MerchantMemory.Past(it.note, it.type, it.categoryId, it.epochDay, it.createdAt) }
+                val hidden = repository.categories.first().filter { it.hidden }.map { it.id }.toSet()
+                val past = repository.getAllTransactions().filter { it.categoryId !in hidden }
+                    .map { com.leftovers.app.util.MerchantMemory.Past(it.note, it.type, it.categoryId, it.epochDay, it.createdAt) }
                 com.leftovers.app.util.MerchantMemory.categoryFor(note, type, past)?.let { remembered ->
                     if (categoryId == null) categoryId = remembered
+                }
+                // Somewhere new: the phone's own AI, where there is one, picks from the categories.
+                if (categoryId == null) {
+                    val options = repository.categories.first().filter { it.type == type && !it.hidden }
+                    com.leftovers.app.ai.OnDevice.pickCategory(note, options.map { it.name })?.let { name ->
+                        if (categoryId == null) categoryId = options.firstOrNull { it.name == name }?.id
+                    }
                 }
             }
         }
@@ -604,7 +648,8 @@ class EditorViewModel(
     fun sortedCategories(all: List<Category>, items: List<TransactionItem>): List<Category> {
         val since = LocalDate.now().minusDays(120).toEpochDay()
         val usage = items.filter { it.epochDay >= since }.groupingBy { it.categoryId }.eachCount()
-        return all.filter { it.type == type }.sortedByDescending { usage[it.id] ?: 0 }
+        // Hidden categories aren't offered, unless this entry is already in one.
+        return all.filter { it.type == type && (!it.hidden || it.id == categoryId) }.sortedByDescending { usage[it.id] ?: 0 }
     }
 
     /**
@@ -747,7 +792,7 @@ private val stripDay = DateTimeFormatter.ofPattern("EEE")
 enum class OwedSplit(val label: String) { EACH("Each"), SPLIT("Split"), BY_AMOUNT("By amount") }
 
 /** What the add screen is logging. Swiping across the amount moves between expense and income; the lent or borrowed button sets owed. */
-enum class EntryKind(val label: String) { EXPENSE("Expense"), INCOME("Income"), OWED("Lent or borrowed") }
+enum class EntryKind(val label: String) { EXPENSE("Spending"), INCOME("Income"), OWED("Lent or borrowed") }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -950,8 +995,45 @@ fun EditorScreen(
             Spacer(Modifier.height(16.dp))
             // A long note is cut short here rather than pushing the buttons below off screen.
             NotePill(viewModel.note, onClick = { showNote = true }, modifier = Modifier.padding(horizontal = 32.dp).widthIn(max = 320.dp))
+            // Someone paying you back, typed as income (or you paying them, as spending): one tap records it in
+            // Money owed instead, so it isn't counted twice. Only for a new entry, by the note's name or the amount.
+            val owedNow by viewModel.openOwed.collectAsStateWithLifecycle()
+            val payback = if (viewModel.isEditing || viewModel.owed || viewModel.amountMinor <= 0) null
+            else remember(owedNow, viewModel.note, viewModel.amountMinor, viewModel.type) {
+                com.leftovers.app.util.Payback.find(com.leftovers.app.data.noteText(viewModel.note), viewModel.amountMinor, viewModel.type == TxType.INCOME, owedNow)
+            }
+            if (payback != null) {
+                val undo = LocalUndo.current
+                Spacer(Modifier.height(10.dp))
+                Chip(
+                    if (viewModel.type == TxType.INCOME) "${payback.person} paying you back? Record it" else "Paying ${payback.person} back? Record it",
+                    onClick = {
+                        viewModel.recordPayback(payback) { said, restore ->
+                            undo.show(said, restore)
+                            onClose()
+                        }
+                    },
+                    icon = Lucide.HandCoins,
+                    iconTint = c.textSecondary,
+                )
+            }
+            // An envelope budget by #tag: one tap counts this entry in it, instead of typing the tag (#57).
+            val envelope by viewModel.envelope.collectAsStateWithLifecycle()
+            val envelopeTag = envelope?.envelopeTag
+            if (envelopeTag != null && envelope?.envelopeCovers(viewModel.date) == true && viewModel.type == TxType.EXPENSE && !viewModel.owed) {
+                val on = viewModel.inEnvelope(envelopeTag)
+                Spacer(Modifier.height(10.dp))
+                Chip(
+                    if (on) "In the #$envelopeTag budget" else "Count in the #$envelopeTag budget",
+                    onClick = { viewModel.setInEnvelope(envelopeTag, !on) },
+                    icon = if (on) Lucide.Check else Lucide.PiggyBank,
+                    iconTint = if (on) null else c.textSecondary,
+                    selected = on,
+                )
+            }
             Spacer(Modifier.height(10.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+            // Top-aligned outside lent or borrowed, so the account chip lines up with the buttons, their names below.
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = if (viewModel.owed) Alignment.CenterVertically else Alignment.Top) {
                 if (viewModel.owed) {
                     RoundButton(
                         Lucide.HandCoins,
@@ -974,8 +1056,9 @@ fun EditorScreen(
                 }
                 run {
                     val repeating = viewModel.repeatMonthly
-                    if (!viewModel.isEditing) RoundButton(
+                    if (!viewModel.isEditing) NamedRound(
                         Lucide.Repeat,
+                        "Repeat",
                         if (repeating) "Don't repeat" else "Repeat every month",
                         {
                             viewModel.repeatMonthly = !repeating
@@ -985,28 +1068,28 @@ fun EditorScreen(
                             }
                             if (repeating && viewModel.date > LocalDate.now()) viewModel.date = LocalDate.now()
                         },
-                        size = 40.dp,
                         tint = if (repeating) c.onAccent else c.textSecondary,
                         container = if (repeating) c.accent else null,
                     )
                     if (!repeating) {
                         // One button for both kinds of split: with people, or across your own categories.
                         val split = viewModel.splits.isNotEmpty() || (viewModel.people.isNotEmpty() && viewModel.type == TxType.EXPENSE)
-                        RoundButton(
+                        NamedRound(
                             Lucide.Split,
+                            "Split",
                             "Split this",
                             { showSplit = true },
-                            size = 40.dp,
                             tint = if (split) c.onAccent else c.textSecondary,
                             container = if (split) c.accent else null,
                         )
                     }
-                    RoundButton(Lucide.HandCoins, "Lent or borrowed", { viewModel.selectKind(EntryKind.OWED) }, size = 40.dp, tint = c.textSecondary)
+                    NamedRound(Lucide.HandCoins, "Lent", "Lent or borrowed", { viewModel.selectKind(EntryKind.OWED) }, tint = c.textSecondary)
                 }
                 }
                 val path = viewModel.receiptPath
                 if (path == null) {
-                    RoundButton(Lucide.Camera, "Attach receipt", { receiptMenu = true }, size = 40.dp, tint = c.textSecondary)
+                    if (viewModel.owed) RoundButton(Lucide.Camera, "Attach receipt", { receiptMenu = true }, size = 40.dp, tint = c.textSecondary)
+                    else NamedRound(Lucide.Camera, "Photo", "Attach receipt", { receiptMenu = true }, tint = c.textSecondary)
                 } else {
                     ReceiptThumb(path, onOpen = { viewReceipt = true })
                 }
@@ -1159,6 +1242,13 @@ fun EditorScreen(
             if (grouped && group == null) sorted.find { it.id == viewModel.categoryId }?.let { group = com.leftovers.app.data.Bucket.of(it).name }
         }
         val shown = if (grouped && group != null) sorted.filter { com.leftovers.app.data.Bucket.of(it).name == group } else sorted
+        var showAll by rememberSaveable { mutableStateOf(false) }
+        if (showAll) {
+            AllCategoriesSheet(sorted, viewModel.categoryId, onDismiss = { showAll = false }) {
+                viewModel.selectCategory(it)
+                showAll = false
+            }
+        }
         LazyRow(
             contentPadding = PaddingValues(horizontal = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -1199,6 +1289,8 @@ fun EditorScreen(
                 )
             }
             }
+            // Many categories: all of them at once, in a grid with a search, instead of a long way sideways.
+            if (sorted.size > 6) item(key = "all") { Chip("All", onClick = { showAll = true }, icon = Lucide.LayoutGrid, iconTint = c.textSecondary) }
             item { Chip("Edit", onClick = onManageCategories, icon = Lucide.SlidersHorizontal, iconTint = c.textSecondary) }
         }
         }
@@ -1248,7 +1340,7 @@ fun EditorScreen(
                 SplitBody(
                     total = viewModel.totalMinor,
                     mainCategory = categories.find { it.id == viewModel.categoryId },
-                    categories = categories.filter { it.type == viewModel.type },
+                    categories = categories.filter { it.type == viewModel.type && !it.hidden },
                     parts = viewModel.splits,
                     onDismiss = { showSplit = false },
                     header = header,
@@ -1412,7 +1504,7 @@ fun EditorScreen(
             title = { Text("Delete this entry?") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text("You can restore it later from Settings → Deleted entries.", color = c.textSecondary)
+                    Text("You can restore it later from Settings → Backup & data → Deleted entries.", color = c.textSecondary)
                     linked?.let { r ->
                         Row(
                             Modifier.fillMaxWidth().pressable({ stopRepeating = !stopRepeating }, pressedScale = 0.98f),
@@ -1459,12 +1551,16 @@ private fun NotePill(note: String, onClick: () -> Unit, modifier: Modifier = Mod
             .padding(horizontal = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        // The envelope budget's tag has its own chip below, so it isn't repeated here (#57).
+        val envelopeTag = LocalEnvelopeTag.current
+        val shown = if (envelopeTag == null) note
+        else com.leftovers.app.data.withTags(com.leftovers.app.data.noteText(note), com.leftovers.app.data.hashtags(note).filter { it != envelopeTag })
         Icon(Lucide.PenLine, contentDescription = null, tint = c.textSecondary, modifier = Modifier.size(16.dp))
         Spacer(Modifier.width(8.dp))
         Text(
-            note.ifBlank { "Add a note" },
+            shown.ifBlank { "Add a note" },
             style = MaterialTheme.typography.labelLarge,
-            color = if (note.isBlank()) c.textTertiary else c.textPrimary,
+            color = if (shown.isBlank()) c.textTertiary else c.textPrimary,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
@@ -1985,5 +2081,47 @@ private fun ForeignSheet(
                 }
             }
         }
+    }
+}
+
+/** Every category at once, most used first, in a grid with a search: for when there are too many to scroll through. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun AllCategoriesSheet(categories: List<Category>, selected: Long?, onDismiss: () -> Unit, onPick: (Long) -> Unit) {
+    val c = LocalAppColors.current
+    var query by rememberSaveable { mutableStateOf("") }
+    val found = categories.filter { query.isBlank() || it.name.contains(query.trim(), ignoreCase = true) }
+    GlassSheet(onDismiss) {
+        Column(
+            Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            Text("Categories", style = MaterialTheme.typography.headlineSmall, color = c.textPrimary)
+            GlassTextField(query, { query = it.take(24) }, placeholder = "Search")
+            if (found.isEmpty()) {
+                Text("No category called that", style = MaterialTheme.typography.bodyMedium, color = c.textSecondary, modifier = Modifier.padding(start = 6.dp))
+            }
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                found.forEach { cat ->
+                    Chip(cat.name, onClick = { onPick(cat.id) }, icon = CategoryIcons[cat.emoji], iconTint = Color(cat.color), selected = cat.id == selected)
+                }
+            }
+        }
+    }
+}
+
+/** A round button with its name under it, so what the add screen's buttons do doesn't have to be guessed. */
+@Composable
+private fun NamedRound(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    name: String,
+    description: String,
+    onClick: () -> Unit,
+    tint: Color,
+    container: Color? = null,
+) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        RoundButton(icon, description, onClick, size = 40.dp, tint = tint, container = container)
+        Text(name, style = MaterialTheme.typography.labelSmall, color = LocalAppColors.current.textSecondary, maxLines = 1)
     }
 }

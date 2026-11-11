@@ -38,6 +38,7 @@ fun chatSession(config: AssistantConfig, system: String, tools: List<ToolSpec>):
     ApiStyle.CLAUDE -> ClaudeSession(config, system, tools)
     ApiStyle.OPENAI -> OpenAiSession(config, system, tools)
     ApiStyle.GEMINI -> GeminiSession(config, system, tools)
+    ApiStyle.ON_DEVICE -> OnDeviceSession(system, tools)
 }
 
 /** The models [apiKey] can use, newest names first where the provider orders them; chat models only. */
@@ -54,6 +55,7 @@ suspend fun listModels(provider: AiProvider, baseUrl: String, apiKey: String): L
                 .map { it.optString("name").removePrefix("models/") }
         }
         ApiStyle.OPENAI -> getJson("$baseUrl/models", authHeader(apiKey)).optJSONArray("data").ids("id")
+        ApiStyle.ON_DEVICE -> provider.suggestedModels
     }
     return ids.filter { it.isNotBlank() && !notChat.containsMatchIn(it) }.distinct()
 }

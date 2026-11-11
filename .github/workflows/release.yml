@@ -47,6 +47,18 @@ jobs:
           ./gradlew assembleRelease --stacktrace
           mv app/build/outputs/apk/release/app-release.apk "leftovers-${GITHUB_REF_NAME}.apk"
 
+      # The same app with the phone's own AI (Gemini Nano). Google's library for it isn't open source, so F-Droid
+      # ships the plain APK above; this one is only on GitHub. Same signature, so either installs over the other.
+      - name: Build signed release APK with on-device AI
+        env:
+          SIGNING_STORE_FILE: release.jks
+          SIGNING_STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD }}
+          SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
+          SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
+        run: |
+          ./gradlew assembleRelease -PonDeviceAi=com.google.mlkit:genai-prompt:1.0.0-beta4 --stacktrace
+          mv app/build/outputs/apk/release/app-release.apk "leftovers-${GITHUB_REF_NAME}-ai.apk"
+
       # The release page shows this version's section of CHANGELOG.md, plus how to install.
       - name: Write release notes
         run: |
@@ -64,13 +76,21 @@ jobs:
             echo "## Install"
             echo
             echo "Download \`leftovers-${GITHUB_REF_NAME}.apk\` below and open it on your phone. It installs over the previous version and keeps your data. Requires Android 8.0 or newer."
+            echo
+            echo "To use your phone's own AI (Gemini Nano, on phones like the Pixel 9 and OnePlus 15R), download \`leftovers-${GITHUB_REF_NAME}-ai.apk\` instead: the same app, with the AI built in. It uses Google's library, which isn't open source, so it isn't on F-Droid. Either one installs over the other and keeps your data."
             if [ -n "$previous" ]; then
               echo
               echo "**Full Changelog**: https://github.com/${GITHUB_REPOSITORY}/compare/${previous}...${GITHUB_REF_NAME}"
             fi
           } > notes.md
 
+      # A tag with a "-" in it (v1.10.0-rc1) is a pre-release: never "latest", so the app's update check, the website
+      # and Obtainium keep offering the last full release. F-Droid builds only tags of digits and dots, so it waits too.
       - uses: softprops/action-gh-release@v3
         with:
-          files: leftovers-${{ github.ref_name }}.apk
+          files: |
+            leftovers-${{ github.ref_name }}.apk
+            leftovers-${{ github.ref_name }}-ai.apk
           body_path: notes.md
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          make_latest: ${{ !contains(github.ref_name, '-') }}

@@ -76,16 +76,18 @@ object AutoBackup {
         runCatching {
             val resolver = context.contentResolver
             val folder = DocumentsContract.buildDocumentUriUsingTree(tree, DocumentsContract.getTreeDocumentId(tree))
-            val name = "$PREFIX${LocalDate.now()}.json"
-            // Today's backup replaces any made earlier today, a copy a cloud folder renamed ("… (1).json") too.
+            // Date and time in the name, so each backup is a file of its own and the last [keep] stay.
+            val now = java.time.LocalDateTime.now()
+            val name = "$PREFIX${LocalDate.now()}-${now.hour.toString().padStart(2, '0')}${now.minute.toString().padStart(2, '0')}.json"
+            // Only one made the same minute is replaced, a copy a cloud folder renamed ("… (1).json") too.
             existing(context, tree).filter { it.second.startsWith(name.removeSuffix(".json")) }
                 .forEach { runCatching { DocumentsContract.deleteDocument(resolver, it.first) } }
             val file = DocumentsContract.createDocument(resolver, folder, "application/json", name)
                 ?: error("Couldn't create a file in that folder")
             val count = (context.applicationContext as LeftoversApp).container.backup.export(file).getOrThrow()
-            // Newest first by the date in the name; a copy a cloud folder renamed ("… (1).json") counts too.
+            // Newest first by the date and time in the name (older ones have the date only); a renamed copy counts too.
             existing(context, tree)
-                .sortedByDescending { it.second.removePrefix(PREFIX).take(10) }
+                .sortedByDescending { it.second.removePrefix(PREFIX).takeWhile { ch -> ch.isDigit() || ch == '-' } }
                 .drop(keep.coerceIn(1, 5))
                 .forEach { runCatching { DocumentsContract.deleteDocument(resolver, it.first) } }
             count

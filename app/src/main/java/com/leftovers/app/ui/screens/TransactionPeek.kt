@@ -55,7 +55,7 @@ import kotlinx.coroutines.launch
 
 class TransactionPeekViewModel(
     private val repository: TransactionRepository,
-    accounts: AccountRepository,
+    private val accountRepository: AccountRepository,
     settings: com.leftovers.app.data.SettingsRepository,
     private val planning: com.leftovers.app.data.PlanningRepository,
 ) : ViewModel() {
@@ -104,8 +104,19 @@ class TransactionPeekViewModel(
     val oneBill: StateFlow<Boolean> = settings.settings.map { it.splitsAsOneBill }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), true)
 
+    fun saveTransfer(transfer: com.leftovers.app.data.Transfer) {
+        viewModelScope.launch { accountRepository.saveTransfer(transfer) }
+    }
+
+    fun deleteTransfer(transfer: com.leftovers.app.data.Transfer) {
+        viewModelScope.launch { accountRepository.deleteTransfer(transfer) }
+    }
+
+    /** Puts a deleted transfer back, from the Undo bar. */
+    suspend fun restoreTransfer(transfer: com.leftovers.app.data.Transfer) = accountRepository.saveTransfer(transfer)
+
     val accounts: StateFlow<List<AccountWithBalance>> =
-        accounts.accounts.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+        accountRepository.accounts.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     /** Every entry, to find the rest of a split bill. */
     val all: StateFlow<List<TransactionItem>> =
@@ -126,6 +137,8 @@ class TransactionPeek {
     var open by mutableStateOf<TransactionItem?>(null)
     /** A person's share of a split bill, open on its own to change it. */
     var share by mutableStateOf<com.leftovers.app.data.Debt?>(null)
+    /** A transfer between accounts, open on its own card. */
+    var transfer by mutableStateOf<TransferLine?>(null)
     var hidden by mutableStateOf<Long?>(null)
     var from: Rect? = null
     val bounds = mutableMapOf<Long, Rect>()
@@ -133,6 +146,12 @@ class TransactionPeek {
     fun show(item: TransactionItem) {
         from = bounds[item.id]
         open = item
+    }
+
+    /** Transfers are kept apart from entries, so their rows go by the id below zero. */
+    fun show(line: TransferLine) {
+        from = bounds[-line.transfer.id]
+        transfer = line
     }
 }
 
@@ -167,6 +186,7 @@ fun TransactionPeekCard(
             onSettle = { viewModel.settleShare(it); peek.share = null },
         )
     }
+    TransferPeek(peek, viewModel)
     val item = peek.open ?: return
     val c = LocalAppColors.current
     val money = LocalMoney.current
@@ -207,7 +227,7 @@ fun TransactionPeekCard(
                 )
                 Text(
                     listOfNotNull(item.categoryName.takeIf { com.leftovers.app.data.noteText(item.note).isNotBlank() }, account?.name?.takeIf { accounts.size > 1 }).joinToString(" · ")
-                        .ifBlank { if (income) "Income" else "Expense" },
+                        .ifBlank { if (income) "Income" else "Spending" },
                     style = MaterialTheme.typography.bodySmall,
                     color = c.textSecondary,
                 )
@@ -353,6 +373,66 @@ fun TransactionPeekCard(
                     icon = Lucide.Pencil,
                 )
             }
+        }
+    }
+}
+
+/** Tapping a transfer in Activity: a card with where the money went, how much and when, to change or delete it. */
+@Composable
+private fun TransferPeek(peek: TransactionPeek, viewModel: TransactionPeekViewModel) {
+    val c = LocalAppColors.current
+    val money = LocalMoney.current
+    val undo = LocalUndo.current
+    val accounts by viewModel.accounts.collectAsStateWithLifecycle()
+    var editing by remember { mutableStateOf<com.leftovers.app.data.Transfer?>(null) }
+    editing?.let { transfer ->
+        if (accounts.size >= 2) {
+            TransferSheet(accounts, onDismiss = { editing = null }, initial = transfer) { from, to, amount, note, day ->
+                viewModel.saveTransfer(transfer.copy(fromAccountId = from, toAccountId = to, amountMinor = amount, note = note, epochDay = day.toEpochDay()))
+                editing = null
+            }
+        }
+    }
+    val line = peek.transfer ?: return
+    val transfer = line.transfer
+    MorphCard(
+        from = peek.from,
+        onDismiss = { peek.transfer = null; peek.hidden = null },
+        onReveal = { peek.hidden = null },
+        onShown = { peek.hidden = -transfer.id },
+    ) { close ->
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            com.leftovers.app.ui.components.IconTile(Lucide.Repeat, c.textSecondary, size = 52.dp)
+            Spacer(Modifier.width(14.dp))
+            Column(Modifier.weight(1f)) {
+                Text("${line.from} → ${line.to}", style = MaterialTheme.typography.titleLarge, color = c.textPrimary, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Text(listOf("Transfer", transfer.note).filter { it.isNotBlank() }.joinToString(" · "), style = MaterialTheme.typography.bodySmall, color = c.textSecondary)
+            }
+        }
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(22.dp))
+                .background(c.glass)
+                .border(1.dp, c.glassStrong, RoundedCornerShape(22.dp))
+                .padding(horizontal = 18.dp, vertical = 16.dp),
+        ) {
+            Text("Moved", style = MaterialTheme.typography.labelLarge, color = c.textSecondary)
+            Text(money.format(transfer.amountMinor), style = MaterialTheme.typography.displaySmall, color = c.textPrimary)
+            Text(
+                java.time.LocalDate.ofEpochDay(transfer.epochDay).friendlyLabel() + " · not spending or income",
+                style = MaterialTheme.typography.bodySmall,
+                color = c.textSecondary,
+            )
+        }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            com.leftovers.app.ui.components.RoundButton(Lucide.Trash2, "Delete", {
+                close {
+                    viewModel.deleteTransfer(transfer)
+                    undo.show("Transfer deleted") { viewModel.restoreTransfer(transfer) }
+                }
+            }, size = 56.dp)
+            PrimaryButton("Edit", { close { editing = transfer } }, Modifier.weight(1f), icon = Lucide.Pencil)
         }
     }
 }

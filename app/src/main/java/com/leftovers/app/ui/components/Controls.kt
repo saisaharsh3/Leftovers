@@ -76,21 +76,35 @@ import java.time.YearMonth
 /** Rounded square holding a line icon on a faint wash of its colour. */
 @Composable
 fun IconTile(icon: ImageVector, tint: Color, size: Dp = 44.dp, modifier: Modifier = Modifier) {
+    // Pale category colours (lavender, peach) fade on light glass: deepened a little on the light theme.
+    val c = com.leftovers.app.ui.theme.LocalAppColors.current
+    val shown = if (c.isDark) tint else androidx.compose.ui.graphics.lerp(tint, Color.Black, 0.3f)
     Box(
         modifier
             .size(size)
             .clip(RoundedCornerShape(size * 0.34f))
-            .background(tint.copy(alpha = 0.14f))
-            .border(1.dp, tint.copy(alpha = 0.16f), RoundedCornerShape(size * 0.34f)),
+            .background(shown.copy(alpha = 0.14f))
+            .border(1.dp, shown.copy(alpha = 0.16f), RoundedCornerShape(size * 0.34f)),
         contentAlignment = Alignment.Center,
     ) {
-        Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(size * 0.48f))
+        Icon(icon, contentDescription = null, tint = shown, modifier = Modifier.size(size * 0.48f))
     }
 }
 
 @Composable
-fun CategoryIcon(key: String, color: Long, size: Dp = 44.dp, modifier: Modifier = Modifier) =
-    IconTile(CategoryIcons[key], Color(color), size, modifier)
+fun CategoryIcon(key: String, color: Long, size: Dp = 44.dp, modifier: Modifier = Modifier) {
+    // An icon made from the user's own picture fills the tile; the rest are line icons in the category's colour.
+    val custom = if (com.leftovers.app.util.CustomIcons.isCustom(key)) {
+        val context = androidx.compose.ui.platform.LocalContext.current
+        remember(key) { com.leftovers.app.util.CustomIcons.load(context, key) }
+    } else null
+    if (custom != null) {
+        androidx.compose.foundation.Image(
+            custom, contentDescription = null, contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+            modifier = modifier.size(size).clip(RoundedCornerShape(size * 0.34f)),
+        )
+    } else IconTile(CategoryIcons[key], Color(color), size, modifier)
+}
 
 @Composable
 fun RoundButton(
@@ -192,7 +206,16 @@ fun GlassHeader(
                 Spacer(Modifier.width(12.dp))
             }
             Column(Modifier.weight(1f)) {
-                Text(title, style = MaterialTheme.typography.headlineSmall, color = c.textPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                androidx.compose.animation.AnimatedContent(
+                    title,
+                    transitionSpec = {
+                        androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(220, delayMillis = 60)) togetherWith
+                            androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(120))
+                    },
+                    label = "headerTitle",
+                ) { shown ->
+                    Text(shown, style = MaterialTheme.typography.headlineSmall, color = c.textPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
                 if (subtitle != null) {
                     Text(subtitle, style = MaterialTheme.typography.bodySmall, color = c.textSecondary, maxLines = 1)
                 }
@@ -403,10 +426,16 @@ fun RollingText(
                             },
                         targetState = ch,
                         transitionSpec = {
-                            val up = targetState > initialState
-                            (slideInVertically(spring(dampingRatio = 0.8f, stiffness = 400f)) { if (up) it else -it } + fadeIn(tween(180)))
-                                .togetherWith(slideOutVertically(tween(180)) { if (up) -it else it } + fadeOut(tween(120)))
-                                .using(SizeTransform(clip = true))
+                            // Only digits roll. Matching places from the right, a "₹" could otherwise roll into a digit
+                            // as the real amount replaced a placeholder ("₹54,51,6₹0" for a moment).
+                            if (!initialState.isDigit() || !targetState.isDigit()) {
+                                (androidx.compose.animation.EnterTransition.None togetherWith androidx.compose.animation.ExitTransition.None).using(null)
+                            } else {
+                                val up = targetState > initialState
+                                (slideInVertically(spring(dampingRatio = 0.8f, stiffness = 400f)) { if (up) it else -it } + fadeIn(tween(180)))
+                                    .togetherWith(slideOutVertically(tween(180)) { if (up) -it else it } + fadeOut(tween(120)))
+                                    .using(SizeTransform(clip = true))
+                            }
                         },
                         contentAlignment = Alignment.Center,
                         label = "roll",

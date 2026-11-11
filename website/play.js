@@ -5,22 +5,22 @@
   const { Spring, loop, project, rubber, tracker, fmt, clamp, buzz, reduceMotion } = window.LO;
   const $ = (s, el = document) => el.querySelector(s);
   const now = new Date();
-  const monthName = now.toLocaleDateString("en-IN", { month: "short" });
-  const dayLabel = (d) => new Date(now.getFullYear(), now.getMonth(), d).toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" });
+  const dayLabel = (date) => date.toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" });
+  const shortDay = (date) => date.toLocaleDateString("en-IN", { day: "numeric", month: "short" });
 
   // ---------------------------------------------------------------- See where it went
   (() => {
     const chart = $("#chart"), barsEl = $("#bars"), pin = $("#pin");
-    const days = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-    const today = now.getDate();
-    // A believable month: the same every visit (a fixed seed), busier at weekends, a big shop now and then.
-    let seed = now.getFullYear() * 12 + now.getMonth();
+    // The last 30 days up to today, so the chart is full on any day of the month, not empty early on.
+    const days = 30, today = days;
+    const dateOf = (i) => new Date(now.getFullYear(), now.getMonth(), now.getDate() - (days - 1 - i));
+    // A believable month: the same all day (a fixed seed), busier at weekends, a big shop now and then.
+    let seed = now.getFullYear() * 400 + now.getMonth() * 32 + now.getDate();
     const rand = () => ((seed = (seed * 9301 + 49297) % 233280) / 233280);
     const things = [["Coffee", 120], ["Lunch", 250], ["Metro", 40], ["Groceries", 1200], ["Auto", 90], ["Dinner out", 900], ["Movie", 450], ["Pharmacy", 320], ["Snacks", 80], ["Fuel", 1500]];
     const data = Array.from({ length: days }, (_, i) => {
-      const d = i + 1;
-      if (d > today) return { d, amount: 0, items: [], future: true };
-      const weekend = [0, 6].includes(new Date(now.getFullYear(), now.getMonth(), d).getDay());
+      const d = dateOf(i);
+      const weekend = [0, 6].includes(d.getDay());
       const n = 1 + Math.floor(rand() * (weekend ? 4 : 3));
       const items = [];
       for (let k = 0; k < n; k++) items.push(things[Math.floor(rand() * things.length)]);
@@ -30,15 +30,16 @@
     const max = Math.max(...data.map((x) => x.amount), 1);
     const biggest = data.reduce((a, b) => (b.amount > a.amount ? b : a), data[0]);
     $("#chart-avg").textContent = fmt(spent / today);
-    $("#axis-mid").textContent = String(Math.ceil(days / 2));
-    $("#axis-end").textContent = String(days);
+    $("#axis-start").textContent = shortDay(dateOf(0));
+    $("#axis-mid").textContent = shortDay(dateOf(Math.floor(days / 2)));
+    $("#axis-end").textContent = "Today";
     chart.setAttribute("aria-valuemax", String(today));
 
     const cols = data.map((x) => {
       const col = document.createElement("div");
-      col.className = "bar-col" + (x.future ? " future" : "");
+      col.className = "bar-col";
       const bar = document.createElement("i");
-      bar.style.height = x.future ? "5%" : `${Math.max(3, (x.amount / max) * 100)}%`;
+      bar.style.height = `${Math.max(3, (x.amount / max) * 100)}%`;
       col.append(bar);
       barsEl.append(col);
       return { bar, grow: new Spring(0) };
@@ -48,23 +49,23 @@
     const pinX = new Spring(0);
     let selected = null; // day index, or null for the month
     const label = $("#chart-label"), out = $("#chart-value"), sub = $("#chart-sub");
-    const defaultSub = `Biggest day: ${biggest.d} ${monthName}, ${fmt(biggest.amount)}`;
+    const defaultSub = `Biggest day: ${shortDay(biggest.d)}, ${fmt(biggest.amount)}`;
     function select(i) {
       if (i !== null) i = clamp(i, 0, today - 1);
       if (i === selected) return;
       selected = i;
       if (i === null) {
-        label.textContent = "This month so far";
+        label.textContent = "The last 30 days";
         sub.textContent = defaultSub;
         value.to(spent, { response: 0.35 });
         chart.removeAttribute("aria-valuenow");
-        chart.setAttribute("aria-valuetext", `This month so far, ${fmt(spent)}`);
+        chart.setAttribute("aria-valuetext", `The last 30 days, ${fmt(spent)}`);
       } else {
         const x = data[i];
         label.textContent = dayLabel(x.d);
         sub.textContent = x.items.join(", ");
         value.to(x.amount, { response: 0.28 });
-        chart.setAttribute("aria-valuenow", String(x.d));
+        chart.setAttribute("aria-valuenow", String(i + 1));
         chart.setAttribute("aria-valuetext", `${dayLabel(x.d)}, ${fmt(x.amount)}: ${x.items.join(", ")}`);
       }
       cols.forEach((c, k) => { c.bar.style.opacity = selected === null ? "" : k === selected ? "1" : ".14"; });
@@ -260,6 +261,8 @@
         who: "Swiggy", amount: 250, sub: "HDFC Bank, from a bank text" },
       { from: "Google Pay", text: "₹120 paid to Third Wave Coffee. UPI transaction ID 612345678902.",
         who: "Third Wave Coffee", amount: 120, sub: "Google Pay notification" },
+      { from: "AD-HDFCBK", text: "Rs.1,200.00 credited to HDFC Bank A/c XX1234 by VPA nick.dsouza@okaxis (NICK DSOUZA) on 08-10-26. Avl Bal Rs.42,310.00",
+        who: "Nick", amount: 1200, income: true, payback: true, sub: "Nick paying you back?" },
       { from: "AD-KOTAKB", text: "Your A/c XX1234 is credited with INR 75,000.00 on 01-10-2026 by NEFT from ACME TECH PVT LTD.",
         who: "Acme Tech Pvt Ltd", amount: 75000, income: true, sub: "Kotak, money in" },
       { from: "AD-ICICIB", text: "123456 is your OTP for a transaction of Rs 500.00 at SWIGGY. Do not share it with anyone.", otp: true },
@@ -321,14 +324,19 @@
       empty.hidden = true;
       const row = document.createElement("li");
       row.className = "mini-item";
-      row.innerHTML = `<div><b>${it.m.who}</b><small>${it.m.sub}</small></div><span class="amt ${it.m.income ? "in" : ""}">${it.m.income ? "+" : ""}${fmt(it.m.amount)}</span><button class="add" type="button">Add</button>`;
-      $(".add", row).addEventListener("click", (e) => { row.classList.add("added"); e.target.textContent = "Added"; e.target.disabled = true; buzz(10); });
+      const verb = it.m.payback ? "Settle" : "Add";
+      row.innerHTML = `<div><b>${it.m.who}</b><small>${it.m.sub}</small></div><span class="amt ${it.m.income ? "in" : ""}">${it.m.income ? "+" : ""}${fmt(it.m.amount)}</span><button class="add" type="button">${verb}</button>`;
+      $(".add", row).addEventListener("click", (e) => { row.classList.add("added"); e.target.textContent = it.m.payback ? "Settled" : "Added"; e.target.disabled = true; buzz(10); });
       appList.prepend(row);
       // The new suggestion settles into the list.
       const pop = new Spring(0.9), fade = new Spring(0);
       pop.to(1, { response: 0.35, damping: 0.8 }); fade.to(1, { response: 0.3 });
       loop.add((dt) => { const a = pop.step(dt), b = fade.step(dt); row.style.transform = `scale(${pop.x})`; row.style.opacity = String(clamp(fade.x, 0, 1)); return a || b; });
-      note.textContent = it.m.income ? "Money coming in is suggested as income." : "Nothing is logged until you tap Add.";
+      note.textContent = it.m.payback
+        ? `Nick owes you ${fmt(1200)}, so Settle marks it paid in Money owed instead of counting it as income. The balance in the text, ${fmt(42310)}, shows next to HDFC Bank in Accounts.`
+        : it.m.income ? "Money coming in is suggested as income."
+        : it.m.amount <= 200 ? "Nothing is logged until you tap Add. Or turn on Add small payments automatically, and ones this small go straight in."
+        : "Nothing is logged until you tap Add.";
       reset.hidden = false;
       buzz(10);
     }

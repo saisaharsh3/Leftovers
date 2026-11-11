@@ -29,7 +29,7 @@ object PdfStatement {
         return doc.use { PDFTextStripper().apply { sortByPosition = true }.getText(it) }
     }
 
-    private const val DATE = """(\d{1,2}[/.\-](?:\d{1,2}|[A-Za-z]{3})[/.\-]\d{2,4}|\d{4}-\d{2}-\d{2}|\d{1,2} [A-Za-z]{3,9},? \d{2,4})"""
+    private const val DATE = """(\d{1,2}[/.\-](?:\d{1,2}|[A-Za-z]{3})[/.\-]\d{2,4}|\d{4}-\d{2}-\d{2}|\d{1,2} [A-Za-z]{3,9},? \d{2,4}|[A-Za-z]{3,9} \d{1,2}, \d{4})"""
     private val startsWithDate = Regex("""^\s*$DATE\b""")
     private val anyDate = Regex("""\b$DATE\b""")
     /** Cheque, UPI and reference numbers: eight digits or more. */
@@ -46,8 +46,21 @@ object PdfStatement {
 
     private data class Line(val date: String, val text: String, val amounts: List<Pair<Long, String?>>, val extra: MutableList<String> = mutableListOf())
 
+    /** Currencies printed against their number ("PKR1,000.00", "Rs.250"), split off so the amount reads on its own. */
+    private val gluedCurrency = Regex(
+        """(?<![A-Za-z])(PKR|INR|Rs\.?|USD|EUR|GBP|AED|SAR|QAR|KWD|OMR|BHD|BDT|Tk\.?|LKR|NPR|MYR|SGD|IDR|PHP|THB|NGN|KES|ZAR|₹|\$|€|£|৳|₨)(?=\d)""",
+    )
+
     fun parse(text: String): CsvImporter.Parsed {
-        val lines = text.lines().map { it.trim() }.filter { it.isNotEmpty() }
+        val lines = text.lines().map { gluedCurrency.replace(it.trim(), "$1 ") }.filter { it.isNotEmpty() }
+        // Payment apps (PhonePe, Paytm, Google Pay...) print each payment as a block, with no running balance;
+        // banks print a line each with one. Both are read, and whichever finds more is the one.
+        val blocks = parseBlocks(lines)
+        val lined = parseLines(lines)
+        return if (blocks.rows.size > lined.rows.size) blocks else lined
+    }
+
+    private fun parseLines(lines: List<String>): CsvImporter.Parsed {
         var previousBalance: Long? = null
         val rows = mutableListOf<Line>()
         var current: Line? = null
@@ -107,6 +120,58 @@ object PdfStatement {
             out += CsvImporter.Row(date, value, if (spent == true) TxType.EXPENSE else TxType.INCOME, null, note, null)
         }
         return CsvImporter.Parsed(out, unreadable)
+    }
+
+    /** An amount with its currency, as payment apps print it: "₹40", "₹3,923.03", "Rs. 250", "INR 1,200". */
+    private val currencyAmount = Regex("""(?:₹|৳|₨|\$|€|£|\bRs\.?|\b(?:INR|PKR|BDT|Tk|LKR|NPR|USD|EUR|GBP|AED|SAR))\s*(\d{1,3}(?:,\d{2,3})+(?:\.\d{1,2})?|\d+(?:\.\d{1,2})?)""")
+    private val blockOut = Regex("""\b(debit|debited|dr|paid to|payment to|sent to|paid for|bill paid|recharge)\b""", RegexOption.IGNORE_CASE)
+    private val blockIn = Regex("""\b(credit|credited|cr|received from|refund|cashback|reversal)\b""", RegexOption.IGNORE_CASE)
+    /** Lines in a block that aren't its description: times, IDs, the card or account used, page furniture. */
+    private val blockNoise = Regex("""^(\d{1,4}:?\d{2}\s*[ap]m|transaction id|utr|ref|reference|order id|paid by|credited to|debited from|page \d|this is a|date\b)""", RegexOption.IGNORE_CASE)
+
+    /** One payment per block: from a line that starts with a date up to the next one. */
+    private fun parseBlocks(lines: List<String>): CsvImporter.Parsed {
+        val starts = lines.indices.filter { startsWithDate.find(lines[it]) != null }
+        if (starts.isEmpty()) return CsvImporter.Parsed(emptyList(), 0)
+        val dateText = starts.map { startsWithDate.find(lines[it])!!.groupValues[1] }
+        val dayFirst = CsvImporter.dayComesFirst(dateText)
+        var unreadable = 0
+        var transfers = 0
+        val out = mutableListOf<CsvImporter.Row>()
+        starts.forEachIndexed { n, at ->
+            val block = lines.subList(at, starts.getOrElse(n + 1) { lines.size })
+            val date = CsvImporter.parseDate(dateText[n], dayFirst)
+            val withAmount = block.firstOrNull { currencyAmount.containsMatchIn(it) }
+            val value = withAmount?.let { line -> currencyAmount.find(line)?.let { CsvImporter.parseAmount(it.groupValues[1]) } }
+            if (date == null || value == null || value == 0L) {
+                unreadable++
+                return@forEachIndexed
+            }
+            // What it was: the first line with words that isn't a time, an ID or the account used.
+            val described = block.map { it.replace(startsWithDate, "").trim() }
+                .firstOrNull { l -> l.any(Char::isLetter) && blockNoise.find(l) == null } ?: ""
+            if (CsvImporter.ownTransfer.containsMatchIn(described)) {
+                transfers++
+                return@forEachIndexed
+            }
+            val all = block.joinToString(" ")
+            val spent = when {
+                Regex("""\bDEBIT\b""").containsMatchIn(all) -> true
+                Regex("""\bCREDIT\b""").containsMatchIn(all) -> false
+                blockOut.containsMatchIn(described) && !blockIn.containsMatchIn(described) -> true
+                blockIn.containsMatchIn(described) && !blockOut.containsMatchIn(described) -> false
+                else -> null
+            }
+            if (spent == null) {
+                unreadable++
+                return@forEachIndexed
+            }
+            val note = CsvImporter.payee(
+                described.replace(currencyAmount, " ").replace(Regex("""\b(DEBIT|CREDIT|Dr|Cr)\b"""), " ").replace(Regex("""\s+"""), " ").trim(),
+            ).take(120)
+            out += CsvImporter.Row(date, value, if (spent) TxType.EXPENSE else TxType.INCOME, null, note, null)
+        }
+        return CsvImporter.Parsed(out, unreadable, transfers = transfers)
     }
 
     private fun money(m: MatchResult): Long = CsvImporter.parseAmount(m.groupValues[1]) ?: 0L

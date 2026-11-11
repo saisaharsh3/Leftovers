@@ -29,6 +29,23 @@ class PlanningRepository(private val database: AppDatabase) {
     suspend fun deleteDeposit(deposit: GoalDeposit) = goalDao.deleteDeposit(deposit)
 
     suspend fun saveDebt(debt: Debt) = debtDao.upsert(debt)
+
+    /**
+     * A payment that pays [person] back, or them paying you: recorded against what's open with them (see [settleUp]),
+     * never as income or spending. Returns how to take it back, for Undo: their entries as they were.
+     */
+    suspend fun recordPayback(person: String, amountMinor: Long, accountId: Long?, epochDay: Long): suspend () -> Unit {
+        val key = person.trim().lowercase()
+        val before = debtDao.getAll().filter { it.person.trim().lowercase() == key }
+        settleUp(person, amountMinor, accountId, chosen = accountId != null, epochDay = epochDay)
+        return {
+            database.withTransaction {
+                val keep = before.map { it.id }.toSet()
+                debtDao.getAll().filter { it.person.trim().lowercase() == key && it.id !in keep }.forEach { debtDao.delete(it) }
+                before.forEach { debtDao.upsert(it) }
+            }
+        }
+    }
     suspend fun deleteDebt(debt: Debt) {
         debtDao.delete(debt)
         debt.photos.forEach { com.leftovers.app.util.ReceiptStore.delete(it) }
@@ -49,7 +66,7 @@ class PlanningRepository(private val database: AppDatabase) {
             val open = debtDao.openFor(person)
             val net = open.sumOf { it.amountMinor }
             if (net == 0L) {
-                debtDao.settle(person)
+                debtDao.settle(person, epochDay)
                 return@withTransaction
             }
             val paid = (amountMinor ?: kotlin.math.abs(net)).coerceIn(1, kotlin.math.abs(net))
@@ -63,7 +80,7 @@ class PlanningRepository(private val database: AppDatabase) {
                     repayment = true,
                 ),
             )
-            if (paid == kotlin.math.abs(net)) debtDao.settle(person)
+            if (paid == kotlin.math.abs(net)) debtDao.settle(person, epochDay)
         }
     }
 
@@ -73,7 +90,7 @@ class PlanningRepository(private val database: AppDatabase) {
      */
     suspend fun settleEntry(debt: Debt, epochDay: Long = LocalDate.now().toEpochDay()) {
         database.withTransaction {
-            debtDao.upsert(debt.copy(settled = true))
+            debtDao.upsert(debt.copy(settled = true, settledOn = epochDay))
             debtDao.upsert(
                 Debt(
                     person = debt.person.trim(),
@@ -83,10 +100,19 @@ class PlanningRepository(private val database: AppDatabase) {
                     accountId = debt.accountId,
                     repayment = true,
                     settled = true,
+                    settledOn = epochDay,
                 ),
             )
         }
     }
+
+    /**
+     * Whether [item] is [r]'s charge for [date], logged some other way: the same kind and amount, within three
+     * days of it, and in its category or with its name in the note. Then the subscription isn't logged again.
+     */
+    internal fun alreadyLogged(item: TransactionItem, r: Recurring, amount: Long, date: LocalDate): Boolean =
+        item.type == r.type && item.amountMinor == amount && kotlin.math.abs(item.epochDay - date.toEpochDay()) <= 3 &&
+            (item.categoryId == r.categoryId || (r.name.isNotBlank() && item.note.contains(r.name.trim(), ignoreCase = true)))
 
     /** Everything with [person] paid back in full. */
     suspend fun settle(person: String) = settleUp(person)
@@ -108,6 +134,8 @@ class PlanningRepository(private val database: AppDatabase) {
         val balances = database.accountDao().observeWithBalance().first().associate { it.id to it.balanceMinor }.toMutableMap()
         database.withTransaction {
             val currentMonth = YearMonth.from(today)
+            // Entries already there, to see whether a bill was logged some other way first.
+            val existing = transactionDao.getAll().toMutableList()
             recurringDao.getActive().forEach { r ->
                 var month = r.lastPostedMonth?.let { YearMonth.parse(it).plusMonths(1) } ?: YearMonth.parse(r.startMonth)
                 var lastPosted: YearMonth? = null
@@ -123,6 +151,12 @@ class PlanningRepository(private val database: AppDatabase) {
                     val amount = r.interestOn(into?.let { balances[it] } ?: 0L) ?: r.amountMinor
                     if (amount <= 0) {
                         // No balance, no interest this time.
+                        lastPosted = month
+                        month = month.plusMonths(1)
+                        continue
+                    }
+                    // Already logged by hand, or from its SMS or email, around its date: that's this month's.
+                    if (existing.any { alreadyLogged(it, r, amount, date) }) {
                         lastPosted = month
                         month = month.plusMonths(1)
                         continue

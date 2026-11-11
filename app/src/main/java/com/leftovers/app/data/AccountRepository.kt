@@ -21,7 +21,13 @@ class AccountRepository(
         }
     val transfers: Flow<List<Transfer>> = transferDao.observeAll()
 
-    suspend fun saveAccount(account: Account): Long = accountDao.upsert(account)
+    /** A new account goes at the end of the list. */
+    suspend fun saveAccount(account: Account): Long = accountDao.upsert(
+        if (account.id != 0L) account else account.copy(position = (accountDao.getAll().maxOfOrNull { it.position } ?: -1) + 1),
+    )
+
+    /** The accounts in [ids]' order, as the user arranged them (#47). */
+    suspend fun reorder(ids: List<Long>) = ids.forEachIndexed { i, id -> accountDao.setPosition(id, i) }
 
     /** Deletes the account, or returns how many entries still use it (and deletes nothing). */
     suspend fun deleteAccount(account: Account): Int {
@@ -56,7 +62,12 @@ class AccountRepository(
     suspend fun deleteTransfer(transfer: Transfer) = transferDao.delete(transfer)
 }
 
-class SmsRepository(private val dao: SmsDao, private val transactionDao: TransactionDao) {
+class SmsRepository(
+    private val dao: SmsDao,
+    private val transactionDao: TransactionDao,
+    /** Subscriptions, so a bill the app logged by itself isn't suggested again when its SMS arrives; null in tests. */
+    private val recurringDao: RecurringDao? = null,
+) {
     companion object {
         /** How long a seen message is remembered; far longer than any email check looks back. */
         const val SEEN_DAYS = 30L
@@ -68,24 +79,44 @@ class SmsRepository(private val dao: SmsDao, private val transactionDao: Transac
      * Stores a detected payment unless it's a repeat: the same message again, or the same amount already
      * suggested or logged around the same time (see [DuplicatePayments]). Returns whether it was added.
      */
-    suspend fun add(suggestion: SmsSuggestion): Boolean {
+    suspend fun add(suggestion: SmsSuggestion): Boolean = addReturningId(suggestion) != null
+
+    /** As [add], with the new suggestion's id; null when it was a repeat and nothing was added. */
+    suspend fun addReturningId(suggestion: SmsSuggestion): Long? {
         val hash = suggestion.body
         // Seen before, even if that suggestion was since added or dismissed: email checks look back two days.
-        if (hash.isNotEmpty() && (dao.countWithBody(hash) > 0 || dao.seenCount(hash) > 0)) return false
+        if (hash.isNotEmpty() && (dao.countWithBody(hash) > 0 || dao.seenCount(hash) > 0)) return null
         val from = suggestion.receivedAt - DuplicatePayments.WINDOW_MS
         val to = suggestion.receivedAt + DuplicatePayments.WINDOW_MS
         val logged = if (suggestion.isIncome) transactionDao.incomeAmountsBetween(from, to) else transactionDao.expenseAmountsBetween(from, to)
         val seen = dao.amountsBetween(from, to, suggestion.isIncome) + logged
         if (hash.isNotEmpty()) dao.markSeen(SeenMessage(hash, System.currentTimeMillis()))
-        if (DuplicatePayments.isDuplicate(suggestion.amountMinor, suggestion.receivedAt, seen)) return false
-        dao.insert(suggestion)
-        return true
+        if (DuplicatePayments.isDuplicate(suggestion.amountMinor, suggestion.receivedAt, seen)) return null
+        if (subscriptionAlreadyLogged(suggestion)) return null
+        return dao.insert(suggestion)
+    }
+
+    /**
+     * The SMS of a bill the app already logged as a subscription: an active one with this amount, logged within
+     * three days, with its name as the note (as the app logs them).
+     */
+    private suspend fun subscriptionAlreadyLogged(s: SmsSuggestion): Boolean {
+        val subs = recurringDao?.getActive().orEmpty()
+            .filter { it.amountMinor == s.amountMinor && (it.type == TxType.INCOME) == s.isIncome }
+        if (subs.isEmpty()) return false
+        val names = subs.map { it.name.trim().lowercase() }.toSet()
+        return transactionDao.getAll().any { t ->
+            t.amountMinor == s.amountMinor && kotlin.math.abs(t.epochDay - s.epochDay) <= 3 && t.note.trim().lowercase() in names
+        }
     }
 
     /** Forgets seen messages older than any email check looks back. */
     suspend fun forgetOldSeen() = dao.forgetSeenBefore(System.currentTimeMillis() - java.util.concurrent.TimeUnit.DAYS.toMillis(SEEN_DAYS))
 
     suspend fun dismiss(id: Long) = dao.delete(id)
+
+    /** A dismissed suggestion back as it was, for Undo (not through [add], which would see it as a repeat). */
+    suspend fun putBack(suggestion: SmsSuggestion) { dao.insert(suggestion) }
 
     /** The account digits a detected payment's message named, if any. */
     suspend fun digitsFor(id: Long): String? = dao.digitsFor(id)

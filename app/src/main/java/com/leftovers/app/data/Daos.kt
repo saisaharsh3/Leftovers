@@ -163,7 +163,7 @@ interface AccountDao {
             + COALESCE((SELECT SUM(amountMinor) FROM transfers WHERE toAccountId = a.id), 0)
             - COALESCE((SELECT SUM(amountMinor) FROM transfers WHERE fromAccountId = a.id), 0)
             - COALESCE((SELECT SUM(amountMinor) FROM debts WHERE accountId = a.id), 0) AS balanceMinor
-        FROM accounts a ORDER BY a.id
+        FROM accounts a ORDER BY a.position, a.id
         """,
     )
     fun observeWithBalance(): Flow<List<AccountWithBalance>>
@@ -187,8 +187,11 @@ interface AccountDao {
     )
     fun observeNativeParts(): Flow<List<NativeParts>>
 
-    @Query("SELECT * FROM accounts ORDER BY id")
+    @Query("SELECT * FROM accounts ORDER BY position, id")
     suspend fun getAll(): List<Account>
+
+    @Query("UPDATE accounts SET position = :position WHERE id = :id")
+    suspend fun setPosition(id: Long, position: Int)
 
     @Upsert
     suspend fun upsert(account: Account): Long
@@ -221,7 +224,7 @@ interface SmsDao {
     fun observeAll(): Flow<List<SmsSuggestion>>
 
     @androidx.room.Insert
-    suspend fun insert(suggestion: SmsSuggestion)
+    suspend fun insert(suggestion: SmsSuggestion): Long
 
     @Query("DELETE FROM sms_suggestions WHERE id = :id")
     suspend fun delete(id: Long)
@@ -271,8 +274,8 @@ interface DebtDao {
     @Query("DELETE FROM debts")
     suspend fun deleteAll()
 
-    @Query("UPDATE debts SET settled = 1 WHERE settled = 0 AND LOWER(TRIM(person)) = LOWER(TRIM(:person))")
-    suspend fun settle(person: String)
+    @Query("UPDATE debts SET settled = 1, settledOn = :day WHERE settled = 0 AND LOWER(TRIM(person)) = LOWER(TRIM(:person))")
+    suspend fun settle(person: String, day: Long)
 
     @Query("SELECT * FROM debts WHERE settled = 0 AND LOWER(TRIM(person)) = LOWER(TRIM(:person)) ORDER BY createdAt DESC")
     suspend fun openFor(person: String): List<Debt>

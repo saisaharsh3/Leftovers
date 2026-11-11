@@ -7,7 +7,8 @@ import kotlin.math.abs
 import kotlin.math.roundToInt
 
 /** One short observation for Insights, e.g. "Food is up 30% vs last month". */
-data class Trend(val text: String, val good: Boolean?)
+/** [down]: it says something fell, so its arrow points down. */
+data class Trend(val text: String, val good: Boolean?, val down: Boolean = false)
 
 /**
  * Up to three observations about [month]'s entries of [type] compared with the month before.
@@ -38,7 +39,7 @@ fun spendingTrends(
         .take(2)
         .forEach { (name, _, pct) ->
             val up = pct > 0
-            trends += Trend("$name is ${if (up) "up" else "down"} ${abs(pct)}% vs last month", if (isExpense) !up else up)
+            trends += Trend("$name is ${if (up) "up" else "down"} ${abs(pct)}% vs last month", if (isExpense) !up else up, down = !up)
         }
 
     // Weekend vs weekday spending per day, once there is enough to compare.

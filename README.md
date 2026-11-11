@@ -12,6 +12,7 @@ today, plan for the things you want, and ask an AI about your money if you'd lik
 
 [![Build](https://github.com/saisaharsh3/Leftovers/actions/workflows/build.yml/badge.svg)](https://github.com/saisaharsh3/Leftovers/actions/workflows/build.yml)
 [![Download](https://img.shields.io/badge/Download-latest%20APK-CDF46F?logo=android&logoColor=black)](https://github.com/saisaharsh3/Leftovers/releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/saisaharsh3/Leftovers/total?label=Downloads&color=CDF46F)](https://github.com/saisaharsh3/Leftovers/releases)
 ![Android 8.0+](https://img.shields.io/badge/Android-8.0%2B-3DDC84?logo=android&logoColor=white)
 ![Kotlin](https://img.shields.io/badge/Kotlin-Jetpack%20Compose-7F52FF?logo=kotlin&logoColor=white)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue)](https://github.com/saisaharsh3/Leftovers/blob/main/LICENSE)
@@ -19,6 +20,8 @@ today, plan for the things you want, and ask an AI about your money if you'd lik
 ![Home, adding an expense, Insights and Plan](https://raw.githubusercontent.com/saisaharsh3/Leftovers/main/docs/screenshots/row1.png)
 
 ![Activity calendar, lent or borrowed, Money owed and the AI assistant](https://raw.githubusercontent.com/saisaharsh3/Leftovers/main/docs/screenshots/row2.png)
+
+![Over your own photos: a friend paying you back, bank balances from SMS, and Settings](https://raw.githubusercontent.com/saisaharsh3/Leftovers/main/docs/screenshots/row3.png)
 
 <a href="https://f-droid.org/packages/com.leftovers.app/"><img src="https://fdroid.gitlab.io/artwork/badge/get-it-on.png" height="60" alt="Get it on F-Droid"></a>&nbsp;
 <a href="https://github.com/saisaharsh3/Leftovers/releases/latest"><img src="https://raw.githubusercontent.com/saisaharsh3/Leftovers/main/docs/badge-download.png" height="40" alt="Download the APK"></a>&nbsp;
@@ -81,11 +84,18 @@ Most budget apps want an account, show ads, or send your spending to a server. L
   and a one-step move of every entry to another account (with undo). An account can have its own currency:
   its entries are entered and shown in it, and totals count them at its rate, typed or fetched (optional). An
   account can be left out of Safe to spend, or out of the All accounts total (a savings account, say)
+- When a bank text gives your balance (*"Avl Bal Rs.12,000"*), the account shows it next to its own and offers
+  **Match** when they differ (with Undo). Only the number is kept, never the message
 - Total balance across accounts on Home, with where it's heading by the end of the month; switch it to one
   account (like a wallet) to see just that account's balance, spending and income
 - Money owed: what you lent or borrowed and from whom, kept out of your budget. It moves the account the money
   went from or into while it's open, and can be paid back in full or a bit at a time. **Remind** sends someone
-  who owes you a friendly message through WhatsApp, SMS or any app
+  who owes you a friendly message through WhatsApp, SMS or any app, with a link: if they use Leftovers too, a tap
+  adds it to their own Money owed (the amounts are in the link itself, so nothing goes through a server)
+- A friend paying you back is recognised: a detected payment from someone who owes you (or to someone you owe)
+  asks *"Arjun paying you back?"*, and one tap settles it in Money owed instead of counting it as income. Names
+  match however the bank writes them (*Ravi*, *Mr RAVI KUMAR*, *Ravi K*, or a UPI ID); two different people never
+  match, and when two could, the amount decides. Typing a repayment as income on the add screen offers the same
 
 **Insights**
 - Daily bar chart you can touch to read any day
@@ -96,6 +106,8 @@ Most budget apps want an account, show ads, or send your spending to a server. L
 
 **AI assistant** (optional)
 - Connect Claude, ChatGPT, Gemini, Mistral, Groq, DeepSeek, Grok, OpenRouter or your own server, with your own API key
+- Or use **the phone's own AI** (Gemini Nano, on phones like the Pixel 9 and OnePlus 15R): offline, no key, nothing
+  leaves the phone. It's in the `-ai.apk` download on GitHub; see [Install](#install)
 - Ask questions like *"How much did I spend on food this month?"* or *"Am I on track with my budget?"*
 - Tell it what to do: *"Add 250 for coffee today"*, *"Move yesterday's lunch to Cash"*, *"Set a 5,000 limit on Shopping"*
 - Snap a bill or receipt and it suggests the entries, split by category
@@ -123,11 +135,16 @@ Most budget apps want an account, show ads, or send your spending to a server. L
 - Optional payment detection from bank SMS and from bank email alerts, suggesting entries for you to confirm,
   including money coming in as income.
   Add your own keywords for banks it misses, and test any message to see what it would suggest. One payment never shows up twice, even when it arrives by both SMS and email.
-  A payment to a place you've logged before opens under the category you used last time
+  A payment to a place you've logged before opens under the category you used last time.
+  **Add small payments automatically** (off unless you turn it on): spending from bank SMS up to an amount you choose
+  goes straight in, under that place's category from last time; bigger ones, money coming in and paybacks still wait
+- **Settings arranged like your phone's:** a search that finds any setting by name or a word for it, and
+  categories (Appearance, Security, Reminders & alerts, Payment detection and more) that each open a page of their own
 - Swipe sideways to move between Home, Activity, Insights and Plan
 - Pull down on Home to check for new payment emails, log subscriptions that are due and sync right away
 - Frosted glass design in dark and light mode (or solid surfaces with *Glass effects* off), a liquid glass tab
-  bar on Android 13 and newer, spring animations, haptic feedback and high-refresh-rate support
+  bar on Android 13 and newer, spring animations, haptic feedback and high-refresh-rate support. The background
+  can be a glow in several colours, plain, or your own photo, with liquid or frosted glass over it
 - If the app ever closes unexpectedly, it offers to report it on GitHub or by email. You see the report (versions,
   phone model and the error, nothing from your entries) before anything is sent
 
@@ -142,7 +159,8 @@ turn on *Tell me about new versions* (one weekly request to GitHub for the lates
 - The app is excluded from Android's automatic cloud backup, so backups go only where you save them.
 - With app lock on, screenshots are blocked and the app is hidden in the recent-apps preview. An app PIN or password is
   kept only as a salted hash, and repeated wrong tries make you wait longer each time.
-- SMS detection is off by default. When on, messages are read on the device and nothing is added without your tap.
+- SMS detection is off by default. When on, messages are read on the device and nothing is added without your tap,
+  unless you also turn on *Add small payments automatically*, which adds spending up to the amount you choose.
 - Payment app detection is off by default too. When on, it reads only notifications from the payment apps listed in
   Settings, keeps just a fingerprint of each, and needs notification access you give in the phone's settings.
 - Email detection is off by default and signs in with an *app password* (Gmail, Yahoo, iCloud, Zoho or any
@@ -174,8 +192,9 @@ Tap **Load models** to see every model your key can use.
 | Grok (xAI) | [console.x.ai](https://console.x.ai) | `grok-4` |
 | OpenRouter | [openrouter.ai](https://openrouter.ai/keys) | `openrouter/auto` (one key for many models) |
 | Custom | your server | any OpenAI-compatible HTTPS server, e.g. one you host yourself |
+| On this phone | no key needed | the phone's own Gemini Nano, in the `-ai.apk` download (phones like the Pixel 9 and OnePlus 15R) |
 
-Usage is billed by the provider to your own account. **Answer style** switches between *Quick*
+Usage is billed by the provider to your own account (*On this phone* is free and works offline). **Answer style** switches between *Quick*
 (the default: a few seconds per answer) and *Thorough* (the model thinks longer).
 
 **What it can do**
@@ -218,6 +237,17 @@ the two without losing data.
 2. Open the file. If Android asks, allow your browser or file manager to **install unknown apps**.
 3. Tap **Install**. Updates install over the top and keep your data.
 
+**Why there are two APKs:** each release has `leftovers-<version>.apk` and `leftovers-<version>-ai.apk`. They're the
+same app; the `-ai` one also has the phone's own AI for the assistant (Gemini Nano, on phones that have it, like the
+Pixel 9 and OnePlus 15R). That uses Google's ML Kit library, which isn't open source, so F-Droid can't include it and
+the plain APK is the one F-Droid checks. Both are signed with the same key, so either installs over the other, or over
+F-Droid's, and keeps your data. Not sure? Take the plain one.
+
+**Pre-releases:** before a big version, a pre-release (like `1.10.0-rc2`) goes up on the
+[releases page](https://github.com/saisaharsh3/Leftovers/releases) to try first. It's on GitHub only, never marked
+latest, and the app's update check and F-Droid ignore it. Back up first: a pre-release can update the database, so
+going back to the previous version means uninstalling.
+
 **Automatic updates:** add the repo to [Obtainium](https://github.com/ImranR98/Obtainium) with the badge at the
 top, and new releases install straight from GitHub.
 
@@ -255,7 +285,8 @@ On Windows use `gradlew.bat`. If Gradle can't find the SDK, create `local.proper
 ### Publishing a GitHub release
 
 Pushing a tag such as `v1.2.0` runs the [release workflow](https://github.com/saisaharsh3/Leftovers/blob/main/.github/workflows/release.yml), which runs
-the tests, builds a signed APK and attaches it to a GitHub release. It needs these repository secrets
+the tests, builds the signed APK and the `-ai` APK, and attaches both to a GitHub release. A tag with a dash
+(`v1.2.0-rc1`) is published as a pre-release, never as latest. It needs these repository secrets
 (**Settings → Secrets and variables → Actions**):
 
 | Secret | Value |
@@ -280,7 +311,9 @@ git push origin v1.2.0
 - Room (SQLite) with versioned migrations, DataStore for settings
 - WorkManager (reminders, bill alerts, automatic backups, sync), Glance (widgets), Biometric (app lock)
 - [OkHttp](https://square.github.io/okhttp/) for WebDAV sync, which needs requests Android's built-in client can't send
-- AI providers called over plain HTTPS with `org.json`, so no extra SDKs ship in the app
+- AI providers called over plain HTTPS with `org.json`, so no extra SDKs ship in the app. The `-ai` APK alone adds
+  Google's ML Kit GenAI library for the phone's own AI; it's named only on that build's command line
+  (`-PonDeviceAi=…`), never in the Gradle files, so the F-Droid build stays fully open source
 - [Haze](https://github.com/chrisbanes/haze) for frosted-glass blur
 - [Lucide](https://lucide.dev) icons and the [Manrope](https://github.com/davelab6/manrope) typeface
 

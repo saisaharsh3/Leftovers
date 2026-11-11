@@ -257,7 +257,7 @@ private fun GoalCard(goal: GoalWithSaved, modifier: Modifier = Modifier, onClick
     Glass(modifier.sharedContainer("goal-${goal.id}").fillMaxWidth(), onClick = onClick) {
         Row(Modifier.padding(18.dp), verticalAlignment = Alignment.CenterVertically) {
             ProgressRing(goal.fraction, Color(goal.color), size = 64.dp) {
-                Icon(CategoryIcons[goal.emoji], contentDescription = null, tint = Color(goal.color), modifier = Modifier.size(24.dp).align(Alignment.Center))
+                Box(Modifier.align(Alignment.Center)) { BareIcon(goal.emoji, goal.color, 24.dp) }
             }
             Spacer(Modifier.width(16.dp))
             Column(Modifier.weight(1f)) {
@@ -341,7 +341,7 @@ fun GoalDetailScreen(
                     Column(Modifier.fillMaxWidth().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                         ProgressRing(g.fraction, Color(g.color), size = 190.dp, thickness = 12.dp) {
                             Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
-                                Icon(CategoryIcons[g.emoji], contentDescription = null, tint = Color(g.color), modifier = Modifier.size(26.dp))
+                                BareIcon(g.emoji, g.color, 26.dp)
                                 Spacer(Modifier.height(6.dp))
                                 RollingText(money.format(g.savedMinor), MaterialTheme.typography.headlineMedium, c.textPrimary)
                                 Text("of ${money.format(g.targetMinor)}", style = MaterialTheme.typography.bodySmall, color = c.textSecondary)
@@ -500,6 +500,8 @@ private fun GoalEditor(
         ) {
             Text(if (initial == null) "New savings goal" else "Edit goal", style = MaterialTheme.typography.headlineSmall, color = c.textPrimary)
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                // First: an icon from a picture of your own, such as what you're saving for.
+                OwnIcons(icon, color) { icon = it }
                 CategoryIcons.goalKeys.forEach { key ->
                     val selected = key == icon
                     val bg by animateColorAsState(if (selected) Color(color).copy(alpha = 0.22f) else c.glass, label = "goalIcon")

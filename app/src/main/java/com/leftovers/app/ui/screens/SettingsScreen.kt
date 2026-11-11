@@ -1,5 +1,14 @@
 package com.leftovers.app.ui.screens
 
+import androidx.compose.foundation.background
+import androidx.compose.ui.draw.clip
+import androidx.compose.animation.togetherWith
+import androidx.compose.animation.animateContentSize
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.gestures.animateScrollBy
+import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import com.leftovers.app.ui.components.toggleHaptic
 import com.leftovers.app.ui.components.pressable
 import androidx.compose.foundation.layout.Box
@@ -89,6 +98,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
 class SettingsViewModel(
@@ -160,7 +170,10 @@ class SettingsViewModel(
             fun fallback(type: com.leftovers.app.data.TxType) = cats.filter { it.type == type }.let { list ->
                 list.firstOrNull { it.name.lowercase() in setOf("other", "others", "miscellaneous", "misc", "general") } ?: list.firstOrNull()
             }
-            val existing = repository.getAllTransactions().map { Triple(it.epochDay, it.amountMinor, it.type to it.note.trim().lowercase()) }.toMutableSet()
+            // Already in the app, counted: a file with two real payments alike (₹80 at the same shop twice a day)
+            // keeps both, and only as many as the app already has are skipped as duplicates.
+            val existing = repository.getAllTransactions().groupingBy { Triple(it.epochDay, it.amountMinor, it.type to it.note.trim().lowercase()) }
+                .eachCount().toMutableMap()
             var duplicates = 0
             var noCategory = 0
             val newCategories = linkedMapOf<Pair<com.leftovers.app.data.TxType, String>, String>()
@@ -168,7 +181,9 @@ class SettingsViewModel(
             val toAdd = mutableListOf<com.leftovers.app.data.Transaction>()
             parsed.rows.forEach { row ->
                 val key = Triple(row.date.toEpochDay(), row.amountMinor, row.type to row.note.trim().lowercase())
-                if (!existing.add(key)) {
+                val left = existing[key] ?: 0
+                if (left > 0) {
+                    existing[key] = left - 1
                     duplicates++
                     return@forEach
                 }
@@ -199,7 +214,7 @@ class SettingsViewModel(
         csvPreview = null
     }
 
-    fun confirmCsvImport(onDone: (Int) -> Unit) {
+    fun confirmCsvImport(onDone: (Int, Long) -> Unit) {
         val preview = csvPreview ?: return
         csvPreview = null
         viewModelScope.launch {
@@ -216,12 +231,28 @@ class SettingsViewModel(
                 }
             }
             val cats = repository.categories.first()
-            val entries = preview.toAdd.mapIndexed { i, t ->
+            val at = System.currentTimeMillis()
+            val entries = preview.toAdd.mapIndexed { i, t0 ->
+                val t = t0.copy(createdAt = at)
                 val (type, name) = preview.pendingCategory[i] ?: return@mapIndexed t
                 cats.firstOrNull { it.type == type && it.name.equals(name, ignoreCase = true) }?.let { t.copy(categoryId = it.id) } ?: t
             }
             repository.addTransactions(entries)
-            onDone(entries.size)
+            onDone(entries.size, at)
+        }
+    }
+
+    /** Files imported before, newest first, to take one back if it came in wrong. */
+    val imports: StateFlow<List<com.leftovers.app.util.ImportBatches.Batch>> = repository.allTransactions
+        .map { com.leftovers.app.util.ImportBatches.find(it) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** Takes an import back: its entries go to Deleted entries, so they can still be restored. */
+    fun removeImport(batch: com.leftovers.app.util.ImportBatches.Batch, onDone: (Int) -> Unit) {
+        viewModelScope.launch {
+            val ids = repository.getAllTransactions().filter { com.leftovers.app.util.ImportBatches.inBatch(it, batch) }.map { it.id }
+            ids.forEach { id -> repository.getTransaction(id)?.let { repository.deleteTransaction(it) } }
+            onDone(ids.size)
         }
     }
 
@@ -265,6 +296,38 @@ class SettingsViewModel(
         viewModelScope.launch { settingsRepository.setPureBlack(enabled) }
     }
 
+    fun setLiquidGlass(enabled: Boolean) {
+        viewModelScope.launch { settingsRepository.setLiquidGlass(enabled) }
+    }
+
+    fun setBackdrop(b: com.leftovers.app.ui.theme.Backdrop) {
+        viewModelScope.launch { settingsRepository.setBackdrop(b.name) }
+    }
+
+    fun setPhotoDim(value: Float) {
+        viewModelScope.launch { settingsRepository.setPhotoDim(value) }
+    }
+
+    fun setPhotoBlur(value: Float) {
+        viewModelScope.launch { settingsRepository.setPhotoBlur(value) }
+    }
+
+    fun setPhotoText(value: String) {
+        viewModelScope.launch { settingsRepository.setPhotoText(value) }
+    }
+
+    fun setAccentColor(argb: Long) {
+        viewModelScope.launch { settingsRepository.setAccentColor(argb) }
+    }
+
+    /** Keeps a copy of the chosen picture as the background; [onFailed] when it can't be read. */
+    fun setBackgroundPhoto(context: Context, uri: android.net.Uri, onFailed: () -> Unit) {
+        viewModelScope.launch {
+            val saved = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { com.leftovers.app.ui.theme.BackgroundPhoto.save(context, uri) }
+            if (saved) settingsRepository.photoChanged() else onFailed()
+        }
+    }
+
     fun setBudgetAlerts(enabled: Boolean) {
         viewModelScope.launch { settingsRepository.setBudgetAlerts(enabled) }
     }
@@ -279,6 +342,10 @@ class SettingsViewModel(
 
     fun setAppLock(enabled: Boolean) {
         viewModelScope.launch { settingsRepository.setAppLock(enabled) }
+    }
+
+    fun setBlockScreenshots(enabled: Boolean) {
+        viewModelScope.launch { settingsRepository.setBlockScreenshots(enabled) }
     }
 
     fun setLockAfter(seconds: Int) {
@@ -309,11 +376,23 @@ class SettingsViewModel(
         viewModelScope.launch { settingsRepository.setBillReminders(enabled) }
     }
 
+    fun setFestivalGreetings(enabled: Boolean) {
+        viewModelScope.launch { settingsRepository.setFestivalGreetings(enabled) }
+    }
+
+    fun setWeeklyNotes(enabled: Boolean) {
+        viewModelScope.launch { settingsRepository.setWeeklyNotes(enabled) }
+    }
+
     /** Remembers [tree] for weekly backups and makes the first one straight away. */
     fun enableAutoBackup(context: Context, tree: Uri, onResult: (String) -> Unit) {
         viewModelScope.launch {
             settingsRepository.setAutoBackupDir(tree.toString())
-            backUpNow(context, onResult)
+            // Into the folder just chosen: reading it back from settings straight away could still give the old one.
+            AutoBackup.backUp(context, tree, settingsRepository.settings.first().autoBackupKeep).fold(
+                { onResult("Backed up $it entries") },
+                { onResult("Couldn't back up: ${AutoBackup.problem(it)}") },
+            )
         }
     }
 
@@ -388,19 +467,29 @@ class SettingsViewModel(
             settingsRepository.setSyncDir(null)
             settingsRepository.setSyncServer(null, null)
             (context.applicationContext as com.leftovers.app.LeftoversApp).container.syncLogin.set(null)
-            dir?.let { runCatching { context.contentResolver.releasePersistableUriPermission(Uri.parse(it), Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION) } }
+            // Backups may use the same folder; it stays for them.
+            com.leftovers.app.util.FolderAccess.release(context, dir, listOf(settingsRepository.settings.first().autoBackupDir))
         }
     }
 
     fun disableAutoBackup(context: Context, dir: String?) {
         viewModelScope.launch {
             settingsRepository.setAutoBackupDir(null)
-            dir?.let { runCatching { context.contentResolver.releasePersistableUriPermission(Uri.parse(it), Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION) } }
+            // Sync may use the same folder; it stays for it.
+            com.leftovers.app.util.FolderAccess.release(context, dir, listOf(settingsRepository.settings.first().syncDir))
         }
     }
 
     fun setSmsDetection(enabled: Boolean) {
         viewModelScope.launch { settingsRepository.setSmsDetection(enabled) }
+    }
+
+    fun setSmsAutoAdd(enabled: Boolean) {
+        viewModelScope.launch { settingsRepository.setSmsAutoAdd(enabled) }
+    }
+
+    fun setSmsAutoMax(minor: Long) {
+        viewModelScope.launch { settingsRepository.setSmsAutoMax(minor) }
     }
 
     fun setAppNotifications(enabled: Boolean) {
@@ -476,6 +565,7 @@ fun SettingsScreen(
     onManageCategories: () -> Unit,
     onOpenAccounts: () -> Unit,
     onOpenDeleted: () -> Unit,
+    onOpenHelp: () -> Unit = {},
     viewModel: SettingsViewModel = viewModel(factory = AppViewModelProvider.Factory),
 ) {
     val settings by viewModel.settings.collectAsStateWithLifecycle()
@@ -519,18 +609,15 @@ fun SettingsScreen(
     }
     val pickBackupFolder = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { tree ->
         if (tree != null) {
-            runCatching {
-                context.contentResolver.takePersistableUriPermission(tree, Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
-            }
-            viewModel.enableAutoBackup(context, tree) { toast(it) }
+            // Android has to let the app keep the folder, or the next backup would fail (#41).
+            if (com.leftovers.app.util.FolderAccess.keep(context, tree, listOf(settings?.syncDir))) viewModel.enableAutoBackup(context, tree) { toast(it) }
+            else toast("Android won't let Leftovers keep that folder. Try another one")
         }
     }
     val pickSyncFolder = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { tree ->
         if (tree != null) {
-            runCatching {
-                context.contentResolver.takePersistableUriPermission(tree, Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
-            }
-            viewModel.enableSync(context, tree) { toast(it) }
+            if (com.leftovers.app.util.FolderAccess.keep(context, tree, listOf(settings?.autoBackupDir))) viewModel.enableSync(context, tree) { toast(it) }
+            else toast("Android won't let Leftovers keep that folder. Try another one")
         }
     }
     val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
@@ -539,7 +626,11 @@ fun SettingsScreen(
         if (!granted) toast("SMS permission is needed to spot bank payments")
     }
 
-    GlassScreen(title = "Settings", onBack = onBack, snackbar = snackbar) { padding ->
+    // A category's page, or null for the main page; Back leaves the page before it leaves Settings.
+    var page by rememberSaveable { mutableStateOf<String?>(null) }
+    var query by rememberSaveable { mutableStateOf("") }
+    androidx.activity.compose.BackHandler(enabled = page != null) { page = null }
+    GlassScreen(title = page ?: "Settings", onBack = { if (page != null) page = null else onBack() }, snackbar = snackbar) { padding ->
         val s = settings ?: return@GlassScreen
         val passcode = (context.applicationContext as com.leftovers.app.LeftoversApp).container.passcode
         val passcodeKind by passcode.kind.collectAsStateWithLifecycle()
@@ -577,346 +668,611 @@ fun SettingsScreen(
             )
         }
         val money = Money(s.currencyCode)
-        LazyColumn(
-            Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = padding.calculateTopPadding() + 4.dp, bottom = 48.dp),
-        ) {
-            item { SectionHeader("Appearance") }
-            item {
-                Glass(Modifier.fillMaxWidth()) {
-                    Column(Modifier.padding(16.dp)) {
-                        SegmentedToggle(
-                            listOf(ThemeMode.DARK, ThemeMode.LIGHT, ThemeMode.SYSTEM),
-                            s.themeMode,
-                            { if (it == ThemeMode.SYSTEM) "Auto" else it.label },
-                            viewModel::setTheme,
-                            Modifier.fillMaxWidth(),
-                        )
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                            Spacer(Modifier.height(8.dp))
-                            ToggleRow(Lucide.Palette, "Accent from wallpaper", s.dynamicColor, viewModel::setDynamicColor, inset = false)
-                        }
-                        // Off: solid bars, cards, dialogs and sheets, with no blur (also a little easier on the battery).
-                        ToggleRow(Lucide.Droplet, "Glass effects", s.glassEffects, viewModel::setGlassEffects, inset = false)
-                        // Only means something with the dark theme, so it's hidden when the app is always light.
-                        if (s.themeMode != ThemeMode.LIGHT) {
-                            ToggleRow(Lucide.Moon, "Pure black (AMOLED)", s.pureBlack, viewModel::setPureBlack, inset = false)
-                        }
-                        Spacer(Modifier.height(10.dp))
-                        Text("Time", style = MaterialTheme.typography.labelMedium, color = c.textSecondary, modifier = Modifier.padding(start = 4.dp, bottom = 8.dp))
-                        SegmentedToggle(
-                            com.leftovers.app.data.TimeFormat.entries,
-                            s.timeFormat,
-                            { it.label },
-                            viewModel::setTimeFormat,
-                            Modifier.fillMaxWidth(),
-                        )
-                        Spacer(Modifier.height(10.dp))
-                        Text("Home screen widgets", style = MaterialTheme.typography.labelMedium, color = c.textSecondary, modifier = Modifier.padding(start = 4.dp, bottom = 8.dp))
-                        SegmentedToggle(
-                            com.leftovers.app.data.WidgetStyle.entries,
-                            s.widgetStyle,
-                            { it.label },
-                            viewModel::setWidgetStyle,
-                            Modifier.fillMaxWidth(),
-                        )
-                    }
-                }
+        val focus = androidx.compose.ui.platform.LocalFocusManager.current
+        val scrolls = remember { mutableMapOf<String?, androidx.compose.foundation.lazy.LazyListState>() }
+        fun scrollOf(of: String?) = scrolls.getOrPut(of) { androidx.compose.foundation.lazy.LazyListState() }
+        val density = androidx.compose.ui.platform.LocalDensity.current
+        // Opened from Help or the search on one setting: its page, then the row itself into view, lit up for a moment.
+        LaunchedEffect(SettingsJump.section) {
+            val section = SettingsJump.section ?: return@LaunchedEffect
+            // The page the setting is on; the AI assistant's settings are a sheet of their own.
+            val target = SettingsIndex.pageFor(section, SettingsJump.row)
+            if (target == SettingsIndex.AI) {
+                showAssistant = true
+                SettingsJump.section = null
+                SettingsJump.row = null
+                return@LaunchedEffect
             }
-
-            item { SectionHeader("Security & reminders") }
-            item {
-                Glass(Modifier.fillMaxWidth()) {
-                    Column(Modifier.padding(vertical = 6.dp)) {
-                        ToggleRow(Lucide.Lock, "App lock", s.appLock, { on ->
-                            // Without a phone screen lock, an app PIN or password is the way to lock it.
-                            if (on && !canLock(context) && passcodeKind == null) {
-                                enableLockAfterCode = true
-                                showLockOptions = true
-                            } else {
-                                viewModel.setAppLock(on)
-                            }
-                        })
-                        if (s.appLock) {
-                            RowDivider()
-                            NavRow(
-                                Lucide.Shield,
-                                "Lock options",
-                                when (passcodeKind) {
-                                    com.leftovers.app.util.AppPasscode.Kind.PIN -> "App PIN"
-                                    com.leftovers.app.util.AppPasscode.Kind.PASSWORD -> "Password"
-                                    null -> "Phone lock"
-                                } + " · " + lockAfterLabel(s.lockAfterSeconds).lowercase(),
-                            ) { showLockOptions = true }
-                        }
-                        RowDivider()
-                        ToggleRow(Lucide.Repeat, "Remind me before bills", s.billReminders, { on ->
-                            if (on && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
-                            viewModel.setBillReminders(on)
-                        })
-                        RowDivider()
-                        ToggleRow(Lucide.Bell, "Daily reminder", s.reminderEnabled, { on ->
-                            if (on && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
-                            viewModel.setReminder(on, s.reminderMinutes)
-                        })
-                        if (s.reminderEnabled) {
-                            RowDivider()
-                            NavRow(Lucide.CalendarClock, "Remind me at", Reminders.label(s.reminderMinutes, com.leftovers.app.util.LocalUse24Hour.current)) { showTime = true }
-                        }
-                        RowDivider()
-                        ToggleRow(Lucide.Smartphone, "Detect bank SMS", s.smsDetection, { on ->
-                            if (on) smsPermission.launch(Manifest.permission.RECEIVE_SMS) else viewModel.setSmsDetection(false)
-                        })
-                        RowDivider()
-                        ToggleRow(Lucide.Bell, "Detect payment apps", s.appNotifications && notificationAccess, { on ->
-                            viewModel.setAppNotifications(on)
-                            if (on && !notificationAccess) {
-                                val intent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                                    android.content.Intent(android.provider.Settings.ACTION_NOTIFICATION_LISTENER_DETAIL_SETTINGS)
-                                        .putExtra(android.provider.Settings.EXTRA_NOTIFICATION_LISTENER_COMPONENT_NAME, com.leftovers.app.util.PaymentApps.component(context).flattenToString())
-                                } else {
-                                    android.content.Intent(android.provider.Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
-                                }
-                                runCatching { context.startActivity(intent) }
-                                    .onFailure { runCatching { context.startActivity(android.content.Intent(android.provider.Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) } }
-                            }
-                        })
-                        if (s.appNotifications && notificationAccess) {
-                            RowDivider()
-                            val apps by (context.applicationContext as com.leftovers.app.LeftoversApp).container.paymentApps.apps.collectAsStateWithLifecycle()
-                            val reading = apps.count { it.read }
-                            NavRow(Lucide.Smartphone, "Payment apps", "$reading ${if (reading == 1) "app" else "apps"}") { showPaymentApps = true }
-                        }
-                        RowDivider()
-                        NavRow(Lucide.Mail, "Detect payments in email", emailConnection?.address ?: "Off") { showEmail = true }
-                        if (s.smsDetection || emailConnection != null) {
-                            RowDivider()
-                            NavRow(Lucide.Tag, "Detection keywords", if (s.detectionKeywords.isEmpty()) "Test a message" else "${s.detectionKeywords.size} added") { showKeywords = true }
-                        }
-                    }
+            page = target
+            val listState = scrollOf(target)
+            // After the page has slid in, so the row is found where it will stay.
+            kotlinx.coroutines.delay(320)
+            listState.scrollToItem(0)
+            val row = SettingsJump.row
+            if (row != null) {
+                // Where the row is after that scroll, not before it: wait for the list to lay out there first.
+                repeat(2) { androidx.compose.runtime.withFrameNanos { } }
+                val top = SettingsJump.rowTop ?: kotlinx.coroutines.withTimeoutOrNull(800) {
+                    androidx.compose.runtime.snapshotFlow { SettingsJump.rowTop }.first { it != null }
                 }
-                if (s.appNotifications) {
-                    Text(
-                        if (notificationAccess) {
-                            "Reads only notifications from ${com.leftovers.app.util.PaymentApps.names.values.joinToString(", ")}, and only a fingerprint of each is kept. Offers and reminders are skipped."
+                if (top != null) listState.animateScrollBy(top - with(density) { 200.dp.toPx() })
+                SettingsJump.flash = row
+            }
+            SettingsJump.section = null
+            SettingsJump.row = null
+            SettingsJump.rowTop = null
+            kotlinx.coroutines.delay(1600)
+            SettingsJump.flash = null
+        }
+        // Like a phone's Settings: a page slides in from the right and back out to the right, on a spring with no bounce,
+        // the page below easing back a little and dimming as it does.
+        androidx.compose.animation.AnimatedContent(
+            targetState = page,
+            transitionSpec = {
+                val slide = androidx.compose.animation.core.spring<androidx.compose.ui.unit.IntOffset>(
+                    dampingRatio = 1f,
+                    stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow,
+                )
+                val fade = androidx.compose.animation.core.tween<Float>(220)
+                val forward = targetState != null
+                if (forward) {
+                    (androidx.compose.animation.slideInHorizontally(slide) { it / 3 } + androidx.compose.animation.fadeIn(fade)) togetherWith
+                        (androidx.compose.animation.slideOutHorizontally(slide) { -it / 8 } + androidx.compose.animation.fadeOut(fade))
+                } else {
+                    (androidx.compose.animation.slideInHorizontally(slide) { -it / 8 } + androidx.compose.animation.fadeIn(fade)) togetherWith
+                        (androidx.compose.animation.slideOutHorizontally(slide) { it / 3 } + androidx.compose.animation.fadeOut(fade))
+                }.using(androidx.compose.animation.SizeTransform(clip = false))
+            },
+            label = "settingsPage",
+        ) { shown ->
+            LazyColumn(
+                Modifier.fillMaxSize(),
+                state = scrollOf(shown),
+                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = padding.calculateTopPadding() + 4.dp, bottom = 48.dp),
+            ) {
+                // Like a phone's Settings: a search, Help, and the categories, each opening a page of its own.
+                if (shown == null) {
+                    item(key = "search") {
+                        SettingsSearch(query, { query = it.take(40) }, onSearch = { focus.clearFocus() }, modifier = Modifier.padding(top = 8.dp))
+                    }
+                    if (query.isNotBlank()) {
+                        val found = SettingsIndex.search(query)
+                        if (found.isEmpty()) {
+                            item(key = "none") {
+                                Text(
+                                    "No setting called that. Help & features covers every feature, settings too.",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = c.textSecondary,
+                                    modifier = Modifier.padding(start = 8.dp, top = 16.dp),
+                                )
+                            }
                         } else {
-                            "Turn on notification access for Leftovers in the screen that opened, then come back."
-                        },
-                        style = MaterialTheme.typography.bodySmall,
-                        color = c.textSecondary,
-                        modifier = Modifier.padding(start = 8.dp, end = 8.dp, top = 8.dp),
-                    )
-                }
-                if (s.smsDetection) {
-                    Text(
-                        "New debit messages from your bank show up on Home for you to confirm. Nothing is added without your tap, and messages never leave the phone.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = c.textTertiary,
-                        modifier = Modifier.padding(start = 8.dp, end = 8.dp, top = 8.dp),
-                    )
-                }
-            }
-
-            item { SectionHeader("AI assistant") }
-            item {
-                val assistant by viewModel.assistant.config.collectAsStateWithLifecycle()
-                Glass(Modifier.fillMaxWidth()) {
-                    Column(Modifier.padding(vertical = 6.dp)) {
-                        NavRow(Lucide.MessageCircle, "AI assistant", assistant?.let { "${it.provider.label} · connected" } ?: "Not connected") { showAssistant = true }
-                    }
-                }
-            }
-
-            item { SectionHeader("General") }
-            item {
-                Glass(Modifier.fillMaxWidth()) {
-                    Column(Modifier.padding(vertical = 6.dp)) {
-                        NavRow(Lucide.Coins, "Currency", "${money.currency.displayName} (${money.symbol})") { showCurrency = true }
-                        RowDivider()
-                        ToggleRow(Lucide.Bell, "Budget alerts", s.budgetAlerts, viewModel::setBudgetAlerts)
-                        RowDivider()
-                        ToggleRow(Lucide.Split, "Show a split bill as one entry", s.splitsAsOneBill, viewModel::setSplitsAsOneBill)
-                        RowDivider()
-                        NavRow(Lucide.Tag, "Categories", null, onManageCategories)
-                        RowDivider()
-                        NavRow(Lucide.Wallet, "Accounts", "Cash, bank, cards", onOpenAccounts)
-                    }
-                }
-            }
-
-            item { SectionHeader("Data") }
-            item {
-                Glass(Modifier.fillMaxWidth()) {
-                    Column(Modifier.padding(vertical = 6.dp)) {
-                        NavRow(Lucide.Download, "Back up", "To a file or Google Drive") {
-                            createBackup.launch("leftovers-backup-${java.time.LocalDate.now()}.json")
-                        }
-                        RowDivider()
-                        NavRow(Lucide.Repeat, "Restore", "From a backup file") { openBackup.launch(arrayOf("application/json", "*/*")) }
-                        RowDivider()
-                        NavRow(Lucide.History, "Deleted entries", if (deletedCount == 0) "None" else "$deletedCount", onOpenDeleted)
-                        RowDivider()
-                        ToggleRow(Lucide.CalendarClock, "Automatic backup", s.autoBackupDir != null, { on ->
-                            if (on) pickBackupFolder.launch(null) else viewModel.disableAutoBackup(context, s.autoBackupDir)
-                        })
-                        if (s.autoBackupDir != null) {
-                            Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                SegmentedToggle(listOf(1, 7, 30), s.autoBackupDays, { if (it == 1) "Daily" else if (it == 7) "Weekly" else "Monthly" }, { viewModel.setAutoBackupDays(it) }, Modifier.fillMaxWidth())
-                                Text("Backup files to keep", style = MaterialTheme.typography.labelMedium, color = c.textSecondary, modifier = Modifier.padding(start = 6.dp))
-                                SegmentedToggle(listOf(1, 2, 3, 4, 5), s.autoBackupKeep, { it.toString() }, { viewModel.setAutoBackupKeep(it) }, Modifier.fillMaxWidth())
-                                // The last try failed: say why, until a backup works again.
-                                s.autoBackupError?.let { problem ->
-                                    Text("Last automatic backup failed: $problem", style = MaterialTheme.typography.bodySmall, color = c.negative, modifier = Modifier.padding(start = 6.dp))
+                            item(key = "found") {
+                                Glass(Modifier.fillMaxWidth().padding(top = 12.dp).animateContentSize(androidx.compose.animation.core.spring(stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow))) {
+                                    Column(Modifier.padding(vertical = 6.dp)) {
+                                        found.forEachIndexed { i, entry ->
+                                            if (i > 0) RowDivider()
+                                            PageRow(entry.icon, entry.title, entry.page, Color(SettingsIndex.colorOf(entry.page))) {
+                                                query = ""
+                                                focus.clearFocus()
+                                                if (entry.page == SettingsIndex.AI) showAssistant = true
+                                                else { page = entry.page; SettingsJump.row = entry.title.takeIf { entry.row }; SettingsJump.section = entry.page }
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }
-                        if (s.autoBackupDir != null) {
-                            RowDivider()
-                            NavRow(Lucide.Download, "Back up now", "To the chosen folder") { viewModel.backUpNow(context) { toast(it) } }
+                    } else {
+                        // Help first, where someone new opening Settings finds it.
+                        item(key = "help") {
+                            Glass(Modifier.fillMaxWidth().padding(top = 12.dp)) {
+                                Column(Modifier.padding(vertical = 6.dp)) {
+                                    NavRow(Lucide.BookOpen, "Help & features", "Every feature explained", onOpenHelp)
+                                }
+                            }
                         }
-                        RowDivider()
-                        ToggleRow(Lucide.Camera, "Include photos in backups", s.backupPhotos, { viewModel.setBackupPhotos(it) })
-                        RowDivider()
-                        ToggleRow(Lucide.Lock, "Password-protect backups", passwordSet, { on ->
-                            if (on) setPassword = true else viewModel.setBackupPassword(null)
-                        })
-                        RowDivider()
-                        NavRow(Lucide.ReceiptText, "Export to CSV", "Excel, Sheets") {
-                            viewModel.export(context) { scope.launch { snackbar.showSnackbar("Nothing to export yet") } }
+                        SettingsIndex.groups.forEachIndexed { g, group ->
+                            item(key = "group$g") {
+                                val assistant by viewModel.assistant.config.collectAsStateWithLifecycle()
+                                Glass(Modifier.fillMaxWidth().padding(top = if (g == 0) 20.dp else 14.dp)) {
+                                    Column(Modifier.padding(vertical = 6.dp)) {
+                                        group.forEachIndexed { i, pg ->
+                                            if (i > 0) RowDivider()
+                                            PageRow(
+                                                pg.icon,
+                                                pg.title,
+                                                if (pg.title == SettingsIndex.AI) assistant?.let { "${it.provider.label} · connected" } ?: "Not connected" else pg.summary,
+                                                Color(pg.color),
+                                            ) {
+                                                if (pg.title == SettingsIndex.AI) showAssistant = true else page = pg.title
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                         }
-                        RowDivider()
-                        NavRow(Lucide.Download, "Import entries", "Statements, other apps") {
-                            openCsv.launch(
-                                arrayOf(
-                                    "text/*", "application/csv", "application/vnd.ms-excel", "application/octet-stream",
-                                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "application/pdf",
-                                    "application/json", "application/zip",
-                                ),
+                    }
+                }
+                if (shown == SettingsIndex.APPEARANCE) {
+                item {
+                    Glass(Modifier.fillMaxWidth()) {
+                        Column(Modifier.padding(16.dp)) {
+                            SegmentedToggle(
+                                listOf(ThemeMode.DARK, ThemeMode.LIGHT, ThemeMode.SYSTEM),
+                                s.themeMode,
+                                { if (it == ThemeMode.SYSTEM) "Auto" else it.label },
+                                viewModel::setTheme,
+                                Modifier.fillMaxWidth(),
+                            )
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                                Spacer(Modifier.height(8.dp))
+                                ToggleRow(Lucide.Palette, "Accent from wallpaper", s.dynamicColor, viewModel::setDynamicColor, inset = false)
+                            }
+                            // Over a photo, cards are always glass and the photo is the background, so these two are hidden.
+                            val photoBackground = s.backdrop == com.leftovers.app.ui.theme.Backdrop.PHOTO.name
+                            // Off: solid bars, cards, dialogs and sheets, with no blur (also a little easier on the battery).
+                            if (!photoBackground) ToggleRow(Lucide.Droplet, "Glass effects", s.glassEffects, viewModel::setGlassEffects, inset = false)
+                            // Over a photo, in its place: which glass. Liquid bends the photo (Android 13 and newer); frosted
+                            // is lighter, for smooth scrolling on any phone.
+                            if (photoBackground && Build.VERSION.SDK_INT >= 33) {
+                                Spacer(Modifier.height(8.dp))
+                                // Switching to liquid asks first: it's the heavier of the two.
+                                var askLiquid by remember { mutableStateOf(false) }
+                                SegmentedToggle(
+                                    listOf(true, false), s.liquidGlass, { if (it) "Liquid glass" else "Frosted glass" },
+                                    { liquid -> if (liquid && !s.liquidGlass) askLiquid = true else viewModel.setLiquidGlass(liquid) },
+                                    Modifier.fillMaxWidth(),
+                                )
+                                if (askLiquid) {
+                                    GlassAlertDialog(
+                                        onDismissRequest = { askLiquid = false },
+                                        text = {
+                                            Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+                                                com.leftovers.app.ui.components.IconTile(Lucide.Droplet, c.accent, size = 56.dp)
+                                                Spacer(Modifier.height(16.dp))
+                                                Text("Liquid glass", style = MaterialTheme.typography.headlineSmall, color = c.textPrimary)
+                                                Spacer(Modifier.height(8.dp))
+                                                Text(
+                                                    "Cards bend your photo at their edges, like real glass.",
+                                                    style = MaterialTheme.typography.bodyMedium,
+                                                    color = c.textSecondary,
+                                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                                                )
+                                                Spacer(Modifier.height(20.dp))
+                                                Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                                    LiquidCost(Lucide.BatteryMedium, "Uses more battery")
+                                                    LiquidCost(Lucide.Zap, "Works your phone harder, so scrolling can stutter on some phones")
+                                                }
+                                            }
+                                        },
+                                        confirmButton = {
+                                            Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                                com.leftovers.app.ui.components.PrimaryButton("Use liquid glass", { askLiquid = false; viewModel.setLiquidGlass(true) }, Modifier.fillMaxWidth())
+                                                com.leftovers.app.ui.components.SecondaryButton("Keep frosted", { askLiquid = false }, Modifier.fillMaxWidth())
+                                            }
+                                        },
+                                    )
+                                }
+                                if (s.liquidGlass) {
+                                    Text(
+                                        "Uses more battery and graphics power. If scrolling isn't smooth on your phone, Frosted glass is lighter.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = c.textSecondary,
+                                        modifier = Modifier.padding(start = 6.dp, top = 6.dp),
+                                    )
+                                }
+                            }
+                            // Only means something with the dark theme, so it's hidden when the app is always light.
+                            if (s.themeMode != ThemeMode.LIGHT && !photoBackground) {
+                                ToggleRow(Lucide.Moon, "Pure black (AMOLED)", s.pureBlack, viewModel::setPureBlack, inset = false)
+                            }
+                            Spacer(Modifier.height(12.dp))
+                            LooksPicker(
+                                s,
+                                onBackdrop = viewModel::setBackdrop,
+                                onPhoto = { uri -> viewModel.setBackgroundPhoto(context, uri) { toast("Couldn't open that picture") } },
+                                onDim = viewModel::setPhotoDim,
+                                onBlur = viewModel::setPhotoBlur,
+                                onText = viewModel::setPhotoText,
+                                onAccent = viewModel::setAccentColor,
+                            )
+                            Spacer(Modifier.height(10.dp))
+                            Text("Time", style = MaterialTheme.typography.labelMedium, color = c.textSecondary, modifier = Modifier.jumpTarget("Time").padding(start = 4.dp, bottom = 8.dp))
+                            SegmentedToggle(
+                                com.leftovers.app.data.TimeFormat.entries,
+                                s.timeFormat,
+                                { it.label },
+                                viewModel::setTimeFormat,
+                                Modifier.fillMaxWidth(),
+                            )
+                            Spacer(Modifier.height(10.dp))
+                            Text("Home screen widgets", style = MaterialTheme.typography.labelMedium, color = c.textSecondary, modifier = Modifier.jumpTarget("Home screen widgets").padding(start = 4.dp, bottom = 8.dp))
+                            SegmentedToggle(
+                                com.leftovers.app.data.WidgetStyle.entries,
+                                s.widgetStyle,
+                                { it.label },
+                                viewModel::setWidgetStyle,
+                                Modifier.fillMaxWidth(),
                             )
                         }
-                        RowDivider()
-                        ListRow(
-                            "Delete all entries",
-                            leading = { IconTile(Lucide.Trash2, c.negative, size = 38.dp) },
-                            onClick = { confirmWipe = true },
+                    }
+                }
+
+                }
+                if (shown == SettingsIndex.SECURITY) {
+                item {
+                    Glass(Modifier.fillMaxWidth()) {
+                        Column(Modifier.padding(vertical = 6.dp)) {
+                            ToggleRow(Lucide.Lock, "App lock", s.appLock, { on ->
+                                // Without a phone screen lock, an app PIN or password is the way to lock it.
+                                if (on && !canLock(context) && passcodeKind == null) {
+                                    enableLockAfterCode = true
+                                    showLockOptions = true
+                                } else {
+                                    viewModel.setAppLock(on)
+                                }
+                            })
+                            if (s.appLock) {
+                                RowDivider()
+                                NavRow(
+                                    Lucide.Shield,
+                                    "Lock options",
+                                    when (passcodeKind) {
+                                        com.leftovers.app.util.AppPasscode.Kind.PIN -> "App PIN"
+                                        com.leftovers.app.util.AppPasscode.Kind.PASSWORD -> "Password"
+                                        null -> "Phone lock"
+                                    } + " · " + lockAfterLabel(s.lockAfterSeconds).lowercase(),
+                                ) { showLockOptions = true }
+                            } else {
+                                // App lock blocks them already; without it, this can.
+                                RowDivider()
+                                ToggleRow(Lucide.Camera, "Block screenshots", s.blockScreenshots, viewModel::setBlockScreenshots)
+                            }
+                        }
+                    }
+                }
+                }
+                if (shown == SettingsIndex.REMINDERS) {
+                item {
+                    Glass(Modifier.fillMaxWidth()) {
+                        Column(Modifier.padding(vertical = 6.dp)) {
+                            ToggleRow(Lucide.Repeat, "Remind me before bills", s.billReminders, { on ->
+                                if (on && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+                                viewModel.setBillReminders(on)
+                            })
+                            RowDivider()
+                            ToggleRow(Lucide.Bell, "Daily reminder", s.reminderEnabled, { on ->
+                                if (on && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+                                viewModel.setReminder(on, s.reminderMinutes)
+                            })
+                            if (s.reminderEnabled) {
+                                RowDivider()
+                                NavRow(Lucide.CalendarClock, "Remind me at", Reminders.label(s.reminderMinutes, com.leftovers.app.util.LocalUse24Hour.current)) { showTime = true }
+                            }
+                            RowDivider()
+                            ToggleRow(Lucide.Bell, "Budget alerts", s.budgetAlerts, viewModel::setBudgetAlerts)
+                        }
+                    }
+                }
+                }
+                if (shown == SettingsIndex.DETECTION) {
+                item {
+                    Glass(Modifier.fillMaxWidth()) {
+                        Column(Modifier.padding(vertical = 6.dp)) {
+                            ToggleRow(Lucide.Smartphone, "Detect bank SMS", s.smsDetection, { on ->
+                                if (on) smsPermission.launch(Manifest.permission.RECEIVE_SMS) else viewModel.setSmsDetection(false)
+                            })
+                            // With bank SMS read: small spending can go straight in, up to an amount of the user's choosing.
+                            if (s.smsDetection) {
+                                RowDivider()
+                                ToggleRow(Lucide.Zap, "Add small payments automatically", s.smsAutoAdd, viewModel::setSmsAutoAdd)
+                                if (s.smsAutoAdd) {
+                                    var editingMax by rememberSaveable { mutableStateOf(false) }
+                                    RowDivider()
+                                    NavRow(Lucide.Coins, "Up to", money.format(s.smsAutoMaxMinor)) { editingMax = true }
+                                    if (editingMax) {
+                                        // Empty, with the amount now in its label: typing replaces it rather than adding to its front.
+                                        var typed by rememberSaveable { mutableStateOf("") }
+                                        val minor = com.leftovers.app.util.AmountInput.toMinor(typed) ?: 0L
+                                        GlassAlertDialog(
+                                            onDismissRequest = { editingMax = false },
+                                            title = { Text("Add automatically up to") },
+                                            text = {
+                                                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                                    Text(
+                                                        "Payments from bank SMS up to this amount are added right away. Bigger ones, and money coming in, still wait on Home for you to check.",
+                                                        color = c.textSecondary,
+                                                    )
+                                                    MoneyField(typed, { typed = it }, label = "Amount (now ${money.format(s.smsAutoMaxMinor)})")
+                                                }
+                                            },
+                                            confirmButton = {
+                                                TextButton(enabled = minor > 0, onClick = { viewModel.setSmsAutoMax(minor); editingMax = false }) {
+                                                    Text("Save", color = if (minor > 0) c.textPrimary else c.textTertiary)
+                                                }
+                                            },
+                                            dismissButton = { TextButton(onClick = { editingMax = false }) { Text("Cancel", color = c.textSecondary) } },
+                                        )
+                                    }
+                                }
+                            }
+                            RowDivider()
+                            ToggleRow(Lucide.Bell, "Detect payment apps", s.appNotifications && notificationAccess, { on ->
+                                viewModel.setAppNotifications(on)
+                                if (on && !notificationAccess) {
+                                    val intent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                                        android.content.Intent(android.provider.Settings.ACTION_NOTIFICATION_LISTENER_DETAIL_SETTINGS)
+                                            .putExtra(android.provider.Settings.EXTRA_NOTIFICATION_LISTENER_COMPONENT_NAME, com.leftovers.app.util.PaymentApps.component(context).flattenToString())
+                                    } else {
+                                        android.content.Intent(android.provider.Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
+                                    }
+                                    runCatching { context.startActivity(intent) }
+                                        .onFailure { runCatching { context.startActivity(android.content.Intent(android.provider.Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) } }
+                                }
+                            })
+                            if (s.appNotifications && notificationAccess) {
+                                RowDivider()
+                                val apps by (context.applicationContext as com.leftovers.app.LeftoversApp).container.paymentApps.apps.collectAsStateWithLifecycle()
+                                val reading = apps.count { it.read }
+                                NavRow(Lucide.Smartphone, "Payment apps", "$reading ${if (reading == 1) "app" else "apps"}") { showPaymentApps = true }
+                            }
+                            RowDivider()
+                            NavRow(Lucide.Mail, "Detect payments in email", emailConnection?.address ?: "Off") { showEmail = true }
+                            if (s.smsDetection || emailConnection != null) {
+                                RowDivider()
+                                NavRow(Lucide.Tag, "Detection keywords", if (s.detectionKeywords.isEmpty()) "Test a message" else "${s.detectionKeywords.size} added") { showKeywords = true }
+                            }
+                        }
+                    }
+                    if (s.appNotifications) {
+                        Text(
+                            if (notificationAccess) {
+                                "Reads only notifications from ${com.leftovers.app.util.PaymentApps.names.values.joinToString(", ")}, and only a fingerprint of each is kept. Offers and reminders are skipped."
+                            } else {
+                                "Turn on notification access for Leftovers in the screen that opened, then come back."
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = c.textSecondary,
+                            modifier = Modifier.padding(start = 8.dp, end = 8.dp, top = 8.dp),
                         )
-                        RowDivider()
-                        ListRow(
-                            "Reset app",
-                            subtitle = "Erase everything and start fresh",
-                            leading = { IconTile(Lucide.RotateCcw, c.negative, size = 38.dp) },
-                            onClick = { confirmReset = true },
+                    }
+                    if (s.smsDetection) {
+                        Text(
+                            if (s.smsAutoAdd) "Payments up to ${money.format(s.smsAutoMaxMinor)} are added as they come; bigger ones show up on Home for you to confirm. Messages never leave the phone."
+                            else "New debit messages from your bank show up on Home for you to confirm. Nothing is added without your tap, and messages never leave the phone.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = c.textTertiary,
+                            modifier = Modifier.padding(start = 8.dp, end = 8.dp, top = 8.dp),
                         )
                     }
                 }
-                if (s.autoBackupDir != null || passwordSet || s.backupPhotos) {
+
+                }
+                if (shown == SettingsIndex.GENERAL) {
+                item {
+                    Glass(Modifier.fillMaxWidth()) {
+                        Column(Modifier.padding(vertical = 6.dp)) {
+                            NavRow(Lucide.Coins, "Currency", "${money.currency.displayName} (${money.symbol})") { showCurrency = true }
+                            RowDivider()
+                            ToggleRow(Lucide.Split, "Show a split bill as one entry", s.splitsAsOneBill, viewModel::setSplitsAsOneBill)
+                            RowDivider()
+                            NavRow(Lucide.Tag, "Categories", null, onManageCategories)
+                            RowDivider()
+                            NavRow(Lucide.Wallet, "Accounts", "Cash, bank, cards", onOpenAccounts)
+                        }
+                    }
+                }
+
+                }
+                if (shown == SettingsIndex.DATA) {
+                item {
+                    Glass(Modifier.fillMaxWidth()) {
+                        Column(Modifier.padding(vertical = 6.dp)) {
+                            NavRow(Lucide.Download, "Back up", "To a file or Google Drive") {
+                                createBackup.launch("leftovers-backup-${java.time.LocalDate.now()}.json")
+                            }
+                            RowDivider()
+                            NavRow(Lucide.Repeat, "Restore", "From a backup file") { openBackup.launch(arrayOf("application/json", "*/*")) }
+                            RowDivider()
+                            NavRow(Lucide.History, "Deleted entries", if (deletedCount == 0) "None" else "$deletedCount", onOpenDeleted)
+                            RowDivider()
+                            ToggleRow(Lucide.CalendarClock, "Automatic backup", s.autoBackupDir != null, { on ->
+                                if (on) pickBackupFolder.launch(null) else viewModel.disableAutoBackup(context, s.autoBackupDir)
+                            })
+                            if (s.autoBackupDir != null) {
+                                Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    SegmentedToggle(listOf(1, 7, 30), s.autoBackupDays, { if (it == 1) "Daily" else if (it == 7) "Weekly" else "Monthly" }, { viewModel.setAutoBackupDays(it) }, Modifier.fillMaxWidth())
+                                    Text("Backup files to keep", style = MaterialTheme.typography.labelMedium, color = c.textSecondary, modifier = Modifier.padding(start = 6.dp))
+                                    SegmentedToggle(listOf(1, 2, 3, 4, 5), s.autoBackupKeep, { it.toString() }, { viewModel.setAutoBackupKeep(it) }, Modifier.fillMaxWidth())
+                                    // The last try failed: say why, until a backup works again.
+                                    s.autoBackupError?.let { problem ->
+                                        Text("Last automatic backup failed: $problem", style = MaterialTheme.typography.bodySmall, color = c.negative, modifier = Modifier.padding(start = 6.dp))
+                                    }
+                                }
+                            }
+                            if (s.autoBackupDir != null) {
+                                RowDivider()
+                                NavRow(Lucide.Download, "Back up now", "To the chosen folder") { viewModel.backUpNow(context) { toast(it) } }
+                            }
+                            RowDivider()
+                            ToggleRow(Lucide.Camera, "Include photos in backups", s.backupPhotos, { viewModel.setBackupPhotos(it) })
+                            RowDivider()
+                            ToggleRow(Lucide.Lock, "Password-protect backups", passwordSet, { on ->
+                                if (on) setPassword = true else viewModel.setBackupPassword(null)
+                            })
+                            RowDivider()
+                            NavRow(Lucide.ReceiptText, "Export to CSV", "Excel, Sheets") {
+                                viewModel.export(context) { scope.launch { snackbar.showSnackbar("Nothing to export yet") } }
+                            }
+                            RowDivider()
+                            NavRow(Lucide.Download, "Import entries", "Statements, other apps") {
+                                openCsv.launch(
+                                    arrayOf(
+                                        "text/*", "application/csv", "application/vnd.ms-excel", "application/octet-stream",
+                                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "application/pdf",
+                                        "application/json", "application/zip",
+                                    ),
+                                )
+                            }
+                            // Files imported before, to take one back if it came in wrong.
+                            val imports by viewModel.imports.collectAsStateWithLifecycle()
+                            var removing by remember { mutableStateOf<com.leftovers.app.util.ImportBatches.Batch?>(null) }
+                            imports.take(5).forEach { b ->
+                                RowDivider()
+                                val whenText = java.time.Instant.ofEpochMilli(b.from).atZone(java.time.ZoneId.systemDefault()).let {
+                                    it.toLocalDate().friendlyLabel() + " · " + it.toLocalTime().format(java.time.format.DateTimeFormatter.ofLocalizedTime(java.time.format.FormatStyle.SHORT))
+                                }
+                                ListRow(
+                                    "Imported $whenText",
+                                    subtitle = "${b.count} entries · ${money.format(b.spent)} spent" + if (b.received > 0) " · ${money.format(b.received)} received" else "",
+                                    leading = { IconTile(Lucide.History, c.textSecondary, size = 38.dp) },
+                                    trailing = { Text("Remove", style = MaterialTheme.typography.labelLarge, color = c.negative) },
+                                    onClick = { removing = b },
+                                )
+                            }
+                            removing?.let { b ->
+                                GlassAlertDialog(
+                                    onDismissRequest = { removing = null },
+                                    title = { Text("Remove this import?") },
+                                    text = { Text("Its ${b.count} entries go to Deleted entries, where they can be restored.", color = c.textSecondary) },
+                                    confirmButton = {
+                                        androidx.compose.material3.TextButton(onClick = {
+                                            removing = null
+                                            viewModel.removeImport(b) { n -> scope.launch { snackbar.showSnackbar("Removed $n entries") } }
+                                        }) { Text("Remove", color = c.negative) }
+                                    },
+                                    dismissButton = { androidx.compose.material3.TextButton(onClick = { removing = null }) { Text("Cancel", color = c.textSecondary) } },
+                                )
+                            }
+                            RowDivider()
+                            ListRow(
+                                "Delete all entries",
+                                leading = { IconTile(Lucide.Trash2, c.negative, size = 38.dp) },
+                                onClick = { confirmWipe = true },
+                            )
+                            RowDivider()
+                            ListRow(
+                                "Reset app",
+                                subtitle = "Erase everything and start fresh",
+                                leading = { IconTile(Lucide.RotateCcw, c.negative, size = 38.dp) },
+                                onClick = { confirmReset = true },
+                            )
+                        }
+                    }
+                    if (s.autoBackupDir != null || passwordSet || s.backupPhotos) {
+                        Text(
+                            listOfNotNull(
+                                if (s.autoBackupDir == null) null else {
+                                    val every = when (s.autoBackupDays) { 1 -> "every day"; 30 -> "every month"; else -> "every week" }
+                                    val kept = if (s.autoBackupKeep == 1) "only the latest" else "the last ${s.autoBackupKeep}"
+                                    "Saves a backup to your chosen folder $every and keeps $kept." + if (s.autoBackupLast > 0) {
+                                        val at = java.time.Instant.ofEpochMilli(s.autoBackupLast).atZone(java.time.ZoneId.systemDefault())
+                                        " Last automatic backup: ${at.toLocalDate().friendlyLabel()}, ${at.format(java.time.format.DateTimeFormatter.ofPattern("h:mm a"))}."
+                                    } else ""
+                                },
+                                if (s.backupPhotos) "Receipt and Money owed photos are included (up to 40 MB of photos; past that they're left out)." else null,
+                                if (passwordSet) "New backups are encrypted. Restoring one needs the password, and it can't be recovered if forgotten." else null,
+                            ).joinToString(" "),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = c.textTertiary,
+                            modifier = Modifier.padding(start = 8.dp, end = 8.dp, top = 8.dp),
+                        )
+                    }
+                }
+
+                }
+                if (shown == SettingsIndex.SYNC) {
+                item {
+                    Glass(Modifier.fillMaxWidth()) {
+                        Column(Modifier.padding(vertical = 6.dp)) {
+                            val syncOn = s.syncDir != null || s.syncServer != null
+                            ToggleRow(Lucide.Smartphone, "Sync between devices", syncOn, { on ->
+                                if (on) chooseSync = true else viewModel.disableSync(context, s.syncDir)
+                            })
+                            if (syncOn) {
+                                RowDivider()
+                                NavRow(
+                                    if (s.syncServer != null) Lucide.Globe else Lucide.Folder,
+                                    if (s.syncServer != null) "Server" else "Folder",
+                                    s.syncServer?.removePrefix("https://")?.substringBefore('/') ?: "Chosen folder",
+                                ) { chooseSync = true }
+                                RowDivider()
+                                NavRow(
+                                    Lucide.Repeat,
+                                    "Sync now",
+                                    if (s.syncLast > 0) {
+                                        val at = java.time.Instant.ofEpochMilli(s.syncLast).atZone(java.time.ZoneId.systemDefault())
+                                        "${at.toLocalDate().friendlyLabel()}, ${at.format(java.time.format.DateTimeFormatter.ofPattern("h:mm a"))}"
+                                    } else "Not synced yet",
+                                ) { viewModel.syncNow(context) { toast(it) } }
+                            }
+                        }
+                    }
                     Text(
-                        listOfNotNull(
-                            if (s.autoBackupDir == null) null else {
-                                val every = when (s.autoBackupDays) { 1 -> "every day"; 30 -> "every month"; else -> "every week" }
-                                val kept = if (s.autoBackupKeep == 1) "only the latest" else "the last ${s.autoBackupKeep}"
-                                "Saves a backup to your chosen folder $every and keeps $kept." + if (s.autoBackupLast > 0) {
-                                    val at = java.time.Instant.ofEpochMilli(s.autoBackupLast).atZone(java.time.ZoneId.systemDefault())
-                                    " Last automatic backup: ${at.toLocalDate().friendlyLabel()}, ${at.format(java.time.format.DateTimeFormatter.ofPattern("h:mm a"))}."
-                                } else ""
-                            },
-                            if (s.backupPhotos) "Receipt and Money owed photos are included (up to 40 MB of photos; past that they're left out)." else null,
-                            if (passwordSet) "New backups are encrypted. Restoring one needs the password, and it can't be recovered if forgotten." else null,
-                        ).joinToString(" "),
+                        if (s.syncDir == null && s.syncServer == null) {
+                            "Keep your phones in step with no account: use a folder that Syncthing or Nextcloud's app keeps the same on each phone, or your own WebDAV server, and choose the same one on every phone."
+                        } else {
+                            "Each phone keeps its data there and merges in the others' when the app opens and every few hours. Entries deleted or changed on one phone are removed on the others; Money owed, goals and subscriptions are only added." +
+                                if (passwordSet) " Files are encrypted with your backup password; use the same one on every phone." else " Set a backup password to keep these files encrypted."
+                        },
                         style = MaterialTheme.typography.bodySmall,
                         color = c.textTertiary,
                         modifier = Modifier.padding(start = 8.dp, end = 8.dp, top = 8.dp),
                     )
                 }
-            }
 
-            item { SectionHeader("Sync") }
-            item {
-                Glass(Modifier.fillMaxWidth()) {
-                    Column(Modifier.padding(vertical = 6.dp)) {
-                        val syncOn = s.syncDir != null || s.syncServer != null
-                        ToggleRow(Lucide.Smartphone, "Sync between devices", syncOn, { on ->
-                            if (on) chooseSync = true else viewModel.disableSync(context, s.syncDir)
-                        })
-                        if (syncOn) {
+                }
+                if (shown == SettingsIndex.ABOUT) {
+                item {
+                    val uriHandler = LocalUriHandler.current
+                    Glass(Modifier.fillMaxWidth()) {
+                        Column(Modifier.padding(vertical = 6.dp)) {
+                            // Opens GitHub's issue forms (bug report or feature request) in the browser.
+                            NavRow(Lucide.MessageCircle, "Report a problem or suggest an idea", "GitHub") {
+                                uriHandler.openUri("https://github.com/saisaharsh3/Leftovers/issues/new/choose")
+                            }
                             RowDivider()
-                            NavRow(
-                                if (s.syncServer != null) Lucide.Globe else Lucide.Folder,
-                                if (s.syncServer != null) "Server" else "Folder",
-                                s.syncServer?.removePrefix("https://")?.substringBefore('/') ?: "Chosen folder",
-                            ) { chooseSync = true }
+                            // Off unless turned on: F-Droid and Obtainium already update the app.
+                            ToggleRow(Lucide.Bell, "Tell me about new versions", s.updateCheck, { on ->
+                                viewModel.setUpdateCheck(on)
+                                if (on && android.os.Build.VERSION.SDK_INT >= 33) notificationPermission.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                            })
                             RowDivider()
-                            NavRow(
-                                Lucide.Repeat,
-                                "Sync now",
-                                if (s.syncLast > 0) {
-                                    val at = java.time.Instant.ofEpochMilli(s.syncLast).atZone(java.time.ZoneId.systemDefault())
-                                    "${at.toLocalDate().friendlyLabel()}, ${at.format(java.time.format.DateTimeFormatter.ofPattern("h:mm a"))}"
-                                } else "Not synced yet",
-                            ) { viewModel.syncNow(context) { toast(it) } }
+                            NavRow(Lucide.Download, "Check for a new version", null) { viewModel.checkForUpdate(context) { toast(it) } }
                         }
                     }
                 }
-                Text(
-                    if (s.syncDir == null && s.syncServer == null) {
-                        "Keep your phones in step with no account: use a folder that Syncthing or Nextcloud's app keeps the same on each phone, or your own WebDAV server, and choose the same one on every phone."
-                    } else {
-                        "Each phone keeps its data there and merges in the others' when the app opens and every few hours. Entries deleted or changed on one phone are removed on the others; Money owed, goals and subscriptions are only added." +
-                            if (passwordSet) " Files are encrypted with your backup password; use the same one on every phone." else " Set a backup password to keep these files encrypted."
-                    },
-                    style = MaterialTheme.typography.bodySmall,
-                    color = c.textTertiary,
-                    modifier = Modifier.padding(start = 8.dp, end = 8.dp, top = 8.dp),
-                )
-            }
-
-            item {
-                Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(top = 32.dp),
-                    horizontalArrangement = Arrangement.Center,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Icon(Lucide.Lock, contentDescription = null, tint = c.textTertiary, modifier = Modifier.size(14.dp))
-                    Spacer(Modifier.width(6.dp))
-                    val version = remember { runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull().orEmpty() }
-                    val where = if (s.syncDir != null || s.syncServer != null) "Stored on your devices only" else "Stored only on this device"
-                    Text("$where · Leftovers $version", style = MaterialTheme.typography.bodySmall, color = c.textTertiary, textAlign = TextAlign.Center)
-                }
-            }
-            item {
-                val uriHandler = LocalUriHandler.current
-                Glass(Modifier.fillMaxWidth().padding(top = 24.dp)) {
-                    Column(Modifier.padding(vertical = 6.dp)) {
-                        // Opens GitHub's issue forms (bug report or feature request) in the browser.
-                        NavRow(Lucide.MessageCircle, "Report a problem or suggest an idea", "GitHub") {
-                            uriHandler.openUri("https://github.com/saisaharsh3/Leftovers/issues/new/choose")
-                        }
-                        RowDivider()
-                        // Off unless turned on: F-Droid and Obtainium already update the app.
-                        ToggleRow(Lucide.Bell, "Tell me about new versions", s.updateCheck, { on ->
-                            viewModel.setUpdateCheck(on)
-                            if (on && android.os.Build.VERSION.SDK_INT >= 33) notificationPermission.launch(android.Manifest.permission.POST_NOTIFICATIONS)
-                        })
-                        RowDivider()
-                        NavRow(Lucide.Download, "Check for a new version", null) { viewModel.checkForUpdate(context) { toast(it) } }
+                item {
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(top = 24.dp),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(Lucide.Lock, contentDescription = null, tint = c.textTertiary, modifier = Modifier.size(14.dp))
+                        Spacer(Modifier.width(6.dp))
+                        val version = remember { runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull().orEmpty() }
+                        val where = if (s.syncDir != null || s.syncServer != null) "Stored on your devices only" else "Stored only on this device"
+                        Text("$where · Leftovers $version", style = MaterialTheme.typography.bodySmall, color = c.textTertiary, textAlign = TextAlign.Center)
                     }
                 }
-            }
-            item {
-                val uriHandler = LocalUriHandler.current
-                Text(
-                    "Made by C. Sai Saharsh · GitHub",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = c.textTertiary,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 4.dp)
-                        .clickable { uriHandler.openUri("https://github.com/saisaharsh3") }
-                        .padding(vertical = 8.dp),
-                )
+                item {
+                    val uriHandler = LocalUriHandler.current
+                    Text(
+                        "Made by C. Sai Saharsh · GitHub",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = c.textTertiary,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 4.dp)
+                            .clickable { uriHandler.openUri("https://github.com/saisaharsh3") }
+                            .padding(vertical = 8.dp),
+                    )
+                }
+                }
             }
         }
 
@@ -1210,7 +1566,15 @@ fun SettingsScreen(
                 confirmButton = {
                     if (adding > 0) {
                         TextButton(onClick = {
-                            viewModel.confirmCsvImport { n -> scope.launch { snackbar.showSnackbar("Imported $n ${if (n == 1) "entry" else "entries"}") } }
+                            viewModel.confirmCsvImport { n, at ->
+                                scope.launch {
+                                    val r = snackbar.showSnackbar("Imported $n ${if (n == 1) "entry" else "entries"}", actionLabel = "Undo", duration = androidx.compose.material3.SnackbarDuration.Long)
+                                    // Undo: the import's entries go to Deleted entries, like removing it from the list.
+                                    if (r == androidx.compose.material3.SnackbarResult.ActionPerformed) {
+                                        viewModel.removeImport(com.leftovers.app.util.ImportBatches.Batch(at, at, n, 0, 0)) { m -> scope.launch { snackbar.showSnackbar("Removed $m ${if (m == 1) "entry" else "entries"}") } }
+                                    }
+                                }
+                            }
                         }) { Text("Import", color = c.textPrimary) }
                     } else {
                         TextButton(onClick = viewModel::cancelCsvImport) { Text("OK", color = c.textPrimary) }
@@ -1246,6 +1610,7 @@ private fun NavRow(icon: ImageVector, title: String, value: String?, onClick: ()
     val c = LocalAppColors.current
     ListRow(
         title,
+        modifier = Modifier.jumpTarget(title),
         leading = { IconTile(icon, c.textPrimary, size = 38.dp) },
         trailing = {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1261,13 +1626,66 @@ private fun NavRow(icon: ImageVector, title: String, value: String?, onClick: ()
     )
 }
 
+/** The search at the top of Settings: a magnifier, the words, and a clear button once something's typed. */
+@Composable
+private fun SettingsSearch(query: String, onChange: (String) -> Unit, onSearch: () -> Unit, modifier: Modifier = Modifier) {
+    val c = LocalAppColors.current
+    Glass(modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp)) {
+        Row(Modifier.padding(start = 16.dp, end = 6.dp).height(52.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(Lucide.Search, contentDescription = null, tint = c.textTertiary, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(10.dp))
+            Box(Modifier.weight(1f)) {
+                if (query.isEmpty()) Text("Search settings", style = MaterialTheme.typography.bodyLarge, color = c.textTertiary)
+                androidx.compose.foundation.text.BasicTextField(
+                    value = query,
+                    onValueChange = onChange,
+                    singleLine = true,
+                    textStyle = MaterialTheme.typography.bodyLarge.copy(color = c.textPrimary),
+                    cursorBrush = androidx.compose.ui.graphics.SolidColor(c.accent),
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Search),
+                    keyboardActions = androidx.compose.foundation.text.KeyboardActions(onSearch = { onSearch() }),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+            androidx.compose.animation.AnimatedVisibility(
+                query.isNotEmpty(),
+                enter = androidx.compose.animation.fadeIn() + androidx.compose.animation.scaleIn(initialScale = 0.6f),
+                exit = androidx.compose.animation.fadeOut() + androidx.compose.animation.scaleOut(targetScale = 0.6f),
+            ) {
+                Box(
+                    Modifier
+                        .size(40.dp)
+                        .clip(androidx.compose.foundation.shape.CircleShape)
+                        .clickable { onChange("") },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(Lucide.X, contentDescription = "Clear", tint = c.textSecondary, modifier = Modifier.size(18.dp))
+                }
+            }
+        }
+    }
+}
+
+/** A category on Settings' main page (or a search result): its name, with what's in it underneath, like a phone's. */
+@Composable
+private fun PageRow(icon: ImageVector, title: String, summary: String, tint: Color, onClick: () -> Unit) {
+    val c = LocalAppColors.current
+    ListRow(
+        title,
+        subtitle = summary,
+        leading = { IconTile(icon, tint, size = 38.dp) },
+        trailing = { Icon(Lucide.ChevronRight, contentDescription = null, tint = c.textTertiary, modifier = Modifier.size(18.dp)) },
+        onClick = onClick,
+    )
+}
+
 @Composable
 private fun ToggleRow(icon: ImageVector, title: String, checked: Boolean, onChange: (Boolean) -> Unit, inset: Boolean = true) {
     val c = LocalAppColors.current
     val flip = toggleHaptic(onChange)
     ListRow(
         title,
-        modifier = if (inset) Modifier else Modifier.padding(horizontal = (0).dp),
+        modifier = (if (inset) Modifier else Modifier.padding(horizontal = (0).dp)).jumpTarget(title),
         leading = { IconTile(icon, c.textPrimary, size = 38.dp) },
         trailing = {
             Switch(
@@ -1503,4 +1921,46 @@ private fun PaymentAppsSheet(onDismiss: () -> Unit) {
             )
         }
     }
+}
+
+/** One thing liquid glass costs, as a line with its icon. */
+@Composable
+private fun LiquidCost(icon: androidx.compose.ui.graphics.vector.ImageVector, text: String) {
+    val c = LocalAppColors.current
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Icon(icon, contentDescription = null, tint = c.textSecondary, modifier = Modifier.size(20.dp))
+        Spacer(Modifier.width(12.dp))
+        Text(text, style = MaterialTheme.typography.bodyMedium, color = c.textPrimary)
+    }
+}
+
+/** Where Help asked Settings to open, by the titles in its path ("Settings → Backup & data → Import entries"). */
+object SettingsJump {
+    var section by mutableStateOf<String?>(null)
+    var row by mutableStateOf<String?>(null)
+    /** Where the asked-for row is on the screen, once drawn. */
+    var rowTop by mutableStateOf<Float?>(null)
+    /** The row lit up for a moment after arriving. */
+    var flash by mutableStateOf<String?>(null)
+
+    fun open(where: String) {
+        val parts = where.split(" → ")
+        section = parts.getOrNull(1) ?: "bottom"
+        row = parts.getOrNull(2)
+        rowTop = null
+    }
+}
+
+/** A row Help can point at: reports where it is when asked for, and glows briefly once there. */
+@Composable
+private fun Modifier.jumpTarget(title: String): Modifier {
+    val c = LocalAppColors.current
+    val glow by androidx.compose.animation.animateColorAsState(
+        if (SettingsJump.flash == title) c.accent.copy(alpha = 0.2f) else Color.Transparent,
+        androidx.compose.animation.core.tween(450),
+        label = "jumpGlow",
+    )
+    return this
+        .then(if (SettingsJump.row == title) Modifier.onGloballyPositioned { SettingsJump.rowTop = it.positionInRoot().y } else Modifier)
+        .background(glow, RoundedCornerShape(16.dp))
 }

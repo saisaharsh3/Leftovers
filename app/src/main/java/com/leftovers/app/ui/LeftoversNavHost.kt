@@ -132,6 +132,7 @@ private object Routes {
     const val SETTINGS = "settings"
     const val NOTICES = "notices"
     const val CATEGORIES = "categories"
+    const val HELP = "help"
     const val ASSISTANT = "assistant?ask={ask}"
     /** Opens the assistant; a non-empty [ask] is sent as the first question. */
     fun assistant(ask: String = "") = "assistant?ask=" + android.net.Uri.encode(ask)
@@ -182,7 +183,12 @@ private fun NavGraphBuilder.screen(
 
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
-fun LeftoversNavHost(openAdd: Boolean = false, onOpenAddHandled: () -> Unit = {}) {
+fun LeftoversNavHost(
+    openAdd: Boolean = false,
+    onOpenAddHandled: () -> Unit = {},
+    sharedOwed: com.leftovers.app.util.SharedOwed.Shared? = null,
+    onSharedHandled: () -> Unit = {},
+) {
     val nav = rememberNavController()
     val backStack by nav.currentBackStackEntryAsState()
     val currentRoute = backStack?.destination?.route
@@ -347,6 +353,7 @@ fun LeftoversNavHost(openAdd: Boolean = false, onOpenAddHandled: () -> Unit = {}
                     }
                     screen(Routes.INSIGHTS) {
                         StatsScreen(
+                            onOpenSettings = { nav.navigate(Routes.SETTINGS) },
                             onOpenRecap = { nav.navigate(Routes.recap(it.toString())) },
                             onOpenYear = { nav.navigate(Routes.recap(it.toString())) },
                             onOpenTransaction = { nav.navigate(Routes.edit(it)) },
@@ -355,6 +362,7 @@ fun LeftoversNavHost(openAdd: Boolean = false, onOpenAddHandled: () -> Unit = {}
                     }
                     screen(Routes.PLAN) {
                         PlanScreen(
+                            onOpenSettings = { nav.navigate(Routes.SETTINGS) },
                             onOpenBudget = { nav.navigate(Routes.BUDGET) },
                             onEditPlan = { nav.navigate(Routes.BUDGET_PLAN) },
                             onOpenSubscriptions = { nav.navigate(Routes.subscriptions()) },
@@ -403,6 +411,7 @@ fun LeftoversNavHost(openAdd: Boolean = false, onOpenAddHandled: () -> Unit = {}
                             onEditPlan = { nav.navigate(Routes.BUDGET_PLAN) },
                             onOpenSubscriptions = { nav.navigate(Routes.subscriptions()) },
                             onOpenGoals = { nav.navigate(Routes.GOALS) },
+                            onAdd = { note -> nav.navigate(Routes.add(note = note)) },
                         )
                     }
                     screen(Routes.BUDGET_PLAN) { BudgetPlanScreen(onBack = back) }
@@ -429,7 +438,32 @@ fun LeftoversNavHost(openAdd: Boolean = false, onOpenAddHandled: () -> Unit = {}
                             onManageCategories = { nav.navigate(Routes.CATEGORIES) },
                             onOpenAccounts = { nav.navigate(Routes.ACCOUNTS) },
                             onOpenDeleted = { nav.navigate(Routes.DELETED) },
+                            onOpenHelp = { nav.navigate(Routes.HELP) },
                         )
+                    }
+                    screen(Routes.HELP) {
+                        com.leftovers.app.ui.screens.HelpScreen(onBack = back) { place ->
+                            when (place) {
+                                // Everything opens on top of the guide, tabs too, so going back always returns here.
+                                // (Switching tabs would clear the guide away, or, for Home, put it straight back.)
+                                com.leftovers.app.util.HelpGuide.Place.HOME -> nav.navigate(Routes.HOME)
+                                com.leftovers.app.util.HelpGuide.Place.ACTIVITY -> nav.navigate(Routes.ACTIVITY)
+                                com.leftovers.app.util.HelpGuide.Place.INSIGHTS -> nav.navigate(Routes.INSIGHTS)
+                                com.leftovers.app.util.HelpGuide.Place.PLAN -> nav.navigate(Routes.PLAN)
+                                com.leftovers.app.util.HelpGuide.Place.ADD -> nav.navigate(Routes.add())
+                                com.leftovers.app.util.HelpGuide.Place.ACCOUNTS -> nav.navigate(Routes.ACCOUNTS)
+                                com.leftovers.app.util.HelpGuide.Place.BUDGET -> nav.navigate(Routes.BUDGET)
+                                com.leftovers.app.util.HelpGuide.Place.BUDGET_PLAN -> nav.navigate(Routes.BUDGET_PLAN)
+                                com.leftovers.app.util.HelpGuide.Place.SUBSCRIPTIONS -> nav.navigate(Routes.subscriptions())
+                                com.leftovers.app.util.HelpGuide.Place.GOALS -> nav.navigate(Routes.GOALS)
+                                com.leftovers.app.util.HelpGuide.Place.DEBTS -> nav.navigate(Routes.DEBTS)
+                                com.leftovers.app.util.HelpGuide.Place.CATEGORIES -> nav.navigate(Routes.CATEGORIES)
+                                com.leftovers.app.util.HelpGuide.Place.SETTINGS -> back()
+                                com.leftovers.app.util.HelpGuide.Place.DELETED -> nav.navigate(Routes.DELETED)
+                                com.leftovers.app.util.HelpGuide.Place.ASSISTANT -> nav.navigate(Routes.assistant())
+                                com.leftovers.app.util.HelpGuide.Place.NOTICES -> nav.navigate(Routes.NOTICES)
+                            }
+                        }
                     }
                     screen(Routes.CATEGORIES) { CategoriesScreen(onBack = back) }
                 }
@@ -480,6 +514,9 @@ fun LeftoversNavHost(openAdd: Boolean = false, onOpenAddHandled: () -> Unit = {}
                     Toast(toast.orEmpty())
                 }
 
+                // Money owed sent from a friend's Leftovers, from the link the app was opened with.
+                sharedOwed?.let { com.leftovers.app.ui.screens.SharedOwedSheet(it, onDismiss = onSharedHandled) }
+
                 // Pop-up cards, above the tab bar and everything else.
                 popups.Content()
             }
@@ -488,10 +525,14 @@ fun LeftoversNavHost(openAdd: Boolean = false, onOpenAddHandled: () -> Unit = {}
 }
 
 private fun NavHostController.switchTab(route: String) {
+    // A tab opened on top of other screens (Help's Open puts Activity over Settings and Help): those are a detour,
+    // left behind when moving to a tab, not kept. Kept, they were what came back on going to Home, so Home showed
+    // Activity again and couldn't be reached.
+    val detour = currentBackStack.value.any { e -> e.destination.route.let { it != null && it !in Routes.tabs && it != graph.route } }
     navigate(route) {
-        popUpTo(graph.findStartDestination().id) { saveState = true }
+        popUpTo(graph.findStartDestination().id) { saveState = !detour }
         launchSingleTop = true
-        restoreState = true
+        restoreState = !detour
     }
 }
 
@@ -566,12 +607,13 @@ private fun DockItem(tab: Tab, selected: Boolean, compact: Boolean, onClick: () 
         Icon(tab.icon, contentDescription = tab.label, tint = tint, modifier = Modifier.size(22.dp))
         AnimatedVisibility(
             visible = selected && !compact,
-            enter = expandHorizontally(spring(dampingRatio = 0.8f, stiffness = Spring.StiffnessMediumLow)) + fadeIn(),
-            exit = shrinkHorizontally(spring(dampingRatio = 1f, stiffness = Spring.StiffnessMedium)) + fadeOut(),
+            // The name fades out before the pill narrows and in once it has widened, so it's never seen cut off.
+            enter = expandHorizontally(spring(dampingRatio = 0.8f, stiffness = Spring.StiffnessMediumLow)) + fadeIn(tween(160, delayMillis = 110)),
+            exit = shrinkHorizontally(spring(dampingRatio = 1f, stiffness = Spring.StiffnessMedium)) + fadeOut(tween(70)),
         ) {
             Row {
                 Spacer(Modifier.width(8.dp))
-                Text(tab.label, style = MaterialTheme.typography.labelLarge, color = c.textPrimary, maxLines = 1)
+                Text(tab.label, style = MaterialTheme.typography.labelLarge, color = c.textPrimary, maxLines = 1, softWrap = false)
             }
         }
     }

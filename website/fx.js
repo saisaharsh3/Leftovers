@@ -8,7 +8,7 @@
   if (!reduceMotion && "IntersectionObserver" in window) {
     const sel = [
       "main > section:not(.hero) > h2", "main > section:not(.hero) > .section-lede", ".panel", ".switches", ".facts > div",
-      ".changelog", ".closing > *",
+      ".changelog", ".closing > *", ".look-stage",
     ].join(",");
     const items = [...document.querySelectorAll(sel)].filter((el) => {
       // Already on screen when the page opens: leave it be, so nothing blinks.

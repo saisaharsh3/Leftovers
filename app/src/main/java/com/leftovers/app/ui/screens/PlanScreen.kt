@@ -29,6 +29,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.leftovers.app.data.periodName
 import com.leftovers.app.data.BudgetMode
 import com.leftovers.app.data.BudgetPlan
 import com.leftovers.app.data.GoalWithSaved
@@ -99,8 +100,8 @@ class PlanViewModel(
             loaded = true,
             plan = s.plan,
             budget = budget,
-            spent = items.totalOf(TxType.EXPENSE),
-            dailyLimit = dailyBudget(budget, items, recurring.pendingExpenses(cycle), periodEnd = cycle.end)?.dailyLimit ?: 0,
+            spent = items.filter { !it.outOfBudget }.totalOf(TxType.EXPENSE),
+            dailyLimit = dailyBudget(budget, items, if (s.plan.envelope) 0L else recurring.pendingExpenses(cycle), periodEnd = cycle.end)?.dailyLimit ?: 0,
             recurring = recurring,
             goals = goals,
             owedToYou = open.filter { it.netMinor > 0 }.sumOf { it.netMinor },
@@ -118,13 +119,18 @@ fun PlanScreen(
     onOpenGoal: (Long) -> Unit,
     onOpenCategories: () -> Unit,
     onOpenDebts: () -> Unit,
+    onOpenSettings: () -> Unit = {},
     viewModel: PlanViewModel = viewModel(factory = AppViewModelProvider.Factory),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val c = LocalAppColors.current
     val money = LocalMoney.current
 
-    GlassScreen(title = "Plan", onBack = null) { padding ->
+    GlassScreen(
+        title = "Plan",
+        onBack = null,
+        actions = { com.leftovers.app.ui.components.RoundButton(Lucide.Settings, "Settings", onOpenSettings) },
+    ) { padding ->
         if (!state.loaded) return@GlassScreen
         LazyColumn(
             Modifier.fillMaxSize(),
@@ -264,7 +270,8 @@ private fun planSummary(plan: BudgetPlan): String {
     return when {
         !plan.isSet -> "Not set"
         plan.mode == BudgetMode.MONTHLY -> "${money.format(plan.monthlyMinor)} a month"
-        plan.mode == BudgetMode.RANGE -> "${money.format(plan.rangeMinor)} until ${plan.rangeTo?.format(java.time.format.DateTimeFormatter.ofPattern("d MMM"))}"
+        plan.mode == BudgetMode.PERIOD -> "${money.format(plan.periodMinor)} " + periodName(plan.periodDays)
+        plan.mode == BudgetMode.RANGE -> (plan.rangeTag?.let { "#$it · " } ?: "") + "${money.format(plan.rangeMinor)} until ${plan.rangeTo?.format(java.time.format.DateTimeFormatter.ofPattern("d MMM"))}"
         else -> "${money.format(plan.yearlyMinor)} a year · ${plan.split.title.lowercase()}"
     }
 }

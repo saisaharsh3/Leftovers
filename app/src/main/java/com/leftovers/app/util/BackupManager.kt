@@ -87,6 +87,11 @@ class BackupManager(
                     put("buckets", s.plan.buckets)
                     put("bucketIncome", s.plan.bucketIncome)
                     put("bucketPicker", s.plan.bucketPicker)
+                    put("periodBudget", s.plan.periodMinor)
+                    put("periodDays", s.plan.periodDays)
+                    s.plan.periodFrom?.let { put("periodFrom", it.toString()) }
+                    s.plan.rangeTag?.let { put("rangeTag", it) }
+                    s.plan.rangeAccount?.let { put("rangeAccount", it) }
                     s.plan.rangeFrom?.let { put("rangeFrom", it.toString()) }
                     s.plan.rangeTo?.let { put("rangeTo", it.toString()) }
                     put("carryChoices", BudgetPlan.encodeChoices(s.plan.carryChoices))
@@ -97,12 +102,16 @@ class BackupManager(
                         .put("type", c.type.name).put("budget", c.budgetMinor ?: JSONObject.NULL)
                         .put("addsToBudget", c.addsToBudget)
                         .put("bucket", c.bucket ?: JSONObject.NULL)
+                        .put("hidden", c.hidden)
                 }))
+                // Icons made from the user's own pictures: small, so always included.
+                CustomIcons.export(context, dao.categories().map { it.emoji } + dao.accounts().map { it.icon } + dao.goals().map { it.emoji })
+                    .takeIf { it.length() > 0 }?.let { put("icons", it) }
                 put("accounts", JSONArray(dao.accounts().map { a ->
                     JSONObject().put("id", a.id).put("name", a.name).put("icon", a.icon).put("color", a.color)
                         .put("opening", a.openingMinor).put("createdAt", a.createdAt).put("smsDigits", a.smsDigits ?: JSONObject.NULL)
                         .put("currency", a.currency ?: JSONObject.NULL).put("openingNative", a.openingNative ?: JSONObject.NULL)
-                        .put("outOfBudget", a.outOfBudget).put("outOfTotal", a.outOfTotal)
+                        .put("outOfBudget", a.outOfBudget).put("outOfTotal", a.outOfTotal).put("position", a.position)
                 }))
                 put("transactions", JSONArray(transactions.map { t ->
                     JSONObject().put("id", t.id).put("amount", t.amountMinor).put("type", t.type.name)
@@ -140,6 +149,8 @@ class BackupManager(
                         .put("account", d.accountId ?: JSONObject.NULL).put("repayment", d.repayment)
                         .put("splitOf", d.splitOf ?: JSONObject.NULL)
                         .put("pending", d.pending)
+                        .put("settledOn", d.settledOn ?: JSONObject.NULL)
+                        .put("sharedId", d.sharedId ?: JSONObject.NULL)
                         .put("receipts", JSONArray(d.photos.map { photoRef(it) }.filter { it != JSONObject.NULL }))
                 }))
                 if (photos.length() > 0) put("photos", photos)
@@ -195,6 +206,7 @@ class BackupManager(
             if (json.optString("app") !in setOf("leftovers", "cash-tracker")) throw NotABackupException()
 
             fun JSONObject.longOrNull(key: String) = if (isNull(key)) null else getLong(key)
+            CustomIcons.restore(context, json.optJSONObject("icons"))
             // Photos saved in the backup, written back to private storage on demand.
             val savedPhotos = json.optJSONObject("photos")
             val restoredPhotos = mutableMapOf<String, String>()
@@ -212,13 +224,13 @@ class BackupManager(
                 val name = it.getString("name")
                 // Older backups predate the flag: use the same default as the database migration.
                 val adds = it.optBoolean("addsToBudget", type == TxType.INCOME && name != "Salary")
-                Category(it.getLong("id"), name, it.getString("icon"), it.getLong("color"), type, it.longOrNull("budget"), adds, it.stringOrNull("bucket"))
+                Category(it.getLong("id"), name, it.getString("icon"), it.getLong("color"), type, it.longOrNull("budget"), adds, it.stringOrNull("bucket"), it.optBoolean("hidden", false))
             }
             val accounts = json.optJSONArray("accounts")?.objects().orEmpty().map {
                 Account(
                     it.getLong("id"), it.getString("name"), it.getString("icon"), it.getLong("color"), it.getLong("opening"), it.getLong("createdAt"), it.stringOrNull("smsDigits"),
                     currency = it.stringOrNull("currency"), openingNative = it.longOrNull("openingNative"),
-                    outOfBudget = it.optBoolean("outOfBudget"), outOfTotal = it.optBoolean("outOfTotal"),
+                    outOfBudget = it.optBoolean("outOfBudget"), outOfTotal = it.optBoolean("outOfTotal"), position = it.optInt("position"),
                 )
             }
             val transactions = json.getJSONArray("transactions").objects().map {
@@ -261,6 +273,8 @@ class BackupManager(
                     repayment = it.optBoolean("repayment"),
                     splitOf = it.longOrNull("splitOf"),
                     pending = it.optInt("pending", 0),
+                    settledOn = it.longOrNull("settledOn"),
+                    sharedId = it.stringOrNull("sharedId"),
                 )
             }
 
@@ -343,6 +357,11 @@ class BackupManager(
                         buckets = s.optBoolean("buckets", false),
                         bucketIncome = s.optLong("bucketIncome", 0),
                         bucketPicker = s.optBoolean("bucketPicker", false),
+                        periodMinor = s.optLong("periodBudget", 0),
+                        periodDays = s.optInt("periodDays", 14),
+                        periodFrom = s.optString("periodFrom").takeIf { it.isNotEmpty() }?.let { runCatching { java.time.LocalDate.parse(it) }.getOrNull() },
+                        rangeTag = s.optString("rangeTag").takeIf { it.isNotEmpty() },
+                        rangeAccount = if (s.has("rangeAccount")) s.optLong("rangeAccount") else null,
                         rangeFrom = s.optString("rangeFrom").takeIf { it.isNotEmpty() }?.let { runCatching { java.time.LocalDate.parse(it) }.getOrNull() },
                         rangeTo = s.optString("rangeTo").takeIf { it.isNotEmpty() }?.let { runCatching { java.time.LocalDate.parse(it) }.getOrNull() },
                         carryChoices = BudgetPlan.decodeChoices(s.optString("carryChoices")),
