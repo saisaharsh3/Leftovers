@@ -176,6 +176,20 @@ class EditorViewModel(
     /** 50/30/20 with its picker on: an expense's category is chosen by Needs, Wants or Savings first (#39). */
     val pickByBucket: StateFlow<Boolean> = settings.settings.map { it.plan.buckets && it.plan.bucketPicker }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+
+    /** The budget's envelope, when it counts entries by a #tag (#57): with its dates, to offer it only on those days. */
+    val envelope: StateFlow<com.leftovers.app.data.BudgetPlan?> = settings.settings.map { it.plan.takeIf { p -> p.envelopeTag != null } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    /** Whether this entry counts in the envelope: it carries the envelope's tag. */
+    fun inEnvelope(tag: String): Boolean = tag in com.leftovers.app.data.hashtags(note)
+
+    /** Counts this entry in the envelope or takes it out, by adding or removing its tag, so nobody has to type it. */
+    fun setInEnvelope(tag: String, on: Boolean) {
+        val words = com.leftovers.app.data.noteText(note)
+        val others = com.leftovers.app.data.hashtags(note).filter { it != tag }
+        note = com.leftovers.app.data.withTags(words, if (on) others + tag else others)
+    }
     var readingReceipt by mutableStateOf(false)
         private set
     /** What happened when the photo was read: filled in, or why not. */
@@ -960,6 +974,20 @@ fun EditorScreen(
             Spacer(Modifier.height(16.dp))
             // A long note is cut short here rather than pushing the buttons below off screen.
             NotePill(viewModel.note, onClick = { showNote = true }, modifier = Modifier.padding(horizontal = 32.dp).widthIn(max = 320.dp))
+            // An envelope budget by #tag: one tap counts this entry in it, instead of typing the tag (#57).
+            val envelope by viewModel.envelope.collectAsStateWithLifecycle()
+            val envelopeTag = envelope?.envelopeTag
+            if (envelopeTag != null && envelope?.envelopeCovers(viewModel.date) == true && viewModel.type == TxType.EXPENSE && !viewModel.owed) {
+                val on = viewModel.inEnvelope(envelopeTag)
+                Spacer(Modifier.height(10.dp))
+                Chip(
+                    if (on) "In the #$envelopeTag budget" else "Count in the #$envelopeTag budget",
+                    onClick = { viewModel.setInEnvelope(envelopeTag, !on) },
+                    icon = if (on) Lucide.Check else Lucide.PiggyBank,
+                    iconTint = if (on) null else c.textSecondary,
+                    selected = on,
+                )
+            }
             Spacer(Modifier.height(10.dp))
             // Top-aligned outside lent or borrowed, so the account chip lines up with the buttons, their names below.
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = if (viewModel.owed) Alignment.CenterVertically else Alignment.Top) {
@@ -1480,12 +1508,16 @@ private fun NotePill(note: String, onClick: () -> Unit, modifier: Modifier = Mod
             .padding(horizontal = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        // The envelope budget's tag has its own chip below, so it isn't repeated here (#57).
+        val envelopeTag = LocalEnvelopeTag.current
+        val shown = if (envelopeTag == null) note
+        else com.leftovers.app.data.withTags(com.leftovers.app.data.noteText(note), com.leftovers.app.data.hashtags(note).filter { it != envelopeTag })
         Icon(Lucide.PenLine, contentDescription = null, tint = c.textSecondary, modifier = Modifier.size(16.dp))
         Spacer(Modifier.width(8.dp))
         Text(
-            note.ifBlank { "Add a note" },
+            shown.ifBlank { "Add a note" },
             style = MaterialTheme.typography.labelLarge,
-            color = if (note.isBlank()) c.textTertiary else c.textPrimary,
+            color = if (shown.isBlank()) c.textTertiary else c.textPrimary,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )

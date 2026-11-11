@@ -155,6 +155,8 @@ fun BudgetsScreen(
     onEditPlan: () -> Unit,
     onOpenSubscriptions: () -> Unit,
     onOpenGoals: () -> Unit,
+    /** Opens the add screen, given the note to start with (the envelope's tag, when the budget is one). */
+    onAdd: (String) -> Unit = {},
     viewModel: BudgetsViewModel = viewModel(factory = AppViewModelProvider.Factory),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -172,10 +174,12 @@ fun BudgetsScreen(
         }
     }
 
+    val envelopeTag = LocalEnvelopeTag.current
     GlassScreen(
         title = "Budget",
         subtitle = state.month.label(),
         onBack = onBack,
+        actions = { com.leftovers.app.ui.components.RoundButton(Lucide.Plus, "Add an entry", { onAdd(envelopeTag?.let { "#$it" }.orEmpty()) }) },
     ) { padding ->
         LazyColumn(
             Modifier.fillMaxSize(),

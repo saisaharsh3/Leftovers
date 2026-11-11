@@ -42,7 +42,7 @@ object HelpGuide {
 
         // Budgets
         Item("Budgets", "Budget plan", "Monthly, Weeks (every week or two from payday), Dates (one amount for a trip or any dates) or 50/30/20.", "Plan → budget card → Budget plan", Place.BUDGET_PLAN, "monthly weekly payday 50 30 20 needs wants"),
-        Item("Budgets", "Envelope budgets", "A Dates budget can count only entries with a #tag like #trip, or from one account, so other spending leaves it alone.", "Plan → Budget plan → Dates", Place.BUDGET_PLAN, "envelope tag trip holiday"),
+        Item("Budgets", "Envelope budgets", "A Dates budget can count only entries with a #tag like #trip, or from one account, so other spending leaves it alone. With a tag, the add screen has a switch to count an entry in it, so there's no tag to type; the + on the Budget screen starts with it on.", "Plan → Budget plan → Dates", Place.BUDGET_PLAN, "envelope tag trip holiday"),
         Item("Budgets", "Category limits", "A monthly limit for a category, with alerts as you near it.", "Plan → budget card → Category limits", Place.BUDGET, "limit cap alert"),
         Item("Budgets", "Set aside", "Money kept out of what's left to spend, such as for bills still to come.", "Plan → budget card → Set aside", Place.BUDGET, "reserve save"),
         Item("Budgets", "Your own icons", "Make an icon from any picture, such as a shop's logo from a screenshot: tap the camera in an icon picker and frame it. It's kept on your phone to use again for categories, accounts and goals; long-press one to delete it.", "Settings → General → Categories → a category → Icon", Place.CATEGORIES, "logo picture photo custom icon brand shop"),

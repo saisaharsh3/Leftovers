@@ -115,7 +115,9 @@ fun TransactionRow(
     val c = LocalAppColors.current
     // The note's words as the title; its tags after the category, on their own.
     val text = com.leftovers.app.data.noteText(item.note)
-    val tags = com.leftovers.app.data.hashtags(item.note)
+    // The envelope budget's own tag is shown by the budget, not on every row (#57).
+    val envelopeTag = LocalEnvelopeTag.current
+    val tags = com.leftovers.app.data.hashtags(item.note).filter { it != envelopeTag }
     val hasNote = text.isNotBlank()
     ListRow(
         title = if (hasNote) text else item.categoryName,
@@ -985,3 +987,6 @@ private fun FrozenBlur(backdrop: com.kyant.backdrop.backdrops.LayerBackdrop, dim
             },
     )
 }
+
+/** The tag an envelope budget counts, when there is one: entries carry it, but rows don't show it (#57). */
+val LocalEnvelopeTag = androidx.compose.runtime.compositionLocalOf<String?> { null }

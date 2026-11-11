@@ -142,6 +142,7 @@ class MainActivity : FragmentActivity() {
                     val liquidCards = photo != null && android.os.Build.VERSION.SDK_INT >= 33 && s.liquidGlass
                     CompositionLocalProvider(
                         com.leftovers.app.ui.components.LocalBackgroundBackdrop provides (if (liquidCards) bgBackdrop else null),
+                        com.leftovers.app.ui.screens.LocalEnvelopeTag provides s.plan.envelopeTag,
                         LocalMoney provides money,
                         com.leftovers.app.util.LocalUse24Hour provides when (s.timeFormat) {
                             com.leftovers.app.data.TimeFormat.H12 -> false

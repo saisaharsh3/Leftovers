@@ -411,6 +411,7 @@ fun LeftoversNavHost(
                             onEditPlan = { nav.navigate(Routes.BUDGET_PLAN) },
                             onOpenSubscriptions = { nav.navigate(Routes.subscriptions()) },
                             onOpenGoals = { nav.navigate(Routes.GOALS) },
+                            onAdd = { note -> nav.navigate(Routes.add(note = note)) },
                         )
                     }
                     screen(Routes.BUDGET_PLAN) { BudgetPlanScreen(onBack = back) }

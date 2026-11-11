@@ -66,6 +66,12 @@ data class BudgetPlan(
     val rangeTag: String? = null,
     val rangeAccount: Long? = null,
 ) {
+    /** The tag an envelope counts, while it's one that counts by tag; null otherwise. */
+    val envelopeTag: String? get() = rangeTag?.takeIf { envelope }
+
+    /** Whether [date] is in the envelope's dates (or it has none set yet). */
+    fun envelopeCovers(date: LocalDate): Boolean = (rangeFrom == null || date >= rangeFrom) && (rangeTo == null || date <= rangeTo)
+
     /** An envelope: a Dates budget that counts only the entries chosen for it, so other spending and bills leave it be. */
     val envelope: Boolean get() = mode == BudgetMode.RANGE && (rangeTag != null || rangeAccount != null)
 

@@ -5,6 +5,8 @@ All notable changes to Leftovers. Download any version from
 
 ## Unreleased
 
+- Envelope budgets by #tag: a switch on the add screen counts an entry in the envelope, so there's no tag to type, and the envelope's tag isn't shown on every row (#57)
+- Add an entry straight from the Budget screen with its + button; with an envelope budget, it already counts in it (#57)
 - A money-owed link from a friend opens straight in Leftovers when you have it; without it, the page shows what was sent and how to get Leftovers
 - Opening an entry, a sheet or a pop-up is smoother: the screen behind is blurred at a sixth of its size and drawn back up, far less work on every frame, and it looks the same
 - Home: what scrolls under the clock is frosted, so the two never run into each other
