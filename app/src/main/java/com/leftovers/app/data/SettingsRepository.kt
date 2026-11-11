@@ -55,6 +55,8 @@ data class AppSettings(
     val budgetAlerts: Boolean,
     /** A split bill shows as one entry with its parts under it; off, each part is listed on its own. */
     val splitsAsOneBill: Boolean = true,
+    /** Activity shows every entry rather than one month's: the last choice, kept (#41). */
+    val activityAllTime: Boolean = false,
     val defaultAccountId: Long,
     val reminderEnabled: Boolean,
     /** Minutes after midnight for the daily reminder. */
@@ -168,6 +170,7 @@ class SettingsRepository(context: Context) {
             ),
             budgetAlerts = p[BUDGET_ALERTS] ?: true,
             splitsAsOneBill = p[SPLITS_ONE_BILL] ?: true,
+            activityAllTime = p[ACTIVITY_ALL_TIME] ?: false,
             defaultAccountId = p[DEFAULT_ACCOUNT] ?: 1L,
             reminderEnabled = p[REMINDER] ?: false,
             reminderMinutes = p[REMINDER_TIME] ?: (21 * 60),
@@ -275,6 +278,7 @@ class SettingsRepository(context: Context) {
     }
     suspend fun setBudgetAlerts(enabled: Boolean) = store.edit { it[BUDGET_ALERTS] = enabled }
     suspend fun setSplitsAsOneBill(enabled: Boolean) = store.edit { it[SPLITS_ONE_BILL] = enabled }
+    suspend fun setActivityAllTime(allTime: Boolean) = store.edit { it[ACTIVITY_ALL_TIME] = allTime }
     suspend fun setDefaultAccount(id: Long) = store.edit { it[DEFAULT_ACCOUNT] = id }
     suspend fun setReminder(enabled: Boolean, minutes: Int) = store.edit {
         it[REMINDER] = enabled
@@ -392,6 +396,7 @@ class SettingsRepository(context: Context) {
         val CARRY_FROM = stringPreferencesKey("carry_from")
         val BUDGET_ALERTS = booleanPreferencesKey("budget_alerts")
         val SPLITS_ONE_BILL = booleanPreferencesKey("splits_one_bill")
+        val ACTIVITY_ALL_TIME = booleanPreferencesKey("activity_all_time")
         val SENT_ALERTS = stringSetPreferencesKey("sent_alerts")
         val DISMISSED_SUGGESTIONS = stringSetPreferencesKey("dismissed_suggestions")
         val DELETED_KEEP_DAYS = intPreferencesKey("deleted_keep_days")

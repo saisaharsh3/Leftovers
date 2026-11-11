@@ -1,5 +1,6 @@
 package com.leftovers.app.ui.screens
 
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.Dispatchers
 import androidx.compose.animation.core.Spring
@@ -184,14 +185,19 @@ class HistoryViewModel(
     private val repository: TransactionRepository,
     accountRepository: AccountRepository,
     planning: PlanningRepository,
-    settings: com.leftovers.app.data.SettingsRepository,
+    private val settingsRepository: com.leftovers.app.data.SettingsRepository,
 ) : ViewModel() {
+    private val settings = settingsRepository
     private val month = MutableStateFlow(YearMonth.now())
     private val filter = MutableStateFlow(TypeFilter.ALL)
     private val query = MutableStateFlow("")
     private val filters = MutableStateFlow(ActivityFilters())
 
     init {
+        // By month or All time: as it was last left, however long ago (#41).
+        viewModelScope.launch {
+            filters.value = filters.value.copy(allTime = settings.settings.first().activityAllTime)
+        }
         // Activity shows the account Home is showing, however it's opened; all accounts on Home shows them all.
         // It can still be cleared here, until Home switches account again.
         viewModelScope.launch {
@@ -282,7 +288,10 @@ class HistoryViewModel(
     fun setMonth(value: YearMonth) { month.value = value }
     fun setFilter(value: TypeFilter) { filter.value = value }
     fun setQuery(value: String) { query.value = value }
-    fun setFilters(value: ActivityFilters) { filters.value = value }
+    fun setFilters(value: ActivityFilters) {
+        if (value.allTime != filters.value.allTime) viewModelScope.launch { settingsRepository.setActivityAllTime(value.allTime) }
+        filters.value = value
+    }
 
     fun delete(item: TransactionItem) {
         viewModelScope.launch { repository.deleteTransaction(item.toTransaction()) }

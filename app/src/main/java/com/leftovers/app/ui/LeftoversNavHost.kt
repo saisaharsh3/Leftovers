@@ -163,14 +163,11 @@ private val tabs = listOf(
  */
 private val navTween = tween<IntOffset>(340, easing = FastOutSlowInEasing)
 
+
 private fun NavBackStackEntry.route() = destination.route.orEmpty()
 private fun NavBackStackEntry.isTab() = route() in Routes.tabs
 private fun NavBackStackEntry.isAdd() = route().startsWith("add") || route().startsWith("edit")
 private fun NavBackStackEntry.isSheet() = route().startsWith("recap")
-
-/** Moving right along the dock, which slides like going forward; left slides like going back. */
-private fun forward(from: NavBackStackEntry, to: NavBackStackEntry) =
-    Routes.tabOrder.indexOf(to.route()) > Routes.tabOrder.indexOf(from.route())
 
 /** Registers a screen and hands its animation scope to shared-element modifiers. */
 private fun NavGraphBuilder.screen(
@@ -270,14 +267,9 @@ fun LeftoversNavHost(
                             // Add and edit slide up like a sheet: moving a finished layout is cheap and never stretches text.
                             targetState.isAdd() -> slideInVertically(tween(320, easing = FastOutSlowInEasing)) { it / 5 } + fadeIn(tween(220))
                             targetState.isSheet() -> slideInVertically(tween(420, easing = FastOutSlowInEasing)) { it } + fadeIn(tween(200))
-                            // Tabs move like going forward and back (Activity back to Home was the one that felt right):
-                            // the page that leaves slides all the way off, the one that arrives glides in from a quarter
-                            // of the way, in the direction of the dock.
-                            targetState.isTab() && initialState.isTab() -> if (forward(initialState, targetState)) {
-                                slideIntoContainer(SlideDirection.Start, navTween) + fadeIn(tween(220))
-                            } else {
-                                slideIntoContainer(SlideDirection.End, navTween) { it / 4 } + fadeIn(tween(220))
-                            }
+                            // Between tabs, a quick crossfade, as Apple's tab bars do: sliding both whole pages across
+                            // the screen made switching quickly stutter (#41: about 73% of frames late, against 38%).
+                            targetState.isTab() && initialState.isTab() -> fadeIn(tween(150))
                             else -> slideIntoContainer(SlideDirection.Start, navTween) + fadeIn(tween(220))
                         }
                     },
@@ -286,11 +278,7 @@ fun LeftoversNavHost(
                             // Scaling the screen behind would re-render its frosted blur every frame.
                             targetState.isAdd() -> fadeOut(tween(220))
                             targetState.isSheet() -> fadeOut(tween(300))
-                            targetState.isTab() && initialState.isTab() -> if (forward(initialState, targetState)) {
-                                slideOutOfContainer(SlideDirection.Start, navTween) { it / 4 } + fadeOut(tween(220))
-                            } else {
-                                slideOutOfContainer(SlideDirection.End, navTween) + fadeOut(tween(220))
-                            }
+                            targetState.isTab() && initialState.isTab() -> fadeOut(tween(100))
                             else -> slideOutOfContainer(SlideDirection.Start, navTween) { it / 4 } + fadeOut(tween(220))
                         }
                     },
@@ -298,8 +286,7 @@ fun LeftoversNavHost(
                         when {
                             initialState.isAdd() -> fadeIn(tween(220))
                             initialState.isSheet() -> fadeIn(tween(300))
-                            targetState.isTab() && initialState.isTab() && forward(initialState, targetState) ->
-                                slideIntoContainer(SlideDirection.Start, navTween) + fadeIn(tween(220))
+                            targetState.isTab() && initialState.isTab() -> fadeIn(tween(150))
                             else -> slideIntoContainer(SlideDirection.End, navTween) { it / 4 } + fadeIn(tween(220))
                         }
                     },
@@ -307,8 +294,7 @@ fun LeftoversNavHost(
                         when {
                             initialState.isAdd() -> slideOutVertically(tween(260, easing = FastOutSlowInEasing)) { it / 5 } + fadeOut(tween(200))
                             initialState.isSheet() -> slideOutVertically(tween(360, easing = FastOutSlowInEasing)) { it } + fadeOut(tween(260))
-                            targetState.isTab() && initialState.isTab() && forward(initialState, targetState) ->
-                                slideOutOfContainer(SlideDirection.Start, navTween) { it / 4 } + fadeOut(tween(220))
+                            targetState.isTab() && initialState.isTab() -> fadeOut(tween(100))
                             else -> slideOutOfContainer(SlideDirection.End, navTween) + fadeOut(tween(220))
                         }
                     },

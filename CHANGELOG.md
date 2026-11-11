@@ -5,6 +5,8 @@ All notable changes to Leftovers. Download any version from
 
 ## Unreleased
 
+- Switching tabs is a quick crossfade instead of sliding whole pages across, so switching fast no longer stutters (#41)
+- Activity remembers By month or All time, the way you left it (#41)
 - No thin bright outline around the screen when a pop-up or sheet opens: the glass behind no longer draws an edge, and a sheet catches the light only along its rounded top (#58)
 - Envelope budgets by #tag: a switch on the add screen counts an entry in the envelope, so there's no tag to type, and the envelope's tag isn't shown on every row (#57)
 - Add an entry straight from the Budget screen with its + button; with an envelope budget, it already counts in it (#57)
