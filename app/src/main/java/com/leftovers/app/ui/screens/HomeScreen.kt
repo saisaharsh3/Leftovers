@@ -1,5 +1,6 @@
 package com.leftovers.app.ui.screens
 
+import com.leftovers.app.ui.components.LocalUndo
 import androidx.compose.foundation.layout.asPaddingValues
 import com.leftovers.app.ui.components.frosted
 import com.leftovers.app.ui.components.Haptics
@@ -241,6 +242,21 @@ class HomeViewModel(
 
     fun dismissSms(id: Long) {
         viewModelScope.launch { sms.dismiss(id) }
+    }
+
+    /**
+     * A detected payment that is [match]'s person paying you back (or you paying them): settled against what's
+     * open with them instead of becoming income or spending. [onDone] gets the Undo.
+     */
+    fun paidBack(s: SmsSuggestion, match: com.leftovers.app.util.Payback.Match, onDone: (suspend () -> Unit) -> Unit) {
+        viewModelScope.launch {
+            val undoDebts = planning.recordPayback(match.person, s.amountMinor, s.accountId, s.epochDay)
+            sms.dismiss(s.id)
+            onDone {
+                undoDebts()
+                sms.putBack(s)
+            }
+        }
     }
 
     fun showAccount(id: Long?) {
@@ -742,10 +758,16 @@ fun HomeScreen(
                         Column(Modifier.padding(vertical = 6.dp)) {
                             state.smsSuggestions.take(5).forEachIndexed { i, s ->
                                 if (i > 0) RowDivider()
+                                // Someone paying you back (or you paying them): settled in Money owed, not income.
+                                val back = remember(s, state.owed) { com.leftovers.app.util.Payback.find(s.merchant, s.amountMinor, s.isIncome, state.owed) }
+                                val where = s.sender.ifBlank { if (s.source == SmsSuggestion.SOURCE_EMAIL) "email" else if (s.source == SmsSuggestion.SOURCE_APP) "payment app" else "bank SMS" }
                                 ListRow(
                                     title = s.merchant.ifBlank { if (s.isIncome) "Money in" else "Bank payment" },
-                                    subtitle = java.time.LocalDate.ofEpochDay(s.epochDay).friendlyLabel() + " · " +
-                                        s.sender.ifBlank { if (s.source == SmsSuggestion.SOURCE_EMAIL) "email" else if (s.source == SmsSuggestion.SOURCE_APP) "payment app" else "bank SMS" },
+                                    subtitle = if (back != null) {
+                                        (if (s.isIncome) "${back.person} paying you back?" else "Paying ${back.person} back?") + " · " + where
+                                    } else {
+                                        java.time.LocalDate.ofEpochDay(s.epochDay).friendlyLabel() + " · " + where
+                                    },
                                     leading = {
                                         IconTile(
                                             when (s.source) {
@@ -765,6 +787,15 @@ fun HomeScreen(
                                                 color = if (s.isIncome) c.positive else c.textPrimary,
                                             )
                                             Spacer(Modifier.width(10.dp))
+                                            if (back != null) {
+                                                val undo = LocalUndo.current
+                                                RoundButton(Lucide.Check, if (s.isIncome) "${back.person} paid you back" else "You paid ${back.person} back", {
+                                                    viewModel.paidBack(s, back) { restore ->
+                                                        undo.show(if (s.isIncome) "${back.person} paid you back" else "Paid ${back.person} back", restore)
+                                                    }
+                                                }, size = 34.dp, tint = c.onAccent, container = c.accent)
+                                                Spacer(Modifier.width(6.dp))
+                                            }
                                             RoundButton(Lucide.X, "Dismiss", { viewModel.dismissSms(s.id) }, size = 34.dp, tint = c.textTertiary)
                                         }
                                     },

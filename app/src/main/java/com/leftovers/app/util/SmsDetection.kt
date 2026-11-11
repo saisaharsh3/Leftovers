@@ -151,6 +151,13 @@ class SmsReceiver : BroadcastReceiver() {
             try {
                 val s = container.settings.settings.first()
                 if (!s.smsDetection) return@launch
+                // The balance the bank reports, for the account the message is about (#59): only the number is
+                // kept, and only for an account in the app's own currency, as the message's amounts are.
+                BankBalance.read(body)?.let { balance ->
+                    container.accounts.accounts.first().matchFor(body)?.takeIf { it.currency == null }?.let { account ->
+                        container.settings.setBankBalance(account.id, balance, System.currentTimeMillis())
+                    }
+                }
                 // The user's own keywords count too, for banks the built-in words miss.
                 val check = SmsParser.check(body, s.detectionKeywords)
                 // One the rules couldn't read (not an OTP or offer they skipped): the phone's own AI tries, where there is

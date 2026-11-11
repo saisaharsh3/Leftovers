@@ -1,5 +1,7 @@
 package com.leftovers.app.ui.screens
 
+import com.leftovers.app.data.openBalances
+import com.leftovers.app.ui.components.LocalUndo
 import com.leftovers.app.ui.components.Haptics
 import com.leftovers.app.ui.components.toggleHaptic
 import androidx.compose.foundation.gestures.transformable
@@ -176,6 +178,25 @@ class EditorViewModel(
     /** 50/30/20 with its picker on: an expense's category is chosen by Needs, Wants or Savings first (#39). */
     val pickByBucket: StateFlow<Boolean> = settings.settings.map { it.plan.buckets && it.plan.bucketPicker }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+
+    /** What's open with each person, to spot an entry that is really someone paying back. */
+    val openOwed: StateFlow<List<com.leftovers.app.data.PersonBalance>> = planning.debts.map { d -> d.openBalances().filter { it.netMinor != 0L } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /**
+     * This entry as someone paying you back (income) or you paying them (spending): settled in Money owed instead
+     * of saved as an entry. [onDone] gets what to say and the Undo.
+     */
+    fun recordPayback(match: com.leftovers.app.util.Payback.Match, onDone: (String, suspend () -> Unit) -> Unit) {
+        val amount = amountMinor
+        if (amount <= 0) return
+        val income = type == TxType.INCOME
+        viewModelScope.launch {
+            val undo = planning.recordPayback(match.person, amount, accountId, date.toEpochDay())
+            if (smsId > 0) sms.dismiss(smsId)
+            onDone(if (income) "${match.person} paid you back" else "Paid ${match.person} back", undo)
+        }
+    }
 
     /** The budget's envelope, when it counts entries by a #tag (#57): with its dates, to offer it only on those days. */
     val envelope: StateFlow<com.leftovers.app.data.BudgetPlan?> = settings.settings.map { it.plan.takeIf { p -> p.envelopeTag != null } }
@@ -974,6 +995,28 @@ fun EditorScreen(
             Spacer(Modifier.height(16.dp))
             // A long note is cut short here rather than pushing the buttons below off screen.
             NotePill(viewModel.note, onClick = { showNote = true }, modifier = Modifier.padding(horizontal = 32.dp).widthIn(max = 320.dp))
+            // Someone paying you back, typed as income (or you paying them, as spending): one tap records it in
+            // Money owed instead, so it isn't counted twice. Only for a new entry, by the note's name or the amount.
+            val owedNow by viewModel.openOwed.collectAsStateWithLifecycle()
+            val payback = if (viewModel.isEditing || viewModel.owed || viewModel.amountMinor <= 0) null
+            else remember(owedNow, viewModel.note, viewModel.amountMinor, viewModel.type) {
+                com.leftovers.app.util.Payback.find(com.leftovers.app.data.noteText(viewModel.note), viewModel.amountMinor, viewModel.type == TxType.INCOME, owedNow)
+            }
+            if (payback != null) {
+                val undo = LocalUndo.current
+                Spacer(Modifier.height(10.dp))
+                Chip(
+                    if (viewModel.type == TxType.INCOME) "${payback.person} paying you back? Record it" else "Paying ${payback.person} back? Record it",
+                    onClick = {
+                        viewModel.recordPayback(payback) { said, restore ->
+                            undo.show(said, restore)
+                            onClose()
+                        }
+                    },
+                    icon = Lucide.HandCoins,
+                    iconTint = c.textSecondary,
+                )
+            }
             // An envelope budget by #tag: one tap counts this entry in it, instead of typing the tag (#57).
             val envelope by viewModel.envelope.collectAsStateWithLifecycle()
             val envelopeTag = envelope?.envelopeTag

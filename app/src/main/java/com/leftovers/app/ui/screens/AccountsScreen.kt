@@ -1,5 +1,6 @@
 package com.leftovers.app.ui.screens
 
+import com.leftovers.app.ui.components.LocalUndo
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.graphics.graphicsLayer
 import kotlinx.coroutines.flow.flowOn
@@ -166,6 +167,22 @@ class AccountsViewModel(
         }
     }
 
+    /** What each account's bank last said its balance was, from an SMS (#59). */
+    val bankBalances: StateFlow<Map<Long, com.leftovers.app.data.BankFigure>> =
+        settings.settings.map { it.bankBalances }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
+
+    /**
+     * Sets [account]'s balance to what its bank said, by moving its opening balance by the difference (entries stay
+     * as they are). [onDone] gets the Undo.
+     */
+    fun matchBank(account: AccountWithBalance, bankMinor: Long, onDone: (suspend () -> Unit) -> Unit) {
+        val before = account.toAccount()
+        viewModelScope.launch {
+            repository.saveAccount(before.copy(openingMinor = before.openingMinor + (bankMinor - account.balanceMinor)))
+            onDone { repository.saveAccount(before) }
+        }
+    }
+
     val defaultAccountId: StateFlow<Long> =
         settings.settings.map { it.defaultAccountId }.flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 1L)
 
@@ -230,6 +247,7 @@ fun AccountsScreen(
 ) {
     val accounts by viewModel.accounts.collectAsStateWithLifecycle()
     val transfers by viewModel.transfers.collectAsStateWithLifecycle()
+    val bank by viewModel.bankBalances.collectAsStateWithLifecycle()
     val defaultId by viewModel.defaultAccountId.collectAsStateWithLifecycle()
     val c = LocalAppColors.current
     val money = LocalMoney.current
@@ -303,7 +321,7 @@ fun AccountsScreen(
                                 modifier = Modifier
                                     .trackScreenBounds { rowBounds[a.id] = it }
                                     .then(if (hidden == a.id) Modifier.graphicsLayer { alpha = 0f } else Modifier),
-                                subtitle = if (a.id == defaultId) "Default for new entries" else null,
+                                subtitle = bankLine(a, bank[a.id], money) ?: if (a.id == defaultId) "Default for new entries" else null,
                                 leading = { CategoryIcon(a.icon, a.color, size = 42.dp) },
                                 trailing = {
                                     if (arranging) GripHandle(c.textTertiary)
@@ -353,6 +371,14 @@ fun AccountsScreen(
         val all by viewModel.allTransactions.collectAsStateWithLifecycle()
         val debts by viewModel.debts.collectAsStateWithLifecycle()
         val b = viewModel.breakdown(a.toAccount(), all, transfers, debts)
+        val figure = bank[a.id]?.takeIf { a.currency == null }
+        // The bank's figure is behind the app's when something was added to this account after that message.
+        val changedSince = figure != null && (
+            all.any { it.accountId == a.id && it.createdAt > figure.at } ||
+                transfers.any { (it.fromAccountId == a.id || it.toAccountId == a.id) && it.createdAt > figure.at } ||
+                debts.any { it.accountId == a.id && it.createdAt > figure.at }
+            )
+        val undo = LocalUndo.current
         val latest = all.filter { it.accountId == a.id }.sortedWith(compareByDescending<TransactionItem> { it.epochDay }.thenByDescending { it.createdAt }).take(4)
         MorphCard(from = viewingFrom, onDismiss = { viewing = null; hidden = null }, onReveal = { hidden = null }, onShown = { hidden = viewing }) { close ->
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -386,6 +412,27 @@ fun AccountsScreen(
                     color = c.textSecondary,
                     modifier = Modifier.padding(top = 2.dp),
                 )
+            }
+            // What the bank's last message said (#59), and a way to make the app agree when it doesn't.
+            if (figure != null) {
+                val apart = figure.minor - a.balanceMinor
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(
+                        "Your bank said ${money.format(figure.minor)} ${bankWhen(figure.at)}" + when {
+                            apart == 0L -> ", the same as here."
+                            changedSince -> ". You've added to this account since, so it may not match."
+                            else -> ", ${money.format(kotlin.math.abs(apart))} ${if (apart > 0) "more" else "less"} than here."
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = c.textSecondary,
+                        modifier = Modifier.padding(horizontal = 6.dp),
+                    )
+                    if (apart != 0L && !changedSince) {
+                        SecondaryButton("Match the bank: ${money.format(figure.minor)}", {
+                            viewModel.matchBank(a, figure.minor) { restore -> undo.show("${a.name} matches the bank", restore) }
+                        }, Modifier.fillMaxWidth(), icon = Lucide.Check)
+                    }
+                }
             }
             if (latest.isNotEmpty()) {
                 Column {
@@ -832,5 +879,24 @@ private fun BalanceBreakdownCard(b: BalanceBreakdown, createdAt: Long) {
                 )
             }
         }
+    }
+}
+
+/** "Bank: ₹12,000 · today" under an account, when its bank has said; null otherwise. */
+private fun bankLine(a: AccountWithBalance, figure: com.leftovers.app.data.BankFigure?, money: com.leftovers.app.util.Money): String? {
+    if (figure == null || a.currency != null) return null
+    return "Bank: ${money.format(figure.minor)} · ${bankWhen(figure.at)}"
+}
+
+/** When a bank message came: "today at 9:42 AM", "yesterday", or its date. */
+private fun bankWhen(at: Long): String {
+    val zone = java.time.ZoneId.systemDefault()
+    val time = java.time.Instant.ofEpochMilli(at).atZone(zone)
+    val day = time.toLocalDate()
+    val today = LocalDate.now()
+    return when (day) {
+        today -> "today at " + time.toLocalTime().format(java.time.format.DateTimeFormatter.ofLocalizedTime(java.time.format.FormatStyle.SHORT))
+        today.minusDays(1) -> "yesterday"
+        else -> "on " + day.friendlyLabel()
     }
 }

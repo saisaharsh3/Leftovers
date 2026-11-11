@@ -47,6 +47,13 @@ fun <T> DragReorderColumn(
     var offset by remember { mutableStateOf(0f) }
     var from by remember { mutableStateOf(0) }
     val settle = remember { Animatable(0f) }
+    // The rows themselves follow the data too (a balance that changed), in the order shown: kept as a copy, they
+    // showed what each row said when the list was first drawn. Not while a row is held, so it doesn't jump.
+    androidx.compose.runtime.LaunchedEffect(items) {
+        if (dragging != null) return@LaunchedEffect
+        val latest = items.associateBy(key)
+        order.indices.forEach { i -> latest[key(order[i])]?.let { if (it != order[i]) order[i] = it } }
+    }
 
     // The place the held row would land on, from how far it's moved past its neighbours' middles.
     fun target(): Int {

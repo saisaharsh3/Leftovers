@@ -29,6 +29,23 @@ class PlanningRepository(private val database: AppDatabase) {
     suspend fun deleteDeposit(deposit: GoalDeposit) = goalDao.deleteDeposit(deposit)
 
     suspend fun saveDebt(debt: Debt) = debtDao.upsert(debt)
+
+    /**
+     * A payment that pays [person] back, or them paying you: recorded against what's open with them (see [settleUp]),
+     * never as income or spending. Returns how to take it back, for Undo: their entries as they were.
+     */
+    suspend fun recordPayback(person: String, amountMinor: Long, accountId: Long?, epochDay: Long): suspend () -> Unit {
+        val key = person.trim().lowercase()
+        val before = debtDao.getAll().filter { it.person.trim().lowercase() == key }
+        settleUp(person, amountMinor, accountId, chosen = accountId != null, epochDay = epochDay)
+        return {
+            database.withTransaction {
+                val keep = before.map { it.id }.toSet()
+                debtDao.getAll().filter { it.person.trim().lowercase() == key && it.id !in keep }.forEach { debtDao.delete(it) }
+                before.forEach { debtDao.upsert(it) }
+            }
+        }
+    }
     suspend fun deleteDebt(debt: Debt) {
         debtDao.delete(debt)
         debt.photos.forEach { com.leftovers.app.util.ReceiptStore.delete(it) }

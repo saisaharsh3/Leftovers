@@ -93,6 +93,8 @@ data class AppSettings(
     val homeAccountId: Long? = null,
     /** Extra words that mark a bank message as a payment, for banks the built-in rules miss. */
     val detectionKeywords: Set<String> = emptySet(),
+    /** The balance each account's bank last reported in an SMS, by account id (#59). Only the number and when. */
+    val bankBalances: Map<Long, BankFigure> = emptyMap(),
     /** Days between automatic backups: 1, 7 or 30. */
     val autoBackupDays: Int = 7,
     /** How many automatic backup files to keep; older ones are removed. */
@@ -191,6 +193,7 @@ class SettingsRepository(context: Context) {
             deletedKeepDays = p[DELETED_KEEP_DAYS] ?: 90,
             homeAccountId = p[HOME_ACCOUNT],
             detectionKeywords = p[DETECTION_KEYWORDS].orEmpty(),
+            bankBalances = BankFigure.decode(p[BANK_BALANCES]),
             backupPhotos = p[BACKUP_PHOTOS] ?: false,
             autoBackupDays = p[AUTO_BACKUP_DAYS] ?: 7,
             autoBackupKeep = p[AUTO_BACKUP_KEEP] ?: 4,
@@ -278,6 +281,13 @@ class SettingsRepository(context: Context) {
     }
     suspend fun setBudgetAlerts(enabled: Boolean) = store.edit { it[BUDGET_ALERTS] = enabled }
     suspend fun setSplitsAsOneBill(enabled: Boolean) = store.edit { it[SPLITS_ONE_BILL] = enabled }
+
+    /** Keeps what [accountId]'s bank said its balance was, as of [at]; only a newer figure replaces it. */
+    suspend fun setBankBalance(accountId: Long, minor: Long, at: Long) = store.edit {
+        val all = BankFigure.decode(it[BANK_BALANCES]).toMutableMap()
+        if ((all[accountId]?.at ?: 0L) <= at) all[accountId] = BankFigure(minor, at)
+        it[BANK_BALANCES] = BankFigure.encode(all)
+    }
     suspend fun setActivityAllTime(allTime: Boolean) = store.edit { it[ACTIVITY_ALL_TIME] = allTime }
     suspend fun setDefaultAccount(id: Long) = store.edit { it[DEFAULT_ACCOUNT] = id }
     suspend fun setReminder(enabled: Boolean, minutes: Int) = store.edit {
@@ -396,6 +406,7 @@ class SettingsRepository(context: Context) {
         val CARRY_FROM = stringPreferencesKey("carry_from")
         val BUDGET_ALERTS = booleanPreferencesKey("budget_alerts")
         val SPLITS_ONE_BILL = booleanPreferencesKey("splits_one_bill")
+        val BANK_BALANCES = stringPreferencesKey("bank_balances")
         val ACTIVITY_ALL_TIME = booleanPreferencesKey("activity_all_time")
         val SENT_ALERTS = stringSetPreferencesKey("sent_alerts")
         val DISMISSED_SUGGESTIONS = stringSetPreferencesKey("dismissed_suggestions")
@@ -435,5 +446,22 @@ class SettingsRepository(context: Context) {
 
         fun defaultCurrencyCode(): String =
             runCatching { Currency.getInstance(Locale.getDefault()).currencyCode }.getOrNull() ?: "USD"
+    }
+}
+
+/** A balance an account's bank reported, in minor units, and when the message came ([at], epoch millis). */
+data class BankFigure(val minor: Long, val at: Long) {
+    companion object {
+        /** "id:minor:at" pairs, comma separated. */
+        fun encode(all: Map<Long, BankFigure>): String = all.entries.joinToString(",") { (id, f) -> "$id:${f.minor}:${f.at}" }
+
+        fun decode(raw: String?): Map<Long, BankFigure> = raw.orEmpty().split(',').mapNotNull { part ->
+            val bits = part.split(':')
+            if (bits.size != 3) return@mapNotNull null
+            val id = bits[0].toLongOrNull() ?: return@mapNotNull null
+            val minor = bits[1].toLongOrNull() ?: return@mapNotNull null
+            val at = bits[2].toLongOrNull() ?: return@mapNotNull null
+            id to BankFigure(minor, at)
+        }.toMap()
     }
 }

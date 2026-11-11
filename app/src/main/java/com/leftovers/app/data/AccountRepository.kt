@@ -113,6 +113,9 @@ class SmsRepository(
 
     suspend fun dismiss(id: Long) = dao.delete(id)
 
+    /** A dismissed suggestion back as it was, for Undo (not through [add], which would see it as a repeat). */
+    suspend fun putBack(suggestion: SmsSuggestion) = dao.insert(suggestion)
+
     /** The account digits a detected payment's message named, if any. */
     suspend fun digitsFor(id: Long): String? = dao.digitsFor(id)
 
