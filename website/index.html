@@ -142,6 +142,91 @@
       </div>
     </section>
 
+    <!-- Make it yours: the app's Home, live, over any wallpaper. Pick one, or your own picture (it never leaves the browser),
+         soften the glass, tilt the phone, and settle the friend paying you back. -->
+    <section class="play-look" id="look" aria-labelledby="look-title">
+      <h2 id="look-title">Make it yours</h2>
+      <p class="section-lede">Any picture can be the background: one of these, a wallpaper you love, or a photo of your own. Pick how sharp it is and which glass goes over it. Try it here.</p>
+      <div class="look-grid">
+        <div class="look-stage" id="look-stage">
+          <div class="look-halo" id="look-halo" aria-hidden="true"></div>
+          <div class="look-phone" id="look-phone" role="img" aria-label="Leftovers' Home over the background you pick">
+            <div class="look-bg" id="look-bg"></div>
+            <div class="look-dim" id="look-dim"></div>
+            <div class="look-ui" id="look-ui">
+              <div class="lk-status" aria-hidden="true"><span>9:41</span><span class="lk-sys"><i></i><i></i><b></b></span></div>
+              <p class="lk-greet" id="lk-greet">Good afternoon</p>
+              <p class="lk-month" id="lk-month">November 2026</p>
+              <p class="lk-label">Safe to spend today</p>
+              <p class="lk-safe">₹1,016</p>
+              <div class="lk-meter"><span></span></div>
+              <div class="lk-card">
+                <small>Total balance</small>
+                <strong id="lk-balance">₹2,05,812</strong>
+                <div class="lk-split"><span><small>Spent this month</small><b>₹22,060</b></span><span><small>Income</small><b>₹75,000</b></span></div>
+              </div>
+              <p class="lk-head">Detected payments</p>
+              <div class="lk-card lk-list">
+                <div class="lk-row" id="lk-pay">
+                  <div class="lk-row-in">
+                    <span class="lk-tile"><svg viewBox="0 0 24 24"><path d="M7 2h10a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zM12 18h.01"/></svg></span>
+                    <span class="lk-text"><b>Arjun</b><small>Paying you back?</small></span>
+                    <span class="lk-amt in">+₹2,500</span>
+                    <button class="lk-ok" id="lk-ok" type="button" aria-label="Yes, Arjun is paying me back"><svg viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg></button>
+                  </div>
+                </div>
+                <div class="lk-row">
+                  <div class="lk-row-in">
+                    <span class="lk-tile"><svg viewBox="0 0 24 24"><path d="M7 2h10a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zM12 18h.01"/></svg></span>
+                    <span class="lk-text"><b>Swiggy</b><small>Today · bank text</small></span>
+                    <span class="lk-amt">₹640</span>
+                  </div>
+                </div>
+              </div>
+              <div class="lk-toast" id="lk-toast" aria-live="polite"><svg viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg><span>Settled in Money owed</span></div>
+              <div class="lk-dock" aria-hidden="true"><i class="on"></i><i></i><span>+</span><i></i><i></i></div>
+            </div>
+          </div>
+          <p class="look-hint" id="look-hint">Tap the ✓ to settle Arjun's payback. <span class="fine">Move over the phone to tilt it.</span><span class="coarse">Drag the phone to tilt it.</span></p>
+        </div>
+
+        <div class="panel look-controls">
+          <div class="ctl">
+            <p class="ctl-label">Background</p>
+            <div class="walls" role="radiogroup" aria-label="Background" id="walls">
+              <button class="wall" type="button" role="radio" aria-checked="false" data-src="" data-tone="#7b6cf6"><span class="wall-pic glow"></span><span class="wall-name">Glow</span></button>
+              <button class="wall" type="button" role="radio" aria-checked="true" data-src="assets/wallpapers/mountain.jpg" data-tone="#c9b18f"><span class="wall-pic" style="background-image:url(assets/wallpapers/mountain-thumb.jpg)"></span><span class="wall-name">Mountain</span></button>
+              <button class="wall" type="button" role="radio" aria-checked="false" data-src="assets/wallpapers/clouds.jpg" data-tone="#b9bcc4"><span class="wall-pic" style="background-image:url(assets/wallpapers/clouds-thumb.jpg)"></span><span class="wall-name">Clouds</span></button>
+              <button class="wall" type="button" role="radio" aria-checked="false" data-src="assets/wallpapers/cosmos.jpg" data-tone="#f08a4b"><span class="wall-pic" style="background-image:url(assets/wallpapers/cosmos-thumb.jpg)"></span><span class="wall-name">Cosmos</span></button>
+              <label class="wall own" id="own" role="radio" aria-checked="false">
+                <input class="sr" type="file" accept="image/*" id="look-file" aria-label="Use a picture of your own">
+                <span class="wall-pic" id="own-pic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span><span class="wall-name">Yours</span>
+              </label>
+            </div>
+            <p class="look-note" id="look-note">Your own picture stays in this browser. Nothing is uploaded.</p>
+          </div>
+          <div class="ctl">
+            <p class="ctl-label">Glass</p>
+            <div class="seg" role="radiogroup" aria-label="Glass" id="glass">
+              <button type="button" role="radio" aria-checked="true" data-glass="liquid">Liquid</button>
+              <button type="button" role="radio" aria-checked="false" data-glass="frosted">Frosted</button>
+              <span class="seg-ind" id="seg-ind" aria-hidden="true"></span>
+            </div>
+            <p class="look-note" id="glass-note">Liquid glass bends the picture at its edges, like real glass.</p>
+          </div>
+          <div class="ctl">
+            <div class="ctl-row"><label class="ctl-label" for="look-blur">Blur</label><strong id="blur-out">Soft</strong></div>
+            <input type="range" id="look-blur" min="0" max="24" value="2" step="1">
+          </div>
+          <div class="ctl">
+            <div class="ctl-row"><label class="ctl-label" for="look-dimming">Photo dimming</label><strong id="dim-out">20%</strong></div>
+            <input type="range" id="look-dimming" min="0" max="70" value="20" step="1">
+          </div>
+          <p class="look-foot">In the app: Settings → Appearance → Background → Your photo.</p>
+        </div>
+      </div>
+    </section>
+
     <!-- Insights: scrub the month with a finger; the label follows and reads each day. -->
     <section class="play-month" id="month" aria-labelledby="month-title">
       <h2 id="month-title">See where it went</h2>
@@ -312,6 +397,7 @@
   <script src="play.js" defer></script>
   <script src="gallery.js" defer></script>
   <script src="tour.js" defer></script>
+  <script src="look.js" defer></script>
   <script src="fx.js" defer></script>
 </body>
 </html>

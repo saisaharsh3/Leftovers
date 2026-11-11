@@ -8,6 +8,7 @@ on:
     paths:
       - "website/**"
       - "docs/screenshots/**"
+      - "docs/wallpapers/**"
       - "docs/icon.svg"
       - "docs/social-preview.png"
       - ".github/workflows/pages.yml"
@@ -37,6 +38,8 @@ jobs:
           cp docs/screenshots/*.jpg docs/icon.svg docs/social-preview.png _site/assets/
           # The same screens in the light theme, shown when the page is light.
           mkdir -p _site/assets/light && cp docs/screenshots/light/*.jpg _site/assets/light/
+          # The backgrounds to try in Make it yours.
+          mkdir -p _site/assets/wallpapers && cp docs/wallpapers/*.jpg _site/assets/wallpapers/
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
