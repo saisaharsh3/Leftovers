@@ -70,7 +70,11 @@ jobs:
             fi
           } > notes.md
 
+      # A tag with a "-" in it (v1.10.0-rc1) is a pre-release: never "latest", so the app's update check, the website
+      # and Obtainium keep offering the last full release. F-Droid builds only tags of digits and dots, so it waits too.
       - uses: softprops/action-gh-release@v3
         with:
           files: leftovers-${{ github.ref_name }}.apk
           body_path: notes.md
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          make_latest: ${{ !contains(github.ref_name, '-') }}

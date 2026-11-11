@@ -108,15 +108,19 @@ object UpdateCheck {
         }
     }
 
-    /** The version this app is, without "-dev". */
+    /** The version this app is, without "-dev" (a pre-release keeps its "-rc1", so the full release counts as newer). */
     fun installed(context: Context): String =
-        runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull().orEmpty().substringBefore('-')
+        runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull().orEmpty().substringBefore("-dev")
 
-    /** Whether [candidate] ("1.9.0") is newer than [current] ("1.8.1"). */
+    /**
+     * Whether [candidate] ("1.9.0") is newer than [current] ("1.8.1"). A full release is newer than its own
+     * pre-release ("1.10.0" after "1.10.0-rc1"), and a pre-release isn't newer than the full release it leads to.
+     */
     fun isNewer(candidate: String, current: String): Boolean {
-        fun parts(v: String) = v.trim().split('.').map { it.takeWhile(Char::isDigit).toIntOrNull() ?: 0 }
+        fun parts(v: String) = v.trim().substringBefore('-').split('.').map { it.takeWhile(Char::isDigit).toIntOrNull() ?: 0 }
         val a = parts(candidate)
         val b = parts(current)
+        if (a.zip(b).all { (x, y) -> x == y } && a.size == b.size) return '-' !in candidate.trim() && '-' in current.trim()
         for (i in 0 until maxOf(a.size, b.size)) {
             val x = a.getOrElse(i) { 0 }
             val y = b.getOrElse(i) { 0 }

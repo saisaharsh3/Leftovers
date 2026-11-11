@@ -5,6 +5,10 @@ All notable changes to Leftovers. Download any version from
 
 ## Unreleased
 
+## 1.10.0-rc1
+
+**A pre-release, to try before 1.10.0.** It installs over Leftovers and uses your data, and it updates the database: once it's installed, going back to 1.9.0 means uninstalling, which erases your data. Make a backup first (Settings → Data → Back up). The full 1.10.0 will install over it as usual.
+
 - A friend paying you back is recognised: a detected payment from someone who owes you (or to someone you owe) says "Priya paying you back?", and one tap settles it in Money owed instead of counting it as income. Names match however the bank writes them: "Ravi" saved, "Mr. RAVI KUMAR SHARMA", "Ravi K" or a UPI ID in the message; two different people never match, and when two could, the amount decides
 - The same on the add screen: typing a repayment as income offers to record it in Money owed instead
 - Bank balances from SMS (#59): when a bank message reports the balance ("Avl Bal Rs.12,000"), the account shows it next to its own, and offers to match it when they differ. Only the number is kept, never the message

@@ -13,5 +13,11 @@ class UpdateCheckTest {
         assertFalse(UpdateCheck.isNewer("1.8.1", "1.8.1"))
         assertFalse(UpdateCheck.isNewer("1.8.0", "1.8.1"))
         assertFalse(UpdateCheck.isNewer("1.8", "1.8.0"))
+        // A pre-release: the full release it leads to is newer, the release before it isn't.
+        assertTrue(UpdateCheck.isNewer("1.10.0", "1.10.0-rc1"))
+        assertFalse(UpdateCheck.isNewer("1.9.0", "1.10.0-rc1"))
+        assertFalse(UpdateCheck.isNewer("1.10.0-rc1", "1.10.0"))
+        assertFalse(UpdateCheck.isNewer("1.10.0-rc1", "1.10.0-rc1"))
+        assertTrue(UpdateCheck.isNewer("1.10.0-rc1", "1.9.0"))
     }
 }
