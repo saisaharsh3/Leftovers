@@ -864,8 +864,8 @@ fun AssistantSetupSheet(onDismiss: () -> Unit, viewModel: AssistantSetupViewMode
 
             Text(if (current == null) "Connect" else "Set up another AI", style = MaterialTheme.typography.labelMedium, color = c.textSecondary, modifier = Modifier.padding(start = 6.dp))
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                // The phone's own AI only in builds that have it.
-                AiProvider.entries.filter { it != AiProvider.ON_DEVICE || com.leftovers.app.ai.OnDevice.inBuild }.forEach { p ->
+                // The phone's own AI is offered in every build; one without it says where to get the version that has it.
+                AiProvider.entries.forEach { p ->
                     Chip(p.label, {
                         if (p != provider) {
                             provider = p
@@ -878,7 +878,9 @@ fun AssistantSetupSheet(onDismiss: () -> Unit, viewModel: AssistantSetupViewMode
             }
             provider.note?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = c.warning, modifier = Modifier.padding(start = 6.dp)) }
             val local = provider == AiProvider.ON_DEVICE
-            if (local) LocalModelStatus()
+            // This build doesn't have it (F-Droid's, or the plain APK): the GitHub one with it installs over this one.
+            val missing = local && !com.leftovers.app.ai.OnDevice.inBuild
+            if (missing) OnDeviceElsewhere() else if (local) LocalModelStatus()
 
             if (provider.baseUrl == null) {
                 GlassTextField(
@@ -962,7 +964,8 @@ fun AssistantSetupSheet(onDismiss: () -> Unit, viewModel: AssistantSetupViewMode
                 )
             }
 
-            Text(
+            // Nothing to agree to or connect when this build can't run it: only the card above, pointing to GitHub.
+            if (!missing) Text(
                 if (local) "It runs on this phone: your questions and data never leave it, and no key is needed. Changes still wait for your Apply." else
                 "Your key is encrypted on this phone and is only ever sent to ${provider.label}. " +
                     "When you ask something, your question and only the data needed to answer it are sent to ${provider.label} and handled under its privacy policy. " +
@@ -970,7 +973,7 @@ fun AssistantSetupSheet(onDismiss: () -> Unit, viewModel: AssistantSetupViewMode
                 style = MaterialTheme.typography.bodySmall,
                 color = c.textSecondary,
             )
-            Chip(
+            if (!missing) Chip(
                 "I understand",
                 { agreed = !agreed },
                 icon = if (agreed) Lucide.CircleCheck else Lucide.Plus,
@@ -982,7 +985,7 @@ fun AssistantSetupSheet(onDismiss: () -> Unit, viewModel: AssistantSetupViewMode
             val keepKey = savedKey != null && key.isEmpty() && sameServer
             // Custom servers may not need a key at all.
             val keyOk = keepKey || key.length >= 10 || provider == AiProvider.CUSTOM || local
-            PrimaryButton(
+            if (!missing) PrimaryButton(
                 when {
                     current == null -> "Connect"
                     keepKey -> "Save"
@@ -994,7 +997,7 @@ fun AssistantSetupSheet(onDismiss: () -> Unit, viewModel: AssistantSetupViewMode
                     onDismiss()
                 },
                 Modifier.fillMaxWidth(),
-                enabled = model.isNotBlank() && urlOk && keyOk && (keepKey || agreed),
+                enabled = !missing && model.isNotBlank() && urlOk && keyOk && (keepKey || agreed),
             )
             if (provider.baseUrl == null && customUrl.isNotBlank() && !urlOk) {
                 Text("The address must start with https://", style = MaterialTheme.typography.bodySmall, color = c.negative, modifier = Modifier.padding(start = 6.dp))
@@ -1020,6 +1023,41 @@ fun AssistantSetupSheet(onDismiss: () -> Unit, viewModel: AssistantSetupViewMode
 }
 
 /** Whether this phone has its own AI ready, with a way to get it when Android can download it. */
+@Composable
+private fun OnDeviceElsewhere() {
+    val c = LocalAppColors.current
+    val uri = androidx.compose.ui.platform.LocalUriHandler.current
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(22.dp))
+            .background(c.glass)
+            .border(1.dp, c.glassStrong, RoundedCornerShape(22.dp))
+            .padding(horizontal = 18.dp, vertical = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Text("Not in this version of Leftovers", style = MaterialTheme.typography.titleSmall, color = c.textPrimary)
+        Text(
+            "The phone's own AI (Gemini Nano, on phones like the Pixel 9 and OnePlus 15R) uses a Google library that " +
+                "isn't open source, so F-Droid can't include it. The same app with it built in is on GitHub: download " +
+                "the file ending in \"-ai.apk\" from the latest release. It installs over this one and keeps your data.",
+            style = MaterialTheme.typography.bodySmall,
+            color = c.textSecondary,
+        )
+        Text(
+            "F-Droid's updates are the version without it, so update that one from GitHub (Obtainium can do it for you).",
+            style = MaterialTheme.typography.bodySmall,
+            color = c.textSecondary,
+        )
+        PrimaryButton(
+            "Get it from GitHub",
+            { uri.openUri("https://github.com/saisaharsh3/Leftovers/releases/latest") },
+            Modifier.fillMaxWidth(),
+            icon = Lucide.ArrowUpRight,
+        )
+    }
+}
+
 @Composable
 private fun LocalModelStatus() {
     val c = LocalAppColors.current

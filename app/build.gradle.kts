@@ -16,9 +16,10 @@ val signing = Properties().apply {
 fun signingValue(key: String, env: String): String? = signing.getProperty(key) ?: System.getenv(env)
 
 /**
- * On-device AI (Gemini Nano, which Android keeps on phones like the Pixel 9 and OnePlus 15R) for Dev builds only.
- * Google's library for it isn't open source, so it's named on the build command (-PonDeviceAi=group:name:version)
- * and never in this file: release and F-Droid builds don't have it, and its code in src/ondevice isn't compiled.
+ * On-device AI (Gemini Nano, which Android keeps on phones like the Pixel 9 and OnePlus 15R), for the Dev build and
+ * the GitHub release's "-ai" APK. Google's library for it isn't open source, so it's named on the build command
+ * (-PonDeviceAi=group:name:version) and never in this file: F-Droid's build, and the plain APK it is checked against,
+ * don't have it, and its code in src/ondevice isn't compiled without it.
  */
 val onDeviceAi: String? = providers.gradleProperty("onDeviceAi").orNull
 
@@ -65,6 +66,8 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            // Only for the "-ai" APK, built with -PonDeviceAi: the plain one and F-Droid's are as before.
+            if (onDeviceAi != null) proguardFile("proguard-ondevice.pro")
         }
         // The Dev build testers install from GitHub: optimized like a release, so its speed is the real app's
         // (a debug build starts about three times slower and stutters), but it installs as Leftovers Dev.
@@ -120,7 +123,12 @@ android {
         // The Dev build shares the debug build's name and amber icon.
         getByName("dev").res.srcDir("src/debug/res")
         getByName("debug").assets.srcDir("$projectDir/schemas")
-        if (onDeviceAi != null) getByName("dev").kotlin.directories += "src/ondevice/java"
+        if (onDeviceAi != null) {
+            getByName("dev").kotlin.directories += "src/ondevice/java"
+            getByName("release").kotlin.directories += "src/ondevice/java"
+            // Lets the AI settings see whether Android AICore is installed (the Dev build has its own copy).
+            getByName("release").manifest.srcFile("src/ondevice/AndroidManifest.xml")
+        }
     }
 }
 
@@ -186,5 +194,8 @@ dependencies {
     // Email payment detection (IMAP over TLS). Only used when the user connects a mailbox.
     implementation(libs.angus.mail)
     implementation(libs.pdfbox.android)
-    onDeviceAi?.let { add("devImplementation", it) }
+    onDeviceAi?.let {
+        add("devImplementation", it)
+        add("releaseImplementation", it)
+    }
 }

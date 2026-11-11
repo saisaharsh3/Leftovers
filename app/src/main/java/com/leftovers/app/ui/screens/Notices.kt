@@ -160,6 +160,10 @@ private fun noteIcon(name: String) = when (name) {
     "search" -> Lucide.Search
     "receipt" -> Lucide.ReceiptText
     "bot" -> Lucide.BotMessageSquare
+    "handcoins" -> Lucide.HandCoins
+    "link" -> Lucide.Link
+    "zap" -> Lucide.Zap
+    "landmark" -> Lucide.Landmark
     else -> Lucide.Sparkles
 }
 

@@ -11,11 +11,11 @@ object WhatsNew {
     data class Note(val icon: String, val title: String, val text: String)
 
     val items = listOf(
-        Note("palette", "Make it yours", "A background of your choice, even your own photo behind liquid glass, and an accent colour."),
-        Note("party", "Greetings and a weekly note", "Festival wishes where you live, and a short note on your week every Sunday."),
-        Note("search", "Help & features", "Find any feature and where it is, in Settings, or just ask the AI assistant."),
-        Note("receipt", "Better statement imports", "Payment app statements read right, and an import can be undone or removed."),
-        Note("bot", "A smarter assistant", "PDF statements, CSV exports and goals from the chat, and switch AIs without a new key."),
+        Note("handcoins", "Paid back, not income", "When a friend pays you back, it's spotted, even with their full name in the SMS, and settled in Money owed with one tap."),
+        Note("link", "Share what's owed", "Remind someone and they get a link: if they use Leftovers too, one tap adds it to theirs."),
+        Note("zap", "Small payments, added for you", "Turn on adding automatically, and bank-SMS spending up to your amount goes straight in."),
+        Note("landmark", "Your bank's balance", "When a bank SMS says the balance, each account shows it, and can match it."),
+        Note("palette", "Make it yours", "Your own photo behind liquid glass, an accent colour, your own icons, and categories you can hide."),
     )
 
     /** The changes in a line each, for the AI assistant. */

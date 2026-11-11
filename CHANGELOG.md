@@ -5,6 +5,7 @@ All notable changes to Leftovers. Download any version from
 
 ## Unreleased
 
+- The phone's own AI in the regular app: each GitHub release has a second download, ending in -ai.apk, with it built in (the same app, so either installs over the other). F-Droid's version can't include Google's library, so its AI settings show where to get it
 - Add small payments automatically (Settings → Detect bank SMS): spending from bank SMS up to an amount you choose goes straight in, under the category that place had last time. Bigger ones, money coming in, and anything that may be paying someone back still wait on Home
 ## 1.10.0-rc1
 
