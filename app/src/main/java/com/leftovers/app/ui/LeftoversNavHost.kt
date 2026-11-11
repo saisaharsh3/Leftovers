@@ -1,7 +1,5 @@
 package com.leftovers.app.ui
 
-import kotlinx.coroutines.launch
-import androidx.compose.ui.graphics.graphicsLayer
 import com.leftovers.app.ui.components.Haptics
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.runtime.rememberCoroutineScope
@@ -234,13 +232,6 @@ fun LeftoversNavHost(
     }
 
     val swipeThreshold = with(LocalDensity.current) { 72.dp.toPx() }
-    // How far the current tab follows the finger while swiping to the next one: it moves with the drag, a little
-    // held back, so the swipe answers right away instead of only once the finger lifts.
-    val swipeOffset = remember { androidx.compose.animation.core.Animatable(0f) }
-    val swipeScope = rememberCoroutineScope()
-    LaunchedEffect(currentRoute) {
-        if (swipeOffset.value != 0f) swipeOffset.animateTo(0f, tween(340, easing = FastOutSlowInEasing))
-    }
 
     SharedTransitionLayout(Modifier.fillMaxSize()) {
         CompositionLocalProvider(
@@ -256,37 +247,23 @@ fun LeftoversNavHost(
                     modifier = Modifier
                         .fillMaxSize()
                         .then(if (liquid) Modifier.layerBackdrop(backdrop) else Modifier)
-                        .graphicsLayer { translationX = swipeOffset.value }
                         // Swipe sideways on a tab to move to the next one. Anything inside that handles its own
                         // sideways drag (swipeable rows, scrolling card rows, the chart) gets it first.
                         .pointerInput(currentRoute) {
                             val index = Routes.tabOrder.indexOf(currentRoute)
                             if (index < 0) return@pointerInput
                             var dx = 0f
-                            val velocity = androidx.compose.ui.input.pointer.util.VelocityTracker()
-                            fun settle() = swipeScope.launch { swipeOffset.animateTo(0f, spring(dampingRatio = 1f, stiffness = Spring.StiffnessMediumLow)) }
                             detectHorizontalDragGestures(
-                                onDragStart = { dx = 0f; velocity.resetTracking() },
+                                onDragStart = { dx = 0f },
                                 onDragEnd = {
-                                    // A quick flick goes to the next tab too, not only a long drag.
-                                    val fling = velocity.calculateVelocity().x
                                     val next = when {
-                                        dx < -swipeThreshold || (dx < 0 && fling < -1200f) -> index + 1
-                                        dx > swipeThreshold || (dx > 0 && fling > 1200f) -> index - 1
+                                        dx < -swipeThreshold -> index + 1
+                                        dx > swipeThreshold -> index - 1
                                         else -> index
                                     }
-                                    // Going: the page stays where the finger left it and eases home as the next tab
-                                    // arrives (below), so the move carries on. Staying: it springs back.
-                                    if (next != index && next in Routes.tabOrder.indices) nav.switchTab(Routes.tabOrder[next]) else settle()
+                                    if (next != index && next in Routes.tabOrder.indices) nav.switchTab(Routes.tabOrder[next])
                                 },
-                                onDragCancel = { settle() },
-                            ) { change, amount ->
-                                dx += amount
-                                velocity.addPosition(change.uptimeMillis, change.position)
-                                // Held back to a third, and more at the first and last tab, where there's nowhere to go.
-                                val edge = (dx > 0 && index == 0) || (dx < 0 && index == Routes.tabOrder.lastIndex)
-                                swipeScope.launch { swipeOffset.snapTo(dx * if (edge) 0.12f else 0.33f) }
-                            }
+                            ) { _, amount -> dx += amount }
                         },
                     enterTransition = {
                         when {

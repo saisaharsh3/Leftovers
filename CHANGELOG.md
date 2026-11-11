@@ -10,7 +10,6 @@ All notable changes to Leftovers. Download any version from
 - Bank balances from SMS (#59): when a bank message reports the balance ("Avl Bal Rs.12,000"), the account shows it next to its own, and offers to match it when they differ. Only the number is kept, never the message
 - The Accounts list shows balances as they change, not as they were when it opened
 - Help & features is the first thing in Settings, where someone new finds it
-- Swiping between tabs: the page moves with your finger and carries on into the next tab (a quick flick works too), instead of only switching after you let go and springing back first
 - Tab names in the bar are never shown cut off as the selected one changes
 - Activity no longer flashes "No entries" or a stray ₹ in its total while it opens
 - Help: after Open took you to a tab, the other tabs work as usual (Home couldn't be reached, it showed that tab again)
