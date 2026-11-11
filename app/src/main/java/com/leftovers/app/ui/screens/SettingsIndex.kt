@@ -13,6 +13,7 @@ object SettingsIndex {
     const val SECURITY = "Security"
     const val REMINDERS = "Reminders & alerts"
     const val DETECTION = "Payment detection"
+    const val PAID = "Getting paid"
     const val AI = "AI assistant"
     const val GENERAL = "General"
     const val DATA = "Backup & data"
@@ -37,6 +38,7 @@ object SettingsIndex {
             ),
             listOf(
                 Page(DETECTION, Lucide.Smartphone, "Bank SMS, payment apps, email", Palette.MINT),
+                Page(PAID, Lucide.HandCoins, "UPI ID or other ways friends pay you back", Palette.LIME),
                 Page(REMINDERS, Lucide.Bell, "Daily reminder, bills, budget alerts", Palette.AMBER),
                 Page(AI, Lucide.BotMessageSquare, "", Palette.IRIS),
             ),
@@ -73,6 +75,10 @@ object SettingsIndex {
             Entry("Detect payment apps", DETECTION, Lucide.Bell, "notification gpay google pay phonepe paytm upi"),
             Entry("Detect payments in email", DETECTION, Lucide.Mail, "gmail mailbox inbox outlook"),
             Entry("Detection keywords", DETECTION, Lucide.Tag, "bank words test a message not detected"),
+            Entry("UPI ID", PAID, Lucide.Wallet, "upi vpa gpay phonepe paytm bhim pay me back reminder"),
+            Entry("Payment link", PAID, Lucide.ExternalLink, "paypal revolut wise venmo cash app monzo pay me back"),
+            Entry("Bank details", PAID, Lucide.Landmark, "iban account sort code swift bic transfer"),
+            Entry("Add to reminders", PAID, Lucide.Bell, "remind money owed share payment details"),
             Entry("Currency", GENERAL, Lucide.Coins, "rupee dollar euro symbol money"),
             Entry("Show a split bill as one entry", GENERAL, Lucide.Split, "split friends parts"),
             Entry("Categories", GENERAL, Lucide.Tag, "icons needs wants hide"),

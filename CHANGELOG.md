@@ -5,6 +5,13 @@ All notable changes to Leftovers. Download any version from
 
 ## Unreleased
 
+- Getting paid (Settings → Getting paid): your UPI ID, or for friends where UPI isn't used, a payment link (PayPal.me, Revolut, Wise...) or bank details. Reminders from Money owed carry them, and the link's page and a friend's Leftovers turn them into "Pay ₹750 with UPI", which opens their UPI app with the amount in. Only what you add is shared, only with the people you remind, and never a PIN
+- Share a group split: the share button on a bill split with people sends one message to the group with each person's share; each taps their own name to see it, pay you, or add it to their Leftovers
+- Reminders for a share of a group bill say so: "your share of Dinner is ₹750 (a ₹3,000 bill split 4 ways)"
+- A clearer link preview when a reminder is shared, with its own picture and title
+- A setting opened from the search no longer stays green after it's lit up
+- The account picker's buttons stay on one line with larger text sizes
+
 ## 1.10.0-rc2
 
 **A second pre-release, to try before 1.10.0.** It replaces 1.10.0-rc1 and installs over it, or over 1.9.0, keeping your data. Coming from 1.9.0, it updates the database: once it's installed, going back to 1.9.0 means uninstalling, which erases your data, so make a backup first (in 1.9.0: Settings → Data → Back up). The full 1.10.0 will install over it as usual.

@@ -398,7 +398,8 @@ fun HomeScreen(
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 SecondaryButton("Accounts", { close(onOpenAccounts) }, Modifier.weight(1f))
                 if (state.accounts.size >= 2) RoundButton(Lucide.Repeat, "Transfer between accounts", { close { transferring = true } }, size = 56.dp)
-                PrimaryButton("See activity", { close { onOpenActivity(null, selected?.id) } }, Modifier.weight(1.4f), icon = Lucide.ArrowUpRight)
+                // Short, so it stays on one line with larger text sizes too; the arrow says it opens.
+                PrimaryButton("Activity", { close { onOpenActivity(null, selected?.id) } }, Modifier.weight(1f), icon = Lucide.ArrowUpRight)
             }
         }
     }

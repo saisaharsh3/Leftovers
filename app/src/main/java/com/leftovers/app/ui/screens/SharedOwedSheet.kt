@@ -51,7 +51,14 @@ import kotlin.math.abs
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun SharedOwedSheet(shared: SharedOwed.Shared, onDismiss: () -> Unit) {
+fun SharedOwedSheet(sent: SharedOwed.Shared, onDismiss: () -> Unit) {
+    // A link shared with a whole group: each person picks their own name, and only their share is shown.
+    var me by rememberSaveable { mutableStateOf<String?>(null) }
+    if (sent.group && me == null) {
+        PickYourName(sent, onPick = { me = it }, onDismiss = onDismiss)
+        return
+    }
+    val shared = me?.let { sent.forName(it) } ?: sent
     val c = LocalAppColors.current
     val money = LocalMoney.current
     val undo = LocalUndo.current
@@ -95,8 +102,10 @@ fun SharedOwedSheet(shared: SharedOwed.Shared, onDismiss: () -> Unit) {
                 Text(if (net < 0) "You owe" else "You're owed", style = MaterialTheme.typography.labelLarge, color = if (net < 0) c.textSecondary else c.positive)
                 Text(theirs.format(abs(net)), style = MaterialTheme.typography.displaySmall, color = if (net < 0) c.textPrimary else c.positive)
                 if (fresh.size == 1) {
+                    val l = fresh[0]
+                    val group = if (l.splitPeople > 1) "your share of ${theirs.format(l.splitTotalMinor)}, split ${l.splitPeople} ways" else ""
                     Text(
-                        listOf(fresh[0].note, LocalDate.ofEpochDay(fresh[0].epochDay).friendlyLabel()).filter { it.isNotBlank() }.joinToString(" · "),
+                        listOf(l.note, group, LocalDate.ofEpochDay(l.epochDay).friendlyLabel()).filter { it.isNotBlank() }.joinToString(" · "),
                         style = MaterialTheme.typography.bodySmall,
                         color = c.textSecondary,
                     )
@@ -128,6 +137,38 @@ fun SharedOwedSheet(shared: SharedOwed.Shared, onDismiss: () -> Unit) {
                     modifier = Modifier.padding(horizontal = 6.dp),
                 )
             }
+            // They sent how to pay them: UPI opens your UPI app with the amount in; a link opens in the browser.
+            val pay = shared.pay
+            if (pay != null && net < 0) {
+                val context = LocalContext.current
+                val owe = -net
+                val upi = SharedOwed.upiUri(pay, owe, shared.currency)
+                if (upi != null) {
+                    com.leftovers.app.ui.components.SecondaryButton("Pay ${theirs.format(owe)} with UPI", {
+                        runCatching { context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(upi))) }
+                            .onFailure { android.widget.Toast.makeText(context, "No UPI app on this phone. Their UPI ID is ${pay.upi}", android.widget.Toast.LENGTH_LONG).show() }
+                    }, Modifier.fillMaxWidth(), icon = com.leftovers.app.ui.icons.Lucide.Wallet)
+                }
+                if (pay.link.isNotBlank()) {
+                    com.leftovers.app.ui.components.SecondaryButton("Pay with ${pay.linkHost.ifBlank { "their link" }}", {
+                        runCatching { context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(pay.link))) }
+                    }, Modifier.fillMaxWidth(), icon = com.leftovers.app.ui.icons.Lucide.ExternalLink)
+                }
+                if (pay.bank.isNotBlank()) {
+                    val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
+                    com.leftovers.app.ui.components.SecondaryButton("Copy their bank details", {
+                        clipboard.setText(androidx.compose.ui.text.AnnotatedString(pay.bank))
+                        android.widget.Toast.makeText(context, "Copied", android.widget.Toast.LENGTH_SHORT).show()
+                    }, Modifier.fillMaxWidth(), icon = com.leftovers.app.ui.icons.Lucide.Landmark)
+                }
+                Text(
+                    listOfNotNull(pay.upi.takeIf { it.isNotBlank() }?.let { "UPI ID: $it" }, pay.name.takeIf { it.isNotBlank() }, pay.bank.takeIf { it.isNotBlank() }?.replace("\n", ", "))
+                        .joinToString(" · ").ifBlank { "Pays through ${pay.linkHost}" },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = c.textSecondary,
+                    modifier = Modifier.padding(horizontal = 6.dp),
+                )
+            }
             GlassTextField(person, { person = it.take(30) }, placeholder = "Their name", label = "Who sent this?")
             if (people.isNotEmpty() && sender == null) {
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -144,6 +185,34 @@ fun SharedOwedSheet(shared: SharedOwed.Shared, onDismiss: () -> Unit) {
                     onDismiss()
                 }
             }, Modifier.fillMaxWidth(), enabled = person.isNotBlank())
+        }
+    }
+}
+
+/** A group link's first step: whose share this is, everyone's listed with their amount. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun PickYourName(sent: SharedOwed.Shared, onPick: (String) -> Unit, onDismiss: () -> Unit) {
+    val c = LocalAppColors.current
+    val money = LocalMoney.current
+    val theirs = if (sent.currency.isNotBlank() && sent.currency != money.currency.currencyCode) Money(sent.currency) else money
+    val first = sent.lines.first()
+    GlassSheet(onDismiss) {
+        Column(Modifier.padding(horizontal = 20.dp).padding(bottom = 16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            Text("A bill split with your group", style = MaterialTheme.typography.headlineSmall, color = c.textPrimary)
+            Text(
+                listOf(first.note, if (first.splitPeople > 1) "${theirs.format(first.splitTotalMinor)}, split ${first.splitPeople} ways" else "")
+                    .filter { it.isNotBlank() }.joinToString(" · "),
+                style = MaterialTheme.typography.bodyMedium,
+                color = c.textSecondary,
+            )
+            Text("Which one is you?", style = MaterialTheme.typography.titleSmall, color = c.textPrimary)
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                sent.names.forEach { name ->
+                    val amount = sent.lines.filter { it.name == name }.sumOf { it.amountMinor }
+                    Chip("$name · ${theirs.format(amount)}", onClick = { onPick(name) })
+                }
+            }
         }
     }
 }

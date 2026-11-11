@@ -289,6 +289,17 @@ fun TransactionPeekCard(
                         color = c.textSecondary,
                         modifier = Modifier.weight(1f),
                     )
+                    // Split with people who still owe: one message to the group's chat, each finds their own share.
+                    if (shares.any { it.amountMinor > 0 && !it.settled }) {
+                        val context = androidx.compose.ui.platform.LocalContext.current
+                        val shareScope = androidx.compose.runtime.rememberCoroutineScope()
+                        com.leftovers.app.ui.components.RoundButton(Lucide.Share2, "Share with the group", {
+                            shareScope.launch {
+                                com.leftovers.app.util.DebtReminder.groupWithLink(context, main.id, money.currency.currencyCode, money::format)
+                                    ?.let { com.leftovers.app.util.DebtReminder.share(context, it, "the group") }
+                            }
+                        }, size = 36.dp, tint = c.textPrimary)
+                    }
                 }
                 // Tapping a line opens it to change: a part on its own, the main entry with the whole bill.
                 bill.forEach { b ->

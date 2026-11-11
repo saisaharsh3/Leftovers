@@ -492,6 +492,17 @@ class SettingsViewModel(
         viewModelScope.launch { settingsRepository.setSmsAutoMax(minor) }
     }
 
+    /** How friends can pay you back, for the reminders sent from Money owed. */
+    val pay: StateFlow<com.leftovers.app.util.SharedOwed.Pay> =
+        settingsRepository.payDetailsFlow.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), com.leftovers.app.util.SharedOwed.Pay())
+    val payShare: StateFlow<Boolean> = settingsRepository.payShareFlow.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), true)
+    fun setPay(pay: com.leftovers.app.util.SharedOwed.Pay) {
+        viewModelScope.launch { settingsRepository.setPayDetails(com.leftovers.app.util.SharedOwed.clean(pay)) }
+    }
+    fun setPayShare(on: Boolean) {
+        viewModelScope.launch { settingsRepository.setPayShare(on) }
+    }
+
     fun setAppNotifications(enabled: Boolean) {
         viewModelScope.launch { settingsRepository.setAppNotifications(enabled) }
     }
@@ -701,6 +712,11 @@ fun SettingsScreen(
             SettingsJump.section = null
             SettingsJump.row = null
             SettingsJump.rowTop = null
+        }
+        // The lit row fades on its own clock: clearing the section above restarts that effect, which would cancel a
+        // wait inside it and leave the row lit for good.
+        LaunchedEffect(SettingsJump.flash) {
+            if (SettingsJump.flash == null) return@LaunchedEffect
             kotlinx.coroutines.delay(1600)
             SettingsJump.flash = null
         }
@@ -932,6 +948,61 @@ fun SettingsScreen(
                         }
                     }
                 }
+                }
+                // Getting paid: UPI for India, other ways for everyone else, and what's safe to share.
+                if (shown == SettingsIndex.PAID) {
+                    item {
+                        val pay by viewModel.pay.collectAsStateWithLifecycle()
+                        val share by viewModel.payShare.collectAsStateWithLifecycle()
+                        var editingPay by rememberSaveable { mutableStateOf(false) }
+                        if (editingPay) PayDetailsSheet(pay, onSave = { viewModel.setPay(it); editingPay = false }, onDismiss = { editingPay = false })
+                        Column {
+                            Text(
+                                "Put in the reminders you send from Money owed, so a friend pays you back in one tap: UPI opens their UPI app with the amount filled in.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = c.textSecondary,
+                                modifier = Modifier.padding(start = 8.dp, end = 8.dp, bottom = 12.dp),
+                            )
+                            SectionHeader("UPI (India)")
+                            Glass(Modifier.fillMaxWidth()) {
+                                Column(Modifier.padding(vertical = 6.dp)) {
+                                    NavRow(Lucide.Wallet, "UPI ID", pay.upi.ifBlank { "Not added" }) { editingPay = true }
+                                    if (pay.upi.isNotBlank()) {
+                                        RowDivider()
+                                        NavRow(Lucide.Users, "Name on it", pay.name.ifBlank { pay.upi.substringBefore('@') }) { editingPay = true }
+                                    }
+                                }
+                            }
+                            SectionHeader("Other ways to pay", Modifier.padding(top = 8.dp))
+                            Text(
+                                "For friends where UPI isn't used: a payment link (PayPal.me, Revolut, Wise, Venmo...) or bank details to copy.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = c.textTertiary,
+                                modifier = Modifier.padding(start = 8.dp, end = 8.dp, bottom = 10.dp),
+                            )
+                            Glass(Modifier.fillMaxWidth()) {
+                                Column(Modifier.padding(vertical = 6.dp)) {
+                                    NavRow(Lucide.ExternalLink, "Payment link", pay.linkHost.ifBlank { "Not added" }) { editingPay = true }
+                                    RowDivider()
+                                    NavRow(Lucide.Landmark, "Bank details", if (pay.bank.isBlank()) "Not added" else "Added") { editingPay = true }
+                                }
+                            }
+                            Glass(Modifier.fillMaxWidth().padding(top = 16.dp)) {
+                                Column(Modifier.padding(vertical = 6.dp)) {
+                                    ToggleRow(Lucide.Bell, "Add to reminders", share && !pay.isEmpty, { on -> if (pay.isEmpty) editingPay = true else viewModel.setPayShare(on) })
+                                }
+                            }
+                            SectionHeader("Keeping it safe", Modifier.padding(top = 8.dp))
+                            Glass(Modifier.fillMaxWidth()) {
+                                Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                                    LiquidCost(Lucide.Shield, "Only your UPI ID is shared: never your UPI PIN, bank login or card.")
+                                    LiquidCost(Lucide.Lock, "Nobody needs your UPI PIN to pay you. If someone asks for it so they can send you money, it's a scam.")
+                                    LiquidCost(Lucide.CircleCheck, "Their UPI app shows your name before they pay, so they can check it's you.")
+                                    LiquidCost(Lucide.Link, "Payment links open only secure (https) pages, and nothing goes through a server: it's all in the message you send.")
+                                }
+                            }
+                        }
+                    }
                 }
                 if (shown == SettingsIndex.REMINDERS) {
                 item {

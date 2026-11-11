@@ -3,14 +3,18 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>Add to Leftovers</title>
-  <meta name="description" content="Money owed, sent from a friend's Leftovers. Tap to add it to yours.">
+  <title>Money owed · Leftovers</title>
+  <meta name="description" content="What you owe a friend, or they owe you: see what it was for, pay them back, or add it to your Leftovers.">
   <meta name="robots" content="noindex">
   <meta name="theme-color" content="#0b0b0f" media="(prefers-color-scheme: dark)">
   <meta name="theme-color" content="#f2f2f6" media="(prefers-color-scheme: light)">
-  <meta property="og:title" content="Add to Leftovers">
-  <meta property="og:description" content="Money owed, sent from a friend's Leftovers. Tap to add it to yours.">
-  <meta property="og:image" content="https://saisaharsh3.github.io/Leftovers/assets/social-preview.png">
+  <meta property="og:title" content="Money owed, from a friend's Leftovers">
+  <meta property="og:description" content="See what it was for, pay them back, or add it to your Leftovers with a tap.">
+  <meta property="og:image" content="https://saisaharsh3.github.io/Leftovers/assets/og-owed.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:site_name" content="Leftovers">
+  <meta name="twitter:card" content="summary_large_image">
   <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="style.css">
   <script>
@@ -41,6 +45,21 @@
     .add-note { color: var(--text-2); font-size: .85rem; letter-spacing: .01em; text-align: center; }
     .add-get { display: grid; gap: 14px; }
     .add-why { color: var(--text-2); font-size: .95rem; }
+    .add-pay { display: grid; gap: 10px; }
+    .add-pay .pill.primary { background: var(--accent); color: var(--on-accent); }
+    .add-pay .pill { width: 100%; }
+    .add-pay h4 { margin: 0; font-size: .95rem; font-weight: 650; }
+    .add-copy { display: flex; align-items: center; gap: 10px; background: var(--surface-2); border-radius: 16px; padding: 10px 10px 10px 14px; }
+    .add-copy span { flex: 1; min-width: 0; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; white-space: pre-line; }
+    .add-copy small { display: block; color: var(--text-2); font-size: .8rem; }
+    .add-copy button { border: 0; border-radius: 99px; background: var(--card); color: var(--text); font: inherit; font-weight: 650; font-size: .85rem; padding: 8px 14px; cursor: pointer; flex: none; }
+    .add-safe { color: var(--text-3); font-size: .82rem; }
+    /* Their own display rules would otherwise show these when hidden. */
+    .add-page [hidden] { display: none !important; }
+    .add-names { display: grid; gap: 8px; }
+    .add-names button { display: flex; justify-content: space-between; align-items: center; gap: 12px; width: 100%; border: 0; border-radius: 18px; padding: 14px 18px; background: var(--surface-2); color: var(--text); font: inherit; font-weight: 650; cursor: pointer; text-align: left; transition: transform .15s ease; }
+    .add-names button:active { transform: scale(.98); }
+    .add-names b { font-variant-numeric: tabular-nums; }
   </style>
 </head>
 <body>
@@ -62,6 +81,15 @@
           </div>
           <ul class="add-lines" id="lines" hidden></ul>
           <!-- With Leftovers installed, the link opens in the app and this page isn't seen: so getting it comes first. -->
+          <!-- How they'd like to be paid, when you owe them: their UPI app opens with the amount, or their link. -->
+          <div class="add-pay" id="pay" hidden>
+            <h4>Pay them back</h4>
+            <a class="pill primary" id="pay-upi" hidden>Pay with UPI</a>
+            <a class="pill quiet" id="pay-link" rel="noopener noreferrer" hidden>Pay with their link</a>
+            <div class="add-copy" id="upi-box" hidden><span><small>UPI ID</small><b id="upi-id"></b></span><button type="button" data-copy="upi-id">Copy</button></div>
+            <div class="add-copy" id="bank-box" hidden><span><small>Bank details</small><b id="bank"></b></span><button type="button" data-copy="bank">Copy</button></div>
+            <p class="add-safe" id="pay-safe">Check the name your UPI app shows before you pay. Paying never needs anyone else's PIN.</p>
+          </div>
           <div class="add-get" id="get">
             <p class="add-why">Get Leftovers to keep track of this. It's free, has no ads or account, and your money stays on your phone. Then open this link again to add it.</p>
             <div class="add-actions">
@@ -73,6 +101,17 @@
         </div>
       </div>
 
+      <div id="pick" hidden>
+        <div style="display:grid;gap:18px">
+          <div>
+            <h3>A bill split with your group</h3>
+            <p class="add-kicker" id="pick-what"></p>
+          </div>
+          <p class="add-why">Which one is you?</p>
+          <div class="add-names" id="names"></div>
+          <p class="add-note">Nothing was uploaded: the amounts are in the link itself.</p>
+        </div>
+      </div>
       <div id="empty" hidden>
         <div style="display:grid;gap:18px">
           <div>
@@ -98,6 +137,41 @@
       } catch (e) {}
       var entries = data && data.v === 1 && Array.isArray(data.e) ? data.e.filter(function (e) { return Array.isArray(e) && Number(e[1]); }) : [];
       if (!entries.length) { $("empty").hidden = false; return; }
+      // Shared with a whole group: everyone picks their own name, then sees only their share, and the app gets only theirs.
+      var b64url = function (obj) {
+        var bin = ""; new TextEncoder().encode(JSON.stringify(obj)).forEach(function (b) { bin += String.fromCharCode(b); });
+        return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+      };
+      if (data.g === 1 && entries.every(function (e) { return String(e[7] || "").trim(); })) {
+        var cur0 = /^[A-Z]{3}$/.test(data.c || "") ? data.c : "";
+        var fmt0 = function (minor) {
+          try { if (cur0) return new Intl.NumberFormat(cur0 === "INR" ? "en-IN" : undefined, { style: "currency", currency: cur0, maximumFractionDigits: minor % 100 ? 2 : 0 }).format(minor / 100); } catch (e) {}
+          return (minor / 100).toLocaleString();
+        };
+        var f = entries[0];
+        $("pick-what").textContent = [String(f[3] || ""), Number(f[6]) > 1 ? fmt0(Number(f[5])) + ", split " + Number(f[6]) + " ways" : ""].filter(Boolean).join(" · ");
+        var names = [];
+        entries.forEach(function (e) { var n = String(e[7]).slice(0, 30); if (names.indexOf(n) < 0) names.push(n); });
+        names.forEach(function (n) {
+          var btn = document.createElement("button"); btn.type = "button";
+          var mine = entries.filter(function (e) { return String(e[7]).slice(0, 30) === n; });
+          var label = document.createElement("span"); label.textContent = n;
+          var amt = document.createElement("b"); amt.textContent = fmt0(mine.reduce(function (s, e) { return s + Number(e[1]); }, 0));
+          btn.appendChild(label); btn.appendChild(amt);
+          btn.addEventListener("click", function () {
+            var own = { v: 1, c: data.c, e: mine.map(function (e) { return e.slice(0, 7); }) };
+            if (data.p) own.p = data.p;
+            $("pick").hidden = true;
+            show(own, mine, b64url(own));
+          });
+          $("names").appendChild(btn);
+        });
+        $("pick").hidden = false;
+        return;
+      }
+      show(data, entries, code);
+
+      function show(data, entries, code) {
 
       var currency = /^[A-Z]{3}$/.test(data.c || "") ? data.c : "";
       var money = function (minor) {
@@ -115,7 +189,9 @@
       $("label").textContent = net >= 0 ? "You owe" : "You're owed";
       $("number").textContent = money(net);
       if (entries.length === 1) {
-        $("what").textContent = [String(entries[0][3] || ""), day(Number(entries[0][2]))].filter(Boolean).join(" · ");
+        // A share of a group bill says what it's a share of: the bill's total and how many shared it.
+        var e0 = entries[0], group = Number(e0[6]) > 1 ? "your share of " + money(Number(e0[5])) + ", split " + Number(e0[6]) + " ways" : "";
+        $("what").textContent = [String(e0[3] || ""), group, day(Number(e0[2]))].filter(Boolean).join(" · ");
       } else {
         $("what").textContent = entries.length + " entries";
         var list = $("lines");
@@ -123,7 +199,8 @@
           var li = document.createElement("li");
           var name = document.createElement("span"); name.className = "n";
           name.textContent = String(e[3] || (e[4] ? "Paid back" : "Money owed"));
-          var when = document.createElement("span"); when.className = "d"; when.textContent = day(Number(e[2]));
+          var when = document.createElement("span"); when.className = "d";
+          when.textContent = [Number(e[6]) > 1 ? "split " + Number(e[6]) + " ways" : "", day(Number(e[2]))].filter(Boolean).join(" · ");
           name.appendChild(when);
           var amount = document.createElement("span"); amount.className = "a";
           amount.textContent = (Number(e[1]) < 0 ? "−" : "") + money(Number(e[1]));
@@ -143,7 +220,44 @@
         $("open").hidden = true;
         $("note").textContent = "Leftovers is an Android app: open this link on an Android phone to add it. Nothing was uploaded; the amounts are in the link itself.";
       }
+      // How they'd like to be paid back: only shown when you owe them, and only what passes the checks below.
+      var p = data.p && typeof data.p === "object" ? data.p : null;
+      if (p && net > 0) {
+        var upi = /^[A-Za-z0-9._-]{2,64}@[A-Za-z][A-Za-z0-9]{1,30}$/.test(String(p.u || "")) ? String(p.u) : "";
+        var payee = String(p.n || "").replace(/[\u0000-\u001f]/g, "").slice(0, 40);
+        var link = "";
+        try { var u = new URL(String(p.l || "")); if (u.protocol === "https:" && u.hostname.indexOf(".") > 0) link = u.href; } catch (e) {}
+        var bank = String(p.b || "").replace(/[\u0000-\u0009\u000b-\u001f]/g, "").slice(0, 140);
+        var shown = false;
+        if (upi && (!currency || currency === "INR")) {
+          var amount = (net / 100).toFixed(2);
+          var q = "pa=" + encodeURIComponent(upi) + "&pn=" + encodeURIComponent(payee || upi.split("@")[0]) + "&am=" + amount + "&cu=INR&tn=" + encodeURIComponent("Leftovers");
+          $("pay-upi").href = "upi://pay?" + q;
+          $("pay-upi").textContent = "Pay " + money(net) + " with UPI";
+          // A UPI app opens on a phone; on a computer, the ID to copy is what helps.
+          $("pay-upi").hidden = !android;
+          $("upi-id").textContent = upi + (payee ? " · " + payee : "");
+          $("upi-box").hidden = false;
+          shown = true;
+        }
+        if (link) {
+          $("pay-link").href = link;
+          $("pay-link").textContent = "Pay with " + new URL(link).hostname.replace(/^www\./, "");
+          $("pay-link").hidden = false;
+          shown = true;
+        }
+        if (bank) { $("bank").textContent = bank; $("bank-box").hidden = false; shown = true; }
+        if (shown) $("pay").hidden = false;
+        document.querySelectorAll("[data-copy]").forEach(function (b) {
+          b.addEventListener("click", function () {
+            var text = $(b.dataset.copy).textContent.split(" · ")[0];
+            var done = function () { b.textContent = "Copied"; setTimeout(function () { b.textContent = "Copy"; }, 1600); };
+            try { navigator.clipboard.writeText(text).then(done, function () {}); } catch (e) {}
+          });
+        });
+      }
       $("found").hidden = false;
+      }
     })();
   </script>
 </body>
