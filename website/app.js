@@ -386,6 +386,8 @@
     opener?.focus?.({ preventScroll: true });
   }
   $$("[data-open-sheet]").forEach((b) => b.addEventListener("click", () => openSheet(b)));
+  // Linked to with #get (as from a friend's money-owed link, for someone without the app): Get Leftovers opens.
+  if (location.hash === "#get") requestAnimationFrame(() => openSheet());
   $("#sheet-close").addEventListener("click", () => closeSheet());
   scrim.addEventListener("click", () => closeSheet());
   addEventListener("keydown", (e) => { if (e.key === "Escape" && sheetOpen) closeSheet(); });

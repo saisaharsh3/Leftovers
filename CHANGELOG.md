@@ -5,6 +5,7 @@ All notable changes to Leftovers. Download any version from
 
 ## Unreleased
 
+- A money-owed link from a friend opens straight in Leftovers when you have it; without it, the page shows what was sent and how to get Leftovers
 - Opening an entry, a sheet or a pop-up is smoother: the screen behind is blurred at a sixth of its size and drawn back up, far less work on every frame, and it looks the same
 - Home: what scrolls under the clock is frosted, so the two never run into each other
 - Home: Recent shows each split bill as one row; where its money went is on its card and in Activity

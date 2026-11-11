@@ -39,6 +39,8 @@
     .add-actions .pill { width: 100%; }
     .add-actions .pill.primary { background: var(--accent); color: var(--on-accent); }
     .add-note { color: var(--text-2); font-size: .85rem; letter-spacing: .01em; text-align: center; }
+    .add-get { display: grid; gap: 14px; }
+    .add-why { color: var(--text-2); font-size: .95rem; }
   </style>
 </head>
 <body>
@@ -59,11 +61,15 @@
             <p class="what" id="what"></p>
           </div>
           <ul class="add-lines" id="lines" hidden></ul>
-          <div class="add-actions">
-            <a class="pill primary" id="open" href="#">Add to my Leftovers</a>
-            <a class="pill quiet" href="./">Don't have it? Get Leftovers</a>
+          <!-- With Leftovers installed, the link opens in the app and this page isn't seen: so getting it comes first. -->
+          <div class="add-get" id="get">
+            <p class="add-why">Get Leftovers to keep track of this. It's free, has no ads or account, and your money stays on your phone. Then open this link again to add it.</p>
+            <div class="add-actions">
+              <a class="pill primary" href="./#get">Get Leftovers</a>
+              <a class="pill quiet" id="open" href="#">I have Leftovers: open it</a>
+            </div>
           </div>
-          <p class="add-note" id="note">Nothing was uploaded: the amounts are in the link itself, and stay on your phone.</p>
+          <p class="add-note" id="note">Nothing was uploaded: the amounts are in the link itself.</p>
         </div>
       </div>
 
@@ -132,7 +138,11 @@
       $("open").href = android
         ? "intent://owed?d=" + code + "#Intent;scheme=leftovers;S.browser_fallback_url=" + encodeURIComponent(home) + ";end"
         : "leftovers://owed?d=" + code;
-      if (!android) $("note").textContent = "Open this link on the Android phone that has Leftovers. Nothing was uploaded: the amounts are in the link itself.";
+      if (!android) {
+        // Leftovers is for Android: on a computer or an iPhone, say where to open it.
+        $("open").hidden = true;
+        $("note").textContent = "Leftovers is an Android app: open this link on an Android phone to add it. Nothing was uploaded; the amounts are in the link itself.";
+      }
       $("found").hidden = false;
     })();
   </script>

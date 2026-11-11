@@ -63,7 +63,7 @@ class MainActivity : FragmentActivity() {
     private var sharedOwed by mutableStateOf<com.leftovers.app.util.SharedOwed.Shared?>(null)
 
     private fun readShared(intent: Intent) {
-        val data = intent.data?.takeIf { it.scheme == com.leftovers.app.util.SharedOwed.SCHEME && it.host == com.leftovers.app.util.SharedOwed.HOST } ?: return
+        val data = intent.data?.takeIf { com.leftovers.app.util.SharedOwed.isLink(it.scheme, it.host, it.path) } ?: return
         com.leftovers.app.util.SharedOwed.parse(data.toString())?.let { sharedOwed = it }
     }
     private var locked by mutableStateOf(true)

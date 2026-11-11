@@ -31,7 +31,17 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-            <!-- Money owed sent from a friend's Leftovers: the link's page opens leftovers://owed?d=… -->
+            <!--
+              Money owed sent from a friend's Leftovers. The link itself (…github.io/Leftovers/add#…) opens straight in
+              the app once Android has checked the site's assetlinks.json; without the app it opens the web page.
+            -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="saisaharsh3.github.io" android:pathPrefix="/Leftovers/add" />
+            </intent-filter>
+            <!-- The web page's own button, for a phone where the link above opened in the browser. -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />

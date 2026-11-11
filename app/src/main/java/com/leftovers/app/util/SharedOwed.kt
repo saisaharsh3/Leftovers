@@ -16,6 +16,11 @@ object SharedOwed {
     const val SCHEME = "leftovers"
     const val HOST = "owed"
 
+    /** A link this app opens: the page's own (https, which Android hands to the app), or the page's button's. */
+    fun isLink(scheme: String?, host: String?, path: String?): Boolean =
+        (scheme == SCHEME && host == HOST) ||
+            (scheme == "https" && host == "saisaharsh3.github.io" && path.orEmpty().startsWith("/Leftovers/add"))
+
     /** One entry as the sender has it: [amountMinor] above zero when the receiver owes the sender. */
     data class Line(val id: String, val amountMinor: Long, val epochDay: Long, val note: String, val repayment: Boolean)
 

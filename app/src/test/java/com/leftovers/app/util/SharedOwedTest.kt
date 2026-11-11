@@ -52,6 +52,16 @@ class SharedOwedTest {
     }
 
     @Test
+    fun `the link opens in the app, and so does the page's button, but nothing else`() {
+        assertTrue(SharedOwed.isLink("https", "saisaharsh3.github.io", "/Leftovers/add"))
+        assertTrue(SharedOwed.isLink("https", "saisaharsh3.github.io", "/Leftovers/add.html"))
+        assertTrue(SharedOwed.isLink("leftovers", "owed", ""))
+        assertTrue(!SharedOwed.isLink("https", "saisaharsh3.github.io", "/Leftovers/"))
+        assertTrue(!SharedOwed.isLink("https", "example.com", "/Leftovers/add"))
+        assertTrue(!SharedOwed.isLink("http", "saisaharsh3.github.io", "/Leftovers/add"))
+    }
+
+    @Test
     fun `nothing to send and anything that isn't a link give nothing`() {
         assertNull(SharedOwed.link("pixel-8-abc234", "INR", emptyList()))
         assertNull(SharedOwed.link("pixel-8-abc234", "INR", listOf(lent.copy(amountMinor = 0))))
