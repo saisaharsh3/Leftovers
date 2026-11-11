@@ -450,6 +450,15 @@
         $("#version-line").textContent = `Version ${version}${date ? `, released ${date}` : ""}. Free and open source. Android 8.0 or newer.`;
         $("#apk").textContent = `Download ${version}`;
       }
+      return fetch(`https://api.github.com/repos/${repo}/releases?per_page=10`, { headers: { Accept: "application/vnd.github+json" } })
+        .then((r) => (r.ok ? r.json() : Promise.reject()))
+        .then((all) => {
+          const next = all.find((x) => x.prerelease && /^v\d/.test(x.tag_name || "") && new Date(x.published_at) > new Date(rel.published_at));
+          if (!next) return;
+          $("#pre-link").href = next.html_url;
+          $("#pre-link").textContent = `Try ${next.tag_name.replace(/^v/, "")}`;
+          $("#pre").hidden = false;
+        });
     })
     .catch(() => {});
   const inline = (s) => s
@@ -475,11 +484,14 @@
       if (!released.length) throw new Error();
       const box = $("#changelog");
       box.innerHTML = "";
+      const latest = released.findIndex((s) => !s.title.includes("-"));
       released.forEach((s, i) => {
         const d = document.createElement("details");
         d.className = "release";
         if (i === 0) d.open = true;
-        d.innerHTML = `<summary>Version ${s.title}${i === 0 ? "<small>Latest</small>" : ""}</summary><ul>${s.items.map((it) => `<li>${inline(it)}</li>`).join("")}</ul>`;
+        const pre = s.title.includes("-");
+        const tag = pre ? "<small>Pre-release</small>" : i === latest ? "<small>Latest</small>" : "";
+        d.innerHTML = `<summary>Version ${s.title}${tag}</summary><ul>${s.items.map((it) => `<li>${inline(it)}</li>`).join("")}</ul>`;
         box.append(d);
       });
     })

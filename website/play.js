@@ -261,6 +261,8 @@
         who: "Swiggy", amount: 250, sub: "HDFC Bank, from a bank text" },
       { from: "Google Pay", text: "₹120 paid to Third Wave Coffee. UPI transaction ID 612345678902.",
         who: "Third Wave Coffee", amount: 120, sub: "Google Pay notification" },
+      { from: "AD-HDFCBK", text: "Rs.1,200.00 credited to HDFC Bank A/c XX1234 by VPA nick.dsouza@okaxis (NICK DSOUZA) on 08-10-26. Avl Bal Rs.42,310.00",
+        who: "Nick", amount: 1200, income: true, payback: true, sub: "Nick paying you back?" },
       { from: "AD-KOTAKB", text: "Your A/c XX1234 is credited with INR 75,000.00 on 01-10-2026 by NEFT from ACME TECH PVT LTD.",
         who: "Acme Tech Pvt Ltd", amount: 75000, income: true, sub: "Kotak, money in" },
       { from: "AD-ICICIB", text: "123456 is your OTP for a transaction of Rs 500.00 at SWIGGY. Do not share it with anyone.", otp: true },
@@ -322,14 +324,19 @@
       empty.hidden = true;
       const row = document.createElement("li");
       row.className = "mini-item";
-      row.innerHTML = `<div><b>${it.m.who}</b><small>${it.m.sub}</small></div><span class="amt ${it.m.income ? "in" : ""}">${it.m.income ? "+" : ""}${fmt(it.m.amount)}</span><button class="add" type="button">Add</button>`;
-      $(".add", row).addEventListener("click", (e) => { row.classList.add("added"); e.target.textContent = "Added"; e.target.disabled = true; buzz(10); });
+      const verb = it.m.payback ? "Settle" : "Add";
+      row.innerHTML = `<div><b>${it.m.who}</b><small>${it.m.sub}</small></div><span class="amt ${it.m.income ? "in" : ""}">${it.m.income ? "+" : ""}${fmt(it.m.amount)}</span><button class="add" type="button">${verb}</button>`;
+      $(".add", row).addEventListener("click", (e) => { row.classList.add("added"); e.target.textContent = it.m.payback ? "Settled" : "Added"; e.target.disabled = true; buzz(10); });
       appList.prepend(row);
       // The new suggestion settles into the list.
       const pop = new Spring(0.9), fade = new Spring(0);
       pop.to(1, { response: 0.35, damping: 0.8 }); fade.to(1, { response: 0.3 });
       loop.add((dt) => { const a = pop.step(dt), b = fade.step(dt); row.style.transform = `scale(${pop.x})`; row.style.opacity = String(clamp(fade.x, 0, 1)); return a || b; });
-      note.textContent = it.m.income ? "Money coming in is suggested as income." : "Nothing is logged until you tap Add.";
+      note.textContent = it.m.payback
+        ? `Nick owes you ${fmt(1200)}, so Settle marks it paid in Money owed instead of counting it as income. The balance in the text, ${fmt(42310)}, shows next to HDFC Bank in Accounts.`
+        : it.m.income ? "Money coming in is suggested as income."
+        : it.m.amount <= 200 ? "Nothing is logged until you tap Add. Or turn on Add small payments automatically, and ones this small go straight in."
+        : "Nothing is logged until you tap Add.";
       reset.hidden = false;
       buzz(10);
     }

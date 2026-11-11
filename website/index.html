@@ -111,6 +111,21 @@
             <p>Who owes you and whom you owe, kept out of your budget, and paid back in full or a bit at a time. Send a reminder, and a friend who uses Leftovers adds it to theirs with a tap.</p>
             <img class="inline-shot" data-name="money-owed" alt="Money owed" width="540" height="1200" loading="lazy">
           </li>
+          <li class="step" data-shot="payback">
+            <h3>Paid back</h3>
+            <p>When a friend pays you back, the bank text is recognised as theirs, however the bank writes the name, and one tap settles it in Money owed instead of counting it as income. Here over a photo of your own: any picture can be the background.</p>
+            <img class="inline-shot" data-name="payback" alt="Home over a mountain photo, with a friend's payment recognised as paying back" width="540" height="1200" loading="lazy">
+          </li>
+          <li class="step" data-shot="accounts">
+            <h3>Accounts</h3>
+            <p>Cash, bank and cards, each with its balance. When a bank text says your balance, it's shown next to the app's own, with Match if they differ.</p>
+            <img class="inline-shot" data-name="accounts" alt="Accounts, with the balance from a bank text under HDFC Bank" width="540" height="1200" loading="lazy">
+          </li>
+          <li class="step" data-shot="settings">
+            <h3>Settings</h3>
+            <p>Arranged like your phone's: search for any setting, or open a category to see just its own.</p>
+            <img class="inline-shot" data-name="settings" alt="Settings, with a search and categories" width="540" height="1200" loading="lazy">
+          </li>
         </ol>
       </div>
       <!-- On phones the same screens are a gallery: swipe through them, or let it play. Built by gallery.js from the steps above. -->
@@ -179,7 +194,7 @@
     <!-- Detection: pick up a message and drop it on the app. -->
     <section class="play-detect" id="detect" aria-labelledby="detect-title">
       <h2 id="detect-title">It notices payments, you decide</h2>
-      <p class="section-lede">With detection on, a bank text or payment notification becomes a suggestion you can add with a tap. Drag one onto the app and see.</p>
+      <p class="section-lede">With detection on, a bank text or payment notification becomes a suggestion you add with a tap, and a friend paying you back is recognised. Drag one onto the app and see.</p>
       <div class="detect-grid">
         <ul class="messages" id="messages" aria-label="Messages to try"></ul>
         <div class="mini-app panel" id="mini-app" aria-live="polite">
@@ -220,7 +235,7 @@
         <li>
           <div class="sw-text">
             <h3>AI assistant</h3>
-            <p data-off="Nothing is sent to an AI." data-on="It uses the AI you connect with your own key, sees only what each question needs, and changes nothing until you confirm."></p>
+            <p data-off="Nothing is sent to an AI." data-on="It uses the AI you connect with your own key, or the phone's own AI where it has one, so nothing leaves the phone. It sees only what each question needs, and changes nothing until you confirm."></p>
           </div>
           <button class="switch" type="button" role="switch" aria-checked="false" aria-label="AI assistant"><span class="thumb"></span></button>
         </li>
@@ -272,12 +287,16 @@
         <a class="pill primary small" href="https://f-droid.org/packages/com.leftovers.app/">Open</a>
       </li>
       <li>
-        <div><h3>APK from GitHub</h3><p id="apk-text">The signed APK. Updates install over the top and keep your data.</p></div>
+        <div><h3>APK from GitHub</h3><p id="apk-text">The signed APK. Updates install over the top and keep your data. There are two: take the plain one, or the one ending in <code>-ai.apk</code> for your phone's own AI (Gemini Nano, on phones like the Pixel 9). That one uses Google's library, which isn't open source, so it isn't on F-Droid.</p></div>
         <a class="pill quiet small" id="apk" href="https://github.com/saisaharsh3/Leftovers/releases/latest">Download</a>
       </li>
       <li>
         <div><h3>Obtainium</h3><p>Installs from GitHub and keeps it up to date.</p></div>
         <a class="pill quiet small" href="https://apps.obtainium.imranr.dev/redirect?r=obtainium://add/https://github.com/saisaharsh3/Leftovers">Add</a>
+      </li>
+      <li id="pre" hidden>
+        <div><h3>Pre-release</h3><p id="pre-text">The next version, to try before everyone gets it. Back up first: going back to the current version means uninstalling.</p></div>
+        <a class="pill quiet small" id="pre-link" href="https://github.com/saisaharsh3/Leftovers/releases">Try it</a>
       </li>
       <li>
         <div><h3>Dev build</h3><p>The newest changes first. It installs next to the real app with its own data.</p></div>

@@ -28,6 +28,12 @@
       notes: [["Every day", "on a calendar", "calendar"], ["#trip", "find it by tag", "hash"], ["Add for this day", "the one you forgot", "plus"]] },
     "money-owed": { color: "#ef84ad", tags: ["Who owes you", "Whom you owe", "Pay back in parts"],
       notes: [["₹3,400", "you're owed", "users"], ["Pay back", "a bit at a time", "coins"], ["Kept apart", "from your budget", "shield"]] },
+    payback: { color: "#c9b18f", tags: ["Paybacks recognised", "Your own photo", "Liquid glass"],
+      notes: [["Arjun", "paying you back?", "users"], ["One tap", "settled in Money owed", "check"], ["Any photo", "as the background", "image"]] },
+    accounts: { color: "#f08a4b", tags: ["Every account", "Bank balance from SMS", "Transfers"],
+      notes: [["₹2,07,672", "your bank said", "bank"], ["Match", "when they differ", "check"], ["Transfers", "between accounts", "repeat"]] },
+    settings: { color: "#b9bcc4", tags: ["Search", "Categories", "Like your phone's"],
+      notes: [["Search", "any setting", "search"], ["9 categories", "each its own page", "layers"], ["Help", "for every feature", "book"]] },
   };
   // Small line icons for the notes (drawn like the app's own icons: round ends, 2px strokes).
   const icons = {
@@ -46,6 +52,11 @@
     hash: "M4 9h16M4 15h16M10 3 8 21M16 3l-2 18",
     users: "M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM22 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8",
     shield: "M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z",
+    check: "M20 6 9 17l-5-5",
+    image: "M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zM9 11a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM21 15l-5-5L5 21",
+    bank: "M3 22h18M6 18v-7M10 18v-7M14 18v-7M18 18v-7M12 2l8 5H4z",
+    search: "M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM21 21l-4.3-4.3",
+    book: "M12 7v14M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z",
   };
   // Where the three notes sit: two to the left of the phone, one overlapping its right edge, lower down.
   const spots = [{ side: "L", top: 12, depth: 1.4 }, { side: "L", top: 46, depth: 2.2 }, { side: "R", top: 80, depth: 1.8 }];
