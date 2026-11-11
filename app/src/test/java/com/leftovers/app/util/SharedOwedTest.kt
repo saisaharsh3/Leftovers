@@ -73,7 +73,7 @@ class SharedOwedTest {
     private val pay = SharedOwed.Pay(upi = "asha.k@okaxis", name = "Asha K", link = "paypal.me/ashak", bank = "IBAN DE89 3704 0044 0532 0130 00")
 
     /** The link's JSON, to see exactly what goes to the other person. */
-    private fun json(link: String) = org.json.JSONObject(String(java.util.Base64.getUrlDecoder().decode(link.substringAfter('#'))))
+    private fun json(link: String) = org.json.JSONObject(SharedOwed.decode(link.substringAfter('#')))
 
     @Test
     fun `how to pay you travels with the link, when they owe you`() {
@@ -171,5 +171,32 @@ class SharedOwedTest {
             "Hi Rahul, a quick reminder: your share of Dinner is ₹750 (a ₹3,000 bill split 4 ways). Thanks!",
             DebtReminder.message(b, rupees, mapOf(9L to DebtReminder.Split(300_000, 4))),
         )
+    }
+
+    @Test
+    fun `a group's link is compressed, much shorter, and reads back the same`() {
+        val names = listOf("Rohit", "Anil", "Rahul", "Koushik")
+        val shares = names.mapIndexed { i, n -> Debt(id = 20L + i, person = n, amountMinor = 20_000, note = "Food & Dining", epochDay = 20_768, createdAt = 1_794_000_000_000 + i * 997L, splitOf = 7) }
+        val link = SharedOwed.groupLink("pixel-8-393t4e", "EUR", shares, DebtReminder.Split(100_000, 5), SharedOwed.Pay(upi = "asha.k@okaxis"))!!
+        val code = link.substringAfter('#')
+        assertTrue(code.startsWith("z"))
+        val plain = java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(SharedOwed.decode(code).toByteArray())
+        assertTrue(code.length * 10 < plain.length * 6)
+        assertEquals(names, SharedOwed.parse(link)!!.names)
+    }
+
+    @Test
+    fun `a short link stays plain, and links from before still open`() {
+        val code = SharedOwed.link("pixel-8-abc234", "INR", listOf(lent))!!.substringAfter('#')
+        assertTrue(code.startsWith("ey"))
+        // Written the way the app wrote links before compression.
+        val old = java.util.Base64.getUrlEncoder().withoutPadding().encodeToString("""{"v":1,"c":"INR","e":[["abc234.x1",25000,20760,"Dinner",0]]}""".toByteArray())
+        assertEquals(25_000, SharedOwed.parse("${SharedOwed.PAGE}#$old")!!.netMinor)
+    }
+
+    @Test
+    fun `UPI is offered only for rupees`() {
+        assertEquals("", DebtReminder.payLines(SharedOwed.Pay(upi = "asha.k@okaxis"), "EUR"))
+        assertTrue("Pay here: https://paypal.me/a" in DebtReminder.payLines(SharedOwed.Pay(upi = "asha.k@okaxis", link = "paypal.me/a"), "EUR"))
     }
 }

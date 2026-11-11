@@ -125,14 +125,21 @@
   </main>
 
   <script>
-    (function () {
+    (async function () {
       var $ = function (id) { return document.getElementById(id); };
       var code = location.hash.slice(1);
       var data = null;
       try {
-        // The entries, as the app wrote them: base64 (URL-safe) of {v, c: currency, e: [[id, amount, day, note, paidBack]]}.
-        var b64 = code.replace(/-/g, "+").replace(/_/g, "/");
+        // The entries, as the app wrote them: base64 (URL-safe) of {v, c: currency, e: [[id, amount, day, note, paidBack]]},
+        // compressed first when that was shorter ("z" in front), as for a group's shares.
+        var packed = code.charAt(0) === "z";
+        var b64 = (packed ? code.slice(1) : code).replace(/-/g, "+").replace(/_/g, "/");
         var bytes = Uint8Array.from(atob(b64), function (ch) { return ch.charCodeAt(0); });
+        if (packed) {
+          var stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream("deflate-raw"));
+          bytes = new Uint8Array(await new Response(stream).arrayBuffer());
+          if (bytes.length > 65536) throw new Error("too big");
+        }
         data = JSON.parse(new TextDecoder().decode(bytes));
       } catch (e) {}
       var entries = data && data.v === 1 && Array.isArray(data.e) ? data.e.filter(function (e) { return Array.isArray(e) && Number(e[1]); }) : [];

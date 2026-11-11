@@ -52,7 +52,7 @@ object DebtReminder {
         val pay = if (settings.payShare()) settings.payDetails() else SharedOwed.Pay()
         val splits = splitsOf(balance, container)
         val text = message(balance, format, splits)
-        val ways = payLines(pay)
+        val ways = payLines(pay, currency)
         val link = SharedOwed.link(device, currency, balance.entries, pay, splits) ?: return text + ways
         return text + ways + "\n\nSee it, and add it to your Leftovers with a tap:\n" + link
     }
@@ -78,7 +78,7 @@ object DebtReminder {
         val pay = if (settings.payShare()) settings.payDetails() else SharedOwed.Pay()
         val note = shares.firstOrNull { it.note.isNotBlank() }?.note ?: com.leftovers.app.data.noteText(bill.note)
         val link = SharedOwed.groupLink(settings.syncDevice(), currency, shares, split, pay) ?: return null
-        return groupMessage(note, split, shares, format) + payLines(pay) + "\n\nTap your name to see your share, pay, or add it to your Leftovers:\n" + link
+        return groupMessage(note, split, shares, format) + payLines(pay, currency) + "\n\nTap your name to see your share, pay, or add it to your Leftovers:\n" + link
     }
 
     /** The group bills [balance]'s entries were split from: each one's total, and how many shared it. */
@@ -94,12 +94,16 @@ object DebtReminder {
         }.toMap()
     }
 
-    /** "Pay by UPI: asha@okaxis", and the payment link, under the message, for anyone who doesn't open the link. */
-    fun payLines(pay: SharedOwed.Pay): String {
+    /**
+     * "Pay by UPI: asha@okaxis", and the payment link, under the message, for anyone who doesn't open the link. UPI
+     * only for amounts in rupees, the one currency it pays in.
+     */
+    fun payLines(pay: SharedOwed.Pay, currency: String = "INR"): String {
         val clean = SharedOwed.clean(pay)
+        val upi = clean.upi.isNotEmpty() && (currency.isBlank() || currency == "INR")
         val lines = listOfNotNull(
-            clean.upi.takeIf { it.isNotEmpty() }?.let { "Pay by UPI: $it" },
-            clean.link.takeIf { it.isNotEmpty() }?.let { "${if (clean.upi.isEmpty()) "Pay" else "Or pay"} here: $it" },
+            clean.upi.takeIf { upi }?.let { "Pay by UPI: $it" },
+            clean.link.takeIf { it.isNotEmpty() }?.let { "${if (!upi) "Pay" else "Or pay"} here: $it" },
             clean.bank.takeIf { it.isNotEmpty() }?.let { "Bank: " + it.replace("\n", ", ") },
         )
         return if (lines.isEmpty()) "" else "\n\n" + lines.joinToString("\n")

@@ -83,7 +83,7 @@ object SharedOwed {
                 if (clean.bank.isNotEmpty()) put("b", clean.bank)
             })
         }
-        return "$PAGE#" + Base64.getUrlEncoder().withoutPadding().encodeToString(json.toString().toByteArray())
+        return "$PAGE#" + encode(json.toString())
     }
 
     /**
@@ -107,7 +107,49 @@ object SharedOwed {
                 if (clean.bank.isNotEmpty()) put("b", clean.bank)
             })
         }
-        return "$PAGE#" + Base64.getUrlEncoder().withoutPadding().encodeToString(json.toString().toByteArray())
+        return "$PAGE#" + encode(json.toString())
+    }
+
+    /**
+     * What goes after the "#": the entries as JSON in URL-safe base64, or compressed first ("z" in front) when that's
+     * shorter, as it is for a group, whose shares repeat the same bill. Plain base64 of JSON never starts with "z".
+     */
+    internal fun encode(json: String): String {
+        val raw = json.toByteArray()
+        val plain = Base64.getUrlEncoder().withoutPadding().encodeToString(raw)
+        val deflater = java.util.zip.Deflater(9, true)
+        val packed = try {
+            deflater.setInput(raw)
+            deflater.finish()
+            val out = java.io.ByteArrayOutputStream()
+            val buf = ByteArray(1024)
+            while (!deflater.finished()) out.write(buf, 0, deflater.deflate(buf))
+            out.toByteArray()
+        } finally {
+            deflater.end()
+        }
+        val z = "z" + Base64.getUrlEncoder().withoutPadding().encodeToString(packed)
+        return if (z.length < plain.length) z else plain
+    }
+
+    /** The JSON back from [encode]'s text, capped so a crafted link can't unpack into something huge. */
+    internal fun decode(code: String): String {
+        if (!code.startsWith("z")) return String(Base64.getUrlDecoder().decode(code))
+        val inflater = java.util.zip.Inflater(true)
+        try {
+            inflater.setInput(Base64.getUrlDecoder().decode(code.substring(1)))
+            val out = java.io.ByteArrayOutputStream()
+            val buf = ByteArray(1024)
+            while (!inflater.finished()) {
+                val n = inflater.inflate(buf)
+                if (n == 0 && (inflater.needsInput() || inflater.needsDictionary())) break
+                out.write(buf, 0, n)
+                if (out.size() > 64 * 1024) throw IllegalArgumentException("Too big")
+            }
+            return out.toString("UTF-8")
+        } finally {
+            inflater.end()
+        }
     }
 
     fun idOf(device: String, debt: Debt): String =
@@ -122,7 +164,7 @@ object SharedOwed {
                 else -> t
             }
         }
-        val json = JSONObject(String(Base64.getUrlDecoder().decode(code)))
+        val json = JSONObject(decode(code))
         if (json.optInt("v") != 1) return null
         val entries = json.getJSONArray("e")
         val lines = (0 until minOf(entries.length(), 40)).map { i ->
