@@ -526,7 +526,7 @@ fun HistoryScreen(
                                 .appear(groupIndex + 1),
                         ) {
                             if (i > 0) RowDivider(inset = 74.dp)
-                            TransferRow(line)
+                            TransferRow(line, onClick = { peek.show(line) }, modifier = Modifier.peekSource(peek, -line.transfer.id))
                         }
                     }
                 }
@@ -800,11 +800,13 @@ private data class Books(
 
 /** A transfer in Activity: neutral, neither spending nor income; signed only when one account is shown. */
 @Composable
-private fun TransferRow(line: TransferLine) {
+private fun TransferRow(line: TransferLine, onClick: () -> Unit, modifier: Modifier = Modifier) {
     val c = LocalAppColors.current
     val money = LocalMoney.current
     com.leftovers.app.ui.components.ListRow(
         title = "${line.from} → ${line.to}",
+        modifier = modifier,
+        onClick = onClick,
         subtitle = listOf("Transfer", line.transfer.note).filter { it.isNotBlank() }.joinToString(" · "),
         leading = { com.leftovers.app.ui.components.IconTile(Lucide.Repeat, c.textSecondary, size = 42.dp) },
         trailing = {

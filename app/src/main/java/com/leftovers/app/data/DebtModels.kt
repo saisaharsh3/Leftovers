@@ -34,6 +34,8 @@ data class Debt(
     val pending: Int = 0,
     /** The day it was paid back, for entries settled from v27 on; null before then, or while it's open. */
     val settledOn: Long? = null,
+    /** Came from, or was sent to, a friend's Leftovers: the id they both know it by, so it's never added twice. */
+    val sharedId: String? = null,
 ) {
     val photos: List<String> get() = receiptPath?.split('\n')?.filter { it.isNotBlank() }.orEmpty()
 

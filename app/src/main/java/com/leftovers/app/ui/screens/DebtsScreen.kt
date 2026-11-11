@@ -184,7 +184,10 @@ fun DebtsScreen(onBack: () -> Unit, viewModel: DebtsViewModel = viewModel(factor
                             if (b.netMinor > 0) {
                                 val context = androidx.compose.ui.platform.LocalContext.current
                                 Spacer(Modifier.padding(start = 12.dp))
-                                RoundButton(Lucide.Bell, "Remind ${b.person}", { com.leftovers.app.util.DebtReminder.share(context, com.leftovers.app.util.DebtReminder.message(b, money::format), b.person) })
+                                val remindScope = rememberCoroutineScope()
+                                RoundButton(Lucide.Bell, "Remind ${b.person}", {
+                                    remindScope.launch { com.leftovers.app.util.DebtReminder.share(context, com.leftovers.app.util.DebtReminder.withLink(context, b, money.currency.currencyCode, money::format), b.person) }
+                                })
                                 Spacer(Modifier.padding(start = 8.dp))
                             }
                             // Nothing to pay back until an amount is in.

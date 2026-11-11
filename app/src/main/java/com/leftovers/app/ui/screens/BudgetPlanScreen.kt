@@ -228,6 +228,7 @@ fun BudgetPlanScreen(
                     .imePadding()
                     .padding(start = 16.dp, end = 16.dp, top = 26.dp, bottom = 16.dp),
             ) {
+                var askRemove by androidx.compose.runtime.remember { mutableStateOf(false) }
                 PrimaryButton("Save plan", { saveAndClose() }, Modifier.fillMaxWidth(), enabled = plan.isSet)
                 if (viewModel.wasSet) {
                     Text(
@@ -237,8 +238,22 @@ fun BudgetPlanScreen(
                         modifier = Modifier
                             .align(Alignment.CenterHorizontally)
                             .padding(top = 14.dp)
-                            .pressable({ viewModel.clear(onBack) }),
+                            .pressable({ askRemove = true }),
                     )
+                    // Asked first: the whole plan goes, with its start day, carry-over and 50/30/20 choices.
+                    if (askRemove) {
+                        GlassAlertDialog(
+                            onDismissRequest = { askRemove = false },
+                            title = { Text("Remove your budget?") },
+                            text = { Text("Safe to spend and budget alerts stop until you set one again. Your entries stay as they are.", color = c.textSecondary) },
+                            confirmButton = {
+                                androidx.compose.material3.TextButton(onClick = { askRemove = false; viewModel.clear(onBack) }) { Text("Remove", color = c.negative) }
+                            },
+                            dismissButton = {
+                                androidx.compose.material3.TextButton(onClick = { askRemove = false }) { Text("Cancel", color = c.textSecondary) }
+                            },
+                        )
+                    }
                 }
             }
         },
@@ -329,7 +344,13 @@ fun BudgetPlanScreen(
                             val d = viewModel.startDay
                             Text(
                                 if (d == 1) "The 1st: budgets follow calendar months. Pick payday to run from one to the next."
-                                else "The ${ordinal(d)}: this month's budget runs ${YearMonth.now().atDay(d).format(java.time.format.DateTimeFormatter.ofPattern("d MMM"))} to the ${ordinal(d - 1)} of next month.",
+                                else {
+                                    // The budget month today falls in: before the start day, it began last month.
+                                    val today = java.time.LocalDate.now()
+                                    val from = (if (today.dayOfMonth >= d) today else today.minusMonths(1)).withDayOfMonth(d)
+                                    val dayMonth = java.time.format.DateTimeFormatter.ofPattern("d MMM")
+                                    "The ${ordinal(d)}: the budget you're in runs ${from.format(dayMonth)} to ${from.plusMonths(1).minusDays(1).format(dayMonth)}."
+                                },
                                 style = MaterialTheme.typography.bodySmall,
                                 color = c.textSecondary,
                             )

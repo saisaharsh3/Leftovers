@@ -119,13 +119,18 @@ fun PlanScreen(
     onOpenGoal: (Long) -> Unit,
     onOpenCategories: () -> Unit,
     onOpenDebts: () -> Unit,
+    onOpenSettings: () -> Unit = {},
     viewModel: PlanViewModel = viewModel(factory = AppViewModelProvider.Factory),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val c = LocalAppColors.current
     val money = LocalMoney.current
 
-    GlassScreen(title = "Plan", onBack = null) { padding ->
+    GlassScreen(
+        title = "Plan",
+        onBack = null,
+        actions = { com.leftovers.app.ui.components.RoundButton(Lucide.Settings, "Settings", onOpenSettings) },
+    ) { padding ->
         if (!state.loaded) return@GlassScreen
         LazyColumn(
             Modifier.fillMaxSize(),

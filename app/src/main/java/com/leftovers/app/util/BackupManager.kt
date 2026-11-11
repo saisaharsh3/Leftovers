@@ -102,6 +102,7 @@ class BackupManager(
                         .put("type", c.type.name).put("budget", c.budgetMinor ?: JSONObject.NULL)
                         .put("addsToBudget", c.addsToBudget)
                         .put("bucket", c.bucket ?: JSONObject.NULL)
+                        .put("hidden", c.hidden)
                 }))
                 // Icons made from the user's own pictures: small, so always included.
                 CustomIcons.export(context, dao.categories().map { it.emoji } + dao.accounts().map { it.icon } + dao.goals().map { it.emoji })
@@ -149,6 +150,7 @@ class BackupManager(
                         .put("splitOf", d.splitOf ?: JSONObject.NULL)
                         .put("pending", d.pending)
                         .put("settledOn", d.settledOn ?: JSONObject.NULL)
+                        .put("sharedId", d.sharedId ?: JSONObject.NULL)
                         .put("receipts", JSONArray(d.photos.map { photoRef(it) }.filter { it != JSONObject.NULL }))
                 }))
                 if (photos.length() > 0) put("photos", photos)
@@ -222,7 +224,7 @@ class BackupManager(
                 val name = it.getString("name")
                 // Older backups predate the flag: use the same default as the database migration.
                 val adds = it.optBoolean("addsToBudget", type == TxType.INCOME && name != "Salary")
-                Category(it.getLong("id"), name, it.getString("icon"), it.getLong("color"), type, it.longOrNull("budget"), adds, it.stringOrNull("bucket"))
+                Category(it.getLong("id"), name, it.getString("icon"), it.getLong("color"), type, it.longOrNull("budget"), adds, it.stringOrNull("bucket"), it.optBoolean("hidden", false))
             }
             val accounts = json.optJSONArray("accounts")?.objects().orEmpty().map {
                 Account(
@@ -272,6 +274,7 @@ class BackupManager(
                     splitOf = it.longOrNull("splitOf"),
                     pending = it.optInt("pending", 0),
                     settledOn = it.longOrNull("settledOn"),
+                    sharedId = it.stringOrNull("sharedId"),
                 )
             }
 

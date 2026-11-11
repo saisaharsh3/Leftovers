@@ -1,5 +1,7 @@
 package com.leftovers.app.ui.screens
 
+import androidx.compose.foundation.layout.asPaddingValues
+import com.leftovers.app.ui.components.frosted
 import com.leftovers.app.ui.components.Haptics
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.horizontalScroll
@@ -37,7 +39,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.windowInsetsTopHeight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -49,7 +50,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -299,6 +299,18 @@ fun HomeScreen(
     val upcomingBounds = remember { mutableMapOf<Long, androidx.compose.ui.geometry.Rect>() }
     // Tapping the balance opens a card with every account, to switch which one Home shows.
     var balanceOpen by remember { mutableStateOf(false) }
+    // Moving money between accounts, straight from the balance card.
+    var transferring by remember { mutableStateOf(false) }
+    val transferScope = androidx.compose.runtime.rememberCoroutineScope()
+    if (transferring && state.accounts.size >= 2) {
+        TransferSheet(state.accounts, onDismiss = { transferring = false }) { from, to, amount, note, day ->
+            val accounts = (versionContext.applicationContext as com.leftovers.app.LeftoversApp).container.accounts
+            transferScope.launch {
+                accounts.saveTransfer(com.leftovers.app.data.Transfer(fromAccountId = from, toAccountId = to, amountMinor = amount, epochDay = day.toEpochDay(), note = note))
+            }
+            transferring = false
+        }
+    }
     var balanceHidden by remember { mutableStateOf(false) }
     var balanceFrom by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
     var balanceBounds by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
@@ -369,6 +381,7 @@ fun HomeScreen(
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 SecondaryButton("Accounts", { close(onOpenAccounts) }, Modifier.weight(1f))
+                if (state.accounts.size >= 2) RoundButton(Lucide.Repeat, "Transfer between accounts", { close { transferring = true } }, size = 56.dp)
                 PrimaryButton("See activity", { close { onOpenActivity(null, selected?.id) } }, Modifier.weight(1.4f), icon = Lucide.ArrowUpRight)
             }
         }
@@ -515,8 +528,9 @@ fun HomeScreen(
                     // Someone who owes you can be reminded, in a message you send from WhatsApp, SMS or any app.
                     if (b.netMinor > 0) {
                         val context = androidx.compose.ui.platform.LocalContext.current
+                        val remindScope = androidx.compose.runtime.rememberCoroutineScope()
                         RoundButton(Lucide.Bell, "Remind ${b.person}", {
-                            com.leftovers.app.util.DebtReminder.share(context, com.leftovers.app.util.DebtReminder.message(b, money::format), b.person)
+                            remindScope.launch { com.leftovers.app.util.DebtReminder.share(context, com.leftovers.app.util.DebtReminder.withLink(context, b, money.currency.currencyCode, money::format), b.person) }
                         }, size = 56.dp)
                     }
                     PrimaryButton(if (b.netMinor > 0) "Received" else "Paid back", { close { settling = b.person } }, Modifier.weight(1.4f), icon = Lucide.Check)
@@ -822,8 +836,7 @@ fun HomeScreen(
                         billCards(state.recent, state.shares, state.oneBill).forEach { card ->
                             Glass(Modifier.fillMaxWidth()) {
                                 Column(Modifier.padding(vertical = 6.dp)) {
-                                    // A split bill is its row and where its money went; its parts and shares aren't rows of their own.
-                                    val bill = card.drop(1).any { it.under() }
+                                    // A split bill is one row here; where its money went is on its card and in Activity.
                                     card.forEachIndexed { i, line ->
                                         if (line !is BillLine.Entry || line.under()) return@forEachIndexed
                                         if (i > 0) RowDivider(inset = 74.dp)
@@ -834,12 +847,6 @@ fun HomeScreen(
                                             wholeMinor = line.whole(),
                                             modifier = Modifier.peekSource(peek, line.item.id),
                                         )
-                                        if (bill && i == 0) {
-                                            BillBreakdown(
-                                                line, onPart = { peek.show(it) }, onShare = { peek.share = it },
-                                                partModifier = { Modifier.peekSource(peek, it.id) },
-                                            )
-                                        }
                                     }
                                 }
                             }
@@ -852,8 +859,8 @@ fun HomeScreen(
         Box(
             Modifier
                 .fillMaxWidth()
-                .windowInsetsTopHeight(WindowInsets.statusBars)
-                .background(Brush.verticalGradient(listOf(c.background.copy(alpha = 0.85f), Color.Transparent))),
+                .height(WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 10.dp)
+                .frosted(fadeBottom = true),
         )
         // What the pull found, for a moment.
         androidx.compose.animation.AnimatedVisibility(

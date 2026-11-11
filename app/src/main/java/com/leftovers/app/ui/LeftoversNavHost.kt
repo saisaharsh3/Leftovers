@@ -183,7 +183,12 @@ private fun NavGraphBuilder.screen(
 
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
-fun LeftoversNavHost(openAdd: Boolean = false, onOpenAddHandled: () -> Unit = {}) {
+fun LeftoversNavHost(
+    openAdd: Boolean = false,
+    onOpenAddHandled: () -> Unit = {},
+    sharedOwed: com.leftovers.app.util.SharedOwed.Shared? = null,
+    onSharedHandled: () -> Unit = {},
+) {
     val nav = rememberNavController()
     val backStack by nav.currentBackStackEntryAsState()
     val currentRoute = backStack?.destination?.route
@@ -348,6 +353,7 @@ fun LeftoversNavHost(openAdd: Boolean = false, onOpenAddHandled: () -> Unit = {}
                     }
                     screen(Routes.INSIGHTS) {
                         StatsScreen(
+                            onOpenSettings = { nav.navigate(Routes.SETTINGS) },
                             onOpenRecap = { nav.navigate(Routes.recap(it.toString())) },
                             onOpenYear = { nav.navigate(Routes.recap(it.toString())) },
                             onOpenTransaction = { nav.navigate(Routes.edit(it)) },
@@ -356,6 +362,7 @@ fun LeftoversNavHost(openAdd: Boolean = false, onOpenAddHandled: () -> Unit = {}
                     }
                     screen(Routes.PLAN) {
                         PlanScreen(
+                            onOpenSettings = { nav.navigate(Routes.SETTINGS) },
                             onOpenBudget = { nav.navigate(Routes.BUDGET) },
                             onEditPlan = { nav.navigate(Routes.BUDGET_PLAN) },
                             onOpenSubscriptions = { nav.navigate(Routes.subscriptions()) },
@@ -505,6 +512,9 @@ fun LeftoversNavHost(openAdd: Boolean = false, onOpenAddHandled: () -> Unit = {}
                 ) {
                     Toast(toast.orEmpty())
                 }
+
+                // Money owed sent from a friend's Leftovers, from the link the app was opened with.
+                sharedOwed?.let { com.leftovers.app.ui.screens.SharedOwedSheet(it, onDismiss = onSharedHandled) }
 
                 // Pop-up cards, above the tab bar and everything else.
                 popups.Content()

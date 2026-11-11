@@ -248,8 +248,8 @@ class AssistantTools(private val container: AppContainer, private val privacy: A
         return buildString {
             append("You are the assistant inside Leftovers, a private expense tracker on the user's phone. ")
             append("Today is ${LocalDate.now()} (${LocalDate.now().dayOfWeek.name.lowercase()}) and amounts are in $currency.\n")
-            append("Expense categories: ${categories.filter { it.type == TxType.EXPENSE }.joinToString { it.name }}.\n")
-            append("Income categories: ${categories.filter { it.type == TxType.INCOME }.joinToString { it.name }}.\n")
+            append("Expense categories: ${categories.filter { it.type == TxType.EXPENSE && !it.hidden }.joinToString { it.name }}.\n")
+            append("Income categories: ${categories.filter { it.type == TxType.INCOME && !it.hidden }.joinToString { it.name }}.\n")
             append("Accounts: ${accounts.joinToString { scrub(it.name) + if (it.id == defaultAccount) " (default)" else "" }}.\n\n")
             append(rules(currency))
         }

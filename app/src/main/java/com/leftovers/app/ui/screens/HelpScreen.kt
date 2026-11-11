@@ -84,7 +84,10 @@ private fun HelpRow(item: HelpGuide.Item, onOpen: (HelpGuide.Place) -> Unit) {
                     "Open ›",
                     style = MaterialTheme.typography.labelLarge,
                     color = c.textPrimary,
-                    modifier = Modifier.pressable({ onOpen(place) }, pressedScale = 0.95f).padding(horizontal = 6.dp, vertical = 4.dp),
+                    modifier = Modifier.pressable({
+                        if (place == HelpGuide.Place.SETTINGS) SettingsJump.open(item.where)
+                        onOpen(place)
+                    }, pressedScale = 0.95f).padding(horizontal = 6.dp, vertical = 4.dp),
                 )
             }
         }

@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Add to Leftovers</title>
+  <meta name="description" content="Money owed, sent from a friend's Leftovers. Tap to add it to yours.">
+  <meta name="robots" content="noindex">
+  <meta name="theme-color" content="#0b0b0f" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#f2f2f6" media="(prefers-color-scheme: light)">
+  <meta property="og:title" content="Add to Leftovers">
+  <meta property="og:description" content="Money owed, sent from a friend's Leftovers. Tap to add it to yours.">
+  <meta property="og:image" content="https://saisaharsh3.github.io/Leftovers/assets/social-preview.png">
+  <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="style.css">
+  <script>
+    // The same theme as the rest of the site, set before the page paints.
+    (function () {
+      var saved = null;
+      try { saved = localStorage.getItem("theme"); } catch (e) {}
+      document.documentElement.dataset.theme = saved || (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
+    })();
+  </script>
+  <style>
+    .add-page { min-height: 100dvh; display: grid; place-items: center; padding: 24px max(16px, env(safe-area-inset-right, 0px)) 32px max(16px, env(safe-area-inset-left, 0px)); }
+    .add-card { width: min(100%, 440px); padding: 26px 22px 22px; display: grid; gap: 18px; }
+    .add-brand { display: inline-flex; align-items: center; gap: 10px; font-weight: 700; letter-spacing: -0.01em; text-decoration: none; }
+    .add-kicker { color: var(--text-2); font-size: .95rem; }
+    .add-amount { background: var(--surface-2); border-radius: 22px; padding: 16px 18px; }
+    .add-amount .label { color: var(--text-2); font-size: .9rem; font-weight: 600; }
+    .add-amount .number { font-size: clamp(2.2rem, 11vw, 3rem); line-height: 1.1; letter-spacing: -0.035em; font-weight: 800; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+    .add-amount .what { color: var(--text-2); font-size: .9rem; }
+    .add-lines { list-style: none; margin: 0; padding: 0 6px; display: grid; gap: 10px; }
+    .add-lines li { display: flex; align-items: baseline; gap: 12px; }
+    .add-lines .n { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .add-lines .d { display: block; color: var(--text-2); font-size: .85rem; }
+    .add-lines .a { font-weight: 650; font-variant-numeric: tabular-nums; }
+    .add-actions { display: grid; gap: 10px; }
+    .add-actions .pill { width: 100%; }
+    .add-actions .pill.primary { background: var(--accent); color: var(--on-accent); }
+    .add-note { color: var(--text-2); font-size: .85rem; letter-spacing: .01em; text-align: center; }
+  </style>
+</head>
+<body>
+  <div class="aurora" aria-hidden="true"><i></i><i></i><i></i></div>
+  <main class="add-page">
+    <section class="panel add-card" aria-labelledby="add-title">
+      <a class="add-brand" href="./"><img src="assets/icon.svg" alt="" width="28" height="28"><span>Leftovers</span></a>
+
+      <div id="found" hidden>
+        <div style="display:grid;gap:18px">
+          <div>
+            <h3 id="add-title">A friend sent you this</h3>
+            <p class="add-kicker">From their Leftovers, to add to yours.</p>
+          </div>
+          <div class="add-amount">
+            <p class="label" id="label"></p>
+            <p class="number" id="number"></p>
+            <p class="what" id="what"></p>
+          </div>
+          <ul class="add-lines" id="lines" hidden></ul>
+          <div class="add-actions">
+            <a class="pill primary" id="open" href="#">Add to my Leftovers</a>
+            <a class="pill quiet" href="./">Don't have it? Get Leftovers</a>
+          </div>
+          <p class="add-note" id="note">Nothing was uploaded: the amounts are in the link itself, and stay on your phone.</p>
+        </div>
+      </div>
+
+      <div id="empty" hidden>
+        <div style="display:grid;gap:18px">
+          <div>
+            <h3>Nothing to add here</h3>
+            <p class="add-kicker">This link is incomplete. Ask your friend to send it again from Money owed in their Leftovers.</p>
+          </div>
+          <div class="add-actions"><a class="pill quiet" href="./">About Leftovers</a></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    (function () {
+      var $ = function (id) { return document.getElementById(id); };
+      var code = location.hash.slice(1);
+      var data = null;
+      try {
+        // The entries, as the app wrote them: base64 (URL-safe) of {v, c: currency, e: [[id, amount, day, note, paidBack]]}.
+        var b64 = code.replace(/-/g, "+").replace(/_/g, "/");
+        var bytes = Uint8Array.from(atob(b64), function (ch) { return ch.charCodeAt(0); });
+        data = JSON.parse(new TextDecoder().decode(bytes));
+      } catch (e) {}
+      var entries = data && data.v === 1 && Array.isArray(data.e) ? data.e.filter(function (e) { return Array.isArray(e) && Number(e[1]); }) : [];
+      if (!entries.length) { $("empty").hidden = false; return; }
+
+      var currency = /^[A-Z]{3}$/.test(data.c || "") ? data.c : "";
+      var money = function (minor) {
+        var value = Math.abs(minor) / 100;
+        try {
+          if (currency) return new Intl.NumberFormat(currency === "INR" ? "en-IN" : undefined, { style: "currency", currency: currency, maximumFractionDigits: value % 1 ? 2 : 0 }).format(value);
+        } catch (e) {}
+        return value.toLocaleString(undefined, { maximumFractionDigits: 2 });
+      };
+      var day = function (epochDay) {
+        return new Date(epochDay * 86400000).toLocaleDateString(undefined, { day: "numeric", month: "short", timeZone: "UTC" });
+      };
+      // Amounts are as the sender has them: above zero, you owe them.
+      var net = entries.reduce(function (sum, e) { return sum + Number(e[1]); }, 0);
+      $("label").textContent = net >= 0 ? "You owe" : "You're owed";
+      $("number").textContent = money(net);
+      if (entries.length === 1) {
+        $("what").textContent = [String(entries[0][3] || ""), day(Number(entries[0][2]))].filter(Boolean).join(" · ");
+      } else {
+        $("what").textContent = entries.length + " entries";
+        var list = $("lines");
+        entries.slice(0, 40).forEach(function (e) {
+          var li = document.createElement("li");
+          var name = document.createElement("span"); name.className = "n";
+          name.textContent = String(e[3] || (e[4] ? "Paid back" : "Money owed"));
+          var when = document.createElement("span"); when.className = "d"; when.textContent = day(Number(e[2]));
+          name.appendChild(when);
+          var amount = document.createElement("span"); amount.className = "a";
+          amount.textContent = (Number(e[1]) < 0 ? "−" : "") + money(Number(e[1]));
+          li.appendChild(name); li.appendChild(amount); list.appendChild(li);
+        });
+        list.hidden = false;
+      }
+
+      // On Android the button hands the entries to the app; without the app it comes back to the site.
+      var android = /Android/i.test(navigator.userAgent);
+      var home = new URL("./", location.href).href;
+      $("open").href = android
+        ? "intent://owed?d=" + code + "#Intent;scheme=leftovers;S.browser_fallback_url=" + encodeURIComponent(home) + ";end"
+        : "leftovers://owed?d=" + code;
+      if (!android) $("note").textContent = "Open this link on the Android phone that has Leftovers. Nothing was uploaded: the amounts are in the link itself.";
+      $("found").hidden = false;
+    })();
+  </script>
+</body>
+</html>

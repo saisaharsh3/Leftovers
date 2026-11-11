@@ -131,7 +131,7 @@ class StatsViewModel(
                 type = t,
                 total = current.totalOf(t),
                 previousTotal = all.filter { YearMonth.from(it.date) == m.minusMonths(1) }.totalOf(t),
-                budget = if (s.plan.isSet) s.plan.budgetFor(m, all) else 0L,
+                budget = if (s.plan.isSet && s.plan.cycle(m).start == m.atDay(1)) s.plan.budgetFor(m, all) else 0L,
                 categories = current.categoryTotals(t),
                 daily = daily.toList(),
                 count = ofType.size,
@@ -166,6 +166,7 @@ fun StatsScreen(
     onOpenTransaction: (Long) -> Unit,
     /** Opens the assistant with this question; the row only shows when an AI is connected. */
     onAskAi: (String) -> Unit = {},
+    onOpenSettings: () -> Unit = {},
     viewModel: StatsViewModel = viewModel(factory = AppViewModelProvider.Factory)) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val c = LocalAppColors.current
@@ -199,6 +200,7 @@ fun StatsScreen(
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 RoundButton(Lucide.Download, "Statement as a PDF", { showStatement = true })
                 RoundButton(Lucide.Sparkles, "Monthly recap", { onOpenRecap(state.month) })
+                RoundButton(Lucide.Settings, "Settings", onOpenSettings)
             }
         },
     ) { padding ->
@@ -324,7 +326,7 @@ fun StatsScreen(
                             state.trends.forEach { t ->
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Icon(
-                                        Lucide.TrendingUp,
+                                        if (t.down) Lucide.TrendingDown else Lucide.TrendingUp,
                                         contentDescription = null,
                                         tint = when (t.good) {
                                             true -> c.positive

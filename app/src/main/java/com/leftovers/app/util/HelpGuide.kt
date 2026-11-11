@@ -13,7 +13,7 @@ object HelpGuide {
 
     val items: List<Item> = listOf(
         // Adding entries
-        Item("Adding entries", "Add an expense or income", "Type the amount on the keypad, pick a category and the date, and save.", "The + button in the middle of the tab bar", Place.ADD, "new entry log spend spending"),
+        Item("Adding entries", "Add an expense or income", "Type the amount on the keypad, pick a category and the date, and save. With many categories, All shows them at once, with a search.", "The + button in the middle of the tab bar", Place.ADD, "new entry log spend spending"),
         Item("Adding entries", "Split a bill", "One bill across several categories, or shared with people: their shares go to Money owed, and it shows as one entry.", "+ → Split", Place.ADD, "share divide friends groceries parts"),
         Item("Adding entries", "Lent or borrowed", "Money you lent or borrowed isn't spending: it goes to Money owed. You can save it without an amount, as a reminder.", "+ → Lent or borrowed", Place.ADD, "loan owe debt friend pending"),
         Item("Adding entries", "Repeat every month", "Turn an entry into a subscription or a regular payment that's logged for you.", "+ → Repeat (↻)", Place.ADD, "recurring rent bill monthly"),
@@ -25,7 +25,7 @@ object HelpGuide {
         Item("Seeing your money", "Home", "What's left to spend today and this month, balances, upcoming bills, money owed and recent entries. Pull down to check email, sync and updates.", "The Home tab", Place.HOME, "dashboard safe to spend refresh"),
         Item("Seeing your money", "Safe to spend today", "The big number on Home: what you can spend today and stay on budget, or how far over you are. Tap it for the month's budget.", "Home, at the top", Place.BUDGET, "over budget left daily limit"),
         Item("Seeing your money", "Detected payments", "Payments found in your SMS, email or payment apps wait on Home: tap one to check and add it, or ✕ to dismiss it.", "Home → Detected payments", Place.HOME, "suggested pending review sms"),
-        Item("Seeing your money", "One month or all time", "See one month at a time or every entry ever, newest first or by amount.", "Activity → By month / All time, and the filter button", Place.ACTIVITY, "sort highest lowest history everything"),
+        Item("Seeing your money", "One month or all time", "See one month at a time or every entry ever, newest first or by amount. Transfers between your accounts show on their day: tap one to change or delete it.", "Activity → By month / All time, and the filter button", Place.ACTIVITY, "sort highest lowest history everything transfer"),
         Item("Seeing your money", "Search and filters", "Search notes, categories, accounts, #tags or amounts; several words find entries with all of them. Filter by account, category or #tag.", "Activity → search or filter buttons", Place.ACTIVITY, "find look up tag hashtag"),
         Item("Seeing your money", "Calendar view", "Each day's spending on a calendar; tap a day to see its entries.", "Activity → calendar button", Place.ACTIVITY, "month days"),
         Item("Seeing your money", "Charts and trends", "Spending and income by category and day, compared with the month before.", "The Insights tab", Place.INSIGHTS, "stats graph analysis report"),
@@ -35,7 +35,7 @@ object HelpGuide {
 
         // Accounts
         Item("Accounts", "Accounts and balances", "Bank, cash, cards and wallets, each with its balance. Tap one to see its entries.", "Home → Total balance card", Place.ACCOUNTS, "bank wallet card cash balance"),
-        Item("Accounts", "Transfer between accounts", "Move money between your own accounts, such as paying a card bill from the bank, today or on an earlier day. It isn't spending or income, but it shows in Activity on its day.", "Home → Total balance card → Transfer", Place.ACCOUNTS, "move money pay card bill withdraw"),
+        Item("Accounts", "Transfer between accounts", "Move money between your own accounts, such as paying a card bill from the bank, today or on an earlier day. It isn't spending or income, but it shows in Activity on its day.", "Home → Total balance card → ⇄ button", Place.ACCOUNTS, "move money pay card bill withdraw"),
         Item("Accounts", "Accounts in another currency", "An account can be in its own currency; entries in it are converted for your totals.", "Accounts → an account → Currency", Place.ACCOUNTS, "foreign dollar euro travel"),
         Item("Accounts", "Leave an account out", "Keep an account out of the total balance and/or the budget, e.g. savings, or money that isn't yours such as a friend's spends on your card.", "Accounts → an account", Place.ACCOUNTS, "exclude hide savings reimbursement external"),
         Item("Accounts", "Put accounts in order", "Drag accounts into the order you want.", "Accounts → Reorder", Place.ACCOUNTS, "sort arrange drag"),
@@ -46,13 +46,14 @@ object HelpGuide {
         Item("Budgets", "Category limits", "A monthly limit for a category, with alerts as you near it.", "Plan → budget card → Category limits", Place.BUDGET, "limit cap alert"),
         Item("Budgets", "Set aside", "Money kept out of what's left to spend, such as for bills still to come.", "Plan → budget card → Set aside", Place.BUDGET, "reserve save"),
         Item("Budgets", "Your own icons", "Make an icon from any picture, such as a shop's logo from a screenshot: tap the camera in an icon picker and frame it. It's kept on your phone to use again for categories, accounts and goals; long-press one to delete it.", "Settings → General → Categories → a category → Icon", Place.CATEGORIES, "logo picture photo custom icon brand shop"),
-        Item("Budgets", "Categories", "Add, rename, recolour or remove categories, with an icon each.", "Settings → General → Categories", Place.CATEGORIES, "category icon colour"),
+        Item("Budgets", "Categories", "Add, rename, recolour or remove categories, with an icon each. One you no longer use can be hidden from adding (Show when adding, off) and keeps its entries.", "Settings → General → Categories", Place.CATEGORIES, "category icon colour hide archive old"),
 
         // Bills, goals and money owed
         Item("Bills, goals and money owed", "Subscriptions and bills", "Regular payments and income, logged for you on their day, with a reminder before bills.", "Plan → Subscriptions", Place.SUBSCRIPTIONS, "netflix rent recurring salary emi"),
         Item("Bills, goals and money owed", "Regular income", "Salary or rent you receive, added on its day like a subscription.", "Plan → Subscriptions → Income", Place.SUBSCRIPTIONS, "salary paycheck recurring income"),
         Item("Bills, goals and money owed", "Savings goals", "Save towards something by a date: see what's needed each month. Add shop links to follow its price.", "Plan → Savings goals", Place.GOALS, "goal save target price"),
         Item("Bills, goals and money owed", "Money owed", "Who owes you and whom you owe. Mark one entry or everything with a person as received or settled.", "Home → Money owed, or Plan → More", Place.DEBTS, "lend borrow settle received friends"),
+        Item("Bills, goals and money owed", "Send it to a friend's Leftovers", "Remind (the bell) sends a message with a link. A friend who also uses Leftovers taps it and what they owe you is added to their Money owed, never twice. The amounts travel in the link itself, not through a server.", "Money owed → a person → bell", Place.DEBTS, "share split link friend send sync together"),
 
         // Detecting payments
         Item("Detecting payments", "Bank SMS", "Payments in your bank's text messages are suggested on Home, to add with one tap. Only a fingerprint of each message is kept.", "Settings → Security & reminders → Detect bank SMS", Place.SETTINGS, "sms message auto upi"),

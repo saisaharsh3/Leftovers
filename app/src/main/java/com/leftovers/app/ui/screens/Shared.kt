@@ -1,5 +1,8 @@
 package com.leftovers.app.ui.screens
 
+import androidx.compose.ui.graphics.layer.drawLayer
+import androidx.compose.ui.graphics.drawscope.scale
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.heightIn
@@ -610,23 +613,11 @@ fun MorphCard(
             androidx.compose.runtime.CompositionLocalProvider(locals) {
                 Box(Modifier.fillMaxSize()) {
                     // What's behind: blurred lightly (liquid glass phones) and dimmed, fading in with the card.
-                    Box(
-                        Modifier
-                            .fillMaxSize()
-                            .graphicsLayer { alpha = progress.value.coerceIn(0f, 1f) }
-                            .then(
-                                if (liquid != null) {
-                                    Modifier.drawBackdrop(
-                                        backdrop = liquid,
-                                        shape = { androidx.compose.ui.graphics.RectangleShape },
-                                        effects = { blur(10.dp.toPx()) },
-                                        onDrawSurface = { drawRect(c.background.copy(alpha = 0.32f)) },
-                                    )
-                                } else {
-                                    Modifier.background(c.background.copy(alpha = 0.6f))
-                                },
-                            ),
-                    )
+                    if (liquid != null) {
+                        FrozenBlur(liquid, dim = 0.32f) { progress.value.coerceIn(0f, 1f) }
+                    } else {
+                        Box(Modifier.fillMaxSize().graphicsLayer { alpha = progress.value.coerceIn(0f, 1f) }.background(c.background.copy(alpha = 0.6f)))
+                    }
                     MorphBody(dim = false)
                 }
             }
@@ -706,19 +697,12 @@ private fun LiquidSheet(
                 // The screen behind: dimmed and lightly blurred, fading with the sheet. A tap closes it. Over another
                 // sheet or pop-up it only dims, so that one stays in sight (the blur would show the screen instead).
                 val over = layer.cards.indexOfFirst { it.first == key } > 0
+                if (!over) FrozenBlur(backdrop, dim = 0.35f) { shown.value.coerceIn(0f, 1f) }
                 Box(
                     Modifier
                         .fillMaxSize()
                         .graphicsLayer { alpha = shown.value.coerceIn(0f, 1f) }
-                        .then(
-                            if (over) Modifier.background(c.background.copy(alpha = 0.35f))
-                            else Modifier.drawBackdrop(
-                                backdrop = backdrop,
-                                shape = { androidx.compose.ui.graphics.RectangleShape },
-                                effects = { blur(8.dp.toPx()) },
-                                onDrawSurface = { drawRect(c.background.copy(alpha = 0.35f)) },
-                            ),
-                        )
+                        .then(if (over) Modifier.background(c.background.copy(alpha = 0.35f)) else Modifier)
                         .pointerInput(Unit) { detectTapGestures { close() } },
                 )
                 // Room for the sheet: below the status bar, above the keyboard; a tall form scrolls inside it.
@@ -973,3 +957,31 @@ internal fun BillLine.Entry.whole(): Long? =
     if (part || (parts.isEmpty() && shares.isEmpty())) null
     else item.amountMinor + parts.sumOf { it.amountMinor } + shares.sumOf { it.amountMinor }
 
+/**
+ * The screen behind a pop-up or sheet, blurred and dimmed. Blurred at a sixth of its size, then drawn back up: a
+ * full-size blur was redone on every frame of the opening and made it stutter (about 95% of frames late), while at
+ * this size it's 36 times less work, and scaled up it looks the same, just as soft. It follows the screen as it
+ * is, so the tapped row stepping aside shows here too. [alpha] fades it with the pop-up.
+ */
+@Composable
+private fun FrozenBlur(backdrop: com.kyant.backdrop.backdrops.LayerBackdrop, dim: Float, alpha: () -> Float) {
+    val c = LocalAppColors.current
+    val small = androidx.compose.ui.graphics.rememberGraphicsLayer()
+    Box(
+        Modifier
+            .fillMaxSize()
+            .graphicsLayer { this.alpha = alpha() }
+            .drawBehind {
+                val scaleDown = 6f
+                val size = androidx.compose.ui.unit.IntSize((this.size.width / scaleDown).toInt().coerceAtLeast(1), (this.size.height / scaleDown).toInt().coerceAtLeast(1))
+                // The same softness as the full-size 10 dp blur, in the small picture's pixels.
+                val radius = 10.dp.toPx() / scaleDown
+                small.renderEffect = androidx.compose.ui.graphics.BlurEffect(radius, radius, androidx.compose.ui.graphics.TileMode.Clamp)
+                small.record(this, layoutDirection, size) {
+                    scale(1f / scaleDown, pivot = androidx.compose.ui.geometry.Offset.Zero) { drawLayer(backdrop.graphicsLayer) }
+                }
+                scale(scaleDown, pivot = androidx.compose.ui.geometry.Offset.Zero) { drawLayer(small) }
+                drawRect(c.background.copy(alpha = dim))
+            },
+    )
+}

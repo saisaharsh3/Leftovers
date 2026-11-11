@@ -286,7 +286,7 @@ class QuickAddWidget : GlanceAppWidget() {
          * rest in their usual order when there isn't enough history.
          */
         internal fun topCategories(items: List<TransactionItem>, categories: List<Category>, today: LocalDate = LocalDate.now()): List<Category> {
-            val expense = categories.filter { it.type == TxType.EXPENSE }
+            val expense = categories.filter { it.type == TxType.EXPENSE && !it.hidden }
             val since = today.minusDays(60).toEpochDay()
             val used = items.filter { it.type == TxType.EXPENSE && it.epochDay >= since }.groupingBy { it.categoryId }.eachCount()
             val ranked = expense.filter { (used[it.id] ?: 0) > 0 }.sortedByDescending { used[it.id] }

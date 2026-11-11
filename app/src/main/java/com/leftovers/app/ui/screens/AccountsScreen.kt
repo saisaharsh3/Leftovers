@@ -703,19 +703,21 @@ private fun AccountEditor(
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun TransferSheet(
+internal fun TransferSheet(
     accounts: List<AccountWithBalance>,
     onDismiss: () -> Unit,
+    /** A transfer being changed; null for a new one. */
+    initial: Transfer? = null,
     onSave: (Long, Long, Long, String, LocalDate) -> Unit,
 ) {
     val c = LocalAppColors.current
-    var from by rememberSaveable { mutableStateOf(accounts[0].id) }
+    var from by rememberSaveable { mutableStateOf(initial?.fromAccountId ?: accounts[0].id) }
     // The day it happened: today unless it's being caught up on later (#54).
-    var day by rememberSaveable { mutableStateOf(LocalDate.now().toEpochDay()) }
+    var day by rememberSaveable { mutableStateOf(initial?.epochDay ?: LocalDate.now().toEpochDay()) }
     var picking by remember { mutableStateOf(false) }
-    var to by rememberSaveable { mutableStateOf(accounts[1].id) }
-    var amount by rememberSaveable { mutableStateOf("") }
-    var note by rememberSaveable { mutableStateOf("") }
+    var to by rememberSaveable { mutableStateOf(initial?.toAccountId ?: accounts[1].id) }
+    var amount by rememberSaveable { mutableStateOf(initial?.let { AmountInput.fromMinor(it.amountMinor) } ?: "") }
+    var note by rememberSaveable { mutableStateOf(initial?.note.orEmpty()) }
     val minor = AmountInput.toMinor(amount) ?: 0L
 
     GlassSheet(onDismiss) {
@@ -723,7 +725,7 @@ private fun TransferSheet(
             Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 16.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            Text("Move money", style = MaterialTheme.typography.headlineSmall, color = c.textPrimary)
+            Text(if (initial == null) "Move money" else "Edit transfer", style = MaterialTheme.typography.headlineSmall, color = c.textPrimary)
             Text("Transfers between your own accounts don't count as spending or income.", style = MaterialTheme.typography.bodySmall, color = c.textSecondary)
             Text("From", style = MaterialTheme.typography.labelMedium, color = c.textSecondary, modifier = Modifier.padding(start = 6.dp))
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -736,7 +738,7 @@ private fun TransferSheet(
             MoneyField(amount, { amount = it }, label = "Amount", large = true)
             Chip(LocalDate.ofEpochDay(day).friendlyLabel(), onClick = { picking = true }, icon = com.leftovers.app.ui.icons.Lucide.Calendar)
             GlassTextField(note, { note = it.take(60) }, placeholder = "e.g. ATM withdrawal", label = "Note (optional)")
-            PrimaryButton("Transfer", { onSave(from, to, minor, note.trim(), LocalDate.ofEpochDay(day)) }, Modifier.fillMaxWidth(), enabled = minor > 0 && from != to)
+            PrimaryButton(if (initial == null) "Transfer" else "Save", { onSave(from, to, minor, note.trim(), LocalDate.ofEpochDay(day)) }, Modifier.fillMaxWidth(), enabled = minor > 0 && from != to)
         }
     }
     if (picking) {

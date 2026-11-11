@@ -711,7 +711,7 @@ private fun RecurringEditor(
 
             Text("Category", style = MaterialTheme.typography.labelMedium, color = c.textSecondary, modifier = Modifier.padding(start = 6.dp))
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                categories.filter { it.type == type }.forEach { cat ->
+                categories.filter { it.type == type && (!it.hidden || it.id == categoryId) }.forEach { cat ->
                     Chip(cat.name, icon = CategoryIcons[cat.emoji], iconTint = Color(cat.color), selected = cat.id == categoryId, onClick = { categoryId = cat.id })
                 }
             }

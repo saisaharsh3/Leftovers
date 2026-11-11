@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -129,54 +130,48 @@ fun CategoriesScreen(
             item {
                 SegmentedToggle(TxType.entries, tab, { if (it == TxType.EXPENSE) "Spending" else "Income" }, { tab = it }, Modifier.fillMaxWidth())
             }
-            item {
-                Glass(Modifier.fillMaxWidth()) {
-                    Column(Modifier.padding(vertical = 6.dp)) {
-                        categories.filter { it.type == tab }.forEachIndexed { i, cat ->
-                            if (i > 0) RowDivider()
-                            ListRow(
-                                title = cat.name,
-                                leading = { CategoryIcon(cat.emoji, cat.color, size = 42.dp) },
-                                trailing = {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        // 50/30/20 (#39): tap to move it between needs, wants and savings.
-                                        if (cat.type == TxType.EXPENSE && bucketsOn) {
-                                            val b = com.leftovers.app.data.Bucket.of(cat)
-                                            com.leftovers.app.ui.components.Chip(b.label, {
-                                                val next = com.leftovers.app.data.Bucket.entries[(b.ordinal + 1) % 3]
-                                                viewModel.save(cat.copy(bucket = next.name))
-                                            })
-                                            Spacer(Modifier.width(8.dp))
-                                        }
-                                        if (cat.type == TxType.INCOME) {
-                                            Switch(
-                                                checked = cat.addsToBudget,
-                                                onCheckedChange = toggleHaptic({ viewModel.save(cat.copy(addsToBudget = it)) }),
-                                                colors = SwitchDefaults.colors(
-                                                    checkedTrackColor = c.accent,
-                                                    checkedThumbColor = c.onAccent,
-                                                    uncheckedTrackColor = c.glass,
-                                                    uncheckedBorderColor = c.borderTop,
-                                                    uncheckedThumbColor = c.textSecondary,
-                                                ),
-                                            )
-                                            Spacer(Modifier.width(8.dp))
-                                        }
-                                        RoundButton(Lucide.Trash2, "Delete ${cat.name}", { confirmDelete = cat }, size = 36.dp, tint = c.textTertiary)
-                                    }
-                                },
-                                onClick = { editing = cat },
-                            )
-                        }
+            val ofTab = categories.filter { it.type == tab }
+            listOf(false, true).forEach { hiddenGroup ->
+                val list = ofTab.filter { it.hidden == hiddenGroup }
+                if (list.isEmpty()) return@forEach
+                if (hiddenGroup) {
+                    item {
+                        Text(
+                            "Hidden when adding",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = c.textSecondary,
+                            modifier = Modifier.padding(start = 6.dp, top = 8.dp),
+                        )
                     }
                 }
-                if (tab == TxType.INCOME) {
-                    Text(
-                        "Switched on: money you receive in that category is added to the month's budget, like a gift or bonus. Leave Salary off if your budget already comes from it.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = c.textTertiary,
-                        modifier = Modifier.padding(start = 8.dp, end = 8.dp, top = 8.dp),
-                    )
+                item {
+                    Glass(Modifier.fillMaxWidth()) {
+                        Column(Modifier.padding(vertical = 6.dp)) {
+                            list.forEachIndexed { i, cat ->
+                                if (i > 0) RowDivider()
+                                ListRow(
+                                    title = cat.name,
+                                    subtitle = if (cat.type == TxType.INCOME && cat.addsToBudget) "Adds to the month's budget" else null,
+                                    leading = { CategoryIcon(cat.emoji, cat.color, size = 42.dp) },
+                                    trailing = {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            // 50/30/20 (#39): tap to move it between needs, wants and savings.
+                                            if (cat.type == TxType.EXPENSE && bucketsOn && !cat.hidden) {
+                                                val b = com.leftovers.app.data.Bucket.of(cat)
+                                                com.leftovers.app.ui.components.Chip(b.label, {
+                                                    val next = com.leftovers.app.data.Bucket.entries[(b.ordinal + 1) % 3]
+                                                    viewModel.save(cat.copy(bucket = next.name))
+                                                })
+                                                Spacer(Modifier.width(8.dp))
+                                            }
+                                            RoundButton(Lucide.Trash2, "Delete ${cat.name}", { confirmDelete = cat }, size = 36.dp, tint = c.textTertiary)
+                                        }
+                                    },
+                                    onClick = { editing = cat },
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -199,12 +194,19 @@ fun CategoriesScreen(
             containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
             shape = RoundedCornerShape(30.dp),
             title = { Text("Delete ${category.name}?") },
-            text = { Text("Only categories without any entries or subscriptions can be deleted.", color = c.textSecondary) },
+            text = { Text("Only categories without any entries or subscriptions can be deleted. One in use can be hidden instead, in its settings.", color = c.textSecondary) },
             confirmButton = {
                 TextButton(onClick = {
                     confirmDelete = null
                     viewModel.delete(category) { used ->
-                        scope.launch { snackbar.showSnackbar("${category.name} is used by $used ${if (used == 1) "entry" else "entries"}") }
+                        // In use, so it can't go: hiding it keeps its entries and takes it out of adding.
+                        scope.launch {
+                            val result = snackbar.showSnackbar(
+                                "${category.name} is used by $used ${if (used == 1) "entry" else "entries"}",
+                                actionLabel = if (category.hidden) null else "Hide instead",
+                            )
+                            if (result == androidx.compose.material3.SnackbarResult.ActionPerformed) viewModel.save(category.copy(hidden = true))
+                        }
                     }
                 }) { Text("Delete", color = c.negative) }
             },
@@ -220,6 +222,8 @@ private fun CategoryEditor(initial: Category, onDismiss: () -> Unit, onSave: (Ca
     var name by rememberSaveable { mutableStateOf(initial.name) }
     var icon by rememberSaveable { mutableStateOf(initial.emoji) }
     var color by rememberSaveable { mutableStateOf(initial.color) }
+    var adds by rememberSaveable { mutableStateOf(initial.addsToBudget) }
+    var shown by rememberSaveable { mutableStateOf(!initial.hidden) }
 
     GlassSheet(onDismiss) {
         Column(
@@ -271,12 +275,53 @@ private fun CategoryEditor(initial: Category, onDismiss: () -> Unit, onSave: (Ca
                 }
             }
 
+            if (initial.type == TxType.INCOME) {
+                LabeledSwitch(
+                    "Add to the month's budget",
+                    "Money you receive here goes on top of the month's budget, like a gift or bonus. Leave it off for Salary if your budget already comes from it.",
+                    adds,
+                ) { adds = it }
+            }
+            if (initial.id != 0L) {
+                LabeledSwitch(
+                    "Show when adding",
+                    "Off: it's no longer offered for new entries, but keeps its entries, charts and history. Turn it back on any time.",
+                    shown,
+                ) { shown = it }
+            }
+
             PrimaryButton(
                 "Save",
-                { onSave(initial.copy(name = name.trim(), emoji = icon, color = color)) },
+                { onSave(initial.copy(name = name.trim(), emoji = icon, color = color, addsToBudget = adds, hidden = !shown)) },
                 Modifier.fillMaxWidth(),
                 enabled = name.isNotBlank(),
             )
         }
+    }
+}
+
+/** A switch with what it does spelled out, so it's never mistaken for turning the category off. */
+@Composable
+private fun LabeledSwitch(title: String, text: String, checked: Boolean, onChange: (Boolean) -> Unit) {
+    val c = LocalAppColors.current
+    val flip = toggleHaptic(onChange)
+    Row(Modifier.fillMaxWidth().pressable({ flip(!checked) }, pressedScale = 0.99f), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.titleSmall, color = c.textPrimary)
+            Spacer(Modifier.height(2.dp))
+            Text(text, style = MaterialTheme.typography.bodySmall, color = c.textSecondary)
+        }
+        Spacer(Modifier.width(12.dp))
+        Switch(
+            checked = checked,
+            onCheckedChange = flip,
+            colors = SwitchDefaults.colors(
+                checkedTrackColor = c.accent,
+                checkedThumbColor = c.onAccent,
+                uncheckedTrackColor = c.glass,
+                uncheckedBorderColor = c.borderTop,
+                uncheckedThumbColor = c.textSecondary,
+            ),
+        )
     }
 }

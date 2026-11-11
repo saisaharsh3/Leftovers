@@ -86,7 +86,8 @@ Most budget apps want an account, show ads, or send your spending to a server. L
   account (like a wallet) to see just that account's balance, spending and income
 - Money owed: what you lent or borrowed and from whom, kept out of your budget. It moves the account the money
   went from or into while it's open, and can be paid back in full or a bit at a time. **Remind** sends someone
-  who owes you a friendly message through WhatsApp, SMS or any app
+  who owes you a friendly message through WhatsApp, SMS or any app, with a link: if they use Leftovers too, a tap
+  adds it to their own Money owed (the amounts are in the link itself, so nothing goes through a server)
 
 **Insights**
 - Daily bar chart you can touch to read any day

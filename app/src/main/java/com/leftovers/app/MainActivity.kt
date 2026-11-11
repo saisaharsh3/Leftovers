@@ -59,6 +59,13 @@ class MainActivity : FragmentActivity() {
 
     /** Set when the widget or reminder asks to jump straight to "add". */
     private var openAddRequest by mutableStateOf(false)
+    /** Money owed sent from a friend's Leftovers, in the link this was opened with; shown once the app is unlocked. */
+    private var sharedOwed by mutableStateOf<com.leftovers.app.util.SharedOwed.Shared?>(null)
+
+    private fun readShared(intent: Intent) {
+        val data = intent.data?.takeIf { it.scheme == com.leftovers.app.util.SharedOwed.SCHEME && it.host == com.leftovers.app.util.SharedOwed.HOST } ?: return
+        com.leftovers.app.util.SharedOwed.parse(data.toString())?.let { sharedOwed = it }
+    }
     private var locked by mutableStateOf(true)
     private var lockChecked by mutableStateOf(false)
     private var backgroundedAt = 0L
@@ -72,6 +79,7 @@ class MainActivity : FragmentActivity() {
         preferHighestRefreshRate()
         val container = (application as LeftoversApp).container
         openAddRequest = intent.getBooleanExtra(EXTRA_OPEN_ADD, false)
+        if (savedInstanceState == null) readShared(intent)
         lifecycleScope.launch {
             locked = container.settings.settings.first().appLock
             lockChecked = true
@@ -153,6 +161,8 @@ class MainActivity : FragmentActivity() {
                                 !showLock -> LeftoversNavHost(
                                     openAdd = openAddRequest,
                                     onOpenAddHandled = { openAddRequest = false },
+                                    sharedOwed = sharedOwed,
+                                    onSharedHandled = { sharedOwed = null },
                                 )
                             }
                             // After a crash: offer to report it. Nothing leaves the phone unless the user sends it.
@@ -230,6 +240,7 @@ class MainActivity : FragmentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         if (intent.getBooleanExtra(EXTRA_OPEN_ADD, false)) openAddRequest = true
+        readShared(intent)
     }
 
     override fun onStart() {

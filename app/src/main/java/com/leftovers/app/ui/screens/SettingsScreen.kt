@@ -1,5 +1,11 @@
 package com.leftovers.app.ui.screens
 
+import androidx.compose.foundation.background
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.gestures.animateScrollBy
+import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import com.leftovers.app.ui.components.toggleHaptic
 import com.leftovers.app.ui.components.pressable
 import androidx.compose.foundation.layout.Box
@@ -647,8 +653,34 @@ fun SettingsScreen(
             )
         }
         val money = Money(s.currencyCode)
+        val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+        val density = androidx.compose.ui.platform.LocalDensity.current
+        // Opened from Help on one setting: to its section (a header and its card each, in this order), then the
+        // row itself into view, lit up for a moment.
+        LaunchedEffect(SettingsJump.section) {
+            val section = SettingsJump.section ?: return@LaunchedEffect
+            val sections = listOf("Appearance", "Security & reminders", "AI assistant", "General", "Data", "Sync")
+            val i = sections.indexOf(section)
+            listState.scrollToItem(if (i >= 0) 2 * i else (listState.layoutInfo.totalItemsCount - 1).coerceAtLeast(0))
+            val row = SettingsJump.row
+            if (row != null) {
+                // Where the row is after that scroll, not before it: wait for the list to lay out there first.
+                repeat(2) { androidx.compose.runtime.withFrameNanos { } }
+                val top = SettingsJump.rowTop ?: kotlinx.coroutines.withTimeoutOrNull(800) {
+                    androidx.compose.runtime.snapshotFlow { SettingsJump.rowTop }.first { it != null }
+                }
+                if (top != null) listState.animateScrollBy(top - with(density) { 200.dp.toPx() })
+                SettingsJump.flash = row
+            }
+            SettingsJump.section = null
+            SettingsJump.row = null
+            SettingsJump.rowTop = null
+            kotlinx.coroutines.delay(1600)
+            SettingsJump.flash = null
+        }
         LazyColumn(
             Modifier.fillMaxSize(),
+            state = listState,
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = padding.calculateTopPadding() + 4.dp, bottom = 48.dp),
         ) {
             item { SectionHeader("Appearance") }
@@ -744,7 +776,7 @@ fun SettingsScreen(
                             Modifier.fillMaxWidth(),
                         )
                         Spacer(Modifier.height(10.dp))
-                        Text("Home screen widgets", style = MaterialTheme.typography.labelMedium, color = c.textSecondary, modifier = Modifier.padding(start = 4.dp, bottom = 8.dp))
+                        Text("Home screen widgets", style = MaterialTheme.typography.labelMedium, color = c.textSecondary, modifier = Modifier.jumpTarget("Home screen widgets").padding(start = 4.dp, bottom = 8.dp))
                         SegmentedToggle(
                             com.leftovers.app.data.WidgetStyle.entries,
                             s.widgetStyle,
@@ -1423,6 +1455,7 @@ private fun NavRow(icon: ImageVector, title: String, value: String?, onClick: ()
     val c = LocalAppColors.current
     ListRow(
         title,
+        modifier = Modifier.jumpTarget(title),
         leading = { IconTile(icon, c.textPrimary, size = 38.dp) },
         trailing = {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1444,7 +1477,7 @@ private fun ToggleRow(icon: ImageVector, title: String, checked: Boolean, onChan
     val flip = toggleHaptic(onChange)
     ListRow(
         title,
-        modifier = if (inset) Modifier else Modifier.padding(horizontal = (0).dp),
+        modifier = (if (inset) Modifier else Modifier.padding(horizontal = (0).dp)).jumpTarget(title),
         leading = { IconTile(icon, c.textPrimary, size = 38.dp) },
         trailing = {
             Switch(
@@ -1691,4 +1724,35 @@ private fun LiquidCost(icon: androidx.compose.ui.graphics.vector.ImageVector, te
         Spacer(Modifier.width(12.dp))
         Text(text, style = MaterialTheme.typography.bodyMedium, color = c.textPrimary)
     }
+}
+
+/** Where Help asked Settings to open, by the titles in its path ("Settings → Data → Import entries"). */
+object SettingsJump {
+    var section by mutableStateOf<String?>(null)
+    var row by mutableStateOf<String?>(null)
+    /** Where the asked-for row is on the screen, once drawn. */
+    var rowTop by mutableStateOf<Float?>(null)
+    /** The row lit up for a moment after arriving. */
+    var flash by mutableStateOf<String?>(null)
+
+    fun open(where: String) {
+        val parts = where.split(" → ")
+        section = parts.getOrNull(1) ?: "bottom"
+        row = parts.getOrNull(2)
+        rowTop = null
+    }
+}
+
+/** A row Help can point at: reports where it is when asked for, and glows briefly once there. */
+@Composable
+private fun Modifier.jumpTarget(title: String): Modifier {
+    val c = LocalAppColors.current
+    val glow by androidx.compose.animation.animateColorAsState(
+        if (SettingsJump.flash == title) c.accent.copy(alpha = 0.2f) else Color.Transparent,
+        androidx.compose.animation.core.tween(450),
+        label = "jumpGlow",
+    )
+    return this
+        .then(if (SettingsJump.row == title) Modifier.onGloballyPositioned { SettingsJump.rowTop = it.positionInRoot().y } else Modifier)
+        .background(glow, RoundedCornerShape(16.dp))
 }

@@ -5,6 +5,24 @@ All notable changes to Leftovers. Download any version from
 
 ## Unreleased
 
+- Opening an entry, a sheet or a pop-up is smoother: the screen behind is blurred at a sixth of its size and drawn back up, far less work on every frame, and it looks the same
+- Home: what scrolls under the clock is frosted, so the two never run into each other
+- Home: Recent shows each split bill as one row; where its money went is on its card and in Activity
+- Move money straight from Home: the ⇄ button on the Total balance card
+- Settings is a tap away on Insights and Plan too, not only on Home
+- The buttons on the add screen say what they do: Repeat, Split, Lent, Photo
+- Insights shows "% of budget" only when your budget month is the calendar month, so it never disagrees with Plan
+- A detected payment isn't filed under a category you've hidden
+- Budget plan: with a budget month that starts mid-month, it names the dates of the month you're in now (it named one that hadn't started)
+- Removing your budget asks first
+- Send money owed to a friend who also uses Leftovers: Remind now adds a link to the message, and tapping it adds what they owe to their own Money owed, the other way round and never twice. The amounts are in the link itself; nothing goes through a server
+- Tap a transfer in Activity for its card, to change or delete it (with Undo)
+- Insights: a line about something going down has an arrow pointing down
+- Hide a category you no longer use: it's not offered when adding, and keeps its entries and history. A category in use can't be deleted, but can be hidden instead
+- With many categories, All on the add screen shows them in a grid with a search
+- An income category's switch is labelled now (Add to the month's budget), in the category's settings
+- Help: Open on a setting goes to that setting and lights it up
+- "Spending" everywhere for money going out, instead of a mix with "Expense"
 - Transfers between your accounts show in Activity on their day, neutral and left out of Spent and Income; with one account picked, the ones in and out of it, signed
 - A transfer can be dated earlier than today, for catching up; the AI assistant can date one too
 - Deleting a lent or borrowed entry asks first, as it can't be undone

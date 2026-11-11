@@ -196,7 +196,7 @@ class EditorViewModel(
         viewModelScope.launch {
             runCatching {
                 val image = com.leftovers.app.ai.ImagePrep.prepare(app, Uri.fromFile(File(path)))
-                val cats = categories.value
+                val cats = categories.value.filter { !it.hidden }
                 com.leftovers.app.ai.ReceiptReader.read(
                     config,
                     image,
@@ -392,13 +392,15 @@ class EditorViewModel(
             }
             // A detected payment to somewhere filed before opens under the same category again.
             if (smsId > 0 && categoryId == null && note.isNotBlank()) {
-                val past = repository.getAllTransactions().map { com.leftovers.app.util.MerchantMemory.Past(it.note, it.type, it.categoryId, it.epochDay, it.createdAt) }
+                val hidden = repository.categories.first().filter { it.hidden }.map { it.id }.toSet()
+                val past = repository.getAllTransactions().filter { it.categoryId !in hidden }
+                    .map { com.leftovers.app.util.MerchantMemory.Past(it.note, it.type, it.categoryId, it.epochDay, it.createdAt) }
                 com.leftovers.app.util.MerchantMemory.categoryFor(note, type, past)?.let { remembered ->
                     if (categoryId == null) categoryId = remembered
                 }
                 // Somewhere new: the phone's own AI, where there is one, picks from the categories.
                 if (categoryId == null) {
-                    val options = repository.categories.first().filter { it.type == type }
+                    val options = repository.categories.first().filter { it.type == type && !it.hidden }
                     com.leftovers.app.ai.OnDevice.pickCategory(note, options.map { it.name })?.let { name ->
                         if (categoryId == null) categoryId = options.firstOrNull { it.name == name }?.id
                     }
@@ -611,7 +613,8 @@ class EditorViewModel(
     fun sortedCategories(all: List<Category>, items: List<TransactionItem>): List<Category> {
         val since = LocalDate.now().minusDays(120).toEpochDay()
         val usage = items.filter { it.epochDay >= since }.groupingBy { it.categoryId }.eachCount()
-        return all.filter { it.type == type }.sortedByDescending { usage[it.id] ?: 0 }
+        // Hidden categories aren't offered, unless this entry is already in one.
+        return all.filter { it.type == type && (!it.hidden || it.id == categoryId) }.sortedByDescending { usage[it.id] ?: 0 }
     }
 
     /**
@@ -754,7 +757,7 @@ private val stripDay = DateTimeFormatter.ofPattern("EEE")
 enum class OwedSplit(val label: String) { EACH("Each"), SPLIT("Split"), BY_AMOUNT("By amount") }
 
 /** What the add screen is logging. Swiping across the amount moves between expense and income; the lent or borrowed button sets owed. */
-enum class EntryKind(val label: String) { EXPENSE("Expense"), INCOME("Income"), OWED("Lent or borrowed") }
+enum class EntryKind(val label: String) { EXPENSE("Spending"), INCOME("Income"), OWED("Lent or borrowed") }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -958,7 +961,8 @@ fun EditorScreen(
             // A long note is cut short here rather than pushing the buttons below off screen.
             NotePill(viewModel.note, onClick = { showNote = true }, modifier = Modifier.padding(horizontal = 32.dp).widthIn(max = 320.dp))
             Spacer(Modifier.height(10.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+            // Top-aligned outside lent or borrowed, so the account chip lines up with the buttons, their names below.
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = if (viewModel.owed) Alignment.CenterVertically else Alignment.Top) {
                 if (viewModel.owed) {
                     RoundButton(
                         Lucide.HandCoins,
@@ -981,8 +985,9 @@ fun EditorScreen(
                 }
                 run {
                     val repeating = viewModel.repeatMonthly
-                    if (!viewModel.isEditing) RoundButton(
+                    if (!viewModel.isEditing) NamedRound(
                         Lucide.Repeat,
+                        "Repeat",
                         if (repeating) "Don't repeat" else "Repeat every month",
                         {
                             viewModel.repeatMonthly = !repeating
@@ -992,28 +997,28 @@ fun EditorScreen(
                             }
                             if (repeating && viewModel.date > LocalDate.now()) viewModel.date = LocalDate.now()
                         },
-                        size = 40.dp,
                         tint = if (repeating) c.onAccent else c.textSecondary,
                         container = if (repeating) c.accent else null,
                     )
                     if (!repeating) {
                         // One button for both kinds of split: with people, or across your own categories.
                         val split = viewModel.splits.isNotEmpty() || (viewModel.people.isNotEmpty() && viewModel.type == TxType.EXPENSE)
-                        RoundButton(
+                        NamedRound(
                             Lucide.Split,
+                            "Split",
                             "Split this",
                             { showSplit = true },
-                            size = 40.dp,
                             tint = if (split) c.onAccent else c.textSecondary,
                             container = if (split) c.accent else null,
                         )
                     }
-                    RoundButton(Lucide.HandCoins, "Lent or borrowed", { viewModel.selectKind(EntryKind.OWED) }, size = 40.dp, tint = c.textSecondary)
+                    NamedRound(Lucide.HandCoins, "Lent", "Lent or borrowed", { viewModel.selectKind(EntryKind.OWED) }, tint = c.textSecondary)
                 }
                 }
                 val path = viewModel.receiptPath
                 if (path == null) {
-                    RoundButton(Lucide.Camera, "Attach receipt", { receiptMenu = true }, size = 40.dp, tint = c.textSecondary)
+                    if (viewModel.owed) RoundButton(Lucide.Camera, "Attach receipt", { receiptMenu = true }, size = 40.dp, tint = c.textSecondary)
+                    else NamedRound(Lucide.Camera, "Photo", "Attach receipt", { receiptMenu = true }, tint = c.textSecondary)
                 } else {
                     ReceiptThumb(path, onOpen = { viewReceipt = true })
                 }
@@ -1166,6 +1171,13 @@ fun EditorScreen(
             if (grouped && group == null) sorted.find { it.id == viewModel.categoryId }?.let { group = com.leftovers.app.data.Bucket.of(it).name }
         }
         val shown = if (grouped && group != null) sorted.filter { com.leftovers.app.data.Bucket.of(it).name == group } else sorted
+        var showAll by rememberSaveable { mutableStateOf(false) }
+        if (showAll) {
+            AllCategoriesSheet(sorted, viewModel.categoryId, onDismiss = { showAll = false }) {
+                viewModel.selectCategory(it)
+                showAll = false
+            }
+        }
         LazyRow(
             contentPadding = PaddingValues(horizontal = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -1206,6 +1218,8 @@ fun EditorScreen(
                 )
             }
             }
+            // Many categories: all of them at once, in a grid with a search, instead of a long way sideways.
+            if (sorted.size > 6) item(key = "all") { Chip("All", onClick = { showAll = true }, icon = Lucide.LayoutGrid, iconTint = c.textSecondary) }
             item { Chip("Edit", onClick = onManageCategories, icon = Lucide.SlidersHorizontal, iconTint = c.textSecondary) }
         }
         }
@@ -1255,7 +1269,7 @@ fun EditorScreen(
                 SplitBody(
                     total = viewModel.totalMinor,
                     mainCategory = categories.find { it.id == viewModel.categoryId },
-                    categories = categories.filter { it.type == viewModel.type },
+                    categories = categories.filter { it.type == viewModel.type && !it.hidden },
                     parts = viewModel.splits,
                     onDismiss = { showSplit = false },
                     header = header,
@@ -1992,5 +2006,47 @@ private fun ForeignSheet(
                 }
             }
         }
+    }
+}
+
+/** Every category at once, most used first, in a grid with a search: for when there are too many to scroll through. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun AllCategoriesSheet(categories: List<Category>, selected: Long?, onDismiss: () -> Unit, onPick: (Long) -> Unit) {
+    val c = LocalAppColors.current
+    var query by rememberSaveable { mutableStateOf("") }
+    val found = categories.filter { query.isBlank() || it.name.contains(query.trim(), ignoreCase = true) }
+    GlassSheet(onDismiss) {
+        Column(
+            Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            Text("Categories", style = MaterialTheme.typography.headlineSmall, color = c.textPrimary)
+            GlassTextField(query, { query = it.take(24) }, placeholder = "Search")
+            if (found.isEmpty()) {
+                Text("No category called that", style = MaterialTheme.typography.bodyMedium, color = c.textSecondary, modifier = Modifier.padding(start = 6.dp))
+            }
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                found.forEach { cat ->
+                    Chip(cat.name, onClick = { onPick(cat.id) }, icon = CategoryIcons[cat.emoji], iconTint = Color(cat.color), selected = cat.id == selected)
+                }
+            }
+        }
+    }
+}
+
+/** A round button with its name under it, so what the add screen's buttons do doesn't have to be guessed. */
+@Composable
+private fun NamedRound(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    name: String,
+    description: String,
+    onClick: () -> Unit,
+    tint: Color,
+    container: Color? = null,
+) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        RoundButton(icon, description, onClick, size = 40.dp, tint = tint, container = container)
+        Text(name, style = MaterialTheme.typography.labelSmall, color = LocalAppColors.current.textSecondary, maxLines = 1)
     }
 }
