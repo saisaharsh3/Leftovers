@@ -224,7 +224,7 @@ interface SmsDao {
     fun observeAll(): Flow<List<SmsSuggestion>>
 
     @androidx.room.Insert
-    suspend fun insert(suggestion: SmsSuggestion)
+    suspend fun insert(suggestion: SmsSuggestion): Long
 
     @Query("DELETE FROM sms_suggestions WHERE id = :id")
     suspend fun delete(id: Long)

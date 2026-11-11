@@ -481,6 +481,14 @@ class SettingsViewModel(
         viewModelScope.launch { settingsRepository.setSmsDetection(enabled) }
     }
 
+    fun setSmsAutoAdd(enabled: Boolean) {
+        viewModelScope.launch { settingsRepository.setSmsAutoAdd(enabled) }
+    }
+
+    fun setSmsAutoMax(minor: Long) {
+        viewModelScope.launch { settingsRepository.setSmsAutoMax(minor) }
+    }
+
     fun setAppNotifications(enabled: Boolean) {
         viewModelScope.launch { settingsRepository.setAppNotifications(enabled) }
     }
@@ -844,6 +852,40 @@ fun SettingsScreen(
                         ToggleRow(Lucide.Smartphone, "Detect bank SMS", s.smsDetection, { on ->
                             if (on) smsPermission.launch(Manifest.permission.RECEIVE_SMS) else viewModel.setSmsDetection(false)
                         })
+                        // With bank SMS read: small spending can go straight in, up to an amount of the user's choosing.
+                        if (s.smsDetection) {
+                            RowDivider()
+                            ToggleRow(Lucide.Zap, "Add small payments automatically", s.smsAutoAdd, viewModel::setSmsAutoAdd)
+                            if (s.smsAutoAdd) {
+                                var editingMax by rememberSaveable { mutableStateOf(false) }
+                                RowDivider()
+                                NavRow(Lucide.Coins, "Up to", money.format(s.smsAutoMaxMinor)) { editingMax = true }
+                                if (editingMax) {
+                                    // Empty, with the amount now in its label: typing replaces it rather than adding to its front.
+                                    var typed by rememberSaveable { mutableStateOf("") }
+                                    val minor = com.leftovers.app.util.AmountInput.toMinor(typed) ?: 0L
+                                    GlassAlertDialog(
+                                        onDismissRequest = { editingMax = false },
+                                        title = { Text("Add automatically up to") },
+                                        text = {
+                                            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                                Text(
+                                                    "Payments from bank SMS up to this amount are added right away. Bigger ones, and money coming in, still wait on Home for you to check.",
+                                                    color = c.textSecondary,
+                                                )
+                                                MoneyField(typed, { typed = it }, label = "Amount (now ${money.format(s.smsAutoMaxMinor)})")
+                                            }
+                                        },
+                                        confirmButton = {
+                                            TextButton(enabled = minor > 0, onClick = { viewModel.setSmsAutoMax(minor); editingMax = false }) {
+                                                Text("Save", color = if (minor > 0) c.textPrimary else c.textTertiary)
+                                            }
+                                        },
+                                        dismissButton = { TextButton(onClick = { editingMax = false }) { Text("Cancel", color = c.textSecondary) } },
+                                    )
+                                }
+                            }
+                        }
                         RowDivider()
                         ToggleRow(Lucide.Bell, "Detect payment apps", s.appNotifications && notificationAccess, { on ->
                             viewModel.setAppNotifications(on)

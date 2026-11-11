@@ -79,19 +79,21 @@ class SmsRepository(
      * Stores a detected payment unless it's a repeat: the same message again, or the same amount already
      * suggested or logged around the same time (see [DuplicatePayments]). Returns whether it was added.
      */
-    suspend fun add(suggestion: SmsSuggestion): Boolean {
+    suspend fun add(suggestion: SmsSuggestion): Boolean = addReturningId(suggestion) != null
+
+    /** As [add], with the new suggestion's id; null when it was a repeat and nothing was added. */
+    suspend fun addReturningId(suggestion: SmsSuggestion): Long? {
         val hash = suggestion.body
         // Seen before, even if that suggestion was since added or dismissed: email checks look back two days.
-        if (hash.isNotEmpty() && (dao.countWithBody(hash) > 0 || dao.seenCount(hash) > 0)) return false
+        if (hash.isNotEmpty() && (dao.countWithBody(hash) > 0 || dao.seenCount(hash) > 0)) return null
         val from = suggestion.receivedAt - DuplicatePayments.WINDOW_MS
         val to = suggestion.receivedAt + DuplicatePayments.WINDOW_MS
         val logged = if (suggestion.isIncome) transactionDao.incomeAmountsBetween(from, to) else transactionDao.expenseAmountsBetween(from, to)
         val seen = dao.amountsBetween(from, to, suggestion.isIncome) + logged
         if (hash.isNotEmpty()) dao.markSeen(SeenMessage(hash, System.currentTimeMillis()))
-        if (DuplicatePayments.isDuplicate(suggestion.amountMinor, suggestion.receivedAt, seen)) return false
-        if (subscriptionAlreadyLogged(suggestion)) return false
-        dao.insert(suggestion)
-        return true
+        if (DuplicatePayments.isDuplicate(suggestion.amountMinor, suggestion.receivedAt, seen)) return null
+        if (subscriptionAlreadyLogged(suggestion)) return null
+        return dao.insert(suggestion)
     }
 
     /**
@@ -114,7 +116,7 @@ class SmsRepository(
     suspend fun dismiss(id: Long) = dao.delete(id)
 
     /** A dismissed suggestion back as it was, for Undo (not through [add], which would see it as a repeat). */
-    suspend fun putBack(suggestion: SmsSuggestion) = dao.insert(suggestion)
+    suspend fun putBack(suggestion: SmsSuggestion) { dao.insert(suggestion) }
 
     /** The account digits a detected payment's message named, if any. */
     suspend fun digitsFor(id: Long): String? = dao.digitsFor(id)

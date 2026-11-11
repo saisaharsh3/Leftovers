@@ -1,5 +1,6 @@
 package com.leftovers.app.util
 
+import com.leftovers.app.data.openBalances
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -139,6 +140,38 @@ object SmsParser {
 private fun fingerprint(text: String): String =
     java.security.MessageDigest.getInstance("SHA-256").digest(text.toByteArray()).joinToString("") { "%02x".format(it) }
 
+/**
+ * Adds a just-detected payment as an entry when it's small enough to add without asking (see [AutoAdd]), and takes
+ * its suggestion off Home. Returns whether it did.
+ */
+private suspend fun autoAdd(
+    container: com.leftovers.app.AppContainer,
+    s: com.leftovers.app.data.AppSettings,
+    parsed: SmsParser.Parsed,
+    body: String,
+    suggestionId: Long,
+): Boolean {
+    val owed = container.planning.debts.first().openBalances().filter { it.netMinor != 0L }
+    if (!AutoAdd.allowed(s.smsAutoAdd, s.smsAutoMaxMinor, parsed.amountMinor, parsed.isIncome, parsed.merchant, owed)) return false
+    val past = container.repository.getAllTransactions().map { MerchantMemory.Past(it.note, it.type, it.categoryId, it.epochDay, it.createdAt) }
+    val category = AutoAdd.category(parsed.merchant, past, container.repository.categories.first()) ?: return false
+    val account = container.accounts.accounts.first().let { list -> list.matchFor(body)?.id ?: list.firstOrNull { it.id == s.defaultAccountId }?.id }
+    val day = LocalDate.now()
+    container.repository.saveTransaction(
+        com.leftovers.app.data.Transaction(
+            amountMinor = parsed.amountMinor,
+            type = com.leftovers.app.data.TxType.EXPENSE,
+            categoryId = category,
+            epochDay = day.toEpochDay(),
+            note = parsed.merchant,
+            accountId = account,
+        ),
+    )
+    container.sms.dismiss(suggestionId)
+    runCatching { container.budgetAlerts.checkAfterExpense(day, category) }
+    return true
+}
+
 class SmsReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action != Telephony.Sms.Intents.SMS_RECEIVED_ACTION) return
@@ -165,7 +198,7 @@ class SmsReceiver : BroadcastReceiver() {
                 val byAi = if (check.parsed == null && !check.reason.startsWith("Skipped")) com.leftovers.app.ai.OnDevice.readPayment(body) else null
                 val parsed = check.parsed ?: byAi
                 if (parsed != null) {
-                    val added = container.sms.add(
+                    val suggestionId = container.sms.addReturningId(
                         SmsSuggestion(
                             amountMinor = parsed.amountMinor,
                             merchant = parsed.merchant,
@@ -181,9 +214,12 @@ class SmsReceiver : BroadcastReceiver() {
                             accountId = container.accounts.accounts.first().matchFor(body)?.id,
                         ),
                     )
+                    val added = suggestionId != null
+                    // Switched on: small spending is added now instead of waiting on Home to be checked.
+                    val auto = added && autoAdd(container, s, parsed, body, suggestionId!!)
                     val amount = (if (parsed.isIncome) "income " else "") + Money(s.currencyCode).format(parsed.amountMinor)
                     val how = if (byAi != null) " (read by this phone's AI)" else ""
-                    DetectionLog.add(context, "SMS", sender, if (added) "Suggested $amount$how" else "$amount was already logged or suggested")
+                    DetectionLog.add(context, "SMS", sender, if (auto) "Added $amount automatically$how" else if (added) "Suggested $amount$how" else "$amount was already logged or suggested")
                 } else if (MoneyText.find(body) != null) {
                     // Only messages with an amount are worth noting; personal texts leave no trace.
                     DetectionLog.add(context, "SMS", sender, check.reason)

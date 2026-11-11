@@ -69,6 +69,9 @@ data class AppSettings(
     /** With an app PIN or password, fingerprint or face can unlock too. */
     val lockFingerprint: Boolean = true,
     val smsDetection: Boolean,
+    /** Small spending from bank SMS added straight away, up to [smsAutoMaxMinor], instead of waiting to be checked. */
+    val smsAutoAdd: Boolean = false,
+    val smsAutoMaxMinor: Long = 20_000,
     /** Read payment apps' notifications (FamApp, Google Pay, PhonePe...) for payments; needs notification access. */
     val appNotifications: Boolean = false,
     /** Month (yyyy-MM) whose recap the user has already opened or dismissed. */
@@ -181,6 +184,8 @@ class SettingsRepository(context: Context) {
             lockAfterSeconds = p[LOCK_AFTER] ?: 0,
             lockFingerprint = p[LOCK_FINGERPRINT] ?: true,
             smsDetection = p[SMS] ?: false,
+            smsAutoAdd = p[SMS_AUTO_ADD] ?: false,
+            smsAutoMaxMinor = p[SMS_AUTO_MAX] ?: 20_000,
             appNotifications = p[APP_NOTIFICATIONS] ?: false,
             recapSeen = p[RECAP_SEEN].orEmpty(),
             autoBackupDir = p[AUTO_BACKUP_DIR],
@@ -301,6 +306,8 @@ class SettingsRepository(context: Context) {
 
     suspend fun setLockFingerprint(enabled: Boolean) = store.edit { it[LOCK_FINGERPRINT] = enabled }
     suspend fun setSmsDetection(enabled: Boolean) = store.edit { it[SMS] = enabled }
+    suspend fun setSmsAutoAdd(enabled: Boolean) = store.edit { it[SMS_AUTO_ADD] = enabled }
+    suspend fun setSmsAutoMax(minor: Long) = store.edit { it[SMS_AUTO_MAX] = minor }
 
     suspend fun setAppNotifications(enabled: Boolean) = store.edit { it[APP_NOTIFICATIONS] = enabled }
     suspend fun setRecapSeen(month: String) = store.edit { it[RECAP_SEEN] = month }
@@ -435,6 +442,8 @@ class SettingsRepository(context: Context) {
         val LOCK_AFTER = androidx.datastore.preferences.core.intPreferencesKey("lock_after_seconds")
         val LOCK_FINGERPRINT = booleanPreferencesKey("lock_fingerprint")
         val SMS = booleanPreferencesKey("sms_detection")
+        val SMS_AUTO_ADD = booleanPreferencesKey("sms_auto_add")
+        val SMS_AUTO_MAX = longPreferencesKey("sms_auto_max")
         val APP_NOTIFICATIONS = booleanPreferencesKey("app_notifications")
         val RECAP_SEEN = stringPreferencesKey("recap_seen")
         val AUTO_BACKUP_DIR = stringPreferencesKey("auto_backup_dir")
