@@ -511,10 +511,14 @@ fun LeftoversNavHost(
 }
 
 private fun NavHostController.switchTab(route: String) {
+    // A tab opened on top of other screens (Help's Open puts Activity over Settings and Help): those are a detour,
+    // left behind when moving to a tab, not kept. Kept, they were what came back on going to Home, so Home showed
+    // Activity again and couldn't be reached.
+    val detour = currentBackStack.value.any { e -> e.destination.route.let { it != null && it !in Routes.tabs && it != graph.route } }
     navigate(route) {
-        popUpTo(graph.findStartDestination().id) { saveState = true }
+        popUpTo(graph.findStartDestination().id) { saveState = !detour }
         launchSingleTop = true
-        restoreState = true
+        restoreState = !detour
     }
 }
 
