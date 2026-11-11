@@ -5,6 +5,7 @@ All notable changes to Leftovers. Download any version from
 
 ## Unreleased
 
+- No thin bright outline around the screen when a pop-up or sheet opens: the glass behind no longer draws an edge, and a sheet catches the light only along its rounded top (#58)
 - Envelope budgets by #tag: a switch on the add screen counts an entry in the envelope, so there's no tag to type, and the envelope's tag isn't shown on every row (#57)
 - Add an entry straight from the Budget screen with its + button; with an envelope budget, it already counts in it (#57)
 - A money-owed link from a friend opens straight in Leftovers when you have it; without it, the page shows what was sent and how to get Leftovers

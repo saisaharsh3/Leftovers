@@ -724,10 +724,25 @@ private fun LiquidSheet(
                                 blur(30.dp.toPx())
                                 lens(20.dp.toPx(), 40.dp.toPx(), chromaticAberration = true)
                             },
+                            // No rim all round: the sheet is as wide as the screen, so one ran down both edges of the
+                            // phone like an outline (#58). The light catches only its rounded top, drawn below.
+                            highlight = null,
                             onDrawSurface = {
                                 drawRect(if (c.isDark) androidx.compose.ui.graphics.Color(0xFF14141B).copy(alpha = 0.74f) else androidx.compose.ui.graphics.Color.White.copy(alpha = 0.72f))
                             },
                         )
+                        .drawWithContent {
+                            drawContent()
+                            val r = 32.dp.toPx()
+                            val w = 1.dp.toPx()
+                            val edge = Path().apply {
+                                moveTo(w / 2, r)
+                                arcTo(Rect(w / 2, w / 2, 2 * r, 2 * r), 180f, 90f, false)
+                                lineTo(size.width - r, w / 2)
+                                arcTo(Rect(size.width - 2 * r, w / 2, size.width - w / 2, 2 * r), 270f, 90f, false)
+                            }
+                            drawPath(edge, c.borderTop, style = Stroke(w))
+                        }
                         // Taps inside stay inside.
                         .pointerInput(Unit) { detectTapGestures { } },
                 ) {
