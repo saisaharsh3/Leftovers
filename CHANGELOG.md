@@ -7,7 +7,7 @@ All notable changes to Leftovers. Download any version from
 
 ## 1.10.0-rc2
 
-**A second pre-release, to try before 1.10.0.** It replaces 1.10.0-rc1 and installs over it, or over 1.9.0, keeping your data. Coming from 1.9.0, it updates the database: once it's installed, going back to 1.9.0 means uninstalling, which erases your data, so make a backup first (Settings → Backup & data → Back up). The full 1.10.0 will install over it as usual.
+**A second pre-release, to try before 1.10.0.** It replaces 1.10.0-rc1 and installs over it, or over 1.9.0, keeping your data. Coming from 1.9.0, it updates the database: once it's installed, going back to 1.9.0 means uninstalling, which erases your data, so make a backup first (in 1.9.0: Settings → Data → Back up). The full 1.10.0 will install over it as usual.
 
 New since 1.10.0-rc1 (everything in rc1, below, is here too):
 
