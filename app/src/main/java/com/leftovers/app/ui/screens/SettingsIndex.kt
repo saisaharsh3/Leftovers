@@ -1,6 +1,7 @@
 package com.leftovers.app.ui.screens
 
 import androidx.compose.ui.graphics.vector.ImageVector
+import com.leftovers.app.data.Palette
 import com.leftovers.app.ui.icons.Lucide
 
 /**
@@ -18,24 +19,40 @@ object SettingsIndex {
     const val SYNC = "Sync"
     const val ABOUT = "About"
 
-    class Page(val title: String, val icon: ImageVector, val summary: String)
+    /** [color]: its icon's, so each category is found by colour as much as by name, as on a phone. */
+    class Page(val title: String, val icon: ImageVector, val summary: String, val color: Long)
 
     /** [row]: false for a setting with no row of its own to light up (the page opens at its top). */
     class Entry(val title: String, val page: String, val icon: ImageVector, val words: String = "", val row: Boolean = true)
 
-    val pages: List<Page> by lazy {
+    /**
+     * The categories in groups that go together, each group a card of its own: how the app counts and looks, what it
+     * does for you, where your data is kept, and the app itself.
+     */
+    val groups: List<List<Page>> by lazy {
         listOf(
-            Page(APPEARANCE, Lucide.Palette, "Theme, background, glass, widgets"),
-            Page(SECURITY, Lucide.Shield, "App lock, screenshots"),
-            Page(REMINDERS, Lucide.Bell, "Daily reminder, bills, budget alerts"),
-            Page(DETECTION, Lucide.Smartphone, "Bank SMS, payment apps, email"),
-            Page(AI, Lucide.BotMessageSquare, ""),
-            Page(GENERAL, Lucide.SlidersHorizontal, "Currency, categories, accounts"),
-            Page(DATA, Lucide.Download, "Backups, import, export, deleted entries"),
-            Page(SYNC, Lucide.Repeat, "Between your devices"),
-            Page(ABOUT, Lucide.Info, "Version, updates, feedback"),
+            listOf(
+                Page(GENERAL, Lucide.SlidersHorizontal, "Currency, categories, accounts", Palette.SLATE),
+                Page(APPEARANCE, Lucide.Palette, "Theme, background, glass, widgets", Palette.LILAC),
+            ),
+            listOf(
+                Page(DETECTION, Lucide.Smartphone, "Bank SMS, payment apps, email", Palette.MINT),
+                Page(REMINDERS, Lucide.Bell, "Daily reminder, bills, budget alerts", Palette.AMBER),
+                Page(AI, Lucide.BotMessageSquare, "", Palette.IRIS),
+            ),
+            listOf(
+                Page(SECURITY, Lucide.Shield, "App lock, screenshots", Palette.CORAL),
+                Page(DATA, Lucide.Download, "Backups, import, export, deleted entries", Palette.SKY),
+                Page(SYNC, Lucide.Repeat, "Between your devices", Palette.TEAL),
+            ),
+            listOf(Page(ABOUT, Lucide.Info, "Version, updates, feedback", Palette.SAND)),
         )
     }
+
+    val pages: List<Page> by lazy { groups.flatten() }
+
+    /** A page's colour, for its settings in search results. */
+    fun colorOf(page: String): Long = pages.firstOrNull { it.title == page }?.color ?: Palette.SLATE
 
     val entries: List<Entry> by lazy {
         listOf(

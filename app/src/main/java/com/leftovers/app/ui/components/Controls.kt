@@ -206,7 +206,16 @@ fun GlassHeader(
                 Spacer(Modifier.width(12.dp))
             }
             Column(Modifier.weight(1f)) {
-                Text(title, style = MaterialTheme.typography.headlineSmall, color = c.textPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                androidx.compose.animation.AnimatedContent(
+                    title,
+                    transitionSpec = {
+                        androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(220, delayMillis = 60)) togetherWith
+                            androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(120))
+                    },
+                    label = "headerTitle",
+                ) { shown ->
+                    Text(shown, style = MaterialTheme.typography.headlineSmall, color = c.textPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
                 if (subtitle != null) {
                     Text(subtitle, style = MaterialTheme.typography.bodySmall, color = c.textSecondary, maxLines = 1)
                 }

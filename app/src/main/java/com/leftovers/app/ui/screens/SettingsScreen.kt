@@ -1,6 +1,7 @@
 package com.leftovers.app.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.ui.draw.clip
 import androidx.compose.animation.togetherWith
 import androidx.compose.animation.animateContentSize
 import androidx.compose.runtime.LaunchedEffect
@@ -732,7 +733,7 @@ fun SettingsScreen(
                 // Like a phone's Settings: a search, Help, and the categories, each opening a page of its own.
                 if (shown == null) {
                     item(key = "search") {
-                        GlassTextField(query, { query = it.take(40) }, placeholder = "Search settings", modifier = Modifier.padding(top = 8.dp))
+                        SettingsSearch(query, { query = it.take(40) }, onSearch = { focus.clearFocus() }, modifier = Modifier.padding(top = 8.dp))
                     }
                     if (query.isNotBlank()) {
                         val found = SettingsIndex.search(query)
@@ -751,7 +752,7 @@ fun SettingsScreen(
                                     Column(Modifier.padding(vertical = 6.dp)) {
                                         found.forEachIndexed { i, entry ->
                                             if (i > 0) RowDivider()
-                                            PageRow(entry.icon, entry.title, entry.page) {
+                                            PageRow(entry.icon, entry.title, entry.page, Color(SettingsIndex.colorOf(entry.page))) {
                                                 query = ""
                                                 focus.clearFocus()
                                                 if (entry.page == SettingsIndex.AI) showAssistant = true
@@ -767,22 +768,25 @@ fun SettingsScreen(
                         item(key = "help") {
                             Glass(Modifier.fillMaxWidth().padding(top = 12.dp)) {
                                 Column(Modifier.padding(vertical = 6.dp)) {
-                                    NavRow(Lucide.Search, "Help & features", "Find anything", onOpenHelp)
+                                    NavRow(Lucide.BookOpen, "Help & features", "Every feature explained", onOpenHelp)
                                 }
                             }
                         }
-                        item(key = "pages") {
-                            val assistant by viewModel.assistant.config.collectAsStateWithLifecycle()
-                            Glass(Modifier.fillMaxWidth().padding(top = 12.dp)) {
-                                Column(Modifier.padding(vertical = 6.dp)) {
-                                    SettingsIndex.pages.forEachIndexed { i, pg ->
-                                        if (i > 0) RowDivider()
-                                        PageRow(
-                                            pg.icon,
-                                            pg.title,
-                                            if (pg.title == SettingsIndex.AI) assistant?.let { "${it.provider.label} · connected" } ?: "Not connected" else pg.summary,
-                                        ) {
-                                            if (pg.title == SettingsIndex.AI) showAssistant = true else page = pg.title
+                        SettingsIndex.groups.forEachIndexed { g, group ->
+                            item(key = "group$g") {
+                                val assistant by viewModel.assistant.config.collectAsStateWithLifecycle()
+                                Glass(Modifier.fillMaxWidth().padding(top = if (g == 0) 20.dp else 14.dp)) {
+                                    Column(Modifier.padding(vertical = 6.dp)) {
+                                        group.forEachIndexed { i, pg ->
+                                            if (i > 0) RowDivider()
+                                            PageRow(
+                                                pg.icon,
+                                                pg.title,
+                                                if (pg.title == SettingsIndex.AI) assistant?.let { "${it.provider.label} · connected" } ?: "Not connected" else pg.summary,
+                                                Color(pg.color),
+                                            ) {
+                                                if (pg.title == SettingsIndex.AI) showAssistant = true else page = pg.title
+                                            }
                                         }
                                     }
                                 }
@@ -1622,14 +1626,54 @@ private fun NavRow(icon: ImageVector, title: String, value: String?, onClick: ()
     )
 }
 
+/** The search at the top of Settings: a magnifier, the words, and a clear button once something's typed. */
+@Composable
+private fun SettingsSearch(query: String, onChange: (String) -> Unit, onSearch: () -> Unit, modifier: Modifier = Modifier) {
+    val c = LocalAppColors.current
+    Glass(modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp)) {
+        Row(Modifier.padding(start = 16.dp, end = 6.dp).height(52.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(Lucide.Search, contentDescription = null, tint = c.textTertiary, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(10.dp))
+            Box(Modifier.weight(1f)) {
+                if (query.isEmpty()) Text("Search settings", style = MaterialTheme.typography.bodyLarge, color = c.textTertiary)
+                androidx.compose.foundation.text.BasicTextField(
+                    value = query,
+                    onValueChange = onChange,
+                    singleLine = true,
+                    textStyle = MaterialTheme.typography.bodyLarge.copy(color = c.textPrimary),
+                    cursorBrush = androidx.compose.ui.graphics.SolidColor(c.accent),
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Search),
+                    keyboardActions = androidx.compose.foundation.text.KeyboardActions(onSearch = { onSearch() }),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+            androidx.compose.animation.AnimatedVisibility(
+                query.isNotEmpty(),
+                enter = androidx.compose.animation.fadeIn() + androidx.compose.animation.scaleIn(initialScale = 0.6f),
+                exit = androidx.compose.animation.fadeOut() + androidx.compose.animation.scaleOut(targetScale = 0.6f),
+            ) {
+                Box(
+                    Modifier
+                        .size(40.dp)
+                        .clip(androidx.compose.foundation.shape.CircleShape)
+                        .clickable { onChange("") },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(Lucide.X, contentDescription = "Clear", tint = c.textSecondary, modifier = Modifier.size(18.dp))
+                }
+            }
+        }
+    }
+}
+
 /** A category on Settings' main page (or a search result): its name, with what's in it underneath, like a phone's. */
 @Composable
-private fun PageRow(icon: ImageVector, title: String, summary: String, onClick: () -> Unit) {
+private fun PageRow(icon: ImageVector, title: String, summary: String, tint: Color, onClick: () -> Unit) {
     val c = LocalAppColors.current
     ListRow(
         title,
         subtitle = summary,
-        leading = { IconTile(icon, c.textPrimary, size = 38.dp) },
+        leading = { IconTile(icon, tint, size = 38.dp) },
         trailing = { Icon(Lucide.ChevronRight, contentDescription = null, tint = c.textTertiary, modifier = Modifier.size(18.dp)) },
         onClick = onClick,
     )
