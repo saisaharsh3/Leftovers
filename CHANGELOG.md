@@ -5,6 +5,12 @@ All notable changes to Leftovers. Download any version from
 
 ## Unreleased
 
+## 1.10.0-rc2
+
+**A second pre-release, to try before 1.10.0.** It replaces 1.10.0-rc1 and installs over it, or over 1.9.0, keeping your data. Coming from 1.9.0, it updates the database: once it's installed, going back to 1.9.0 means uninstalling, which erases your data, so make a backup first (Settings → Backup & data → Back up). The full 1.10.0 will install over it as usual.
+
+New since 1.10.0-rc1 (everything in rc1, below, is here too):
+
 - The phone's own AI in the regular app: each GitHub release has a second download, ending in -ai.apk, with it built in (the same app, so either installs over the other). F-Droid's version can't include Google's library, so its AI settings show where to get it
 - Add small payments automatically (Settings → Payment detection): spending from bank SMS up to an amount you choose goes straight in, under the category that place had last time. Bigger ones, money coming in, and anything that may be paying someone back still wait on Home
 - Settings is organised like a phone's: a search at the top finds any setting by name or a word for it, and the categories (Appearance, Security, Reminders & alerts, Payment detection, AI assistant, General, Backup & data, Sync, About) each open a page of their own, sliding in and back out
