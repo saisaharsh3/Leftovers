@@ -21,13 +21,20 @@ today, plan for the things you want, and ask an AI about your money if you'd lik
 
 ![Activity calendar, lent or borrowed, Money owed and the AI assistant](https://raw.githubusercontent.com/saisaharsh3/Leftovers/main/docs/screenshots/row2.png)
 
-![Over your own photos: a friend paying you back, bank balances from SMS, and Settings](https://raw.githubusercontent.com/saisaharsh3/Leftovers/main/docs/screenshots/row3.png)
-
 <a href="https://f-droid.org/packages/com.leftovers.app/"><img src="https://fdroid.gitlab.io/artwork/badge/get-it-on.png" height="60" alt="Get it on F-Droid"></a>&nbsp;
 <a href="https://github.com/saisaharsh3/Leftovers/releases/latest"><img src="https://raw.githubusercontent.com/saisaharsh3/Leftovers/main/docs/badge-download.png" height="40" alt="Download the APK"></a>&nbsp;
 <a href="https://apps.obtainium.imranr.dev/redirect?r=obtainium://add/https://github.com/saisaharsh3/Leftovers"><img src="https://raw.githubusercontent.com/saisaharsh3/Leftovers/main/docs/badge-obtainium.png" height="40" alt="Get it on Obtainium"></a>
 
 If Leftovers is useful to you, a ⭐ helps other people find it.
+
+<br>
+
+### Make it yours
+
+Set any wallpaper or a photo of your own as the background, with liquid or frosted glass over it.<br>
+Choose how sharp it is and how much it's dimmed, in **Settings → Appearance → Background**.
+
+![Over wallpapers: Home with a friend paying you back, Accounts with the bank's balance, Settings, and Payment detection](https://raw.githubusercontent.com/saisaharsh3/Leftovers/main/docs/screenshots/row3.png)
 
 </div>
 
