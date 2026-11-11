@@ -211,7 +211,8 @@ Usage is billed by the provider to your own account (*On this phone* is free and
   If several entries match, it asks which one instead of guessing.
 - Set the monthly budget and category limits, add or stop subscriptions, move money between accounts,
   and add to savings goals.
-- **Read bills:** tap the camera in the chat to take a photo or pick a screenshot of a bill or receipt.
+- **Read files:** attach a CSV, Excel sheet, PDF or text file (a statement, an export) and ask about it, or ask it to add what's in it. It's read on the phone, with card and account numbers and UPI IDs hidden, and every change still waits for **Apply**.
+- **Read bills:** tap **+** in the chat to take a photo or pick a screenshot of a bill or receipt.
   It proposes one entry per category, dated from the bill, with any discount or tax spread so the
   entries add up to what you paid.
 
@@ -226,7 +227,7 @@ Usage is billed by the provider to your own account (*On this phone* is free and
   never sent; a photo goes only when you attach it, resized and re-encoded so location and camera data are removed.
 - **Your key is protected.** It's encrypted with an Android Keystore key, never included in backups, and
   deleted when you disconnect. Custom servers must use HTTPS.
-- **Nothing is kept.** Chats are held in memory only (so an answer can finish while you look elsewhere) and are gone when the app closes. The AI is told to treat your data as data, not
+- **Chats stay on the phone.** They're saved in the app's private storage to open again from History (never in backups or sent anywhere), and *Keep chats on this phone* off deletes them all. Switching to another AI keeps the chat: the new one gets a short recap with your next message, with personal numbers hidden. The AI is told to treat your data as data, not
   instructions, and each message is limited in how many steps and changes it can make.
 
 What you send is handled under the chosen provider's privacy policy (DeepSeek stores data in China;

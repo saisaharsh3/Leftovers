@@ -96,6 +96,7 @@ import com.leftovers.app.ui.components.IconTile
 import com.leftovers.app.ui.components.PrimaryButton
 import com.leftovers.app.ui.components.RoundButton
 import com.leftovers.app.ui.components.SecondaryButton
+import com.leftovers.app.util.friendlyLabel
 import com.leftovers.app.ui.components.SegmentedToggle
 import com.leftovers.app.ui.components.frosted
 import com.leftovers.app.ui.components.pressable
@@ -110,7 +111,8 @@ import kotlinx.coroutines.sync.withLock
 sealed interface ChatItem {
     val key: Long
 
-    data class User(override val key: Long, val text: String, val image: android.graphics.Bitmap? = null) : ChatItem
+    /** [photo]: a photo went with it (kept for a saved chat, where the picture itself isn't); [file]: an attached file's name. */
+    data class User(override val key: Long, val text: String, val image: android.graphics.Bitmap? = null, val file: String? = null, val photo: Boolean = image != null) : ChatItem
     data class Bot(override val key: Long, val text: String) : ChatItem
     data class Change(override val key: Long, val kind: ChangeKind, val summary: String, val state: ChangeState) : ChatItem
 
@@ -148,16 +150,39 @@ class AssistantViewModel(private val container: AppContainer, private val assist
     /** The request being answered, so Stop can cancel it. */
     private var job: Job? = null
 
+    /** Chats kept on this phone to come back to. */
+    val store = com.leftovers.app.ai.ChatStore(container.appContext)
+    /** This chat's id in [store]; a new one for each new chat. */
+    private var chatId = System.currentTimeMillis()
+    /**
+     * The chat so far, for an AI that hasn't seen it: after switching AI, or opening a saved chat. It goes with the
+     * next message, once, as a short recap.
+     */
+    private var carry: String? = null
+    private var lastPrivacy = privacy.value
+
     init {
         // The phone's own AI takes a few seconds to start after the app opens: begin now, so it's ready by the
         // first question.
         viewModelScope.launch {
             config.collect { if (it?.provider == AiProvider.ON_DEVICE) com.leftovers.app.ai.OnDevice.warmUp() }
         }
-        // A new provider, key or privacy setting starts a fresh conversation.
+        // Another AI (or model, or key): the chat stays, and the new one gets a short recap of it with the next message.
+        // A privacy setting changed: the chat stays on screen, but nothing from it is sent under the old rules.
         viewModelScope.launch {
-            combine(config, privacy) { c, p -> c to p }.drop(1).collect {
-                reset(if (items.any { it is ChatItem.User }) "Settings changed, so this is a new conversation." else null)
+            combine(config, privacy) { c, p -> c to p }.drop(1).collect { (c, p) ->
+                val privacyChanged = p != lastPrivacy
+                lastPrivacy = p
+                if (busy) { job?.cancel(); job = null; busy = false }
+                dropSession()
+                if (c == null || items.none { it is ChatItem.User }) return@collect
+                if (privacyChanged) {
+                    carry = null
+                    items += ChatItem.Note(nextKey++, "Privacy settings changed. The chat stays here, and the AI starts afresh from your next message.")
+                } else {
+                    carry = transcript()
+                    items += ChatItem.Note(nextKey++, "Now with ${c.provider.label}. The chat stays, and it gets a short recap with your next message.")
+                }
             }
         }
     }
@@ -166,14 +191,32 @@ class AssistantViewModel(private val container: AppContainer, private val assist
      * Sends a message, optionally with a photo of a bill. The photo is resized and re-encoded on the
      * phone first, and [cleanup] runs once it's been read (e.g. to delete a camera capture).
      */
-    fun send(text: String, photo: android.net.Uri? = null, context: android.content.Context? = null, cleanup: () -> Unit = {}) {
-        val message = text.trim().ifEmpty { if (photo != null) "Here's a bill. Add it as entries, grouped by category." else "" }
+    fun send(text: String, photo: android.net.Uri? = null, context: android.content.Context? = null, cleanup: () -> Unit = {}, file: android.net.Uri? = null) {
+        val message = text.trim().ifEmpty {
+            if (photo != null) "Here's a bill. Add it as entries, grouped by category." else if (file != null) "What's in this file?" else ""
+        }
         if (message.isEmpty() || busy || waiting > 0 || config.value == null) return
         rounds = 0
         changesThisMessage = 0
+        if (file != null && context != null) {
+            // Read on the phone, hidden and capped, then sent as text with the message.
+            busy = true
+            job = viewModelScope.launch {
+                val limit = if (config.value?.provider == AiProvider.ON_DEVICE) 3_000 else 20_000
+                val read = runCatching { kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { com.leftovers.app.ai.AttachedFile.read(context, file, limit) } }
+                read.onSuccess { f ->
+                    items += ChatItem.User(nextKey++, message, file = f.name)
+                    runTurn { ensureSession().sendUser(withCarry(message + "\n\n" + f.block)) }
+                }.onFailure {
+                    busy = false
+                    items += ChatItem.Note(nextKey++, it.message ?: "Couldn't read that file", error = true)
+                }
+            }
+            return
+        }
         if (photo == null || context == null) {
             items += ChatItem.User(nextKey++, message)
-            runTurn { ensureSession().sendUser(message) }
+            runTurn { ensureSession().sendUser(withCarry(message)) }
             return
         }
         busy = true
@@ -184,7 +227,7 @@ class AssistantViewModel(private val container: AppContainer, private val assist
                 val bytes = android.util.Base64.decode(img.base64, android.util.Base64.NO_WRAP)
                 val preview = android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size, android.graphics.BitmapFactory.Options().apply { inSampleSize = 4 })
                 items += ChatItem.User(nextKey++, message, preview)
-                runTurn { ensureSession().sendUser(message, img) }
+                runTurn { ensureSession().sendUser(withCarry(message), img) }
             }.onFailure {
                 busy = false
                 items += ChatItem.Note(nextKey++, it.message ?: "Couldn't read that image", error = true)
@@ -212,7 +255,7 @@ class AssistantViewModel(private val container: AppContainer, private val assist
         }
         results += outcome
         waiting = pending.size
-        if (pending.isEmpty()) runTurn { session!!.sendToolResults(takeResults()) }
+        if (pending.isEmpty()) runTurn { session!!.sendToolResults(takeResults()) } else persist()
     }
 
     fun decideAll(apply: Boolean) = pending.keys.toList().forEach { decide(it, apply) }
@@ -228,12 +271,88 @@ class AssistantViewModel(private val container: AppContainer, private val assist
         busy = false
         dropSession()
         items += ChatItem.Note(nextKey++, "Stopped. Your next message starts afresh.")
+        persist()
     }
 
+    /** A new chat; the one before stays among the saved chats. */
     fun reset(note: String? = null) {
+        persist()
+        dropSession()
+        carry = null
+        items.clear()
+        chatId = System.currentTimeMillis()
+        note?.let { items += ChatItem.Note(nextKey++, it) }
+    }
+
+    /** Opens a saved chat to carry on with: as it was, and the AI gets a recap of it with the next message. */
+    fun open(saved: com.leftovers.app.ai.ChatStore.Saved) {
+        if (busy) return
+        persist()
         dropSession()
         items.clear()
-        note?.let { items += ChatItem.Note(nextKey++, it) }
+        chatId = saved.id
+        saved.lines.forEach { l ->
+            items += when (l.type) {
+                'u' -> ChatItem.User(nextKey++, l.text, file = l.kind.ifEmpty { null }, photo = l.state == "photo")
+                'b' -> ChatItem.Bot(nextKey++, l.text)
+                'c' -> ChatItem.Change(
+                    nextKey++,
+                    runCatching { com.leftovers.app.ai.ChangeKind.valueOf(l.kind) }.getOrDefault(com.leftovers.app.ai.ChangeKind.ADD),
+                    l.text,
+                    // A change still waiting when the chat was left can't be applied now.
+                    runCatching { ChangeState.valueOf(l.state) }.getOrDefault(ChangeState.CANCELLED).let { if (it == ChangeState.PENDING) ChangeState.CANCELLED else it },
+                )
+                's' -> ChatItem.Seen(nextKey++, l.text)
+                else -> ChatItem.Note(nextKey++, l.text, l.error)
+            }
+        }
+        carry = transcript()
+        items += ChatItem.Note(nextKey++, "Carry on where you left off: the AI gets a short recap with your next message.")
+    }
+
+    fun deleteSaved(id: Long) {
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) { store.delete(id) }
+        if (id == chatId) chatId = System.currentTimeMillis()
+    }
+
+    /** Saves this chat among the saved ones, as it is now. */
+    private fun persist() {
+        if (!store.enabled || items.none { it is ChatItem.User }) return
+        val lines = items.map { i ->
+            when (i) {
+                is ChatItem.User -> com.leftovers.app.ai.ChatStore.Line('u', i.text, kind = i.file.orEmpty(), state = if (i.photo) "photo" else "")
+                is ChatItem.Bot -> com.leftovers.app.ai.ChatStore.Line('b', i.text)
+                is ChatItem.Change -> com.leftovers.app.ai.ChatStore.Line('c', i.summary, i.kind.name, i.state.name)
+                is ChatItem.Seen -> com.leftovers.app.ai.ChatStore.Line('s', i.text)
+                is ChatItem.Note -> com.leftovers.app.ai.ChatStore.Line('n', i.text, error = i.error)
+            }
+        }
+        val title = (items.firstOrNull { it is ChatItem.User } as? ChatItem.User)?.text?.lineSequence()?.firstOrNull().orEmpty().take(60)
+        val chat = com.leftovers.app.ai.ChatStore.Saved(chatId, title, System.currentTimeMillis(), lines)
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) { store.save(chat) }
+    }
+
+    /** The chat so far, short, for an AI that hasn't seen it: what was asked, answered and changed. */
+    private fun transcript(): String? {
+        val limit = if (config.value?.provider == AiProvider.ON_DEVICE) 1_500 else 4_000
+        val lines = items.mapNotNull { i ->
+            when (i) {
+                is ChatItem.User -> "User: " + i.text + (i.file?.let { " (attached $it)" } ?: "") + (if (i.photo) " (with a photo)" else "")
+                is ChatItem.Bot -> "Assistant: " + i.text
+                is ChatItem.Change -> "(A change, ${i.state.name.lowercase()}: ${i.summary})"
+                else -> null
+            }
+        }
+        if (lines.isEmpty()) return null
+        return com.leftovers.app.ai.AssistantTools.scrub(lines.joinToString("\n")).takeLast(limit)
+    }
+
+    /** [message] with the recap of the chat in front, when this AI hasn't seen the chat yet. */
+    private fun withCarry(message: String): String {
+        if (session != null) return message
+        val recap = carry ?: return message
+        carry = null
+        return "Earlier in this chat (a recap; your tools still give the current data):\n$recap\n\nNow: $message"
     }
 
     private fun dropSession() {
@@ -276,6 +395,7 @@ class AssistantViewModel(private val container: AppContainer, private val assist
                     busy = false
                     job = null
                 }
+                persist()
             }
         }
         job = turn
@@ -356,7 +476,7 @@ fun AssistantScreen(
     /** A question to send straight away, e.g. from Insights; sent once, only when an AI is connected. */
     ask: String = "",
     // Kept by the activity, not this screen: going back doesn't stop an answer, and the chat is still here
-    // on return. It lives only in memory and is gone when the app closes.
+    // on return. Chats are also saved on the phone (unless that's turned off), to open again from History.
     viewModel: AssistantViewModel = viewModel(
         viewModelStoreOwner = LocalActivity.current as androidx.activity.ComponentActivity,
         factory = AppViewModelProvider.Factory,
@@ -378,6 +498,12 @@ fun AssistantScreen(
     var attached by rememberSaveable { mutableStateOf<android.net.Uri?>(null) }
     var cameraFile by remember { mutableStateOf<java.io.File?>(null) }
     var photoMenu by remember { mutableStateOf(false) }
+    var showHistory by rememberSaveable { mutableStateOf(false) }
+    // A CSV, Excel, PDF or text file to send with the next message.
+    var attachedFile by rememberSaveable { mutableStateOf<android.net.Uri?>(null) }
+    val pickFile = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) { attachedFile = uri; attached = null }
+    }
     val pickImage = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia()) { uri ->
         if (uri != null) attached = uri
     }
@@ -400,7 +526,8 @@ fun AssistantScreen(
         subtitle = cfg?.let { "${it.provider.label} · ${it.model}" } ?: "Not connected",
         onBack = onBack,
         actions = {
-            if (cfg != null && viewModel.items.isNotEmpty()) RoundButton(Lucide.Plus, "New conversation", { viewModel.reset() })
+            if (cfg != null) RoundButton(Lucide.History, "Saved chats", { showHistory = true })
+            if (cfg != null && viewModel.items.isNotEmpty()) RoundButton(Lucide.PenLine, "New chat", { viewModel.reset() })
             RoundButton(Lucide.Settings, "AI settings", { showSetup = true })
         },
         bottomBar = {
@@ -432,8 +559,20 @@ fun AssistantScreen(
                         }, size = 36.dp, tint = c.textSecondary)
                     }
                 }
+                attachedFile?.let { uri ->
+                    val fileName = remember(uri) { com.leftovers.app.ai.AttachedFile.name(context, uri) }
+                    Row(Modifier.padding(bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        IconTile(Lucide.ReceiptText, c.accent, size = 44.dp)
+                        Spacer(Modifier.width(10.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(fileName, style = MaterialTheme.typography.titleSmall, color = c.textPrimary, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                            Text("Only its text is sent, with card and account numbers hidden.", style = MaterialTheme.typography.bodySmall, color = c.textSecondary)
+                        }
+                        RoundButton(Lucide.X, "Remove file", { attachedFile = null }, size = 36.dp, tint = c.textSecondary)
+                    }
+                }
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    RoundButton(Lucide.Camera, "Attach a bill or receipt", { photoMenu = true }, size = 52.dp, tint = c.textSecondary, enabled = !locked)
+                    RoundButton(Lucide.Plus, "Attach a photo or a file", { photoMenu = true }, size = 52.dp, tint = c.textSecondary, enabled = !locked)
                     Spacer(Modifier.width(8.dp))
                     GlassTextField(
                         input,
@@ -451,15 +590,16 @@ fun AssistantScreen(
                             Lucide.ArrowUp, "Send",
                             {
                                 val file = cameraFile
-                                viewModel.send(input, attached, context.applicationContext) { file?.delete() }
+                                viewModel.send(input, attached, context.applicationContext, { file?.delete() }, attachedFile)
                                 input = ""
                                 attached = null
+                                attachedFile = null
                                 cameraFile = null
                             },
                             size = 52.dp,
                             tint = c.onAccent,
                             container = c.accent,
-                            enabled = !locked && (input.isNotBlank() || attached != null),
+                            enabled = !locked && (input.isNotBlank() || attached != null || attachedFile != null),
                         )
                     }
                 }
@@ -488,6 +628,15 @@ fun AssistantScreen(
                                     modifier = Modifier.padding(bottom = 6.dp).size(width = 160.dp, height = 200.dp).clip(RoundedCornerShape(16.dp)),
                                 )
                             }
+                            if (item.file != null) {
+                                Row(Modifier.padding(bottom = 6.dp).clip(RoundedCornerShape(14.dp)).background(c.glassStrong).padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(Lucide.ReceiptText, contentDescription = null, tint = c.textSecondary, modifier = Modifier.size(16.dp))
+                                    Spacer(Modifier.width(8.dp))
+                                    Text(item.file, style = MaterialTheme.typography.bodySmall, color = c.textPrimary, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                                }
+                            } else if (item.photo && item.image == null) {
+                                Text("Photo", style = MaterialTheme.typography.bodySmall, color = c.textTertiary, modifier = Modifier.padding(bottom = 4.dp))
+                            }
                             Bubble(item.text, mine = true)
                         }
                         is ChatItem.Bot -> Bubble(item.text, mine = false)
@@ -514,13 +663,14 @@ fun AssistantScreen(
     }
 
     if (showSetup) AssistantSetupSheet(onDismiss = { showSetup = false })
+    if (showHistory) SavedChatsSheet(viewModel, onDismiss = { showHistory = false })
 
     if (photoMenu) {
         GlassSheet(onDismiss = { photoMenu = false }) {
             Column(Modifier.padding(horizontal = 20.dp).padding(bottom = 16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("Add a bill or receipt", style = MaterialTheme.typography.headlineSmall, color = c.textPrimary)
+                Text("Attach", style = MaterialTheme.typography.headlineSmall, color = c.textPrimary)
                 Text(
-                    "The AI reads it and suggests entries, grouped by category. Nothing is added until you confirm.",
+                    "A bill, a receipt or a statement: the AI reads it, answers about it, and suggests entries. Nothing is added until you confirm.",
                     style = MaterialTheme.typography.bodySmall,
                     color = c.textSecondary,
                 )
@@ -533,7 +683,11 @@ fun AssistantScreen(
                 Glass(Modifier.fillMaxWidth(), onClick = {
                     photoMenu = false
                     pickImage.launch(androidx.activity.result.PickVisualMediaRequest(androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia.ImageOnly))
-                }) { com.leftovers.app.ui.components.ListRow("Choose a photo or screenshot", leading = { Icon(Lucide.ReceiptText, null, tint = c.textPrimary) }) }
+                }) { com.leftovers.app.ui.components.ListRow("Choose a photo or screenshot", leading = { Icon(Lucide.Camera, null, tint = c.textPrimary) }) }
+                Glass(Modifier.fillMaxWidth(), onClick = {
+                    photoMenu = false
+                    pickFile.launch(arrayOf("text/*", "application/pdf", "application/vnd.ms-excel", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "application/json", "application/octet-stream"))
+                }) { com.leftovers.app.ui.components.ListRow("A file", subtitle = "CSV, Excel, PDF or text", leading = { Icon(Lucide.ReceiptText, null, tint = c.textPrimary) }) }
             }
         }
     }
@@ -1185,3 +1339,60 @@ private fun PrivacyToggle(title: String, detail: String, checked: Boolean, onCha
 }
 
 class AssistantSetupViewModel(val settings: AssistantSettings) : ViewModel()
+
+/** Chats kept on the phone: open one to carry on, delete one or all, or stop keeping them. */
+@Composable
+private fun SavedChatsSheet(viewModel: AssistantViewModel, onDismiss: () -> Unit) {
+    val c = LocalAppColors.current
+    var keep by remember { mutableStateOf(viewModel.store.enabled) }
+    var chats by remember { mutableStateOf<List<com.leftovers.app.ai.ChatStore.Saved>?>(null) }
+    LaunchedEffect(Unit) { chats = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { viewModel.store.list() } }
+    val use24 = com.leftovers.app.util.LocalUse24Hour.current
+    GlassSheet(onDismiss) {
+        Column(
+            Modifier.verticalScroll(androidx.compose.foundation.rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text("Saved chats", style = MaterialTheme.typography.headlineSmall, color = c.textPrimary)
+            Glass(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(vertical = 6.dp)) {
+                    PrivacyToggle(
+                        "Keep chats on this phone",
+                        "Only here, never in backups or sent anywhere. Off deletes them all.",
+                        keep,
+                    ) { on -> viewModel.store.enabled = on; keep = on; if (!on) chats = emptyList() }
+                }
+            }
+            val list = chats
+            if (list != null && list.isEmpty()) {
+                Text(if (keep) "No saved chats yet. Each chat is kept here once you've asked something." else "Chats aren't kept.", style = MaterialTheme.typography.bodyMedium, color = c.textSecondary)
+            }
+            if (!list.isNullOrEmpty()) {
+                Glass(Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(vertical = 6.dp)) {
+                        list.forEachIndexed { i, chat ->
+                            if (i > 0) com.leftovers.app.ui.components.RowDivider()
+                            val whenText = remember(chat.updated, use24) {
+                                val t = java.time.Instant.ofEpochMilli(chat.updated).atZone(java.time.ZoneId.systemDefault())
+                                t.toLocalDate().friendlyLabel() + " · " + t.toLocalTime().format(java.time.format.DateTimeFormatter.ofPattern(if (use24) "HH:mm" else "h:mm a"))
+                            }
+                            com.leftovers.app.ui.components.ListRow(
+                                chat.title.ifBlank { "Chat" },
+                                subtitle = whenText,
+                                leading = { IconTile(Lucide.MessageCircle, c.accent, size = 38.dp) },
+                                trailing = {
+                                    RoundButton(Lucide.Trash2, "Delete this chat", {
+                                        viewModel.deleteSaved(chat.id)
+                                        chats = chats?.filter { it.id != chat.id }
+                                    }, size = 36.dp, tint = c.textSecondary)
+                                },
+                                onClick = { viewModel.open(chat); onDismiss() },
+                            )
+                        }
+                    }
+                }
+                SecondaryButton("Delete all", { viewModel.store.deleteAll(); chats = emptyList() }, Modifier.fillMaxWidth())
+            }
+        }
+    }
+}
