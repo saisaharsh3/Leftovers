@@ -655,13 +655,14 @@ fun SettingsScreen(
         val money = Money(s.currencyCode)
         val listState = androidx.compose.foundation.lazy.rememberLazyListState()
         val density = androidx.compose.ui.platform.LocalDensity.current
-        // Opened from Help on one setting: to its section (a header and its card each, in this order), then the
+        // Opened from Help on one setting: to its section (after the Help card, a header and its card each, in this order), then the
         // row itself into view, lit up for a moment.
         LaunchedEffect(SettingsJump.section) {
             val section = SettingsJump.section ?: return@LaunchedEffect
             val sections = listOf("Appearance", "Security & reminders", "AI assistant", "General", "Data", "Sync")
             val i = sections.indexOf(section)
-            listState.scrollToItem(if (i >= 0) 2 * i else (listState.layoutInfo.totalItemsCount - 1).coerceAtLeast(0))
+            // The Help card comes first, then each section's header and card.
+            listState.scrollToItem(if (i >= 0) 1 + 2 * i else (listState.layoutInfo.totalItemsCount - 1).coerceAtLeast(0))
             val row = SettingsJump.row
             if (row != null) {
                 // Where the row is after that scroll, not before it: wait for the list to lay out there first.
@@ -683,6 +684,14 @@ fun SettingsScreen(
             state = listState,
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = padding.calculateTopPadding() + 4.dp, bottom = 48.dp),
         ) {
+            // Help first, where someone new opening Settings finds it, not at the bottom of a long page.
+            item {
+                Glass(Modifier.fillMaxWidth().padding(top = 8.dp)) {
+                    Column(Modifier.padding(vertical = 6.dp)) {
+                        NavRow(Lucide.Search, "Help & features", "Find anything", onOpenHelp)
+                    }
+                }
+            }
             item { SectionHeader("Appearance") }
             item {
                 Glass(Modifier.fillMaxWidth()) {
@@ -1087,9 +1096,6 @@ fun SettingsScreen(
                 val uriHandler = LocalUriHandler.current
                 Glass(Modifier.fillMaxWidth().padding(top = 24.dp)) {
                     Column(Modifier.padding(vertical = 6.dp)) {
-                        // Every feature and where it is, searchable.
-                        NavRow(Lucide.Search, "Help & features", "Find anything", onOpenHelp)
-                        RowDivider()
                         // Opens GitHub's issue forms (bug report or feature request) in the browser.
                         NavRow(Lucide.MessageCircle, "Report a problem or suggest an idea", "GitHub") {
                             uriHandler.openUri("https://github.com/saisaharsh3/Leftovers/issues/new/choose")

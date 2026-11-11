@@ -1,5 +1,7 @@
 package com.leftovers.app.ui
 
+import kotlinx.coroutines.launch
+import androidx.compose.ui.graphics.graphicsLayer
 import com.leftovers.app.ui.components.Haptics
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.runtime.rememberCoroutineScope
@@ -163,11 +165,14 @@ private val tabs = listOf(
  */
 private val navTween = tween<IntOffset>(340, easing = FastOutSlowInEasing)
 
-
 private fun NavBackStackEntry.route() = destination.route.orEmpty()
 private fun NavBackStackEntry.isTab() = route() in Routes.tabs
 private fun NavBackStackEntry.isAdd() = route().startsWith("add") || route().startsWith("edit")
 private fun NavBackStackEntry.isSheet() = route().startsWith("recap")
+
+/** Moving right along the dock, which slides like going forward; left slides like going back. */
+private fun forward(from: NavBackStackEntry, to: NavBackStackEntry) =
+    Routes.tabOrder.indexOf(to.route()) > Routes.tabOrder.indexOf(from.route())
 
 /** Registers a screen and hands its animation scope to shared-element modifiers. */
 private fun NavGraphBuilder.screen(
@@ -229,6 +234,13 @@ fun LeftoversNavHost(
     }
 
     val swipeThreshold = with(LocalDensity.current) { 72.dp.toPx() }
+    // How far the current tab follows the finger while swiping to the next one: it moves with the drag, a little
+    // held back, so the swipe answers right away instead of only once the finger lifts.
+    val swipeOffset = remember { androidx.compose.animation.core.Animatable(0f) }
+    val swipeScope = rememberCoroutineScope()
+    LaunchedEffect(currentRoute) {
+        if (swipeOffset.value != 0f) swipeOffset.animateTo(0f, tween(340, easing = FastOutSlowInEasing))
+    }
 
     SharedTransitionLayout(Modifier.fillMaxSize()) {
         CompositionLocalProvider(
@@ -244,32 +256,51 @@ fun LeftoversNavHost(
                     modifier = Modifier
                         .fillMaxSize()
                         .then(if (liquid) Modifier.layerBackdrop(backdrop) else Modifier)
+                        .graphicsLayer { translationX = swipeOffset.value }
                         // Swipe sideways on a tab to move to the next one. Anything inside that handles its own
                         // sideways drag (swipeable rows, scrolling card rows, the chart) gets it first.
                         .pointerInput(currentRoute) {
                             val index = Routes.tabOrder.indexOf(currentRoute)
                             if (index < 0) return@pointerInput
                             var dx = 0f
+                            val velocity = androidx.compose.ui.input.pointer.util.VelocityTracker()
+                            fun settle() = swipeScope.launch { swipeOffset.animateTo(0f, spring(dampingRatio = 1f, stiffness = Spring.StiffnessMediumLow)) }
                             detectHorizontalDragGestures(
-                                onDragStart = { dx = 0f },
+                                onDragStart = { dx = 0f; velocity.resetTracking() },
                                 onDragEnd = {
+                                    // A quick flick goes to the next tab too, not only a long drag.
+                                    val fling = velocity.calculateVelocity().x
                                     val next = when {
-                                        dx < -swipeThreshold -> index + 1
-                                        dx > swipeThreshold -> index - 1
+                                        dx < -swipeThreshold || (dx < 0 && fling < -1200f) -> index + 1
+                                        dx > swipeThreshold || (dx > 0 && fling > 1200f) -> index - 1
                                         else -> index
                                     }
-                                    if (next != index && next in Routes.tabOrder.indices) nav.switchTab(Routes.tabOrder[next])
+                                    // Going: the page stays where the finger left it and eases home as the next tab
+                                    // arrives (below), so the move carries on. Staying: it springs back.
+                                    if (next != index && next in Routes.tabOrder.indices) nav.switchTab(Routes.tabOrder[next]) else settle()
                                 },
-                            ) { _, amount -> dx += amount }
+                                onDragCancel = { settle() },
+                            ) { change, amount ->
+                                dx += amount
+                                velocity.addPosition(change.uptimeMillis, change.position)
+                                // Held back to a third, and more at the first and last tab, where there's nowhere to go.
+                                val edge = (dx > 0 && index == 0) || (dx < 0 && index == Routes.tabOrder.lastIndex)
+                                swipeScope.launch { swipeOffset.snapTo(dx * if (edge) 0.12f else 0.33f) }
+                            }
                         },
                     enterTransition = {
                         when {
                             // Add and edit slide up like a sheet: moving a finished layout is cheap and never stretches text.
                             targetState.isAdd() -> slideInVertically(tween(320, easing = FastOutSlowInEasing)) { it / 5 } + fadeIn(tween(220))
                             targetState.isSheet() -> slideInVertically(tween(420, easing = FastOutSlowInEasing)) { it } + fadeIn(tween(200))
-                            // Between tabs, a quick crossfade, as Apple's tab bars do: sliding both whole pages across
-                            // the screen made switching quickly stutter (#41: about 73% of frames late, against 38%).
-                            targetState.isTab() && initialState.isTab() -> fadeIn(tween(150))
+                            // Tabs move like going forward and back (Activity back to Home was the one that felt right):
+                            // the page that leaves slides all the way off, the one that arrives glides in from a quarter
+                            // of the way, in the direction of the dock.
+                            targetState.isTab() && initialState.isTab() -> if (forward(initialState, targetState)) {
+                                slideIntoContainer(SlideDirection.Start, navTween) + fadeIn(tween(220))
+                            } else {
+                                slideIntoContainer(SlideDirection.End, navTween) { it / 4 } + fadeIn(tween(220))
+                            }
                             else -> slideIntoContainer(SlideDirection.Start, navTween) + fadeIn(tween(220))
                         }
                     },
@@ -278,7 +309,11 @@ fun LeftoversNavHost(
                             // Scaling the screen behind would re-render its frosted blur every frame.
                             targetState.isAdd() -> fadeOut(tween(220))
                             targetState.isSheet() -> fadeOut(tween(300))
-                            targetState.isTab() && initialState.isTab() -> fadeOut(tween(100))
+                            targetState.isTab() && initialState.isTab() -> if (forward(initialState, targetState)) {
+                                slideOutOfContainer(SlideDirection.Start, navTween) { it / 4 } + fadeOut(tween(220))
+                            } else {
+                                slideOutOfContainer(SlideDirection.End, navTween) + fadeOut(tween(220))
+                            }
                             else -> slideOutOfContainer(SlideDirection.Start, navTween) { it / 4 } + fadeOut(tween(220))
                         }
                     },
@@ -286,7 +321,8 @@ fun LeftoversNavHost(
                         when {
                             initialState.isAdd() -> fadeIn(tween(220))
                             initialState.isSheet() -> fadeIn(tween(300))
-                            targetState.isTab() && initialState.isTab() -> fadeIn(tween(150))
+                            targetState.isTab() && initialState.isTab() && forward(initialState, targetState) ->
+                                slideIntoContainer(SlideDirection.Start, navTween) + fadeIn(tween(220))
                             else -> slideIntoContainer(SlideDirection.End, navTween) { it / 4 } + fadeIn(tween(220))
                         }
                     },
@@ -294,7 +330,8 @@ fun LeftoversNavHost(
                         when {
                             initialState.isAdd() -> slideOutVertically(tween(260, easing = FastOutSlowInEasing)) { it / 5 } + fadeOut(tween(200))
                             initialState.isSheet() -> slideOutVertically(tween(360, easing = FastOutSlowInEasing)) { it } + fadeOut(tween(260))
-                            targetState.isTab() && initialState.isTab() -> fadeOut(tween(100))
+                            targetState.isTab() && initialState.isTab() && forward(initialState, targetState) ->
+                                slideOutOfContainer(SlideDirection.Start, navTween) { it / 4 } + fadeOut(tween(220))
                             else -> slideOutOfContainer(SlideDirection.End, navTween) + fadeOut(tween(220))
                         }
                     },
@@ -593,12 +630,13 @@ private fun DockItem(tab: Tab, selected: Boolean, compact: Boolean, onClick: () 
         Icon(tab.icon, contentDescription = tab.label, tint = tint, modifier = Modifier.size(22.dp))
         AnimatedVisibility(
             visible = selected && !compact,
-            enter = expandHorizontally(spring(dampingRatio = 0.8f, stiffness = Spring.StiffnessMediumLow)) + fadeIn(),
-            exit = shrinkHorizontally(spring(dampingRatio = 1f, stiffness = Spring.StiffnessMedium)) + fadeOut(),
+            // The name fades out before the pill narrows and in once it has widened, so it's never seen cut off.
+            enter = expandHorizontally(spring(dampingRatio = 0.8f, stiffness = Spring.StiffnessMediumLow)) + fadeIn(tween(160, delayMillis = 110)),
+            exit = shrinkHorizontally(spring(dampingRatio = 1f, stiffness = Spring.StiffnessMedium)) + fadeOut(tween(70)),
         ) {
             Row {
                 Spacer(Modifier.width(8.dp))
-                Text(tab.label, style = MaterialTheme.typography.labelLarge, color = c.textPrimary, maxLines = 1)
+                Text(tab.label, style = MaterialTheme.typography.labelLarge, color = c.textPrimary, maxLines = 1, softWrap = false)
             }
         }
     }

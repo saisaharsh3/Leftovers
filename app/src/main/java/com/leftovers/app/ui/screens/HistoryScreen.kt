@@ -179,6 +179,8 @@ data class HistoryUiState(
     val oneBill: Boolean = true,
     /** What people owe for bills split with them, by the entry (your share) each came from. */
     val shares: Map<Long, List<com.leftovers.app.data.Debt>> = emptyMap(),
+    /** False until the entries have been read, for the first moment after Activity opens. */
+    val loaded: Boolean = false,
 )
 
 class HistoryViewModel(
@@ -282,6 +284,7 @@ class HistoryViewModel(
                 tags = all.allTags(),
                 oneBill = oneBill,
                 shares = debts.filter { it.splitOf != null && !it.repayment }.groupBy { it.splitOf!! },
+                loaded = true,
             )
         }.flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), HistoryUiState())
 
@@ -437,11 +440,15 @@ fun HistoryScreen(
                             color = c.textSecondary,
                         )
                         Spacer(Modifier.height(4.dp))
-                        RollingText(
-                            money.format(if (incomeView) state.income else state.expense),
-                            MaterialTheme.typography.displaySmall,
-                            if (incomeView) c.positive else c.textPrimary,
-                        )
+                        // Keyed on loading: the first real total shows as it is, not rolled up from the ₹0 placeholder.
+                        androidx.compose.runtime.key(state.loaded) {
+                            RollingText(
+                                money.format(if (incomeView) state.income else state.expense),
+                                MaterialTheme.typography.displaySmall,
+                                if (incomeView) c.positive else c.textPrimary,
+                                modifier = Modifier.graphicsLayer { alpha = if (state.loaded) 1f else 0f },
+                            )
+                        }
                         Spacer(Modifier.height(10.dp))
                         Row {
                             Text(
@@ -461,7 +468,7 @@ fun HistoryScreen(
                 }
             }
 
-            if (state.groups.isEmpty()) {
+            if (state.loaded && state.groups.isEmpty()) {
                 item {
                     if (state.query.isNotBlank() || state.filters.narrows) {
                         EmptyState(Lucide.Search, "No matches", if (state.filters.narrows) "Nothing matches these filters." else "Try a different word.")

@@ -417,10 +417,16 @@ fun RollingText(
                             },
                         targetState = ch,
                         transitionSpec = {
-                            val up = targetState > initialState
-                            (slideInVertically(spring(dampingRatio = 0.8f, stiffness = 400f)) { if (up) it else -it } + fadeIn(tween(180)))
-                                .togetherWith(slideOutVertically(tween(180)) { if (up) -it else it } + fadeOut(tween(120)))
-                                .using(SizeTransform(clip = true))
+                            // Only digits roll. Matching places from the right, a "₹" could otherwise roll into a digit
+                            // as the real amount replaced a placeholder ("₹54,51,6₹0" for a moment).
+                            if (!initialState.isDigit() || !targetState.isDigit()) {
+                                (androidx.compose.animation.EnterTransition.None togetherWith androidx.compose.animation.ExitTransition.None).using(null)
+                            } else {
+                                val up = targetState > initialState
+                                (slideInVertically(spring(dampingRatio = 0.8f, stiffness = 400f)) { if (up) it else -it } + fadeIn(tween(180)))
+                                    .togetherWith(slideOutVertically(tween(180)) { if (up) -it else it } + fadeOut(tween(120)))
+                                    .using(SizeTransform(clip = true))
+                            }
                         },
                         contentAlignment = Alignment.Center,
                         label = "roll",
