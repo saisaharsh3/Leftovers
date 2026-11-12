@@ -769,7 +769,7 @@ fun SettingsScreen(
                                         found.forEachIndexed { i, entry ->
                                             if (i > 0) RowDivider()
                                             PageRow(entry.icon, entry.title, entry.page, Color(SettingsIndex.colorOf(entry.page))) {
-                                                query = ""
+                                                // The search stays: Back from the page comes back to these results.
                                                 focus.clearFocus()
                                                 if (entry.page == SettingsIndex.AI) showAssistant = true
                                                 else { page = entry.page; SettingsJump.row = entry.title.takeIf { entry.row }; SettingsJump.section = entry.page }

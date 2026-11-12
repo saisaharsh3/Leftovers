@@ -206,7 +206,8 @@ class AssistantViewModel(private val container: AppContainer, private val assist
                 val read = runCatching { kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { com.leftovers.app.ai.AttachedFile.read(context, file, limit) } }
                 read.onSuccess { f ->
                     items += ChatItem.User(nextKey++, message, file = f.name)
-                    runTurn { ensureSession().sendUser(withCarry(message + "\n\n" + f.block)) }
+                    // The recap is added first: once the session exists, this AI counts as having seen the chat.
+                    runTurn { val text = withCarry(message + "\n\n" + f.block); ensureSession().sendUser(text) }
                 }.onFailure {
                     busy = false
                     items += ChatItem.Note(nextKey++, it.message ?: "Couldn't read that file", error = true)
@@ -216,7 +217,7 @@ class AssistantViewModel(private val container: AppContainer, private val assist
         }
         if (photo == null || context == null) {
             items += ChatItem.User(nextKey++, message)
-            runTurn { ensureSession().sendUser(withCarry(message)) }
+            runTurn { val text = withCarry(message); ensureSession().sendUser(text) }
             return
         }
         busy = true
@@ -227,7 +228,7 @@ class AssistantViewModel(private val container: AppContainer, private val assist
                 val bytes = android.util.Base64.decode(img.base64, android.util.Base64.NO_WRAP)
                 val preview = android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size, android.graphics.BitmapFactory.Options().apply { inSampleSize = 4 })
                 items += ChatItem.User(nextKey++, message, preview)
-                runTurn { ensureSession().sendUser(withCarry(message), img) }
+                runTurn { val text = withCarry(message); ensureSession().sendUser(text, img) }
             }.onFailure {
                 busy = false
                 items += ChatItem.Note(nextKey++, it.message ?: "Couldn't read that image", error = true)
