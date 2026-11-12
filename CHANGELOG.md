@@ -5,7 +5,9 @@ All notable changes to Leftovers. Download any version from
 
 ## Unreleased
 
-- The assistant keeps your chats on the phone to come back to (History, at the top), and switching to another AI keeps the chat: the new one gets a short recap. Keep chats on this phone can be turned off, which deletes them
+- The assistant describes money owed to the AI in plain words, so it no longer reads a split share or a payback the wrong way round
+- Settings: Back from a search result returns to the results
+- The assistant keeps your chats on the phone to come back to (History, at the top), and switching to another AI keeps the chat: the new one sees the whole conversation (the phone's own AI, as much as it can hold), and so does a saved chat opened again. Keep chats on this phone can be turned off, which deletes them
 - Attach a file in the assistant: a CSV, Excel sheet, PDF or text file, read on the phone with personal numbers hidden, to ask about or add from (each change still waits for Apply)
 - Getting paid (Settings → Getting paid): your UPI ID, or for friends where UPI isn't used, a payment link (PayPal.me, Revolut, Wise...) or bank details. Reminders from Money owed carry them, and the link's page and a friend's Leftovers turn them into "Pay ₹750 with UPI", which opens their UPI app with the amount in. Only what you add is shared, only with the people you remind, and never a PIN
 - Share a group split: the share button on a bill split with people sends one message to the group with each person's share; each taps their own name to see it, pay you, or add it to their Leftovers

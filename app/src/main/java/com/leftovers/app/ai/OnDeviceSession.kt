@@ -20,6 +20,10 @@ internal class OnDeviceSession(
     /** The photo sent with the latest message, read again with each step of the answer to it. */
     private var photo: ByteArray? = null
 
+    override fun seed(history: List<PastTurn>) {
+        normalised(history).forEach { turns += (if (it.user) "User: " else "Assistant: ") + it.text.trim() }
+    }
+
     override suspend fun sendUser(text: String, image: ImageInput?): ModelTurn {
         photo = image?.let { java.util.Base64.getDecoder().decode(it.base64) }
         turns += "User: ${text.trim()}" + if (photo != null) " [photo attached]" else ""

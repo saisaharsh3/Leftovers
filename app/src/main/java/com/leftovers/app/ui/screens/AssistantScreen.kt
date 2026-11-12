@@ -155,10 +155,10 @@ class AssistantViewModel(private val container: AppContainer, private val assist
     /** This chat's id in [store]; a new one for each new chat. */
     private var chatId = System.currentTimeMillis()
     /**
-     * The chat so far, for an AI that hasn't seen it: after switching AI, or opening a saved chat. It goes with the
-     * next message, once, as a short recap.
+     * The chat so far, for an AI that hasn't seen it: after switching AI, or opening a saved chat. It becomes that AI's
+     * own earlier messages when it starts.
      */
-    private var carry: String? = null
+    private var carry: List<com.leftovers.app.ai.PastTurn>? = null
     private var lastPrivacy = privacy.value
 
     init {
@@ -180,8 +180,9 @@ class AssistantViewModel(private val container: AppContainer, private val assist
                     carry = null
                     items += ChatItem.Note(nextKey++, "Privacy settings changed. The chat stays here, and the AI starts afresh from your next message.")
                 } else {
-                    carry = transcript()
-                    items += ChatItem.Note(nextKey++, "Now with ${c.provider.label}. The chat stays, and it gets a short recap with your next message.")
+                    carry = history()
+                    items += ChatItem.Note(nextKey++, if (c.provider == AiProvider.ON_DEVICE) "Now with ${c.provider.label}. The chat stays: it sees the latest part of it, as much as it can hold."
+                        else "Now with ${c.provider.label}. The chat stays, and it sees all of it.")
                 }
             }
         }
@@ -206,8 +207,7 @@ class AssistantViewModel(private val container: AppContainer, private val assist
                 val read = runCatching { kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { com.leftovers.app.ai.AttachedFile.read(context, file, limit) } }
                 read.onSuccess { f ->
                     items += ChatItem.User(nextKey++, message, file = f.name)
-                    // The recap is added first: once the session exists, this AI counts as having seen the chat.
-                    runTurn { val text = withCarry(message + "\n\n" + f.block); ensureSession().sendUser(text) }
+                    runTurn { ensureSession().sendUser(message + "\n\n" + f.block) }
                 }.onFailure {
                     busy = false
                     items += ChatItem.Note(nextKey++, it.message ?: "Couldn't read that file", error = true)
@@ -217,7 +217,7 @@ class AssistantViewModel(private val container: AppContainer, private val assist
         }
         if (photo == null || context == null) {
             items += ChatItem.User(nextKey++, message)
-            runTurn { val text = withCarry(message); ensureSession().sendUser(text) }
+            runTurn { ensureSession().sendUser(message) }
             return
         }
         busy = true
@@ -228,7 +228,7 @@ class AssistantViewModel(private val container: AppContainer, private val assist
                 val bytes = android.util.Base64.decode(img.base64, android.util.Base64.NO_WRAP)
                 val preview = android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size, android.graphics.BitmapFactory.Options().apply { inSampleSize = 4 })
                 items += ChatItem.User(nextKey++, message, preview)
-                runTurn { val text = withCarry(message); ensureSession().sendUser(text, img) }
+                runTurn { ensureSession().sendUser(message, img) }
             }.onFailure {
                 busy = false
                 items += ChatItem.Note(nextKey++, it.message ?: "Couldn't read that image", error = true)
@@ -307,8 +307,8 @@ class AssistantViewModel(private val container: AppContainer, private val assist
                 else -> ChatItem.Note(nextKey++, l.text, l.error)
             }
         }
-        carry = transcript()
-        items += ChatItem.Note(nextKey++, "Carry on where you left off: the AI gets a short recap with your next message.")
+        carry = history()
+        items += ChatItem.Note(nextKey++, "Carry on where you left off: the AI sees this chat. Files and photos from it aren't kept, so attach one again to ask about it.")
     }
 
     fun deleteSaved(id: Long) {
@@ -333,27 +333,34 @@ class AssistantViewModel(private val container: AppContainer, private val assist
         viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) { store.save(chat) }
     }
 
-    /** The chat so far, short, for an AI that hasn't seen it: what was asked, answered and changed. */
-    private fun transcript(): String? {
-        val limit = if (config.value?.provider == AiProvider.ON_DEVICE) 1_500 else 4_000
-        val lines = items.mapNotNull { i ->
+    /**
+     * The chat so far as messages, for an AI that hasn't seen it: what was asked and answered, with what was changed.
+     * Personal numbers are hidden, as another company's AI may get it. The newest [MAX_HISTORY] messages, up to about
+     * [MAX_HISTORY_CHARS], so a very long chat doesn't get slow or costly; the phone's own AI keeps what fits.
+     */
+    private fun history(): List<com.leftovers.app.ai.PastTurn>? {
+        val turns = mutableListOf<com.leftovers.app.ai.PastTurn>()
+        items.forEach { i ->
             when (i) {
-                is ChatItem.User -> "User: " + i.text + (i.file?.let { " (attached $it)" } ?: "") + (if (i.photo) " (with a photo)" else "")
-                is ChatItem.Bot -> "Assistant: " + i.text
-                is ChatItem.Change -> "(A change, ${i.state.name.lowercase()}: ${i.summary})"
-                else -> null
+                is ChatItem.User -> turns += com.leftovers.app.ai.PastTurn(true, i.text +
+                    (i.file?.let { "\n(Attached the file \"$it\"; its contents aren't available now.)" } ?: "") +
+                    (if (i.photo) "\n(Attached a photo; it isn't available now.)" else ""))
+                is ChatItem.Bot -> turns += com.leftovers.app.ai.PastTurn(false, i.text)
+                // A change belongs to the AI's turn that proposed it.
+                is ChatItem.Change -> turns += com.leftovers.app.ai.PastTurn(false, "(Change ${i.state.name.lowercase()}: ${i.summary})")
+                else -> Unit
             }
         }
-        if (lines.isEmpty()) return null
-        return com.leftovers.app.ai.AssistantTools.scrub(lines.joinToString("\n")).takeLast(limit)
-    }
-
-    /** [message] with the recap of the chat in front, when this AI hasn't seen the chat yet. */
-    private fun withCarry(message: String): String {
-        if (session != null) return message
-        val recap = carry ?: return message
-        carry = null
-        return "Earlier in this chat (a recap; your tools still give the current data):\n$recap\n\nNow: $message"
+        if (turns.isEmpty()) return null
+        val kept = ArrayDeque<com.leftovers.app.ai.PastTurn>()
+        var size = 0
+        for (t in turns.asReversed()) {
+            val clean = t.copy(text = com.leftovers.app.ai.AssistantTools.scrub(t.text))
+            if (kept.size >= MAX_HISTORY || size + clean.text.length > MAX_HISTORY_CHARS) break
+            kept.addFirst(clean)
+            size += clean.text.length
+        }
+        return kept.toList()
     }
 
     private fun dropSession() {
@@ -370,7 +377,12 @@ class AssistantViewModel(private val container: AppContainer, private val assist
         val t = AssistantTools(container, privacy.value)
         val currency = container.settings.settings.first().currencyCode
         tools = t
-        return chatSession(cfg, t.systemPrompt(currency), t.specs).also { session = it }
+        return chatSession(cfg, t.systemPrompt(currency), t.specs).also { s ->
+            // A chat it hasn't seen (another AI's, or a saved one): its own earlier messages, before the next one.
+            carry?.let { s.seed(it) }
+            carry = null
+            session = s
+        }
     }
 
     /** Runs one exchange with the model; named so it can never resolve to Kotlin's scope function `run`. */
@@ -460,6 +472,9 @@ class AssistantViewModel(private val container: AppContainer, private val assist
         const val SOFT_ROUNDS = 8
         const val HARD_ROUNDS = 10
         const val MAX_CHANGES = 15
+        /** Earlier messages given to an AI that hasn't seen the chat. */
+        const val MAX_HISTORY = 50
+        const val MAX_HISTORY_CHARS = 60_000
     }
 }
 
