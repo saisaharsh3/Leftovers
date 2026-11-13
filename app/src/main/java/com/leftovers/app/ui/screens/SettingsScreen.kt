@@ -504,6 +504,11 @@ class SettingsViewModel(
     fun setPay(pay: com.leftovers.app.util.SharedOwed.Pay) {
         viewModelScope.launch { settingsRepository.setPayDetails(com.leftovers.app.util.SharedOwed.clean(pay)) }
     }
+    val reminderLink: StateFlow<Boolean> = settingsRepository.reminderLinkFlow.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), true)
+    fun setReminderLink(on: Boolean) {
+        viewModelScope.launch { settingsRepository.setReminderLink(on) }
+    }
+
     fun setPayShare(on: Boolean) {
         viewModelScope.launch { settingsRepository.setPayShare(on) }
     }
@@ -995,8 +1000,17 @@ fun SettingsScreen(
                             Glass(Modifier.fillMaxWidth().padding(top = 16.dp)) {
                                 Column(Modifier.padding(vertical = 6.dp)) {
                                     ToggleRow(Lucide.Bell, "Add to reminders", share && !pay.isEmpty, { on -> if (pay.isEmpty) editingPay = true else viewModel.setPayShare(on) })
+                                    RowDivider()
+                                    val link by viewModel.reminderLink.collectAsStateWithLifecycle()
+                                    ToggleRow(Lucide.Link, "Add a link to reminders", link, viewModel::setReminderLink)
                                 }
                             }
+                            Text(
+                                "The link lets a friend see what it's for, pay you, and add it to their Leftovers with a tap. Chat apps show it as a preview card. Off: just the message.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = c.textTertiary,
+                                modifier = Modifier.padding(start = 8.dp, end = 8.dp, top = 8.dp),
+                            )
                             SectionHeader("Keeping it safe", Modifier.padding(top = 8.dp))
                             Glass(Modifier.fillMaxWidth()) {
                                 Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -1132,8 +1146,7 @@ fun SettingsScreen(
                             NavRow(Lucide.Coins, "Currency", "${money.currency.displayName} (${money.symbol})") { showCurrency = true }
                             RowDivider()
                             ToggleRow(Lucide.Split, "Show a split bill as one entry", s.splitsAsOneBill, viewModel::setSplitsAsOneBill)
-                        RowDivider()
-                        ToggleRow(Lucide.Target, "Over today, show the new daily limit", s.showNewDailyLimit, viewModel::setShowNewDailyLimit)
+
                             RowDivider()
                             NavRow(Lucide.Tag, "Categories", null, onManageCategories)
                             RowDivider()

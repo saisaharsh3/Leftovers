@@ -365,9 +365,10 @@ fun HomeScreen(
     // What's new pops up once after each update; a fresh install starts without it.
     // Once per feature version, the first time the app opens after updating to it (not again for its pre-releases or
     // Dev builds): after that it's in Updates → Highlights. Seen before this change, the full version was kept.
-    val release = remember(appVersion) { com.leftovers.app.util.WhatsNew.release(appVersion) }
-    if (state.loaded && state.whatsNewSeen?.let { com.leftovers.app.util.WhatsNew.release(it) } != release && !freshInstall) {
-        WhatsNewDialog(appVersion) { viewModel.closeWhatsNew(release) }
+    // Kept as "highlights:1.10": what the old What's new sheet left ("1.10.0-dev.185") isn't the page having been seen.
+    val seenKey = remember(appVersion) { "highlights:" + com.leftovers.app.util.WhatsNew.release(appVersion) }
+    if (state.loaded && state.whatsNewSeen != seenKey && !freshInstall) {
+        WhatsNewDialog(appVersion) { viewModel.closeWhatsNew(seenKey) }
     }
     val money = LocalMoney.current
     if (!state.loaded) return

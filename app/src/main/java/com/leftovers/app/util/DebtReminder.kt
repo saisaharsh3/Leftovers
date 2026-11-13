@@ -53,6 +53,8 @@ object DebtReminder {
         val splits = splitsOf(balance, container)
         val text = message(balance, format, splits)
         val ways = payLines(pay, currency)
+        // Turned off: the message alone, with no link (and so no preview card in the chat app).
+        if (!settings.reminderLink()) return text + ways
         val link = SharedOwed.link(device, currency, balance.entries, pay, splits) ?: return text + ways
         return text + ways + "\n\nSee it, and add it to your Leftovers with a tap:\n" + link
     }
@@ -77,6 +79,8 @@ object DebtReminder {
         val split = Split(bill.amountMinor + shares.sumOf { kotlin.math.abs(it.amountMinor) }, shares.size + 1)
         val pay = if (settings.payShare()) settings.payDetails() else SharedOwed.Pay()
         val note = shares.firstOrNull { it.note.isNotBlank() }?.note ?: com.leftovers.app.data.noteText(bill.note)
+        if (shares.none { it.amountMinor > 0 && !it.settled }) return null
+        if (!settings.reminderLink()) return groupMessage(note, split, shares, format) + payLines(pay, currency)
         val link = SharedOwed.groupLink(settings.syncDevice(), currency, shares, split, pay) ?: return null
         return groupMessage(note, split, shares, format) + payLines(pay, currency) + "\n\nTap your name to see your share, pay, or add it to your Leftovers:\n" + link
     }

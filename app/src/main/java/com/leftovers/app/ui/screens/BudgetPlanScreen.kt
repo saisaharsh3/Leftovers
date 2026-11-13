@@ -75,6 +75,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.map
 import java.time.Month
 import java.time.YearMonth
 import java.time.format.TextStyle
@@ -87,6 +88,13 @@ class BudgetPlanViewModel(
 ) : ViewModel() {
     val accountList: StateFlow<List<com.leftovers.app.data.AccountWithBalance>> =
         accounts.accounts.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** Over today's allowance, Home shows the new daily limit for the days left (#61). Saved at once. */
+    val newDailyLimit: StateFlow<Boolean> =
+        settings.settings.map { it.showNewDailyLimit }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+    fun setNewDailyLimit(on: Boolean) {
+        viewModelScope.launch { settings.setShowNewDailyLimit(on) }
+    }
     /** An envelope (#42): only entries with this tag and/or from this account count. */
     var envelope by mutableStateOf(false)
     var rangeTagText by mutableStateOf("")
@@ -385,6 +393,36 @@ fun BudgetPlanScreen(
                         androidx.compose.material3.Switch(
                             checked = viewModel.extraIncome,
                             onCheckedChange = com.leftovers.app.ui.components.toggleHaptic({ viewModel.extraIncome = it }),
+                            colors = androidx.compose.material3.SwitchDefaults.colors(
+                                checkedTrackColor = c.accent,
+                                checkedThumbColor = c.onAccent,
+                                uncheckedTrackColor = c.glass,
+                                uncheckedBorderColor = c.borderTop,
+                                uncheckedThumbColor = c.textSecondary,
+                            ),
+                        )
+                    }
+                }
+            }
+
+            item {
+                val newLimit by viewModel.newDailyLimit.collectAsStateWithLifecycle()
+                Glass(Modifier.fillMaxWidth().padding(top = 12.dp)) {
+                    Row(Modifier.padding(18.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text("Over today, show the new daily limit", style = MaterialTheme.typography.titleSmall, color = c.textPrimary)
+                            Spacer(Modifier.height(2.dp))
+                            Text(
+                                if (newLimit) "Spent more than today's allowance: Home shows what each day after today can be, like a fresh start tomorrow."
+                                else "Spent more than today's allowance: Home shows how much over you are.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = c.textSecondary,
+                            )
+                        }
+                        Spacer(Modifier.width(12.dp))
+                        androidx.compose.material3.Switch(
+                            checked = newLimit,
+                            onCheckedChange = com.leftovers.app.ui.components.toggleHaptic({ viewModel.setNewDailyLimit(it) }),
                             colors = androidx.compose.material3.SwitchDefaults.colors(
                                 checkedTrackColor = c.accent,
                                 checkedThumbColor = c.onAccent,

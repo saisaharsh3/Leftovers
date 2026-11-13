@@ -322,6 +322,10 @@ class SettingsRepository(context: Context) {
     val payShareFlow = store.data.map { it[PAY_SHARE] ?: true }
     suspend fun payShare(): Boolean = payShareFlow.first()
     suspend fun setPayShare(on: Boolean) = store.edit { it[PAY_SHARE] = on }
+    /** Whether reminders carry the link a friend opens to see it, pay, or add it to their Leftovers (on unless turned off). */
+    val reminderLinkFlow = store.data.map { it[REMINDER_LINK] ?: true }
+    suspend fun reminderLink(): Boolean = reminderLinkFlow.first()
+    suspend fun setReminderLink(on: Boolean) = store.edit { it[REMINDER_LINK] = on }
     suspend fun payDetails(): com.leftovers.app.util.SharedOwed.Pay = payDetailsFlow.first()
     suspend fun setPayDetails(pay: com.leftovers.app.util.SharedOwed.Pay) = store.edit {
         it[PAY_UPI] = pay.upi
@@ -471,6 +475,7 @@ class SettingsRepository(context: Context) {
         val PAY_LINK = stringPreferencesKey("pay_link")
         val PAY_BANK = stringPreferencesKey("pay_bank")
         val PAY_SHARE = booleanPreferencesKey("pay_share")
+        val REMINDER_LINK = booleanPreferencesKey("reminder_link")
         val APP_NOTIFICATIONS = booleanPreferencesKey("app_notifications")
         val RECAP_SEEN = stringPreferencesKey("recap_seen")
         val AUTO_BACKUP_DIR = stringPreferencesKey("auto_backup_dir")
