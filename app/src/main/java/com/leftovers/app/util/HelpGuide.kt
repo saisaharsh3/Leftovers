@@ -19,6 +19,8 @@ object HelpGuide {
         Item("Adding entries", "Repeat every month", "Turn an entry into a subscription or a regular payment that's logged for you.", "+ → Repeat (↻)", Place.ADD, "recurring rent bill monthly"),
         Item("Adding entries", "Receipt photo", "Attach a photo of the bill to an entry. With the AI assistant connected, it can read the bill and fill the entry in.", "+ → Attach receipt", Place.ADD, "bill camera scan invoice picture"),
         Item("Adding entries", "Tags", "Add #tags like #goa or #work to an entry, then search or filter by them, or give a trip its own budget.", "+ → Tags", Place.ADD, "hashtag label trip"),
+        Item("Adding entries", "Details", "The note is an entry's name; tap it to add details too, like who it was with. Details show when the entry is opened, not in lists, and search finds them.", "+ → Add a note", Place.ADD, "description memo more info purpose title"),
+        Item("Bills, goals and money owed", "Wait for its payment", "A subscription can be logged when its bank text or payment notification comes, for that amount and day, instead of on a set day. Without a message it shows under Due on Home, to mark paid or skip.", "Plan → Subscriptions → a subscription → Wait for its payment", Place.SUBSCRIPTIONS, "manual pending due rent salary late paid settle"),
         Item("Adding entries", "Undo and deleted entries", "Deleting shows Undo for a few seconds. Deleted entries are kept, to put back later.", "Settings → Backup & data → Deleted entries", Place.DELETED, "restore recover trash bin removed"),
 
         // Seeing your money

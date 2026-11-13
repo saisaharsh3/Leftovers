@@ -199,6 +199,7 @@ class SettingsViewModel(
                     categoryId = category.id,
                     epochDay = row.date.toEpochDay(),
                     note = row.note,
+                    details = row.details,
                     accountId = account,
                 )
             }

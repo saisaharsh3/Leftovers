@@ -42,6 +42,7 @@ private val MIGRATION_29_30 = object : Migration(29, 30) {
     override fun migrate(db: SupportSQLiteDatabase) {
         db.execSQL("ALTER TABLE `recurring` ADD COLUMN `manual` INTEGER NOT NULL DEFAULT 0")
         db.execSQL("ALTER TABLE `transactions` ADD COLUMN `details` TEXT NOT NULL DEFAULT ''")
+        db.execSQL("ALTER TABLE `deleted_transactions` ADD COLUMN `details` TEXT NOT NULL DEFAULT ''")
     }
 }
 

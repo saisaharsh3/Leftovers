@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 30,
-    "identityHash": "118941f7fd0430ca7b87d0318c5e0d1b",
+    "identityHash": "a635a2c707a2cf5fc3928ddb6160adf5",
     "entities": [
       {
         "tableName": "categories",
@@ -804,7 +804,7 @@
       },
       {
         "tableName": "deleted_transactions",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER NOT NULL, `amountMinor` INTEGER NOT NULL, `type` TEXT NOT NULL, `categoryId` INTEGER NOT NULL, `epochDay` INTEGER NOT NULL, `note` TEXT NOT NULL, `createdAt` INTEGER NOT NULL, `accountId` INTEGER, `receiptPath` TEXT, `deletedAt` INTEGER NOT NULL, `foreignMinor` INTEGER, `foreignCurrency` TEXT, `splitOf` INTEGER, PRIMARY KEY(`id`))",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER NOT NULL, `amountMinor` INTEGER NOT NULL, `type` TEXT NOT NULL, `categoryId` INTEGER NOT NULL, `epochDay` INTEGER NOT NULL, `note` TEXT NOT NULL, `createdAt` INTEGER NOT NULL, `accountId` INTEGER, `receiptPath` TEXT, `deletedAt` INTEGER NOT NULL, `foreignMinor` INTEGER, `foreignCurrency` TEXT, `splitOf` INTEGER, `details` TEXT NOT NULL DEFAULT '', PRIMARY KEY(`id`))",
         "fields": [
           {
             "fieldPath": "id",
@@ -878,6 +878,13 @@
             "fieldPath": "splitOf",
             "columnName": "splitOf",
             "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "details",
+            "columnName": "details",
+            "affinity": "TEXT",
+            "notNull": true,
+            "defaultValue": "''"
           }
         ],
         "primaryKey": {
@@ -914,7 +921,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '118941f7fd0430ca7b87d0318c5e0d1b')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'a635a2c707a2cf5fc3928ddb6160adf5')"
     ]
   }
 }

@@ -5,6 +5,8 @@ All notable changes to Leftovers. Download any version from
 
 ## Unreleased
 
+- Details on an entry (#62): the note is its name, and details hold the rest (who it was with, a statement's purpose line). They show when it's opened, not in lists; search finds them, and CSV export and backups keep them
+- Import reads a statement's purpose or reference column into details, and when the payee is a payment company (SumUp, PayPal, Stripe, DZ Bank...), names the entry after the shop in it. German statements' columns (Buchungstag, Betrag, Empfänger, Verwendungszweck) are read too
 - The Budget screen lists what's been spent in it (an envelope's own entries), with See all opening Activity on just those (#61)
 - Over today's allowance, Home can show the new daily limit for the days left instead of how much over: Settings → General → Over today, show the new daily limit (#61)
 - Budgets of any length are set with a tap: 6, 8 or 12 weeks, or a day longer or shorter, instead of typing (#61)

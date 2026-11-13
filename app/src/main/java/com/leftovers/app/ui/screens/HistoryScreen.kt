@@ -125,6 +125,7 @@ internal fun searchMatches(item: TransactionItem, query: String, accountName: St
     query.trim().split(Regex("""\s+""")).filter { it.isNotEmpty() }.all { word ->
         val amount = AmountInput.toMinor(word.replace(",", ""))
         item.note.contains(word, ignoreCase = true) ||
+            item.details.contains(word, ignoreCase = true) ||
             item.categoryName.contains(word, ignoreCase = true) ||
             accountName?.contains(word, ignoreCase = true) == true ||
             (amount != null && item.amountMinor == amount)

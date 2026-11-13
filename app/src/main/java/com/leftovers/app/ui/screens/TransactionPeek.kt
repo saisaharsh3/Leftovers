@@ -271,6 +271,10 @@ fun TransactionPeekCard(
                 modifier = Modifier.padding(top = 2.dp),
             )
         }
+        // Its details (#62), when it has any: what lists leave out.
+        if (item.details.isNotBlank()) {
+            Text(item.details, style = MaterialTheme.typography.bodyMedium, color = c.textSecondary, modifier = Modifier.padding(horizontal = 6.dp))
+        }
         if (photos.isNotEmpty()) {
             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 photos.forEach { path -> ReceiptThumb(path, onOpen = { photo = path }, size = 64.dp) }

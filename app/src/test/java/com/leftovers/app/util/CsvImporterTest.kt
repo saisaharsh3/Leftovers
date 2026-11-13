@@ -101,4 +101,44 @@ class CsvImporterTest {
         assertEquals("coins", CategoryGuess.icon("Something else", TxType.INCOME))
         assertEquals("package", CategoryGuess.icon("Something else", TxType.EXPENSE))
     }
+
+    // #62: a German bank's export, made up, with the shop in "Verwendungszweck" and a payment company as recipient.
+    @Test fun thePurposeLineNamesTheShopWhenThePayeeIsAPaymentCompany() {
+        val p = CsvImporter.parse(
+            """
+            Buchungstag;Empfaenger;Verwendungszweck;Betrag
+            11.09.2026;SumUp;CPH COFFEE LAB/Schirmerstrabe 80/Dusseldorf/DE/0 11.09.2026 / 15:12 local time;-4,80
+            12.09.2026;Stadtwerke Duesseldorf;Abschlag September Kundennr 12345;-62,00
+            """.trimIndent(),
+        )
+        assertEquals(2, p.rows.size)
+        // SumUp stood in for the cafe: the purpose line's first part names it, and all of it is kept as details.
+        assertEquals("Cph Coffee Lab", p.rows[0].note)
+        assertEquals("CPH COFFEE LAB/Schirmerstrabe 80/Dusseldorf/DE/0 11.09.2026 / 15:12 local time", p.rows[0].details)
+        // A real payee stays the name; the purpose is still there as details.
+        assertEquals("Stadtwerke Duesseldorf", p.rows[1].note)
+        assertEquals("Abschlag September Kundennr 12345", p.rows[1].details)
+    }
+
+    @Test fun leftoversOwnExportKeepsDetailsApart() {
+        val p = CsvImporter.parse(
+            """
+            Date,Type,Category,Amount,Note,Details
+            2026-10-06,Expense,Food & Dining,1200.00,Dinner,"Four of us, my treat"
+            """.trimIndent(),
+        )
+        assertEquals("Dinner", p.rows[0].note)
+        assertEquals("Four of us, my treat", p.rows[0].details)
+    }
+
+    @Test fun aBankDetailsColumnOnItsOwnIsStillTheNote() {
+        val p = CsvImporter.parse(
+            """
+            Date,Details,Debit,Credit
+            05/10/26,UPI-SWIGGY-swiggy@icici,250.00,
+            """.trimIndent(),
+        )
+        assertEquals("UPI-SWIGGY-swiggy@icici", p.rows[0].note)
+        assertEquals("", p.rows[0].details)
+    }
 }

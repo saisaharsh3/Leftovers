@@ -24,12 +24,13 @@ data class DeletedTransaction(
     val foreignCurrency: String? = null,
     /** The bill it was part of, so a split bill restores as one bill again. */
     val splitOf: Long? = null,
+    @androidx.room.ColumnInfo(defaultValue = "") val details: String = "",
 ) {
-    fun toTransaction() = Transaction(id, amountMinor, type, categoryId, epochDay, note, createdAt, accountId, receiptPath, foreignMinor, foreignCurrency, splitOf)
+    fun toTransaction() = Transaction(id, amountMinor, type, categoryId, epochDay, note, createdAt, accountId, receiptPath, foreignMinor, foreignCurrency, splitOf, details)
 
     companion object {
         fun from(t: Transaction, deletedAt: Long = System.currentTimeMillis()) =
-            DeletedTransaction(t.id, t.amountMinor, t.type, t.categoryId, t.epochDay, t.note, t.createdAt, t.accountId, t.receiptPath, deletedAt, t.foreignMinor, t.foreignCurrency, t.splitOf)
+            DeletedTransaction(t.id, t.amountMinor, t.type, t.categoryId, t.epochDay, t.note, t.createdAt, t.accountId, t.receiptPath, deletedAt, t.foreignMinor, t.foreignCurrency, t.splitOf, t.details)
     }
 }
 
