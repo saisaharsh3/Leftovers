@@ -5,6 +5,9 @@ All notable changes to Leftovers. Download any version from
 
 ## Unreleased
 
+- The Budget screen lists what's been spent in it (an envelope's own entries), with See all opening Activity on just those (#61)
+- Over today's allowance, Home can show the new daily limit for the days left instead of how much over: Settings → General → Over today, show the new daily limit (#61)
+- Budgets of any length are set with a tap: 6, 8 or 12 weeks, or a day longer or shorter, instead of typing (#61)
 - Subscriptions can wait for their payment (#64): instead of being logged on a fixed day, one is logged when its bank text or payment notification comes, on that day and for that amount (✓ on Home, or by itself with small payments added automatically). No message, as with cash? It shows under Due on Home, to mark paid with the real amount and day, or skip
 - A subscription's real payment on another day (the salary set for the 29th arriving on the 1st, the gym paid on the 30th instead of the 15th) moves the entry already logged instead of adding a second one; and one already paid within a week of its day, at about its amount, isn't logged again
 - The account picker's buttons fit with larger text sizes

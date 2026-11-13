@@ -157,7 +157,7 @@ data class ActivityFilters(
 enum class ActivitySort(val label: String) { NEWEST("Newest"), HIGHEST("Highest"), LOWEST("Lowest") }
 
 /** How another screen asks Activity to open: which tab, and optionally one account. */
-data class ActivityRequest(val filter: TypeFilter, val accountId: Long? = null)
+data class ActivityRequest(val filter: TypeFilter, val accountId: Long? = null, val tag: String? = null)
 
 data class FilterOption(val id: Long, val name: String, val icon: String, val color: Long)
 
@@ -337,7 +337,7 @@ fun HistoryScreen(
             mode = ActivityView.LIST
             searchOpen = false
             search("")
-            viewModel.setFilters(ActivityFilters(accountId = it.accountId))
+            viewModel.setFilters(ActivityFilters(accountId = it.accountId, tag = it.tag))
             viewModel.setMonth(YearMonth.now())
             viewModel.setFilter(it.filter)
             onRequestHandled()

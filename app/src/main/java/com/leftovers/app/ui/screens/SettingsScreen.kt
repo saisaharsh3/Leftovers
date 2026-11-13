@@ -492,6 +492,10 @@ class SettingsViewModel(
         viewModelScope.launch { settingsRepository.setSmsAutoMax(minor) }
     }
 
+    fun setShowNewDailyLimit(on: Boolean) {
+        viewModelScope.launch { settingsRepository.setShowNewDailyLimit(on) }
+    }
+
     /** How friends can pay you back, for the reminders sent from Money owed. */
     val pay: StateFlow<com.leftovers.app.util.SharedOwed.Pay> =
         settingsRepository.payDetailsFlow.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), com.leftovers.app.util.SharedOwed.Pay())
@@ -1127,6 +1131,8 @@ fun SettingsScreen(
                             NavRow(Lucide.Coins, "Currency", "${money.currency.displayName} (${money.symbol})") { showCurrency = true }
                             RowDivider()
                             ToggleRow(Lucide.Split, "Show a split bill as one entry", s.splitsAsOneBill, viewModel::setSplitsAsOneBill)
+                        RowDivider()
+                        ToggleRow(Lucide.Target, "Over today, show the new daily limit", s.showNewDailyLimit, viewModel::setShowNewDailyLimit)
                             RowDivider()
                             NavRow(Lucide.Tag, "Categories", null, onManageCategories)
                             RowDivider()

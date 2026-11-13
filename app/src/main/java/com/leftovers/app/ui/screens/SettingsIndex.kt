@@ -82,6 +82,7 @@ object SettingsIndex {
             Entry("Currency", GENERAL, Lucide.Coins, "rupee dollar euro symbol money"),
             Entry("Show a split bill as one entry", GENERAL, Lucide.Split, "split friends parts"),
             Entry("Categories", GENERAL, Lucide.Tag, "icons needs wants hide"),
+            Entry("Over today, show the new daily limit", GENERAL, Lucide.Target, "overspent overspend daily allowance cap recalculated safe to spend budget"),
             Entry("Accounts", GENERAL, Lucide.Wallet, "cash bank card balance"),
             Entry("Back up", DATA, Lucide.Download, "backup save file google drive"),
             Entry("Restore", DATA, Lucide.Repeat, "backup file load"),

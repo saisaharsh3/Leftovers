@@ -57,6 +57,7 @@ import com.leftovers.app.ui.components.Glass
 import com.leftovers.app.ui.components.GlassScreen
 import com.leftovers.app.ui.components.IconTile
 import com.leftovers.app.ui.components.ListRow
+import com.leftovers.app.data.TransactionItem
 import com.leftovers.app.ui.components.PrimaryButton
 import com.leftovers.app.ui.components.ProgressLine
 import com.leftovers.app.ui.components.RollingText
@@ -69,6 +70,7 @@ import com.leftovers.app.ui.components.pressable
 import com.leftovers.app.ui.icons.Lucide
 import com.leftovers.app.ui.theme.LocalAppColors
 import com.leftovers.app.util.LocalMoney
+import com.leftovers.app.util.friendlyLabel
 import com.leftovers.app.util.label
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -96,6 +98,9 @@ data class BudgetsUiState(
     val rows: List<CategoryBudgetRow> = emptyList(),
     /** 50/30/20, when it's on (#39). */
     val buckets: List<com.leftovers.app.data.BucketUse> = emptyList(),
+    /** What's used this budget so far (#61), newest first: only what counts in it, as an envelope's own. */
+    val entries: List<TransactionItem> = emptyList(),
+    val entryCount: Int = 0,
 )
 
 class BudgetsViewModel(
@@ -137,6 +142,9 @@ class BudgetsViewModel(
                 val saved = deposits.filter { it.epochDay in cycle.start.toEpochDay()..cycle.end.toEpochDay() }.sumOf { it.amountMinor }
                 com.leftovers.app.data.bucketUse(income, items, categories, saved)
             },
+            entries = items.filter { it.type == TxType.EXPENSE && !it.outOfBudget }
+                .sortedWith(compareByDescending<TransactionItem> { it.epochDay }.thenByDescending { it.createdAt }).take(5),
+            entryCount = items.count { it.type == TxType.EXPENSE && !it.outOfBudget },
             rows = categories.filter { it.type == TxType.EXPENSE }
                 .map { CategoryBudgetRow(it, spentByCategory[it.id] ?: 0L) }
                 // Categories with a limit first, then the ones you spend most on.
@@ -157,6 +165,9 @@ fun BudgetsScreen(
     onOpenGoals: () -> Unit,
     /** Opens the add screen, given the note to start with (the envelope's tag, when the budget is one). */
     onAdd: (String) -> Unit = {},
+    /** Activity on what this budget counts: spending, or an envelope's tag. */
+    onSeeEntries: (tag: String?) -> Unit = {},
+    onOpenEntry: (Long) -> Unit = {},
     viewModel: BudgetsViewModel = viewModel(factory = AppViewModelProvider.Factory),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -311,6 +322,34 @@ fun BudgetsScreen(
                 }
             }
 
+            // What's used it so far (#61): the latest, with all of them a tap away.
+            if (state.plan.isSet && state.entries.isNotEmpty()) {
+                item {
+                    SectionHeader(
+                        if (state.plan.envelope) "In this budget" else "Spent this budget",
+                        Modifier.appear(2),
+                        action = if (state.entryCount > state.entries.size) "See all ${state.entryCount}" else "See all",
+                        onAction = { onSeeEntries(envelopeTag) },
+                    )
+                }
+                item {
+                    Glass(Modifier.fillMaxWidth().appear(2)) {
+                        Column(Modifier.padding(vertical = 6.dp)) {
+                            state.entries.forEachIndexed { i, e ->
+                                if (i > 0) RowDivider()
+                                com.leftovers.app.ui.components.ListRow(
+                                    com.leftovers.app.data.noteText(e.note).ifBlank { e.categoryName },
+                                    // Named after its category already when it has no note: then only the day.
+                                    subtitle = if (com.leftovers.app.data.noteText(e.note).isBlank()) e.date.friendlyLabel() else e.categoryName + " · " + e.date.friendlyLabel(),
+                                    leading = { com.leftovers.app.ui.components.CategoryIcon(e.categoryEmoji, e.categoryColor, size = 38.dp) },
+                                    trailing = { Text(money.format(e.amountMinor), style = MaterialTheme.typography.titleSmall, color = c.textPrimary) },
+                                    onClick = { onOpenEntry(e.id) },
+                                )
+                            }
+                        }
+                    }
+                }
+            }
             item { SectionHeader("Category limits", Modifier.appear(3)) }
             item {
                 Glass(Modifier.fillMaxWidth().appear(3)) {

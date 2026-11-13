@@ -146,6 +146,8 @@ data class HomeUiState(
     val accounts: List<AccountWithBalance> = emptyList(),
     /** The account Home is showing, or null for all of them. */
     val selectedAccount: AccountWithBalance? = null,
+    /** Over today's allowance: show the new daily limit instead of how much over (#61). */
+    val newDailyLimit: Boolean = false,
     /** Subscriptions marked paid by hand (#64) whose day has come, waiting for Paid or Skip. */
     val due: List<DueBill> = emptyList(),
     /** Every subscription, and every entry: to tell a detected payment that's a subscription's, paid late. */
@@ -218,6 +220,7 @@ class HomeViewModel(
             forecast = if (selected == null) forecastMonthEnd(accountList.filterNot { it.outOfTotal }.sumOf { it.balanceMinor }, all, recurring, todayDate) else null,
             accounts = accountList,
             selectedAccount = selected,
+            newDailyLimit = s.showNewDailyLimit,
             due = recurring.filter { it.active && it.manual }.mapNotNull { r ->
                 r.toRecurring().dueMonth(todayDate)?.let { m -> DueBill(r, m, r.toRecurring().chargeDate(m)) }
             }.sortedBy { it.date },
@@ -1094,11 +1097,14 @@ private fun TodayCard(state: HomeUiState, onClick: () -> Unit, modifier: Modifie
             // The month's budget already used up: say so, and by how much, instead of "₹0 of ₹0".
             val usedUp = budget != null && budget.monthUsedUp
             val over = budget != null && (usedUp || budget.leftToday < 0)
+            // Chosen in Settings (#61): over today, the new limit for each day left, like starting fresh tomorrow.
+            val newLimit = if (over && !usedUp && state.newDailyLimit) budget?.newDailyLimit(state.daysLeft) else null
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     when {
                         budget == null -> "Spent today"
                         usedUp -> "Over budget"
+                        newLimit != null -> "New daily limit"
                         over -> "Over today's budget"
                         else -> "Safe to spend today"
                     },
@@ -1113,6 +1119,7 @@ private fun TodayCard(state: HomeUiState, onClick: () -> Unit, modifier: Modifie
                 when {
                     budget == null -> state.spentToday
                     usedUp -> abs(budget.monthLeft)
+                    newLimit != null -> newLimit
                     else -> abs(budget.leftToday)
                 },
             )
@@ -1123,7 +1130,7 @@ private fun TodayCard(state: HomeUiState, onClick: () -> Unit, modifier: Modifie
                 val width = remember(heroText, full) { measurer.measure(heroText, full).size.width }
                 val room = constraints.maxWidth
                 val style = if (width > room && width > 0) full.copy(fontSize = full.fontSize * (room.toFloat() / width * 0.97f)) else full
-                RollingText(text = heroText, style = style, color = if (over) c.negative else c.textPrimary)
+                RollingText(text = heroText, style = style, color = if (over && newLimit == null) c.negative else c.textPrimary)
             }
             Spacer(Modifier.height(14.dp))
             if (budget != null) {
@@ -1137,6 +1144,7 @@ private fun TodayCard(state: HomeUiState, onClick: () -> Unit, modifier: Modifie
                             if (budget.reserved > 0) "${money.formatWhole(spent)} spent + ${money.formatWhole(budget.reserved)} bills due, of ${money.formatWhole(budget.monthlyBudget)}"
                             else "${money.formatWhole(spent)} of ${money.formatWhole(budget.monthlyBudget)}"
                         }
+                        else if (newLimit != null) "${money.formatWhole(abs(budget.leftToday))} over today · from tomorrow"
                         else "${money.formatWhole(state.spentToday)} of ${money.formatWhole(budget.dailyLimit)}",
                         style = MaterialTheme.typography.bodySmall,
                         color = c.textSecondary,
