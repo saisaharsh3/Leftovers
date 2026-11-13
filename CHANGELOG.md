@@ -5,6 +5,11 @@ All notable changes to Leftovers. Download any version from
 
 ## Unreleased
 
+- The phone's own AI answers better: each question offers it only the tools that fit (a small model picks well from eight, not from thirty), results come as plain lines, with a worked example and a reminder to answer only from what it looked up
+- The assistant's chat moves: messages grow in from their side on a spring, Send turns into Stop, the waiting dots bounce, and the starter questions arrive one by one
+- Try again, when a question fails; and after Stop or an error the AI still has the whole chat, instead of starting afresh
+- Hold a reply to copy it
+- The AI's replies are glass again on the app's own backgrounds, not near-black (#41); over a photo they stay darker, to read
 - The assistant describes money owed to the AI in plain words, so it no longer reads a split share or a payback the wrong way round
 - Settings: Back from a search result returns to the results
 - The assistant keeps your chats on the phone to come back to (History, at the top), and switching to another AI keeps the chat: the new one sees the whole conversation (the phone's own AI, as much as it can hold), and so does a saved chat opened again. Keep chats on this phone can be turned off, which deletes them

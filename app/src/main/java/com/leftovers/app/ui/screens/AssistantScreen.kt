@@ -6,6 +6,10 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
+import com.leftovers.app.ui.components.appear
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -160,6 +164,9 @@ class AssistantViewModel(private val container: AppContainer, private val assist
      */
     private var carry: List<com.leftovers.app.ai.PastTurn>? = null
     private var lastPrivacy = privacy.value
+    /** Messages up to this key were there already (a saved chat opened): they don't animate in. */
+    var settledKey by androidx.compose.runtime.mutableLongStateOf(-1L)
+        private set
 
     init {
         // The phone's own AI takes a few seconds to start after the app opens: begin now, so it's ready by the
@@ -271,7 +278,9 @@ class AssistantViewModel(private val container: AppContainer, private val assist
         job = null
         busy = false
         dropSession()
-        items += ChatItem.Note(nextKey++, "Stopped. Your next message starts afresh.")
+        // The provider's own history may be half-finished, but the chat itself isn't lost: it goes to the next session.
+        carry = history()
+        items += ChatItem.Note(nextKey++, "Stopped.")
         persist()
     }
 
@@ -309,6 +318,29 @@ class AssistantViewModel(private val container: AppContainer, private val assist
         }
         carry = history()
         items += ChatItem.Note(nextKey++, "Carry on where you left off: the AI sees this chat. Files and photos from it aren't kept, so attach one again to ask about it.")
+        settledKey = nextKey
+    }
+
+    /** Whether the last question can simply be asked again: it failed, and had no photo or file to send with it. */
+    val canRetry: Boolean
+        get() {
+            if (busy || waiting > 0) return false
+            val last = items.lastOrNull() as? ChatItem.Note ?: return false
+            val asked = items.lastOrNull { it is ChatItem.User } as? ChatItem.User ?: return false
+            return last.error && asked.file == null && !asked.photo && items.indexOf(asked) >= items.indexOfLast { it is ChatItem.Bot }
+        }
+
+    /** Asks the last question again after it failed, without a second copy of it in the chat. */
+    fun retry() {
+        if (!canRetry) return
+        val asked = items.last { it is ChatItem.User } as ChatItem.User
+        while (items.lastOrNull().let { it is ChatItem.Note && it.error }) items.removeAt(items.lastIndex)
+        rounds = 0
+        changesThisMessage = 0
+        dropSession()
+        // The chat before that question; the question itself is what's sent now.
+        carry = history(upTo = asked.key)
+        runTurn { ensureSession().sendUser(asked.text) }
     }
 
     fun deleteSaved(id: Long) {
@@ -338,9 +370,9 @@ class AssistantViewModel(private val container: AppContainer, private val assist
      * Personal numbers are hidden, as another company's AI may get it. The newest [MAX_HISTORY] messages, up to about
      * [MAX_HISTORY_CHARS], so a very long chat doesn't get slow or costly; the phone's own AI keeps what fits.
      */
-    private fun history(): List<com.leftovers.app.ai.PastTurn>? {
+    private fun history(upTo: Long = Long.MAX_VALUE): List<com.leftovers.app.ai.PastTurn>? {
         val turns = mutableListOf<com.leftovers.app.ai.PastTurn>()
-        items.forEach { i ->
+        items.filter { it.key < upTo }.forEach { i ->
             when (i) {
                 is ChatItem.User -> turns += com.leftovers.app.ai.PastTurn(true, i.text +
                     (i.file?.let { "\n(Attached the file \"$it\"; its contents aren't available now.)" } ?: "") +
@@ -397,11 +429,14 @@ class AssistantViewModel(private val container: AppContainer, private val assist
             } catch (e: CancellationException) {
                 throw e // Stopped by the user; stop() already tidied up.
             } catch (e: AiException) {
-                items += ChatItem.Note(nextKey++, e.message ?: "Something went wrong", error = true)
-                // A failed request can leave the provider's history half-finished; start clean next time.
+                // A failed request can leave the provider's history half-finished: a new session next time, given
+                // the chat so far, so nothing said is forgotten.
                 dropSession()
+                carry = history()
+                items += ChatItem.Note(nextKey++, e.message ?: "Something went wrong", error = true)
             } catch (e: Exception) {
                 dropSession()
+                carry = history()
                 items += ChatItem.Note(nextKey++, "Something went wrong: ${e.message}", error = true)
             } finally {
                 if (job == coroutineContext[Job]) {
@@ -511,6 +546,9 @@ fun AssistantScreen(
     }
     val listState = rememberLazyListState()
     val context = androidx.compose.ui.platform.LocalContext.current
+    // Which messages were already here when the screen opened, and which have finished arriving since.
+    val born = remember { viewModel.items.maxOfOrNull { it.key } ?: -1L }
+    val arrived = remember { mutableSetOf<Long>() }
     var attached by rememberSaveable { mutableStateOf<android.net.Uri?>(null) }
     var cameraFile by remember { mutableStateOf<java.io.File?>(null) }
     var photoMenu by remember { mutableStateOf(false) }
@@ -598,8 +636,16 @@ fun AssistantScreen(
                         singleLine = false,
                     )
                     Spacer(Modifier.width(8.dp))
-                    if (viewModel.busy) {
-                        // While it's answering, the send button becomes Stop.
+                    // While it's answering, the send button becomes Stop: one shrinks away as the other grows in.
+                    androidx.compose.animation.AnimatedContent(
+                        viewModel.busy,
+                        transitionSpec = {
+                            (androidx.compose.animation.scaleIn(androidx.compose.animation.core.spring(dampingRatio = 0.8f, stiffness = 500f), initialScale = 0.6f) + fadeIn(androidx.compose.animation.core.tween(120))) togetherWith
+                                (androidx.compose.animation.scaleOut(androidx.compose.animation.core.tween(120), targetScale = 0.6f) + androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(100)))
+                        },
+                        label = "sendOrStop",
+                    ) { answering ->
+                    if (answering) {
                         RoundButton(Lucide.Square, "Stop", viewModel::stop, size = 52.dp, tint = c.textPrimary, container = c.glassStrong)
                     } else {
                         RoundButton(
@@ -618,6 +664,7 @@ fun AssistantScreen(
                             enabled = !locked && (input.isNotBlank() || attached != null || attachedFile != null),
                         )
                     }
+                    }
                 }
                 }
             }
@@ -632,8 +679,11 @@ fun AssistantScreen(
                 contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = padding.calculateTopPadding() + 12.dp, bottom = padding.calculateBottomPadding() + 16.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                if (viewModel.items.isEmpty()) item { Suggestions { viewModel.send(it) } }
+                if (viewModel.items.isEmpty()) item(key = "suggestions") { Suggestions { viewModel.send(it) } }
                 items(viewModel.items, key = { it.key }) { item ->
+                    // New since the screen opened (or the saved chat was): it arrives; what was there is just there.
+                    val fresh = item.key > born && item.key >= viewModel.settledKey && item.key !in arrived
+                    Box(Modifier.fillMaxWidth().animateItem(fadeInSpec = null, fadeOutSpec = null).arrive(fresh, mine = item is ChatItem.User) { arrived += item.key }) {
                     when (item) {
                         is ChatItem.User -> Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.End) {
                             item.image?.let { bmp ->
@@ -672,8 +722,17 @@ fun AssistantScreen(
                             onDecideAll = viewModel::decideAll,
                         )
                     }
+                    }
                 }
-                if (viewModel.busy) item { TypingBubble() }
+                if (viewModel.busy) item(key = "typing") {
+                    Box(Modifier.animateItem(fadeInSpec = null, fadeOutSpec = null).arrive(true, mine = false) {}) { TypingBubble() }
+                }
+                // The last question failed: ask it again with one tap.
+                if (viewModel.canRetry) item(key = "retry") {
+                    Box(Modifier.fillMaxWidth().animateItem(), contentAlignment = Alignment.Center) {
+                        com.leftovers.app.ui.components.Chip("Try again", onClick = viewModel::retry, icon = Lucide.RotateCcw)
+                    }
+                }
             }
         }
     }
@@ -744,7 +803,7 @@ private fun Suggestions(onPick: (String) -> Unit) {
                 suggestions.forEachIndexed { i, text ->
                     if (i > 0) com.leftovers.app.ui.components.RowDivider(inset = 16.dp)
                     Row(
-                        Modifier.fillMaxWidth().pressable({ onPick(text) }, pressedScale = 0.98f).padding(horizontal = 16.dp, vertical = 14.dp),
+                        Modifier.fillMaxWidth().appear(i + 1).pressable({ onPick(text) }, pressedScale = 0.98f).padding(horizontal = 16.dp, vertical = 14.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Text(text, style = MaterialTheme.typography.bodyMedium, color = c.textPrimary, modifier = Modifier.weight(1f))
@@ -759,6 +818,9 @@ private fun Suggestions(onPick: (String) -> Unit) {
 @Composable
 private fun Bubble(text: String, mine: Boolean) {
     val c = LocalAppColors.current
+    val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
+    val haptics = androidx.compose.ui.platform.LocalHapticFeedback.current
+    val context = androidx.compose.ui.platform.LocalContext.current
     // Small "tail" corner on the speaker's side, like a messaging app.
     val shape = if (mine) RoundedCornerShape(20.dp, 20.dp, 6.dp, 20.dp) else RoundedCornerShape(20.dp, 20.dp, 20.dp, 6.dp)
     Box(Modifier.fillMaxWidth(), contentAlignment = if (mine) Alignment.CenterEnd else Alignment.CenterStart) {
@@ -766,6 +828,14 @@ private fun Bubble(text: String, mine: Boolean) {
             Modifier
                 .widthIn(max = 300.dp)
                 .then(if (mine) Modifier.background(c.accent, shape) else Modifier.replyGlass(shape))
+                // Held: copied, to paste into a note or a message.
+                .pointerInput(text) {
+                    detectTapGestures(onLongPress = {
+                        haptics.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                        clipboard.setText(AnnotatedString(text))
+                        android.widget.Toast.makeText(context, "Copied", android.widget.Toast.LENGTH_SHORT).show()
+                    })
+                }
                 .padding(horizontal = 14.dp, vertical = 10.dp),
         ) {
             Text(
@@ -785,7 +855,10 @@ private fun Bubble(text: String, mine: Boolean) {
 private fun Modifier.replyGlass(shape: androidx.compose.ui.graphics.Shape): Modifier {
     val c = LocalAppColors.current
     val darkText = c.textPrimary.luminance() < 0.5f
-    return glassSurface(shape, strong = true, tint = if (darkText) androidx.compose.ui.graphics.Color.White.copy(alpha = 0.55f) else androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.42f))
+    // Over a photo the reply needs a darker body to stay readable; over the app's own backgrounds that much black
+    // made the bubble look solid, not glass (#41), so there it's only lightly tinted.
+    val dark = if (c.photo != null) 0.42f else 0.14f
+    return glassSurface(shape, strong = true, tint = if (darkText) androidx.compose.ui.graphics.Color.White.copy(alpha = 0.55f) else androidx.compose.ui.graphics.Color.Black.copy(alpha = dark))
         .then(androidx.compose.foundation.BorderStroke(1.dp, com.leftovers.app.ui.components.glassBorder(c)).let { Modifier.border(it, shape) })
 }
 
@@ -821,7 +894,7 @@ private fun TypingBubble() {
                     ),
                     label = "dot$i",
                 )
-                Box(Modifier.size(7.dp).graphicsLayer { this.alpha = alpha }.background(c.textSecondary, CircleShape))
+                Box(Modifier.size(7.dp).graphicsLayer { this.alpha = alpha; translationY = -(alpha - 0.25f) * 4.dp.toPx() }.background(c.textSecondary, CircleShape))
             }
         }
     }
@@ -1410,5 +1483,27 @@ private fun SavedChatsSheet(viewModel: AssistantViewModel, onDismiss: () -> Unit
                 SecondaryButton("Delete all", { viewModel.store.deleteAll(); chats = emptyList() }, Modifier.fillMaxWidth())
             }
         }
+    }
+}
+
+/**
+ * A message arriving: it grows out of its speaker's corner (yours from the right, the AI's from the left) and settles
+ * on a spring, with no bounce to speak of. [fresh] is false for messages that were already there, which don't move.
+ */
+@Composable
+private fun Modifier.arrive(fresh: Boolean, mine: Boolean, onArrived: () -> Unit): Modifier {
+    if (!fresh) return this
+    val p = remember { androidx.compose.animation.core.Animatable(0f) }
+    LaunchedEffect(Unit) {
+        p.animateTo(1f, androidx.compose.animation.core.spring(dampingRatio = 0.86f, stiffness = 380f))
+        onArrived()
+    }
+    return graphicsLayer {
+        val k = p.value
+        alpha = (k * 1.8f).coerceIn(0f, 1f)
+        scaleX = 0.88f + 0.12f * k
+        scaleY = 0.88f + 0.12f * k
+        translationY = (1f - k) * 16.dp.toPx()
+        transformOrigin = androidx.compose.ui.graphics.TransformOrigin(if (mine) 1f else 0f, 1f)
     }
 }
