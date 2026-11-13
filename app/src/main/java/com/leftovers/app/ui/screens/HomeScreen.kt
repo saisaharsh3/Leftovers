@@ -363,8 +363,11 @@ fun HomeScreen(
             ?.takeIf { com.leftovers.app.util.UpdateCheck.isNewerThanInstalled(versionContext, it) }
     }
     // What's new pops up once after each update; a fresh install starts without it.
-    if (state.loaded && state.whatsNewSeen != appVersion && !freshInstall) {
-        WhatsNewDialog(appVersion) { viewModel.closeWhatsNew(appVersion) }
+    // Once per feature version, the first time the app opens after updating to it (not again for its pre-releases or
+    // Dev builds): after that it's in Updates → Highlights. Seen before this change, the full version was kept.
+    val release = remember(appVersion) { com.leftovers.app.util.WhatsNew.release(appVersion) }
+    if (state.loaded && state.whatsNewSeen?.let { com.leftovers.app.util.WhatsNew.release(it) } != release && !freshInstall) {
+        WhatsNewDialog(appVersion) { viewModel.closeWhatsNew(release) }
     }
     val money = LocalMoney.current
     if (!state.loaded) return

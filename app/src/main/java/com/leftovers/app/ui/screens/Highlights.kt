@@ -1,12 +1,16 @@
 package com.leftovers.app.ui.screens
 
+import androidx.annotation.DrawableRes
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -15,10 +19,10 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -28,58 +32,45 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import com.leftovers.app.R
 import com.leftovers.app.ui.components.pressable
 import com.leftovers.app.ui.icons.Lucide
 import com.leftovers.app.util.WhatsNew
-import kotlin.math.PI
-import kotlin.math.abs
-import kotlin.math.cos
-import kotlin.math.sin
 
-/** How a section's colour washes in behind it: from the top, the bottom, or across. */
-enum class Field { TOP, BOTTOM, ACROSS }
-
-/** A soft wash of [tint] over near-black, like light falling on the section; [t] (0..1) moves it a little. */
-fun DrawScope.drawField(kind: Field, tint: Color, t: Float) {
-    drawRect(Color(0xFF07070B))
-    val drift = sin(t * 2 * PI).toFloat()
-    // Black at both edges, so one section runs into the next with no seam; the colour peaks high, low or in the middle.
-    val peak = when (kind) {
-        Field.TOP -> 0.3f
-        Field.BOTTOM -> 0.7f
-        Field.ACROSS -> 0.5f
-    } + 0.03f * drift
-    drawRect(Brush.verticalGradient(0f to Color.Transparent, 0.12f to Color.Transparent, peak to tint.copy(alpha = 0.45f), 0.88f to Color.Transparent, 1f to Color.Transparent))
-}
-
-/** 0..1 every [millis], looping, for a field's slow movement. */
+/** 0..1 every [millis], looping: for the slowest movements on a page. */
 @Composable
 fun rememberDrift(millis: Int): Float {
     val loop = rememberInfiniteTransition(label = "drift")
@@ -87,45 +78,56 @@ fun rememberDrift(millis: Int): Float {
     return t
 }
 
-/** One highlight: its big words, the kicker over its title, its line, the field behind it, and a piece of the app. */
-private class Section(
-    val big: String,
-    val note: WhatsNew.Headline,
-    val field: Field,
-    val tint: Color,
-    val sample: @Composable () -> Unit,
-)
-
-private val ink = Color(0xFFF2F3F7)
-private val ink2 = Color(0xFFA9ADBA)
+// Paper and ink: the page's only colours, with the app's lime for the one thing to tap.
+private val paper = Color(0xFFF5F5F7)
+private val night = Color(0xFF000000)
+private val inkDark = Color(0xFF1D1D1F)
+private val greyDark = Color(0xFF6E6E73)
+private val inkLight = Color(0xFFF5F5F7)
+private val greyLight = Color(0xFF86868B)
 private val lime = Color(0xFFCDF46F)
+private val onLime = Color(0xFF151A04)
 
 /**
- * What's new, as a phone maker shows a new system: the version huge, then one change per screen with a few big words,
- * its title and line, and a piece of the app as it looks, over a drawn field of its own. Sections rise in and their
- * big words drift as they pass. The rest of the changes, in a list, then Continue.
+ * What's new, shown the way a phone maker shows a new system: real screens of the app in phones, real photographs,
+ * and plain type in black and white. The phones fan out as it opens; headlines light up word by word as they're
+ * scrolled to; photos ease in closer; the numbers count up. Then the smaller changes, and Continue.
  */
 @Composable
 fun HighlightsScreen(version: String, onClose: () -> Unit) {
     Dialog(onClose, DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
         val list = rememberLazyListState()
-        val t = rememberDrift(24_000)
-        val sections = remember { highlightSections() }
-        Box(Modifier.fillMaxSize().background(Color(0xFF05060A))) {
+        val h = WhatsNew.headlines
+        Box(Modifier.fillMaxSize().background(night)) {
             LazyColumn(Modifier.fillMaxSize(), state = list) {
-                item { Opening(version, list, t) }
-                itemsIndexed(sections) { i, s -> Highlight(s, list, i + 1, t) }
+                item { Opening(version, list) }
+                item { Statement(list, 1, "Money owed settles itself.", h[0].text, dark = true) { Shot(R.drawable.hl_shot_payback, Modifier.width(250.dp)) } }
+                item { PhotoStatement(list, 2, R.drawable.hl_photo_mountain, "Pay me back, in one tap.", h[1].text) { UpiPills() } }
+                item { Statement(list, 3, "One message for the whole group.", h[2].text, dark = false) { GroupCard(list, 3) } }
+                item { Statement(list, 4, "Logged when you really pay.", h[3].text, dark = true) { DueStack(list, 4) } }
+                item { Statement(list, 5, "The balance your bank sees.", h[4].text, dark = false) { Shot(R.drawable.hl_shot_accounts, Modifier.width(250.dp)) } }
+                item { Statement(list, 6, "A fresh start after a big day.", h[5].text, dark = true) { CountUp(list, 6) } }
+                item { Statement(list, 7, "Chats that remember.", h[6].text, dark = false) { Chat(list, 7) } }
+                item { Statement(list, 8, "Settings, like your phone's.", h[7].text, dark = true) { Shot(R.drawable.hl_shot_settings, Modifier.width(250.dp)) } }
+                item { PhotoStatement(list, 9, R.drawable.hl_photo_clouds, "Make it yours.", h[8].text) {} }
                 item { TheRest(onClose) }
             }
-            // Always there to leave by.
+            // On the light sections a dark ✕, on the dark ones a light one.
+            val onLight by remember { derivedStateOf { list.firstVisibleItemIndex in listOf(0, 3, 5, 7, 10) } }
             Box(Modifier.windowInsetsPadding(WindowInsets.statusBars).padding(12.dp).align(Alignment.TopEnd)) {
-                com.leftovers.app.ui.components.RoundButton(Lucide.X, "Close", onClose, size = 44.dp, tint = ink, container = Color.White.copy(alpha = 0.1f))
+                com.leftovers.app.ui.components.RoundButton(
+                    Lucide.X, "Close", onClose, size = 40.dp,
+                    tint = if (onLight) inkDark else inkLight,
+                    container = if (onLight) Color.Black.copy(alpha = 0.06f) else Color.White.copy(alpha = 0.14f),
+                )
             }
         }
     }
 }
 
-/** How far [index] is through the screen: 0 as it comes up from the bottom, 1 once it's well in view. */
+// ---- Where things are on the page.
+
+/** 0 as [index] comes up from the bottom edge, 1 once it's well into view. */
 @Composable
 private fun arrival(list: LazyListState, index: Int): Float {
     val p by remember(list, index) {
@@ -133,287 +135,293 @@ private fun arrival(list: LazyListState, index: Int): Float {
             val info = list.layoutInfo
             val item = info.visibleItemsInfo.firstOrNull { it.index == index } ?: return@derivedStateOf if (index < list.firstVisibleItemIndex) 1f else 0f
             val view = (info.viewportEndOffset - info.viewportStartOffset).toFloat()
-            ((view - item.offset) / (view * 0.55f)).coerceIn(0f, 1f)
+            ((view - item.offset) / (view * 0.6f)).coerceIn(0f, 1f)
         }
     }
     return p
 }
 
-/** How far [index] has scrolled past its resting place, in pixels: for the big words to drift against it. */
+/** [index]'s top, in pixels from the top of the screen (0 when it's off screen). */
 @Composable
-private fun passed(list: LazyListState, index: Int): Float {
-    val p by remember(list, index) {
-        derivedStateOf { list.layoutInfo.visibleItemsInfo.firstOrNull { it.index == index }?.offset?.toFloat() ?: 0f }
-    }
+private fun top(list: LazyListState, index: Int): Float {
+    val p by remember(list, index) { derivedStateOf { list.layoutInfo.visibleItemsInfo.firstOrNull { it.index == index }?.offset?.toFloat() ?: 0f } }
     return p
 }
 
+/** Fast at first, settling at the end, like something coming to rest. */
+private fun ease(x: Float): Float = 1f - (1f - x.coerceIn(0f, 1f)).let { it * it * it }
+
+// ---- The opening: three real screens dealt out of one, and the version under them.
+
 @Composable
-private fun Opening(version: String, list: LazyListState, t: Float) {
+private fun Opening(version: String, list: LazyListState) {
     val number = version.substringBefore("-").split('.').take(2).joinToString(".")
-    val off = passed(list, 0)
-    Box(Modifier.fillMaxWidth().height(760.dp)) {
-        Canvas(Modifier.fillMaxSize()) { drawField(Field.BOTTOM, Color(0xFF6C63FF), t) }
-        Column(
-            Modifier.fillMaxSize().padding(horizontal = 24.dp).graphicsLayer { translationY = -off * 0.35f; alpha = (1f + off / 900f).coerceIn(0f, 1f) },
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
-        ) {
-            Text("LEFTOVERS", style = TextStyle(fontSize = 13.sp, letterSpacing = 6.sp, fontWeight = FontWeight.SemiBold), color = ink2)
-            Spacer(Modifier.height(12.dp))
-            Text(
-                number,
-                style = MaterialTheme.typography.displayLarge.copy(
-                    fontSize = 148.sp, lineHeight = 150.sp, letterSpacing = (-7).sp, fontWeight = FontWeight.Bold,
-                    brush = Brush.verticalGradient(listOf(Color.White, Color(0xFFB9C1FF))),
-                ),
-            )
-            Spacer(Modifier.height(8.dp))
-            Text("Money that keeps up with you.", style = MaterialTheme.typography.titleLarge, color = ink, textAlign = TextAlign.Center)
-            Spacer(Modifier.height(6.dp))
-            Text("Scroll to see what's new", style = MaterialTheme.typography.bodyMedium, color = ink2)
-            Spacer(Modifier.height(18.dp))
-            Icon(Lucide.ChevronDown, contentDescription = null, tint = ink2, modifier = Modifier.size(22.dp).graphicsLayer { translationY = sin(t * 2 * PI.toFloat() * 12) * 6f })
-        }
+    val fan = remember { Animatable(0f) }
+    LaunchedEffect(Unit) {
+        kotlinx.coroutines.delay(150)
+        fan.animateTo(1f, spring(dampingRatio = 0.78f, stiffness = 120f))
     }
-}
-
-@Composable
-private fun Highlight(s: Section, list: LazyListState, index: Int, t: Float) {
-    val p = arrival(list, index)
-    val off = passed(list, index)
-    Box(Modifier.fillMaxWidth().heightIn(min = 720.dp)) {
-        Canvas(Modifier.matchParentSize()) {
-            drawField(s.field, s.tint, t)
+    val scrolled = -top(list, 0)
+    Column(Modifier.fillMaxWidth().background(paper).padding(top = 96.dp, bottom = 80.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        Box(Modifier.fillMaxWidth().height(410.dp), contentAlignment = Alignment.Center) {
+            val f = fan.value
+            FanPhone(R.drawable.hl_shot_accounts, x = -112f * f, y = 22f * f - scrolled * 0.05f, rotate = -10f * f, scale = 0.84f)
+            FanPhone(R.drawable.hl_shot_settings, x = 112f * f, y = 22f * f - scrolled * 0.05f, rotate = 10f * f, scale = 0.84f)
+            FanPhone(R.drawable.hl_shot_payback, x = 0f, y = -8f * f - scrolled * 0.12f, rotate = 0f, scale = 1f)
         }
-        Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 72.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            // The big words: they drift against the scroll, and light up as they arrive.
+        Spacer(Modifier.height(40.dp))
+        val rise = ease((fan.value - 0.3f) / 0.7f)
+        Column(Modifier.graphicsLayer { alpha = rise; translationY = (1f - rise) * 40f }, horizontalAlignment = Alignment.CenterHorizontally) {
             Text(
-                s.big,
-                style = TextStyle(
-                    fontSize = 64.sp, lineHeight = 60.sp, letterSpacing = (-2).sp, fontWeight = FontWeight.Black, textAlign = TextAlign.Center,
-                    brush = Brush.verticalGradient(listOf(Color.White, s.tint.copy(alpha = 0.55f))),
-                ),
-                modifier = Modifier.graphicsLayer {
-                    // Drifts up as the section comes in, never down into the words under it.
-                    translationY = (-off * 0.1f).coerceIn(-70f, 0f)
-                    alpha = p
-                    scaleX = 0.92f + 0.08f * p
-                    scaleY = 0.92f + 0.08f * p
+                buildAnnotatedString {
+                    withStyle(SpanStyle(color = inkDark)) { append("Leftovers ") }
+                    withStyle(SpanStyle(color = Color(0xFF7A6CF0))) { append(number) }
                 },
+                style = TextStyle(fontSize = 44.sp, lineHeight = 48.sp, letterSpacing = (-1.5).sp, fontWeight = FontWeight.Bold),
             )
-            Spacer(Modifier.height(48.dp))
-            Column(
-                Modifier.widthIn(max = 520.dp).graphicsLayer { alpha = p; translationY = (1f - p) * 60f },
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                Text(s.note.kicker, style = TextStyle(fontSize = 13.sp, letterSpacing = 1.sp, fontWeight = FontWeight.SemiBold, brush = Brush.horizontalGradient(listOf(s.tint, lime))))
-                Spacer(Modifier.height(10.dp))
-                Text(s.note.title, style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold, letterSpacing = (-0.5).sp), color = ink, textAlign = TextAlign.Center)
-                Spacer(Modifier.height(12.dp))
-                Text(s.note.text, style = MaterialTheme.typography.bodyLarge.copy(lineHeight = 24.sp), color = ink2, textAlign = TextAlign.Center)
-            }
-            Spacer(Modifier.height(36.dp))
-            // A piece of the app, as it looks: it rises a little later than the words.
-            val q = ((p - 0.2f) / 0.8f).coerceIn(0f, 1f)
-            Box(Modifier.widthIn(max = 420.dp).fillMaxWidth().graphicsLayer { alpha = q; translationY = (1f - q) * 90f; scaleX = 0.94f + 0.06f * q; scaleY = 0.94f + 0.06f * q }) {
-                s.sample()
-            }
+            Spacer(Modifier.height(6.dp))
+            Text("Paid back. Paid on time. Made yours.", style = TextStyle(fontSize = 17.sp, fontWeight = FontWeight.Medium), color = inkDark)
         }
     }
 }
 
-/** A card in the app's glass, for the samples: they're how the real screens look. */
 @Composable
-private fun SampleCard(content: @Composable () -> Unit) {
-    val shape = RoundedCornerShape(26.dp)
+private fun FanPhone(@DrawableRes shot: Int, x: Float, y: Float, rotate: Float, scale: Float) {
+    Shot(
+        shot,
+        Modifier.width(186.dp).graphicsLayer {
+            translationX = x.dp.toPx()
+            translationY = y.dp.toPx()
+            rotationZ = rotate
+            scaleX = scale
+            scaleY = scale
+            transformOrigin = TransformOrigin(0.5f, 1f)
+        },
+    )
+}
+
+/** A real screen of the app in a phone: a thin black bezel, rounded as phones are, with a soft shadow. */
+@Composable
+private fun Shot(@DrawableRes shot: Int, modifier: Modifier = Modifier) {
+    val outer = RoundedCornerShape(32.dp)
     Box(
-        Modifier.fillMaxWidth().clip(shape)
-            .background(Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.1f), Color.White.copy(alpha = 0.04f))))
-            .border(1.dp, Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.35f), Color.White.copy(alpha = 0.06f))), shape)
-            .padding(16.dp),
-    ) { content() }
+        modifier.aspectRatio(540f / 1200f).shadow(22.dp, outer, ambientColor = Color.Black.copy(alpha = 0.3f), spotColor = Color.Black.copy(alpha = 0.35f))
+            .clip(outer).background(Color(0xFF0B0B0C)).padding(5.dp),
+    ) {
+        Image(painterResource(shot), contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(27.dp)))
+    }
 }
 
+// ---- A statement: the headline lights up word by word, then its line, then the thing it's about.
+
 @Composable
-private fun SampleRow(icon: ImageVector, title: String, sub: String, amount: String, check: Boolean = false, amountColor: Color = ink) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(40.dp).clip(RoundedCornerShape(13.dp)).background(Color.White.copy(alpha = 0.08f)).border(1.dp, Color.White.copy(alpha = 0.14f), RoundedCornerShape(13.dp)), contentAlignment = Alignment.Center) {
-            Icon(icon, contentDescription = null, tint = ink, modifier = Modifier.size(19.dp))
-        }
-        Spacer(Modifier.width(12.dp))
-        Column(Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.titleSmall, color = ink)
-            Text(sub, style = MaterialTheme.typography.bodySmall, color = ink2)
-        }
-        Text(amount, style = MaterialTheme.typography.titleSmall, color = amountColor)
-        if (check) {
-            Spacer(Modifier.width(10.dp))
-            Box(Modifier.size(34.dp).clip(CircleShape).background(lime), contentAlignment = Alignment.Center) {
-                Icon(Lucide.Check, contentDescription = null, tint = Color(0xFF151A04), modifier = Modifier.size(17.dp))
-            }
+private fun Statement(list: LazyListState, index: Int, headline: String, line: String, dark: Boolean, show: @Composable () -> Unit) {
+    val p = arrival(list, index)
+    val ink = if (dark) inkLight else inkDark
+    val grey = if (dark) greyLight else greyDark
+    Column(
+        Modifier.fillMaxWidth().background(if (dark) night else paper).padding(horizontal = 28.dp, vertical = 96.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text(
+            lit(headline, ease(p * 1.25f), ink, if (dark) Color(0xFF3A3A3C) else Color(0xFFD2D2D7)),
+            style = TextStyle(fontSize = 40.sp, lineHeight = 44.sp, letterSpacing = (-1.2).sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center),
+            modifier = Modifier.widthIn(max = 560.dp),
+        )
+        Spacer(Modifier.height(18.dp))
+        val q = ease((p - 0.45f) / 0.55f)
+        Text(
+            line, style = TextStyle(fontSize = 17.sp, lineHeight = 25.sp, fontWeight = FontWeight.Medium, textAlign = TextAlign.Center), color = grey,
+            modifier = Modifier.widthIn(max = 520.dp).graphicsLayer { alpha = q; translationY = (1f - q) * 24f },
+        )
+        Spacer(Modifier.height(48.dp))
+        val r = ease((p - 0.6f) / 0.4f)
+        Box(
+            Modifier.widthIn(max = 400.dp).fillMaxWidth().graphicsLayer { alpha = r; translationY = (1f - r) * 70f; scaleX = 0.96f + 0.04f * r; scaleY = 0.96f + 0.04f * r },
+            contentAlignment = Alignment.Center,
+        ) { show() }
+    }
+}
+
+/** [text] with its words lit in turn as [p] goes from 0 to 1: lit ones in [on], the rest in [off]. */
+private fun lit(text: String, p: Float, on: Color, off: Color): AnnotatedString = buildAnnotatedString {
+    val words = text.split(' ')
+    words.forEachIndexed { i, w ->
+        val k = ((p * words.size) - i).coerceIn(0f, 1f)
+        withStyle(SpanStyle(color = lerp(off, on, k))) { append(w) }
+        if (i < words.lastIndex) append(' ')
+    }
+}
+
+// ---- A photograph, full width, easing in closer as it's scrolled, with the words over it.
+
+@Composable
+private fun PhotoStatement(list: LazyListState, index: Int, @DrawableRes photo: Int, headline: String, line: String, show: @Composable () -> Unit) {
+    val p = arrival(list, index)
+    val past = top(list, index)
+    Box(Modifier.fillMaxWidth().height(720.dp).background(night)) {
+        Image(
+            painterResource(photo), contentDescription = null, contentScale = ContentScale.Crop,
+            modifier = Modifier.fillMaxSize().graphicsLayer {
+                val k = 1.18f - 0.18f * ease(p)
+                scaleX = k
+                scaleY = k
+                translationY = (past * -0.15f).coerceIn(-120f, 120f)
+            },
+        )
+        // Shade at the bottom, so the words read on any photo.
+        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0f to Color.Transparent, 0.25f to Color.Transparent, 0.5f to Color.Black.copy(alpha = 0.55f), 0.75f to Color.Black.copy(alpha = 0.82f), 1f to Color.Black.copy(alpha = 0.92f))))
+        Column(Modifier.align(Alignment.BottomCenter).padding(horizontal = 28.dp, vertical = 56.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(
+                lit(headline, ease(p * 1.2f), inkLight, Color.White.copy(alpha = 0.3f)),
+                style = TextStyle(fontSize = 40.sp, lineHeight = 44.sp, letterSpacing = (-1.2).sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center),
+            )
+            Spacer(Modifier.height(14.dp))
+            val q = ease((p - 0.45f) / 0.55f)
+            Text(
+                line, style = TextStyle(fontSize = 16.sp, lineHeight = 23.sp, fontWeight = FontWeight.Medium, textAlign = TextAlign.Center), color = Color.White.copy(alpha = 0.82f),
+                modifier = Modifier.widthIn(max = 500.dp).graphicsLayer { alpha = q; translationY = (1f - q) * 20f },
+            )
+            Spacer(Modifier.height(24.dp))
+            val r = ease((p - 0.6f) / 0.4f)
+            Box(Modifier.widthIn(max = 380.dp).fillMaxWidth().graphicsLayer { alpha = r; translationY = (1f - r) * 40f }) { show() }
         }
     }
 }
 
+// ---- The things each statement is about, drawn as the app draws them.
+
 @Composable
-private fun SamplePill(text: String, icon: ImageVector, filled: Boolean = true) {
+private fun UpiPills() {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Pill("Pay ₹750 with UPI", Lucide.Wallet, filled = true)
+        Pill("Pay with paypal.me", Lucide.ExternalLink, filled = false)
+    }
+}
+
+@Composable
+private fun Pill(text: String, icon: ImageVector, filled: Boolean) {
     Row(
-        Modifier.fillMaxWidth().height(54.dp).clip(CircleShape).background(if (filled) lime else Color.White.copy(alpha = 0.08f))
-            .border(1.dp, if (filled) Color.Transparent else Color.White.copy(alpha = 0.16f), CircleShape),
+        Modifier.fillMaxWidth().height(52.dp).clip(CircleShape).background(if (filled) lime else Color.White.copy(alpha = 0.16f))
+            .border(1.dp, if (filled) Color.Transparent else Color.White.copy(alpha = 0.35f), CircleShape),
         horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(icon, contentDescription = null, tint = if (filled) Color(0xFF151A04) else ink, modifier = Modifier.size(19.dp))
+        Icon(icon, contentDescription = null, tint = if (filled) onLime else Color.White, modifier = Modifier.size(18.dp))
         Spacer(Modifier.width(10.dp))
-        Text(text, style = MaterialTheme.typography.titleMedium, color = if (filled) Color(0xFF151A04) else ink)
+        Text(text, style = TextStyle(fontSize = 16.sp, fontWeight = FontWeight.SemiBold), color = if (filled) onLime else Color.White)
+    }
+}
+
+/** The group's shares, arriving one after another. */
+@Composable
+private fun GroupCard(list: LazyListState, index: Int) {
+    val p = arrival(list, index)
+    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(Color.White).padding(18.dp)) {
+        Text("Dinner · ₹3,000, split 4 ways", style = TextStyle(fontSize = 13.sp, fontWeight = FontWeight.Medium), color = greyDark)
+        Spacer(Modifier.height(6.dp))
+        listOf("Rahul", "Priya", "Nick").forEachIndexed { i, n ->
+            val k = ease((p - 0.68f - i * 0.08f) / 0.2f)
+            Row(Modifier.fillMaxWidth().graphicsLayer { alpha = k; translationX = (1f - k) * 40f }.padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(34.dp).clip(CircleShape).background(Color(0xFFF2F2F7)), contentAlignment = Alignment.Center) {
+                    Text(n.take(1), style = TextStyle(fontSize = 15.sp, fontWeight = FontWeight.Bold), color = inkDark)
+                }
+                Spacer(Modifier.width(12.dp))
+                Text(n, style = TextStyle(fontSize = 16.sp, fontWeight = FontWeight.SemiBold), color = inkDark, modifier = Modifier.weight(1f))
+                Text("₹750", style = TextStyle(fontSize = 16.sp, fontWeight = FontWeight.SemiBold), color = inkDark)
+            }
+        }
+    }
+}
+
+/** Two subscriptions, the second stacking in under the first. */
+@Composable
+private fun DueStack(list: LazyListState, index: Int) {
+    val p = arrival(list, index)
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        listOf(Triple("Rent", "Due Sun, 1 Nov", "₹18,000"), Triple("Spotify", "Your Spotify? · bank SMS", "₹119")).forEachIndexed { i, (name, sub, amount) ->
+            val k = ease((p - 0.66f - i * 0.12f) / 0.22f)
+            Row(
+                Modifier.fillMaxWidth().graphicsLayer { alpha = k; translationY = (1f - k) * 30f; scaleX = 0.94f + 0.06f * k; scaleY = 0.94f + 0.06f * k }
+                    .clip(RoundedCornerShape(20.dp)).background(Color(0xFF1C1C1E)).padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text(name, style = TextStyle(fontSize = 16.sp, fontWeight = FontWeight.SemiBold), color = inkLight)
+                    Text(sub, style = TextStyle(fontSize = 13.sp), color = greyLight)
+                }
+                Text(amount, style = TextStyle(fontSize = 16.sp, fontWeight = FontWeight.SemiBold), color = inkLight)
+                Spacer(Modifier.width(12.dp))
+                Box(Modifier.size(32.dp).clip(CircleShape).background(lime), contentAlignment = Alignment.Center) {
+                    Icon(Lucide.Check, contentDescription = null, tint = onLime, modifier = Modifier.size(16.dp))
+                }
+            }
+        }
+    }
+}
+
+/** The new daily limit, counting up to itself once it's in view. */
+@Composable
+private fun CountUp(list: LazyListState, index: Int) {
+    val p = arrival(list, index)
+    val n = remember { Animatable(0f) }
+    val shown = p > 0.7f
+    LaunchedEffect(shown) { if (shown) n.animateTo(400f, tween(1100, easing = FastOutSlowInEasing)) }
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text("New daily limit", style = TextStyle(fontSize = 15.sp, fontWeight = FontWeight.Medium), color = greyLight)
+        Text("₹" + n.value.toInt(), style = TextStyle(fontSize = 88.sp, lineHeight = 92.sp, letterSpacing = (-3).sp, fontWeight = FontWeight.Bold), color = inkLight)
+        Text("₹900 over today · from tomorrow", style = TextStyle(fontSize = 14.sp), color = greyLight)
+    }
+}
+
+/** A question, then its answer: the answer comes once the question is in. */
+@Composable
+private fun Chat(list: LazyListState, index: Int) {
+    val p = arrival(list, index)
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        val a = ease((p - 0.66f) / 0.16f)
+        val b = ease((p - 0.84f) / 0.16f)
+        Bubble("What did I spend on food this month?", mine = true, Modifier.graphicsLayer {
+            alpha = a; translationY = (1f - a) * 20f; transformOrigin = TransformOrigin(1f, 1f); scaleX = 0.9f + 0.1f * a; scaleY = 0.9f + 0.1f * a
+        })
+        Bubble("₹6,240 on Food & Dining, ₹1,100 less than last month.", mine = false, Modifier.graphicsLayer {
+            alpha = b; translationY = (1f - b) * 20f; transformOrigin = TransformOrigin(0f, 1f); scaleX = 0.9f + 0.1f * b; scaleY = 0.9f + 0.1f * b
+        })
     }
 }
 
 @Composable
-private fun SampleBubble(text: String, mine: Boolean) {
+private fun Bubble(text: String, mine: Boolean, modifier: Modifier) {
     Box(Modifier.fillMaxWidth(), contentAlignment = if (mine) Alignment.CenterEnd else Alignment.CenterStart) {
         Box(
-            Modifier.widthIn(max = 280.dp).clip(if (mine) RoundedCornerShape(20.dp, 20.dp, 6.dp, 20.dp) else RoundedCornerShape(20.dp, 20.dp, 20.dp, 6.dp))
-                .background(if (mine) lime else Color.White.copy(alpha = 0.1f)).padding(horizontal = 14.dp, vertical = 10.dp),
-        ) { Text(text, style = MaterialTheme.typography.bodyMedium, color = if (mine) Color(0xFF151A04) else ink) }
+            modifier.widthIn(max = 280.dp).clip(if (mine) RoundedCornerShape(20.dp, 20.dp, 6.dp, 20.dp) else RoundedCornerShape(20.dp, 20.dp, 20.dp, 6.dp))
+                .background(if (mine) lime else Color(0xFFE9E9EB)).padding(horizontal = 15.dp, vertical = 11.dp),
+        ) { Text(text, style = TextStyle(fontSize = 15.sp, lineHeight = 21.sp), color = if (mine) onLime else inkDark) }
     }
 }
 
-private fun highlightSections(): List<Section> = listOf(
-    Section(
-        "PAID\nBACK", WhatsNew.headlines[0],
-        Field.TOP, Color(0xFF7FD9A8),
-    ) {
-        SampleCard { SampleRow(Lucide.Smartphone, "Money in", "Arjun paying you back?", "+₹2,500", check = true, amountColor = Color(0xFF8FE3B4)) }
-    },
-    Section(
-        "ONE\nTAP", WhatsNew.headlines[1],
-        Field.BOTTOM, Color(0xFFCDF46F),
-    ) {
-        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            SamplePill("Pay ₹750 with UPI", Lucide.Wallet)
-            SamplePill("Pay with paypal.me", Lucide.ExternalLink, filled = false)
-        }
-    },
-    Section(
-        "SPLIT\nFOUR\nWAYS", WhatsNew.headlines[2],
-        Field.ACROSS, Color(0xFFF291B4),
-    ) {
-        SampleCard {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("Dinner · ₹3,000, split 4 ways", style = MaterialTheme.typography.bodySmall, color = ink2)
-                listOf("Rahul", "Priya", "Nick").forEach { n ->
-                    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(Color.White.copy(alpha = 0.06f)).padding(horizontal = 14.dp, vertical = 11.dp)) {
-                        Text(n, style = MaterialTheme.typography.titleSmall, color = ink, modifier = Modifier.weight(1f))
-                        Text("₹750", style = MaterialTheme.typography.titleSmall, color = ink)
-                    }
-                }
-            }
-        }
-    },
-    Section(
-        "ON\nTIME", WhatsNew.headlines[3],
-        Field.TOP, Color(0xFF7DB7F5),
-    ) {
-        SampleCard {
-            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                SampleRow(Lucide.Repeat, "Rent", "Due Sun, 1 Nov · ₹18,000", "Paid")
-                SampleRow(Lucide.Smartphone, "Spotify", "Your Spotify? · bank SMS", "₹119", check = true)
-            }
-        }
-    },
-    Section(
-        "YOUR\nBANK,\nIN SYNC", WhatsNew.headlines[4],
-        Field.BOTTOM, Color(0xFFF2A65A),
-    ) {
-        SampleCard { SampleRow(Lucide.Landmark, "HDFC Bank", "Bank: ₹2,07,672 · today", "₹2,05,812") }
-    },
-    Section(
-        "ON\nBUDGET", WhatsNew.headlines[5],
-        Field.ACROSS, Color(0xFFC59AF2),
-    ) {
-        SampleCard {
-            Column {
-                Text("New daily limit", style = MaterialTheme.typography.labelLarge, color = ink2)
-                Text("₹400", style = MaterialTheme.typography.displayMedium.copy(fontWeight = FontWeight.Bold), color = ink)
-                Text("₹900 over today · from tomorrow", style = MaterialTheme.typography.bodySmall, color = ink2)
-            }
-        }
-    },
-    Section(
-        "ASK\nANYTHING", WhatsNew.headlines[6],
-        Field.TOP, Color(0xFF9C9CF8),
-    ) {
-        SampleCard {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                SampleBubble("What did I spend on food this month?", mine = true)
-                SampleBubble("₹6,240 on Food & Dining, ₹1,100 less than last month.", mine = false)
-            }
-        }
-    },
-    Section(
-        "FIND\nIT", WhatsNew.headlines[7],
-        Field.BOTTOM, Color(0xFF6FD0D0),
-    ) {
-        SampleCard {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Lucide.Search, contentDescription = null, tint = ink2, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(10.dp))
-                Text("Search settings", style = MaterialTheme.typography.bodyLarge, color = ink2)
-            }
-        }
-    },
-    Section(
-        "MAKE\nIT\nYOURS", WhatsNew.headlines[8],
-        Field.ACROSS, Color(0xFFF4A68A),
-    ) {
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            listOf(listOf(Color(0xFF2A3D66), Color(0xFFC9B18F)), listOf(Color(0xFF3B3B44), Color(0xFFDADCE2)), listOf(Color(0xFF1B0F2E), Color(0xFFF08A4B))).forEach { g ->
-                Box(Modifier.weight(1f).height(150.dp).clip(RoundedCornerShape(22.dp)).background(Brush.verticalGradient(g)).border(1.dp, Color.White.copy(alpha = 0.2f), RoundedCornerShape(22.dp)))
-            }
-        }
-    },
-)
+// ---- The smaller changes, then Continue.
 
-/** Everything else in the version, in a list, then Continue. */
 @Composable
 private fun TheRest(onClose: () -> Unit) {
-    Box(Modifier.fillMaxWidth()) {
-        Column(
-            Modifier.fillMaxWidth().background(Color(0xFF05060A)).padding(horizontal = 24.dp, vertical = 64.dp)
-                .windowInsetsPadding(WindowInsets.navigationBars),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Text("And more", style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold), color = ink)
-            Spacer(Modifier.height(24.dp))
-            Column(Modifier.widthIn(max = 520.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
-                WhatsNew.items.forEach { n ->
-                    Row(verticalAlignment = Alignment.Top) {
-                        Icon(whatsNewIcon(n.icon), contentDescription = null, tint = lime, modifier = Modifier.padding(top = 2.dp).size(22.dp))
-                        Spacer(Modifier.width(14.dp))
-                        Column(Modifier.weight(1f)) {
-                            Text(n.title, style = MaterialTheme.typography.titleSmall, color = ink)
-                            Text(n.text, style = MaterialTheme.typography.bodyMedium, color = ink2)
-                        }
-                    }
+    Column(
+        Modifier.fillMaxWidth().background(paper).padding(horizontal = 28.dp, vertical = 80.dp).windowInsetsPadding(WindowInsets.navigationBars),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text("And more.", style = TextStyle(fontSize = 40.sp, letterSpacing = (-1.2).sp, fontWeight = FontWeight.Bold), color = inkDark)
+        Spacer(Modifier.height(32.dp))
+        Column(Modifier.widthIn(max = 520.dp), verticalArrangement = Arrangement.spacedBy(22.dp)) {
+            WhatsNew.items.forEach { n ->
+                Column {
+                    Text(n.title, style = TextStyle(fontSize = 17.sp, fontWeight = FontWeight.SemiBold), color = inkDark)
+                    Spacer(Modifier.height(3.dp))
+                    Text(n.text, style = TextStyle(fontSize = 15.sp, lineHeight = 21.sp), color = greyDark)
                 }
             }
-            Spacer(Modifier.height(36.dp))
-            Box(Modifier.widthIn(max = 520.dp)) { SamplePillButton("Continue", onClose) }
         }
+        Spacer(Modifier.height(44.dp))
+        Box(
+            Modifier.widthIn(max = 520.dp).fillMaxWidth().height(54.dp).clip(CircleShape).background(inkDark).pressable(onClose, pressedScale = 0.97f),
+            contentAlignment = Alignment.Center,
+        ) { Text("Continue", style = TextStyle(fontSize = 17.sp, fontWeight = FontWeight.SemiBold), color = paper) }
     }
-}
-
-@Composable
-private fun SamplePillButton(text: String, onClick: () -> Unit) {
-    Box(
-        Modifier.fillMaxWidth().height(56.dp).clip(CircleShape).background(lime)
-            .pressable(onClick, pressedScale = 0.97f),
-        contentAlignment = Alignment.Center,
-    ) { Text(text, style = MaterialTheme.typography.titleMedium, color = Color(0xFF151A04)) }
-}
-
-private fun Color.compositeOver(under: Color): Color {
-    val a = alpha
-    return Color(red * a + under.red * (1 - a), green * a + under.green * (1 - a), blue * a + under.blue * (1 - a), 1f)
 }
