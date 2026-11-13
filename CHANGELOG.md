@@ -5,6 +5,7 @@ All notable changes to Leftovers. Download any version from
 
 ## Unreleased
 
+- Highlights is a full page to scroll through: the version, then each big change on a screen of its own, with a glimpse of how it looks, and the rest in a list
 - Details on an entry (#62): the note is its name, and details hold the rest (who it was with, a statement's purpose line). They show when it's opened, not in lists; search finds them, and CSV export and backups keep them
 - Import reads a statement's purpose or reference column into details, and when the payee is a payment company (SumUp, PayPal, Stripe, DZ Bank...), names the entry after the shop in it. German statements' columns (Buchungstag, Betrag, Empfänger, Verwendungszweck) are read too
 - The Budget screen lists what's been spent in it (an envelope's own entries), with See all opening Activity on just those (#61)
