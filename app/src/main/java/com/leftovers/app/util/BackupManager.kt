@@ -120,6 +120,7 @@ class BackupManager(
                         .put("receipt", photoRef(t.receiptPath))
                         .put("foreignAmount", t.foreignMinor ?: JSONObject.NULL).put("foreignCurrency", t.foreignCurrency ?: JSONObject.NULL)
                         .put("splitOf", t.splitOf ?: JSONObject.NULL)
+                        .apply { if (t.details.isNotEmpty()) put("details", t.details) }
                 }))
                 put("transfers", JSONArray(dao.transfers().map { t ->
                     JSONObject().put("id", t.id).put("from", t.fromAccountId).put("to", t.toAccountId).put("amount", t.amountMinor)
@@ -131,6 +132,7 @@ class BackupManager(
                         .put("lastPosted", r.lastPostedMonth ?: JSONObject.NULL).put("active", r.active)
                         .put("every", r.everyMonths).put("account", r.accountId ?: JSONObject.NULL)
                         .put("rate", r.ratePercent ?: JSONObject.NULL)
+                        .apply { if (r.manual) put("manual", true) }
                 }))
                 put("goals", JSONArray(dao.goals().map { g ->
                     JSONObject().put("id", g.id).put("name", g.name).put("icon", g.emoji).put("color", g.color)
@@ -238,6 +240,7 @@ class BackupManager(
                     it.getLong("id"), it.getLong("amount"), TxType.valueOf(it.getString("type")), it.getLong("categoryId"),
                     it.getLong("day"), it.getString("note"), it.getLong("createdAt"), it.longOrNull("accountId"), restorePhoto(it.optString("receipt")),
                     it.longOrNull("foreignAmount"), it.stringOrNull("foreignCurrency"), it.longOrNull("splitOf"),
+                    it.optString("details"),
                 )
             }
             val transfers = json.optJSONArray("transfers")?.objects().orEmpty().map {
@@ -250,6 +253,7 @@ class BackupManager(
                     it.optInt("every", 1),
                     it.longOrNull("account"),
                     ratePercent = it.stringOrNull("rate"),
+                    manual = it.optBoolean("manual"),
                 )
             }
             val goals = json.optJSONArray("goals")?.objects().orEmpty().map {

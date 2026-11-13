@@ -5,6 +5,9 @@ All notable changes to Leftovers. Download any version from
 
 ## Unreleased
 
+- Subscriptions can wait for their payment (#64): instead of being logged on a fixed day, one is logged when its bank text or payment notification comes, on that day and for that amount (✓ on Home, or by itself with small payments added automatically). No message, as with cash? It shows under Due on Home, to mark paid with the real amount and day, or skip
+- A subscription's real payment on another day (the salary set for the 29th arriving on the 1st, the gym paid on the 30th instead of the 15th) moves the entry already logged instead of adding a second one; and one already paid within a week of its day, at about its amount, isn't logged again
+- The account picker's buttons fit with larger text sizes
 - The phone's own AI answers better: each question offers it only the tools that fit (a small model picks well from eight, not from thirty), results come as plain lines, with a worked example and a reminder to answer only from what it looked up
 - The assistant's chat moves: messages grow in from their side on a spring, Send turns into Stop, the waiting dots bounce, and the starter questions arrive one by one
 - Try again, when a question fails; and after Stop or an error the AI still has the whole chat, instead of starting afresh

@@ -146,10 +146,18 @@ data class HomeUiState(
     val accounts: List<AccountWithBalance> = emptyList(),
     /** The account Home is showing, or null for all of them. */
     val selectedAccount: AccountWithBalance? = null,
+    /** Subscriptions marked paid by hand (#64) whose day has come, waiting for Paid or Skip. */
+    val due: List<DueBill> = emptyList(),
+    /** Every subscription, and every entry: to tell a detected payment that's a subscription's, paid late. */
+    val recurring: List<RecurringItem> = emptyList(),
+    val entries: List<TransactionItem> = emptyList(),
 )
 
+/** A subscription paid by hand whose day has come: which [month]'s, and its [date]. */
+data class DueBill(val item: RecurringItem, val month: YearMonth, val date: LocalDate)
+
 class HomeViewModel(
-    repository: TransactionRepository,
+    private val repository: TransactionRepository,
     private val settings: SettingsRepository,
     private val planning: PlanningRepository,
     private val sms: SmsRepository,
@@ -183,7 +191,8 @@ class HomeViewModel(
             daysLeft = cycle.daysLeft(todayDate),
             monthSpent = shownMonth.totalOf(TxType.EXPENSE),
             monthIncome = shownMonth.totalOf(TxType.INCOME),
-            upcoming = recurring.filter { it.active }
+            // One that's due and waiting to be marked paid is under Due, not here.
+            upcoming = recurring.filter { it.active && !(it.manual && it.toRecurring().dueMonth(todayDate) != null) }
                 .sortedBy { it.toRecurring().nextChargeDate() }
                 .filter { it.toRecurring().nextChargeDate() <= todayDate.plusDays(30) }
                 .take(6),
@@ -209,6 +218,11 @@ class HomeViewModel(
             forecast = if (selected == null) forecastMonthEnd(accountList.filterNot { it.outOfTotal }.sumOf { it.balanceMinor }, all, recurring, todayDate) else null,
             accounts = accountList,
             selectedAccount = selected,
+            due = recurring.filter { it.active && it.manual }.mapNotNull { r ->
+                r.toRecurring().dueMonth(todayDate)?.let { m -> DueBill(r, m, r.toRecurring().chargeDate(m)) }
+            }.sortedBy { it.date },
+            recurring = recurring,
+            entries = all,
         )
     }.flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), HomeUiState())
 
@@ -254,6 +268,56 @@ class HomeViewModel(
             sms.dismiss(s.id)
             onDone {
                 undoDebts()
+                sms.putBack(s)
+            }
+        }
+    }
+
+    /** [d] paid: an entry for what was really paid, and on which day. [onDone] gets the Undo. */
+    fun payDue(d: DueBill, amountMinor: Long, epochDay: Long, accountId: Long?, onDone: (suspend () -> Unit) -> Unit) {
+        viewModelScope.launch {
+            val r = d.item.toRecurring()
+            val id = planning.payRecurring(r, d.month, amountMinor, epochDay, accountId)
+            onDone { planning.unpayRecurring(r, id) }
+        }
+    }
+
+    /** [d] not paid this time: no entry, and it's no longer due. */
+    fun skipDue(d: DueBill, onDone: (suspend () -> Unit) -> Unit) {
+        viewModelScope.launch {
+            val r = d.item.toRecurring()
+            planning.skipRecurring(r, d.month)
+            onDone { planning.unpayRecurring(r, null) }
+        }
+    }
+
+    /**
+     * A detected payment that's [m]'s subscription, paid later or earlier than its day: the entry it logged moves to
+     * the real day, with the real amount and account, instead of a second one being added.
+     */
+    fun movePayment(s: SmsSuggestion, m: com.leftovers.app.data.SubscriptionMatch.Match, onDone: (suspend () -> Unit) -> Unit) {
+        viewModelScope.launch {
+            val before = m.entry.toTransaction()
+            repository.saveTransaction(before.copy(epochDay = s.epochDay, amountMinor = s.amountMinor, accountId = s.accountId ?: before.accountId))
+            sms.dismiss(s.id)
+            onDone {
+                repository.saveTransaction(before)
+                sms.putBack(s)
+            }
+        }
+    }
+
+    /**
+     * A detected payment that's the one [w]'s subscription waits for: logged as that month's, with the real amount,
+     * day and account, and the suggestion goes.
+     */
+    fun linkPayment(s: SmsSuggestion, w: com.leftovers.app.data.SubscriptionMatch.Waiting, onDone: (suspend () -> Unit) -> Unit) {
+        viewModelScope.launch {
+            val r = w.subscription.toRecurring()
+            val id = planning.payRecurring(r, w.month, s.amountMinor, s.epochDay, s.accountId)
+            sms.dismiss(s.id)
+            onDone {
+                planning.unpayRecurring(r, id)
                 sms.putBack(s)
             }
         }
@@ -781,11 +845,25 @@ fun HomeScreen(
                                 if (i > 0) RowDivider()
                                 // Someone paying you back (or you paying them): settled in Money owed, not income.
                                 val back = remember(s, state.owed) { com.leftovers.app.util.Payback.find(s.merchant, s.amountMinor, s.isIncome, state.owed) }
+                                // A subscription's real payment, on another day than it was logged: that entry moves here.
+                                // The payment a subscription waits for (#64): one tap logs it as that month's.
+                                val waits = remember(s, state.recurring) {
+                                    if (back != null) null
+                                    else com.leftovers.app.data.SubscriptionMatch.waiting(s.amountMinor, s.isIncome, s.merchant, s.epochDay, state.recurring)
+                                }
+                                val late = remember(s, state.recurring, state.entries) {
+                                    if (back != null || waits != null) null
+                                    else com.leftovers.app.data.SubscriptionMatch.find(s.amountMinor, s.isIncome, s.merchant, s.epochDay, state.recurring, state.entries)
+                                }
                                 val where = s.sender.ifBlank { if (s.source == SmsSuggestion.SOURCE_EMAIL) "email" else if (s.source == SmsSuggestion.SOURCE_APP) "payment app" else "bank SMS" }
                                 ListRow(
                                     title = s.merchant.ifBlank { if (s.isIncome) "Money in" else "Bank payment" },
                                     subtitle = if (back != null) {
                                         (if (s.isIncome) "${back.person} paying you back?" else "Paying ${back.person} back?") + " · " + where
+                                    } else if (waits != null) {
+                                        "Your ${waits.subscription.name}? · " + where
+                                    } else if (late != null) {
+                                        "Your ${late.subscription.name}, logged ${java.time.LocalDate.ofEpochDay(late.entry.epochDay).friendlyLabel()}?"
                                     } else {
                                         java.time.LocalDate.ofEpochDay(s.epochDay).friendlyLabel() + " · " + where
                                     },
@@ -814,6 +892,18 @@ fun HomeScreen(
                                                     viewModel.paidBack(s, back) { restore ->
                                                         undo.show(if (s.isIncome) "${back.person} paid you back" else "Paid ${back.person} back", restore)
                                                     }
+                                                }, size = 34.dp, tint = c.onAccent, container = c.accent)
+                                                Spacer(Modifier.width(6.dp))
+                                            } else if (waits != null) {
+                                                val undo = LocalUndo.current
+                                                RoundButton(Lucide.Check, "That's ${waits.subscription.name}", {
+                                                    viewModel.linkPayment(s, waits) { restore -> undo.show("${waits.subscription.name} ${if (s.isIncome) "received" else "paid"}", restore) }
+                                                }, size = 34.dp, tint = c.onAccent, container = c.accent)
+                                                Spacer(Modifier.width(6.dp))
+                                            } else if (late != null) {
+                                                val undo = LocalUndo.current
+                                                RoundButton(Lucide.Check, "Move ${late.subscription.name} to this day", {
+                                                    viewModel.movePayment(s, late) { restore -> undo.show("${late.subscription.name} moved to ${java.time.LocalDate.ofEpochDay(s.epochDay).friendlyLabel()}", restore) }
                                                 }, size = 34.dp, tint = c.onAccent, container = c.accent)
                                                 Spacer(Modifier.width(6.dp))
                                             }
@@ -852,6 +942,21 @@ fun HomeScreen(
                         modifier = Modifier.weight(1f),
                         onClick = { onOpenActivity(TxType.INCOME, state.selectedAccount?.id) },
                     )
+                }
+            }
+
+            // Paid by hand (#64): due now, waiting to be marked paid with what was really paid, or skipped.
+            if (state.due.isNotEmpty()) {
+                item { SectionHeader("Due", Modifier.appear(3), action = "Manage", onAction = { onOpenSubscriptions(state.due.first().item.type == TxType.INCOME) }) }
+                item {
+                    Glass(Modifier.fillMaxWidth().appear(3)) {
+                        Column(Modifier.padding(vertical = 6.dp)) {
+                            state.due.forEachIndexed { i, d ->
+                                if (i > 0) RowDivider()
+                                DueRow(d, state.accounts, onPaid = { amount, day, account, done -> viewModel.payDue(d, amount, day, account, done) }, onSkip = { done -> viewModel.skipDue(d, done) })
+                            }
+                        }
+                    }
                 }
             }
 
@@ -1215,3 +1320,69 @@ private fun GoalMiniCard(g: GoalWithSaved, size: Modifier = Modifier.width(200.d
     }
 }
 
+
+/**
+ * A subscription paid by hand whose day has come (#64): its name, amount and day, with Paid (amount, day and account
+ * as they really were) and Skip.
+ */
+@Composable
+private fun DueRow(
+    d: DueBill,
+    accounts: List<AccountWithBalance>,
+    onPaid: (amountMinor: Long, epochDay: Long, accountId: Long?, done: (suspend () -> Unit) -> Unit) -> Unit,
+    onSkip: (done: (suspend () -> Unit) -> Unit) -> Unit,
+) {
+    val c = LocalAppColors.current
+    val money = LocalMoney.current
+    val undo = LocalUndo.current
+    var paying by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
+    val income = d.item.type == TxType.INCOME
+    val today = LocalDate.now()
+    ListRow(
+        d.item.name,
+        subtitle = (if (d.date < today) "Was due " else "Due ") + d.date.friendlyLabel() + " · " + money.format(d.item.amountMinor),
+        leading = { CategoryIcon(d.item.categoryEmoji, d.item.categoryColor, size = 42.dp) },
+        trailing = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                com.leftovers.app.ui.components.Chip(if (income) "Received" else "Paid", onClick = { paying = true }, icon = Lucide.Check)
+                Spacer(Modifier.width(6.dp))
+                RoundButton(Lucide.X, "Skip this time", { onSkip { restore -> undo.show("${d.item.name} skipped this time", restore) } }, size = 34.dp, tint = c.textTertiary)
+            }
+        },
+        onClick = { paying = true },
+    )
+    if (paying) {
+        var amountText by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(com.leftovers.app.util.AmountInput.fromMinor(d.item.amountMinor)) }
+        var day by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(today.toEpochDay()) }
+        var account by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(d.item.accountId ?: accounts.firstOrNull()?.id) }
+        val amount = com.leftovers.app.util.AmountInput.toMinor(amountText) ?: 0L
+        GlassSheet(onDismiss = { paying = false }) {
+            Column(Modifier.padding(horizontal = 20.dp).padding(bottom = 16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                Text(if (income) "${d.item.name} received" else "${d.item.name} paid", style = MaterialTheme.typography.headlineSmall, color = c.textPrimary)
+                MoneyField(amountText, { amountText = it }, label = "Amount")
+                Text("When", style = MaterialTheme.typography.labelMedium, color = c.textSecondary, modifier = Modifier.padding(start = 6.dp))
+                androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    val choices = listOf(today, today.minusDays(1), d.date).distinct()
+                    choices.forEach { date ->
+                        val label = when (date) {
+                            today -> "Today"
+                            today.minusDays(1) -> "Yesterday"
+                            else -> "On its day, " + date.friendlyLabel()
+                        }
+                        com.leftovers.app.ui.components.Chip(label, onClick = { day = date.toEpochDay() }, selected = day == date.toEpochDay())
+                    }
+                }
+                if (accounts.size > 1) {
+                    Text("Account", style = MaterialTheme.typography.labelMedium, color = c.textSecondary, modifier = Modifier.padding(start = 6.dp))
+                    androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        accounts.forEach { a -> com.leftovers.app.ui.components.Chip(a.name, onClick = { account = a.id }, selected = account == a.id) }
+                    }
+                }
+                PrimaryButton(if (income) "Received" else "Paid", {
+                    paying = false
+                    onPaid(amount, day, account) { restore -> undo.show(if (income) "${d.item.name} received" else "${d.item.name} paid", restore) }
+                }, Modifier.fillMaxWidth(), enabled = amount > 0, icon = Lucide.Check)
+            }
+        }
+    }
+}

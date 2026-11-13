@@ -153,7 +153,24 @@ private suspend fun autoAdd(
 ): Boolean {
     val owed = container.planning.debts.first().openBalances().filter { it.netMinor != 0L }
     if (!AutoAdd.allowed(s.smsAutoAdd, s.smsAutoMaxMinor, parsed.amountMinor, parsed.isIncome, parsed.merchant, owed)) return false
-    val past = container.repository.getAllTransactions().map { MerchantMemory.Past(it.note, it.type, it.categoryId, it.epochDay, it.createdAt) }
+    val today = LocalDate.now().toEpochDay()
+    val payAccount = container.accounts.accounts.first().let { list -> list.matchFor(body)?.id ?: list.firstOrNull { it.id == s.defaultAccountId }?.id }
+    // A subscription's payment: logged as that subscription's, not as a new entry. One waiting for its message
+    // (#64) gets this month's entry; one already logged on its day moves to today, with this amount.
+    val subs = container.planning.recurring.first()
+    com.leftovers.app.data.SubscriptionMatch.waiting(parsed.amountMinor, parsed.isIncome, parsed.merchant, today, subs)?.let { w ->
+        container.planning.payRecurring(w.subscription.toRecurring(), w.month, parsed.amountMinor, today, payAccount)
+        container.sms.dismiss(suggestionId)
+        return true
+    }
+    val entries = container.repository.getAllTransactions()
+    com.leftovers.app.data.SubscriptionMatch.find(parsed.amountMinor, parsed.isIncome, parsed.merchant, today, subs, entries)?.let { m ->
+        val before = m.entry.toTransaction()
+        container.repository.saveTransaction(before.copy(epochDay = today, amountMinor = parsed.amountMinor, accountId = payAccount ?: before.accountId))
+        container.sms.dismiss(suggestionId)
+        return true
+    }
+    val past = entries.map { MerchantMemory.Past(it.note, it.type, it.categoryId, it.epochDay, it.createdAt) }
     val category = AutoAdd.category(parsed.merchant, past, container.repository.categories.first()) ?: return false
     val account = container.accounts.accounts.first().let { list -> list.matchFor(body)?.id ?: list.firstOrNull { it.id == s.defaultAccountId }?.id }
     val day = LocalDate.now()

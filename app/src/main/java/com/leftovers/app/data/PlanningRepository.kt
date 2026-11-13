@@ -107,12 +107,36 @@ class PlanningRepository(private val database: AppDatabase) {
     }
 
     /**
-     * Whether [item] is [r]'s charge for [date], logged some other way: the same kind and amount, within three
-     * days of it, and in its category or with its name in the note. Then the subscription isn't logged again.
+     * Whether [item] is [r]'s charge for [date], logged some other way: the same kind, about the amount (a salary
+     * or a bill isn't always exactly the same), within a week of it, and in its category or with its name in the
+     * note. Then the subscription isn't logged again. Paid on the 1st instead of the 29th still counts.
      */
     internal fun alreadyLogged(item: TransactionItem, r: Recurring, amount: Long, date: LocalDate): Boolean =
-        item.type == r.type && item.amountMinor == amount && kotlin.math.abs(item.epochDay - date.toEpochDay()) <= 3 &&
+        item.type == r.type && SubscriptionMatch.closeAmount(item.amountMinor, amount) && kotlin.math.abs(item.epochDay - date.toEpochDay()) <= 7 &&
             (item.categoryId == r.categoryId || (r.name.isNotBlank() && item.note.contains(r.name.trim(), ignoreCase = true)))
+
+    /** Marks [r]'s [month] paid with an entry for what was really paid, and when (#64). */
+    suspend fun payRecurring(r: Recurring, month: YearMonth, amountMinor: Long, epochDay: Long, accountId: Long?): Long {
+        var id = 0L
+        database.withTransaction {
+            id = transactionDao.upsert(
+                Transaction(amountMinor = amountMinor, type = r.type, categoryId = r.categoryId, epochDay = epochDay, note = r.name, accountId = accountId ?: r.accountId),
+            )
+            recurringDao.setLastPosted(r.id, month.toString())
+        }
+        return id
+    }
+
+    /** Skips [r]'s [month]: nothing logged, and it's no longer due. */
+    suspend fun skipRecurring(r: Recurring, month: YearMonth) = recurringDao.setLastPosted(r.id, month.toString())
+
+    /** Undoes [payRecurring] or [skipRecurring]: that month is due again, and its entry (if any) goes. */
+    suspend fun unpayRecurring(r: Recurring, entryId: Long?) {
+        database.withTransaction {
+            entryId?.let { id -> transactionDao.getById(id)?.let { transactionDao.delete(it) } }
+            recurringDao.setLastPosted(r.id, r.lastPostedMonth)
+        }
+    }
 
     /** Everything with [person] paid back in full. */
     suspend fun settle(person: String) = settleUp(person)
@@ -136,7 +160,8 @@ class PlanningRepository(private val database: AppDatabase) {
             val currentMonth = YearMonth.from(today)
             // Entries already there, to see whether a bill was logged some other way first.
             val existing = transactionDao.getAll().toMutableList()
-            recurringDao.getActive().forEach { r ->
+            // Marked paid by hand (#64): they wait on Home as due instead.
+            recurringDao.getActive().filterNot { it.manual }.forEach { r ->
                 var month = r.lastPostedMonth?.let { YearMonth.parse(it).plusMonths(1) } ?: YearMonth.parse(r.startMonth)
                 var lastPosted: YearMonth? = null
                 while (month <= currentMonth) {

@@ -616,6 +616,8 @@ private fun RecurringEditor(
     }
     var chargeThisMonth by rememberSaveable { mutableStateOf(true) }
     var skipNext by rememberSaveable { mutableStateOf(false) }
+    // Marked paid by hand (#64): waits on Home as due instead of logging itself.
+    var manual by rememberSaveable { mutableStateOf(initial.manual) }
     var accountId by rememberSaveable { mutableStateOf(initial.accountId) }
     // Interest (#32): a yearly rate on the account's balance instead of a fixed amount.
     var interest by rememberSaveable { mutableStateOf(initial.ratePercent != null) }
@@ -773,6 +775,28 @@ private fun RecurringEditor(
                 }
             }
 
+            // Interest is worked out on its day from the balance, so it always logs itself.
+            if (!(interest && type == TxType.INCOME)) {
+                Glass(Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp)) {
+                    Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text("Wait for its payment", style = MaterialTheme.typography.titleSmall, color = c.textPrimary)
+                            Text(
+                                if (manual) "Logged when its bank text or payment notification comes, on that day and for that amount: tap ✓ on it on Home. No message (cash, say)? It shows as due, to mark ${if (type == TxType.INCOME) "received" else "paid"}."
+                                else "Off: logged by itself on its day. If the real payment comes days later, that entry moves to it instead of a second one.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = c.textSecondary,
+                            )
+                        }
+                        Switch(
+                            checked = manual,
+                            onCheckedChange = toggleHaptic({ manual = it }),
+                            colors = SwitchDefaults.colors(checkedTrackColor = c.accent, checkedThumbColor = c.onAccent),
+                        )
+                    }
+                }
+            }
+
             if (!isNew && initial.active) {
                 Glass(Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp)) {
                     Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -812,7 +836,8 @@ private fun RecurringEditor(
                     }
                     var saved = initial.copy(name = name.trim(), amountMinor = amount, type = type, categoryId = categoryId, dayOfMonth = day, startMonth = start, everyMonths = every,
                         accountId = if (interest && type == TxType.INCOME) accountId ?: interestAccount?.id else accountId,
-                        ratePercent = rateText.takeIf { interest && type == TxType.INCOME && it.isNotBlank() })
+                        ratePercent = rateText.takeIf { interest && type == TxType.INCOME && it.isNotBlank() },
+                        manual = manual && !(interest && type == TxType.INCOME))
                     if (skipNext) {
                         // Marking the next charge as already logged skips it without touching the schedule.
                         saved = saved.copy(lastPostedMonth = YearMonth.from(saved.nextChargeDate()).toString())

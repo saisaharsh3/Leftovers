@@ -57,6 +57,11 @@ data class Transaction(
     val foreignCurrency: String? = null,
     /** A part of a split bill: the entry it was split from, which it's shown under (#36). */
     val splitOf: Long? = null,
+    /**
+     * More about it, kept out of lists (#62): the note is its name ("CPH Coffee Lab"), this is the rest ("dinner
+     * for four", or an import's purpose line). Shown when the entry is opened, and found by search.
+     */
+    @androidx.room.ColumnInfo(defaultValue = "") val details: String = "",
 )
 
 /** A transaction joined with its category, ready to display. */
@@ -79,10 +84,11 @@ data class TransactionItem(
     /** Its account is left out of the budget (#33): it doesn't use up Safe to spend or the month's budget. */
     val outOfBudget: Boolean = false,
     val splitOf: Long? = null,
+    val details: String = "",
 ) {
     val date: LocalDate get() = LocalDate.ofEpochDay(epochDay)
 
-    fun toTransaction() = Transaction(id, amountMinor, type, categoryId, epochDay, note, createdAt, accountId, receiptPath, foreignMinor, foreignCurrency, splitOf)
+    fun toTransaction() = Transaction(id, amountMinor, type, categoryId, epochDay, note, createdAt, accountId, receiptPath, foreignMinor, foreignCurrency, splitOf, details)
 }
 
 data class CategoryTotal(
