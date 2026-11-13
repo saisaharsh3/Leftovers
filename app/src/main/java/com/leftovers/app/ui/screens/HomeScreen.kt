@@ -395,11 +395,31 @@ fun HomeScreen(
                     }
                 }
             }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                SecondaryButton("Accounts", { close(onOpenAccounts) }, Modifier.weight(1f))
-                if (state.accounts.size >= 2) RoundButton(Lucide.Repeat, "Transfer between accounts", { close { transferring = true } }, size = 56.dp)
-                // Short, so it stays on one line with larger text sizes too; the arrow says it opens.
-                PrimaryButton("Activity", { close { onOpenActivity(null, selected?.id) } }, Modifier.weight(1f), icon = Lucide.ArrowUpRight)
+            // Side by side when they fit; with a larger text or display size, Activity gets a line of its own
+            // instead of squeezing its label onto two lines.
+            androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxWidth()) {
+                val density = androidx.compose.ui.platform.LocalDensity.current
+                val tight = maxWidth < (300 * density.fontScale).dp
+                val accounts: @Composable (Modifier) -> Unit = { m -> SecondaryButton("Accounts", { close(onOpenAccounts) }, m) }
+                val transfer: @Composable () -> Unit = {
+                    if (state.accounts.size >= 2) RoundButton(Lucide.Repeat, "Transfer between accounts", { close { transferring = true } }, size = 56.dp)
+                }
+                val activity: @Composable (Modifier) -> Unit = { m -> PrimaryButton("Activity", { close { onOpenActivity(null, selected?.id) } }, m, icon = Lucide.ArrowUpRight) }
+                if (tight) {
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                            accounts(Modifier.weight(1f))
+                            transfer()
+                        }
+                        activity(Modifier.fillMaxWidth())
+                    }
+                } else {
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                        accounts(Modifier.weight(1f))
+                        transfer()
+                        activity(Modifier.weight(1f))
+                    }
+                }
             }
         }
     }

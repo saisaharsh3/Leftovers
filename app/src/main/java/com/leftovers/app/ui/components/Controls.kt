@@ -161,7 +161,7 @@ fun PrimaryButton(
                 Icon(icon, contentDescription = null, tint = fg, modifier = Modifier.size(20.dp))
                 Spacer(Modifier.width(8.dp))
             }
-            Text(text, style = MaterialTheme.typography.titleMedium, color = fg)
+            Text(text, style = MaterialTheme.typography.titleMedium, color = fg, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 }
@@ -175,7 +175,7 @@ fun SecondaryButton(text: String, onClick: () -> Unit, modifier: Modifier = Modi
                 Icon(icon, contentDescription = null, tint = c.textPrimary, modifier = Modifier.size(20.dp))
                 Spacer(Modifier.width(8.dp))
             }
-            Text(text, style = MaterialTheme.typography.titleMedium, color = c.textPrimary)
+            Text(text, style = MaterialTheme.typography.titleMedium, color = c.textPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 }
