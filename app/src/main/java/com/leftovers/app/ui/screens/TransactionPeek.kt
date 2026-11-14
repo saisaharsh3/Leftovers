@@ -2,6 +2,7 @@ package com.leftovers.app.ui.screens
 
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.heightIn
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -217,8 +218,6 @@ fun TransactionPeekCard(
         onShown = { peek.hidden = item.id },
     ) { close ->
         photo?.let { ReceiptViewer(it, onDismiss = { photo = null }) }
-        // Long details or a bill shared with many: this part scrolls, and Delete, Again and Edit stay in reach.
-        Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             CategoryIcon(item.categoryEmoji, item.categoryColor, size = 52.dp)
             Spacer(Modifier.width(14.dp))
@@ -288,7 +287,7 @@ fun TransactionPeekCard(
                     maxLines = if (allDetails) Int.MAX_VALUE else 4,
                     overflow = TextOverflow.Ellipsis,
                     onTextLayout = { if (!allDetails) cut = it.hasVisualOverflow },
-                    modifier = Modifier.animateContentSize(),
+                    modifier = Modifier.animateContentSize().then(if (allDetails) Modifier.heightIn(max = 220.dp).verticalScroll(rememberScrollState()) else Modifier),
                 )
                 if (cut || allDetails) {
                     Text(
@@ -330,6 +329,8 @@ fun TransactionPeekCard(
                         }, size = 36.dp, tint = c.textPrimary)
                     }
                 }
+                // Many lines (a bill shared with a big group): they scroll here, in their own space, and the card stays put.
+                Column(Modifier.heightIn(max = 300.dp).verticalScroll(rememberScrollState())) {
                 // Tapping a line opens it to change: a part on its own, the main entry with the whole bill.
                 bill.forEach { b ->
                     Row(
@@ -353,9 +354,7 @@ fun TransactionPeekCard(
                         androidx.compose.material3.Icon(Lucide.ChevronRight, contentDescription = "Edit", tint = c.textTertiary, modifier = Modifier.padding(start = 6.dp).size(16.dp))
                     }
                 }
-                var allShares by remember { mutableStateOf(false) }
-                val shown = if (allShares || shares.size <= 5) shares else shares.take(4)
-                shown.forEach { d ->
+                shares.forEach { d ->
                     Row(
                         Modifier.fillMaxWidth().pressable({ close { peek.share = d } }, pressedScale = 0.98f).padding(horizontal = 16.dp, vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
@@ -374,16 +373,8 @@ fun TransactionPeekCard(
                         androidx.compose.material3.Icon(Lucide.ChevronRight, contentDescription = "Edit ${d.person}'s share", tint = c.textTertiary, modifier = Modifier.padding(start = 6.dp).size(16.dp))
                     }
                 }
-                if (shares.size > 5) {
-                    Text(
-                        if (allShares) "Show fewer" else "Show all ${shares.size} people",
-                        style = MaterialTheme.typography.labelLarge,
-                        color = c.accent,
-                        modifier = Modifier.fillMaxWidth().pressable({ allShares = !allShares }).padding(horizontal = 16.dp, vertical = 10.dp),
-                    )
                 }
             }
-        }
         }
         if (askDelete) {
             // A split bill: all of it, or just this entry.
