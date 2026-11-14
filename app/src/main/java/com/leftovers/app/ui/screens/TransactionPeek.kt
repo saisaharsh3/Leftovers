@@ -1,5 +1,8 @@
 package com.leftovers.app.ui.screens
 
+import androidx.compose.animation.animateContentSize
+import androidx.compose.foundation.verticalScroll
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
@@ -214,6 +217,8 @@ fun TransactionPeekCard(
         onShown = { peek.hidden = item.id },
     ) { close ->
         photo?.let { ReceiptViewer(it, onDismiss = { photo = null }) }
+        // Long details or a bill shared with many: this part scrolls, and Delete, Again and Edit stay in reach.
+        Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             CategoryIcon(item.categoryEmoji, item.categoryColor, size = 52.dp)
             Spacer(Modifier.width(14.dp))
@@ -273,7 +278,27 @@ fun TransactionPeekCard(
         }
         // Its details (#62), when it has any: what lists leave out.
         if (item.details.isNotBlank()) {
-            Text(item.details, style = MaterialTheme.typography.bodyMedium, color = c.textSecondary, modifier = Modifier.padding(horizontal = 6.dp))
+            var allDetails by remember { mutableStateOf(false) }
+            var cut by remember { mutableStateOf(false) }
+            Column(Modifier.padding(horizontal = 6.dp)) {
+                Text(
+                    item.details,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = c.textSecondary,
+                    maxLines = if (allDetails) Int.MAX_VALUE else 4,
+                    overflow = TextOverflow.Ellipsis,
+                    onTextLayout = { if (!allDetails) cut = it.hasVisualOverflow },
+                    modifier = Modifier.animateContentSize(),
+                )
+                if (cut || allDetails) {
+                    Text(
+                        if (allDetails) "Less" else "More",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = c.accent,
+                        modifier = Modifier.padding(top = 4.dp).pressable({ allDetails = !allDetails }),
+                    )
+                }
+            }
         }
         if (photos.isNotEmpty()) {
             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -328,7 +353,9 @@ fun TransactionPeekCard(
                         androidx.compose.material3.Icon(Lucide.ChevronRight, contentDescription = "Edit", tint = c.textTertiary, modifier = Modifier.padding(start = 6.dp).size(16.dp))
                     }
                 }
-                shares.forEach { d ->
+                var allShares by remember { mutableStateOf(false) }
+                val shown = if (allShares || shares.size <= 5) shares else shares.take(4)
+                shown.forEach { d ->
                     Row(
                         Modifier.fillMaxWidth().pressable({ close { peek.share = d } }, pressedScale = 0.98f).padding(horizontal = 16.dp, vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
@@ -347,7 +374,16 @@ fun TransactionPeekCard(
                         androidx.compose.material3.Icon(Lucide.ChevronRight, contentDescription = "Edit ${d.person}'s share", tint = c.textTertiary, modifier = Modifier.padding(start = 6.dp).size(16.dp))
                     }
                 }
+                if (shares.size > 5) {
+                    Text(
+                        if (allShares) "Show fewer" else "Show all ${shares.size} people",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = c.accent,
+                        modifier = Modifier.fillMaxWidth().pressable({ allShares = !allShares }).padding(horizontal = 16.dp, vertical = 10.dp),
+                    )
+                }
             }
+        }
         }
         if (askDelete) {
             // A split bill: all of it, or just this entry.

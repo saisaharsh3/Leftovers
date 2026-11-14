@@ -992,9 +992,13 @@ fun SettingsScreen(
                             )
                             Glass(Modifier.fillMaxWidth()) {
                                 Column(Modifier.padding(vertical = 6.dp)) {
-                                    NavRow(Lucide.ExternalLink, "Payment link", pay.linkHost.ifBlank { "Not added" }) { editingPay = true }
-                                    RowDivider()
-                                    NavRow(Lucide.Landmark, "Bank details", if (pay.bank.isBlank()) "Not added" else "Added") { editingPay = true }
+                                    // One row: both are how someone without UPI pays you, and set in the same place.
+                                    NavRow(
+                                        Lucide.ExternalLink,
+                                        "Payment link or bank details",
+                                        listOfNotNull(pay.linkHost.takeIf { it.isNotBlank() }, "bank details".takeIf { pay.bank.isNotBlank() })
+                                            .joinToString(" + ").replaceFirstChar { it.uppercase() }.ifBlank { "Not added" },
+                                    ) { editingPay = true }
                                 }
                             }
                             Glass(Modifier.fillMaxWidth().padding(top = 16.dp)) {

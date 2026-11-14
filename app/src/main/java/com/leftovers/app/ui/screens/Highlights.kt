@@ -293,9 +293,13 @@ private fun PhotoStatement(list: LazyListState, index: Int, @DrawableRes photo: 
 
 @Composable
 private fun UpiPills() {
+    val m = com.leftovers.app.util.LocalMoney.current
+    // UPI pays in rupees only: elsewhere, the payment link is the way.
+    val rupees = m.currency.currencyCode == "INR"
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Pill("Pay ₹750 with UPI", Lucide.Wallet, filled = true)
-        Pill("Pay with paypal.me", Lucide.ExternalLink, filled = false)
+        if (rupees) Pill("Pay ${m.formatWhole(75_000)} with UPI", Lucide.Wallet, filled = true)
+        Pill("Pay ${m.formatWhole(75_000)} with paypal.me", Lucide.ExternalLink, filled = !rupees)
+        if (!rupees) Pill("Copy their bank details", Lucide.Landmark, filled = false)
     }
 }
 
@@ -316,8 +320,9 @@ private fun Pill(text: String, icon: ImageVector, filled: Boolean) {
 @Composable
 private fun GroupCard(list: LazyListState, index: Int) {
     val p = arrival(list, index)
+    val m = com.leftovers.app.util.LocalMoney.current
     Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(Color.White).padding(18.dp)) {
-        Text("Dinner · ₹3,000, split 4 ways", style = TextStyle(fontSize = 13.sp, fontWeight = FontWeight.Medium), color = greyDark)
+        Text("Dinner · ${m.formatWhole(300_000)}, split 4 ways", style = TextStyle(fontSize = 13.sp, fontWeight = FontWeight.Medium), color = greyDark)
         Spacer(Modifier.height(6.dp))
         listOf("Rahul", "Priya", "Nick").forEachIndexed { i, n ->
             val k = ease((p - 0.68f - i * 0.08f) / 0.2f)
@@ -327,7 +332,7 @@ private fun GroupCard(list: LazyListState, index: Int) {
                 }
                 Spacer(Modifier.width(12.dp))
                 Text(n, style = TextStyle(fontSize = 16.sp, fontWeight = FontWeight.SemiBold), color = inkDark, modifier = Modifier.weight(1f))
-                Text("₹750", style = TextStyle(fontSize = 16.sp, fontWeight = FontWeight.SemiBold), color = inkDark)
+                Text(m.formatWhole(75_000), style = TextStyle(fontSize = 16.sp, fontWeight = FontWeight.SemiBold), color = inkDark)
             }
         }
     }
@@ -337,8 +342,9 @@ private fun GroupCard(list: LazyListState, index: Int) {
 @Composable
 private fun DueStack(list: LazyListState, index: Int) {
     val p = arrival(list, index)
+    val m = com.leftovers.app.util.LocalMoney.current
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        listOf(Triple("Rent", "Due Sun, 1 Nov", "₹18,000"), Triple("Spotify", "Your Spotify? · bank SMS", "₹119")).forEachIndexed { i, (name, sub, amount) ->
+        listOf(Triple("Rent", "Due on the 1st", m.formatWhole(1_800_000)), Triple("Spotify", "Your Spotify? · bank SMS", m.formatWhole(11_900))).forEachIndexed { i, (name, sub, amount) ->
             val k = ease((p - 0.66f - i * 0.12f) / 0.22f)
             Row(
                 Modifier.fillMaxWidth().graphicsLayer { alpha = k; translationY = (1f - k) * 30f; scaleX = 0.94f + 0.06f * k; scaleY = 0.94f + 0.06f * k }
@@ -368,8 +374,8 @@ private fun CountUp(list: LazyListState, index: Int) {
     LaunchedEffect(shown) { if (shown) n.animateTo(400f, tween(1100, easing = FastOutSlowInEasing)) }
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Text("New daily limit", style = TextStyle(fontSize = 15.sp, fontWeight = FontWeight.Medium), color = greyLight)
-        Text("₹" + n.value.toInt(), style = TextStyle(fontSize = 88.sp, lineHeight = 92.sp, letterSpacing = (-3).sp, fontWeight = FontWeight.Bold), color = inkLight)
-        Text("₹900 over today · from tomorrow", style = TextStyle(fontSize = 14.sp), color = greyLight)
+        Text(com.leftovers.app.util.LocalMoney.current.formatWhole(n.value.toLong() * 100), style = TextStyle(fontSize = 88.sp, lineHeight = 92.sp, letterSpacing = (-3).sp, fontWeight = FontWeight.Bold), color = inkLight)
+        Text("${com.leftovers.app.util.LocalMoney.current.formatWhole(90_000)} over today · from tomorrow", style = TextStyle(fontSize = 14.sp), color = greyLight)
     }
 }
 
@@ -383,7 +389,8 @@ private fun Chat(list: LazyListState, index: Int) {
         Bubble("What did I spend on food this month?", mine = true, Modifier.graphicsLayer {
             alpha = a; translationY = (1f - a) * 20f; transformOrigin = TransformOrigin(1f, 1f); scaleX = 0.9f + 0.1f * a; scaleY = 0.9f + 0.1f * a
         })
-        Bubble("₹6,240 on Food & Dining, ₹1,100 less than last month.", mine = false, Modifier.graphicsLayer {
+        val m = com.leftovers.app.util.LocalMoney.current
+        Bubble("${m.formatWhole(624_000)} on Food & Dining, ${m.formatWhole(110_000)} less than last month.", mine = false, Modifier.graphicsLayer {
             alpha = b; translationY = (1f - b) * 20f; transformOrigin = TransformOrigin(0f, 1f); scaleX = 0.9f + 0.1f * b; scaleY = 0.9f + 0.1f * b
         })
     }
