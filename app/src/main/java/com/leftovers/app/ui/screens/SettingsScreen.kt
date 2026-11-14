@@ -973,7 +973,7 @@ fun SettingsScreen(
                                 color = c.textSecondary,
                                 modifier = Modifier.padding(start = 8.dp, end = 8.dp, bottom = 12.dp),
                             )
-                            SectionHeader("UPI (India)")
+                            SectionHeader("UPI")
                             Glass(Modifier.fillMaxWidth()) {
                                 Column(Modifier.padding(vertical = 6.dp)) {
                                     NavRow(Lucide.Wallet, "UPI ID", pay.upi.ifBlank { "Not added" }) { editingPay = true }

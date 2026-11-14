@@ -38,7 +38,7 @@ object SharedOwed {
     )
 
     /**
-     * How the sender would like to be paid: a UPI ID (India) and the name it's under, and for people without UPI a
+     * How the sender would like to be paid: a UPI ID and the name it's under, and for people without UPI a
      * payment link (PayPal.me, Revolut, Wise...) and/or bank details to copy. Sent only when set, and only for money
      * the receiver owes. Never anything that could move money out: no PIN, password or card number has a place here.
      */

@@ -49,7 +49,7 @@ fun PayDetailsSheet(current: SharedOwed.Pay, onSave: (SharedOwed.Pay) -> Unit, o
                 style = MaterialTheme.typography.bodyMedium,
                 color = c.textSecondary,
             )
-            Text("UPI (India)", style = MaterialTheme.typography.titleSmall, color = c.textPrimary, modifier = Modifier.padding(top = 4.dp))
+            Text("UPI", style = MaterialTheme.typography.titleSmall, color = c.textPrimary, modifier = Modifier.padding(top = 4.dp))
             GlassTextField(upi, { upi = it.trim().take(80) }, placeholder = "yourname@okaxis", label = "UPI ID")
             if (upiBad) Text("A UPI ID looks like name@bank.", style = MaterialTheme.typography.bodySmall, color = c.negative, modifier = Modifier.padding(start = 6.dp))
             GlassTextField(name, { name = it.take(40) }, placeholder = "As your bank has it (optional)", label = "Name on it")
