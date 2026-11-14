@@ -1001,20 +1001,23 @@ fun SettingsScreen(
                                     ) { editingPay = true }
                                 }
                             }
-                            Glass(Modifier.fillMaxWidth().padding(top = 16.dp)) {
+                            SectionHeader("In reminders", Modifier.padding(top = 8.dp))
+                            Glass(Modifier.fillMaxWidth()) {
                                 Column(Modifier.padding(vertical = 6.dp)) {
-                                    ToggleRow(Lucide.Bell, "Add to reminders", share && !pay.isEmpty, { on -> if (pay.isEmpty) editingPay = true else viewModel.setPayShare(on) })
+                                    ToggleRow(
+                                        Lucide.Wallet, "Add how to pay me", share && !pay.isEmpty,
+                                        { on -> if (pay.isEmpty) editingPay = true else viewModel.setPayShare(on) },
+                                        detail = if (pay.isEmpty) "Add your UPI ID or a payment link above first."
+                                        else "Your UPI ID, payment link or bank details, so they know how to pay you back.",
+                                    )
                                     RowDivider()
                                     val link by viewModel.reminderLink.collectAsStateWithLifecycle()
-                                    ToggleRow(Lucide.Link, "Add a link to reminders", link, viewModel::setReminderLink)
+                                    ToggleRow(
+                                        Lucide.Link, "Add app link", link, viewModel::setReminderLink,
+                                        detail = "Shows as a preview card in chat apps. Tapping it shows what it's for, a Pay button, and adds it to their Leftovers.",
+                                    )
                                 }
                             }
-                            Text(
-                                "The link lets a friend see what it's for, pay you, and add it to their Leftovers with a tap. Chat apps show it as a preview card. Off: just the message.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = c.textTertiary,
-                                modifier = Modifier.padding(start = 8.dp, end = 8.dp, top = 8.dp),
-                            )
                             SectionHeader("Keeping it safe", Modifier.padding(top = 8.dp))
                             Glass(Modifier.fillMaxWidth()) {
                                 Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -1775,11 +1778,13 @@ private fun PageRow(icon: ImageVector, title: String, summary: String, tint: Col
 }
 
 @Composable
-private fun ToggleRow(icon: ImageVector, title: String, checked: Boolean, onChange: (Boolean) -> Unit, inset: Boolean = true) {
+private fun ToggleRow(icon: ImageVector, title: String, checked: Boolean, onChange: (Boolean) -> Unit, inset: Boolean = true, detail: String? = null) {
     val c = LocalAppColors.current
     val flip = toggleHaptic(onChange)
     ListRow(
         title,
+        subtitle = detail,
+        subtitleLines = 4,
         modifier = (if (inset) Modifier else Modifier.padding(horizontal = (0).dp)).jumpTarget(title),
         leading = { IconTile(icon, c.textPrimary, size = 38.dp) },
         trailing = {

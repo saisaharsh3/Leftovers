@@ -577,6 +577,8 @@ fun ListRow(
     title: String,
     modifier: Modifier = Modifier,
     subtitle: String? = null,
+    /** Lines the subtitle may take: one for a value, more for a sentence explaining a setting. */
+    subtitleLines: Int = 1,
     leading: @Composable (() -> Unit)? = null,
     trailing: @Composable (() -> Unit)? = null,
     onClick: (() -> Unit)? = null,
@@ -596,7 +598,7 @@ fun ListRow(
         Column(Modifier.weight(1f)) {
             Text(title, style = MaterialTheme.typography.titleSmall, color = c.textPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
             if (subtitle != null) {
-                Text(subtitle, style = MaterialTheme.typography.bodySmall, color = c.textSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(subtitle, style = MaterialTheme.typography.bodySmall, color = c.textSecondary, maxLines = subtitleLines, overflow = TextOverflow.Ellipsis)
             }
         }
         if (trailing != null) {
