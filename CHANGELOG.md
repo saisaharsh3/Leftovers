@@ -5,11 +5,28 @@ All notable changes to Leftovers. Download any version from
 
 ## Unreleased
 
+## 1.10.0
+
+Paid back, paid on time, made yours. It installs over 1.9.0 and keeps your data.
+
+**The big ones**
+
+- **Friends paying you back** are recognised in bank texts and settled in Money owed, not counted as income
+- **Getting paid:** your UPI ID, a payment link or bank details in reminders, so a friend pays you back in one tap
+- **Group splits:** one message to the group, where each taps their own name to pay you or add it to their Leftovers
+- **Subscriptions that wait for their payment:** logged when the bank text comes, on that day and for that amount; late payments move the entry instead of adding a second
+- **Bank balances from SMS**, shown next to each account, with Match
+- **Budgets:** the new daily limit after a big day, the budget's own spending on its screen, envelope budgets by #tag, and budgets of any length
+- **The AI assistant:** saved chats, the whole chat kept when you switch AI, files to ask about, and the phone's own AI in the GitHub release's `-ai.apk`
+- **Settings arranged like your phone's**, with a search
+- **Make it yours:** your own photo under liquid or frosted glass, an accent colour, your own icons, and categories you can hide
+
+**Everything new since 1.9.0**
+
 - An entry's card fits any amount: long details show four lines with More, a bill shared with many people shows four with Show all, which opens the list to scroll in place, and Delete and Edit stay in reach
-- Highlights shows amounts in your own currency, and UPI only for rupees
 - Getting paid: the payment link and bank details are one row
 - Reminders can leave out the link (Settings → Getting paid → Add app link, on unless turned off): then just the message is sent
-- Highlights is a full page to scroll through: the version, then each big change on a screen of its own, with a glimpse of how it looks, and the rest in a list
+- Highlights is a full page to scroll through, once after updating and any time from Updates: each big change on a screen of its own, with a glimpse of how it looks, in your own currency
 - Details on an entry (#62): the note is its name, and details hold the rest (who it was with, a statement's purpose line). They show when it's opened, not in lists; search finds them, and CSV export and backups keep them
 - Import reads a statement's purpose or reference column into details, and when the payee is a payment company (SumUp, PayPal, Stripe, DZ Bank...), names the entry after the shop in it. German statements' columns (Buchungstag, Betrag, Empfänger, Verwendungszweck) are read too
 - The Budget screen lists what's been spent in it (an envelope's own entries), with See all opening Activity on just those (#61)
@@ -33,21 +50,9 @@ All notable changes to Leftovers. Download any version from
 - A clearer link preview when a reminder is shared, with its own picture and title
 - A setting opened from the search no longer stays green after it's lit up
 - The account picker's buttons stay on one line with larger text sizes
-
-## 1.10.0-rc2
-
-**A second pre-release, to try before 1.10.0.** It replaces 1.10.0-rc1 and installs over it, or over 1.9.0, keeping your data. Coming from 1.9.0, it updates the database: once it's installed, going back to 1.9.0 means uninstalling, which erases your data, so make a backup first (in 1.9.0: Settings → Data → Back up). The full 1.10.0 will install over it as usual.
-
-New since 1.10.0-rc1 (everything in rc1, below, is here too):
-
 - The phone's own AI in the regular app: each GitHub release has a second download, ending in -ai.apk, with it built in (the same app, so either installs over the other). F-Droid's version can't include Google's library, so its AI settings show where to get it
 - Add small payments automatically (Settings → Payment detection): spending from bank SMS up to an amount you choose goes straight in, under the category that place had last time. Bigger ones, money coming in, and anything that may be paying someone back still wait on Home
 - Settings is organised like a phone's: a search at the top finds any setting by name or a word for it, and the categories (Appearance, Security, Reminders & alerts, Payment detection, AI assistant, General, Backup & data, Sync, About) each open a page of their own, sliding in and back out
-
-## 1.10.0-rc1
-
-**A pre-release, to try before 1.10.0.** It installs over Leftovers and uses your data, and it updates the database: once it's installed, going back to 1.9.0 means uninstalling, which erases your data. Make a backup first (Settings → Data → Back up). The full 1.10.0 will install over it as usual.
-
 - A friend paying you back is recognised: a detected payment from someone who owes you (or to someone you owe) says "Priya paying you back?", and one tap settles it in Money owed instead of counting it as income. Names match however the bank writes them: "Ravi" saved, "Mr. RAVI KUMAR SHARMA", "Ravi K" or a UPI ID in the message; two different people never match, and when two could, the amount decides
 - The same on the add screen: typing a repayment as income offers to record it in Money owed instead
 - Bank balances from SMS (#59): when a bank message reports the balance ("Avl Bal Rs.12,000"), the account shows it next to its own, and offers to match it when they differ. Only the number is kept, never the message
@@ -94,14 +99,12 @@ New since 1.10.0-rc1 (everything in rc1, below, is here too):
 - Your background photo is kept: its swatch shows it, so going to Aurora and back needs no new pick
 - Updates has its own artwork behind the version, like a phone's update page, with a glass card, a bright Highlights button and Check again at the top
 - With a photo background: Activity's cards are glass too, bars are nearly clear, scrolling is smoother (no blur on every card), Pure black and turning glass off are hidden, Blur and dimming have a Reset, and a text colour that fights the photo says so
-- What's new after an update is a glass sheet with the version large on top, each change with its icon, title and line, and Continue
 - The bell opens Updates, laid out like a phone's software update page: the version large, and a glass card saying whether it's up to date, with Highlights and the update notes (or Download when a new version is out)
 - AI assistant settings: how to check whether your phone has the AI built in, step by step
 - Choose the app's background: the glow in Aurora, Ocean, Sunset, Forest or Rose, plain, or a photo of your own, shown in its own colours, with how soft and how dimmed it is up to you. Over a photo, cards are liquid glass that bends the picture at their edges (Android 13 and newer; frosted glass before that), like Apple's clear Liquid Glass, the same in light and dark. The text over a photo is white or black, picked by how bright the photo is or chosen yourself; only the text changes. Settings → Appearance
 - Choose an accent colour for buttons, switches and highlights; on the light theme it's deepened so text in it stays readable. Settings → Appearance
 - Festival greetings: on the main festivals where you live (worked out on the phone from your currency), Home says so ("Happy Diwali 🪔") and a notification comes that morning
 - A note on your week: Sunday evenings, a short note when there's something to say, such as spending down on last week, a category that changed, or no-spend days
-- Help & features, at the bottom of Settings: every feature in a line or two and where to find it, with a search ("transfer", "PDF", "backup") and a way to open each one
 - The AI assistant answers "how do I…" and "where is…" from the same guide, with the path to each feature
 - On this phone: right after the app opens, it waits for Android to start its AI ("Starting the phone's AI…") instead of saying it isn't ready, and starts it as soon as the assistant opens
 - New versions show on the bell, with its red dot, after pulling down on Home, and in Leftovers Dev whenever the app opens or Notices is opened
