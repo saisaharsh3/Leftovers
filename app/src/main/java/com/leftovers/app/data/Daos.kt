@@ -10,7 +10,7 @@ private const val SELECT_ITEMS = """
     SELECT t.id, t.amountMinor, t.type, t.categoryId, t.epochDay, t.note, t.createdAt,
            c.name AS categoryName, c.emoji AS categoryEmoji, c.color AS categoryColor,
            t.accountId, t.receiptPath, c.addsToBudget, t.foreignMinor, t.foreignCurrency,
-           COALESCE(a.outOfBudget, 0) AS outOfBudget, t.splitOf
+           COALESCE(a.outOfBudget, 0) AS outOfBudget, t.splitOf, t.details
     FROM transactions t INNER JOIN categories c ON c.id = t.categoryId
     LEFT JOIN accounts a ON a.id = t.accountId
 """
@@ -96,7 +96,7 @@ interface RecurringDao {
     suspend fun delete(recurring: Recurring)
 
     @Query("UPDATE recurring SET lastPostedMonth = :month WHERE id = :id")
-    suspend fun setLastPosted(id: Long, month: String)
+    suspend fun setLastPosted(id: Long, month: String?)
 
     @Query("SELECT COUNT(*) FROM recurring WHERE categoryId = :categoryId")
     suspend fun countForCategory(categoryId: Long): Int

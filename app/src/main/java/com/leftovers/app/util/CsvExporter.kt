@@ -16,7 +16,7 @@ object CsvExporter {
         val dir = File(context.cacheDir, "exports").apply { mkdirs() }
         val file = File(dir, "leftovers_${LocalDate.now()}.csv")
         file.bufferedWriter().use { out ->
-            out.appendLine("Date,Type,Category,Amount,Note")
+            out.appendLine("Date,Type,Category,Amount,Note,Details")
             items.forEach { item ->
                 out.appendLine(
                     listOf(
@@ -25,6 +25,7 @@ object CsvExporter {
                         item.categoryName,
                         BigDecimal.valueOf(item.amountMinor, 2).toPlainString(),
                         item.note,
+                        item.details,
                     ).joinToString(",") { escape(it) },
                 )
             }

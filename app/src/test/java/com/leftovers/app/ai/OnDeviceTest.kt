@@ -90,7 +90,9 @@ class OnDeviceTest {
         val last = fake.prompts.last()
         assertTrue(last.contains("Today is 2026-11-05") && !last.contains("Long rules"))
         assertTrue(last.contains("- add_entry(amount:number*)"))
-        assertTrue(last.contains("""Result of summarize: {"spent": 2800}"""))
+        // ...as plain lines, with what to do next said last.
+        assertTrue(last.contains("Result of summarize: spent: 2800"))
+        assertTrue(last.trimEnd().endsWith("Assistant:") && last.contains("Now answer the user's last question from the Result"))
     }
 
     @Test fun aFailedCheckSaysWhy() = runBlocking {
@@ -136,5 +138,37 @@ class OnDeviceTest {
         assertTrue(prompt.length < (4_000 - 400) * 3.5 + 50)
         // The newest question is kept; the oldest went first.
         assertTrue(prompt.contains("Question 39") && !prompt.contains("Question 0 "))
+    }
+
+    @Test fun aQuestionGetsOnlyTheToolsThatFitIt() {
+        val names = listOf(
+            "get_overview", "summarize", "group_by", "find_entries", "list_subscriptions", "list_goals", "list_money_owed", "app_help",
+            "make_statement_pdf", "export_csv", "add_entry", "update_entry", "delete_entry", "set_monthly_budget", "set_category_limit",
+            "add_subscription", "stop_subscription", "add_transfer", "add_goal", "add_goal_deposit", "add_lent_or_borrowed", "add_split_bill", "settle_up",
+        )
+        val tools = names.map { ToolSpec(it, "About $it.", emptyList()) }
+        fun offered(q: String) = OnDeviceSession.shortlist(q, tools).map { it.name }
+        assertEquals(8, offered("Who owes me money?").size)
+        assertTrue("list_money_owed" in offered("Who owes me money?"))
+        assertTrue("list_subscriptions" in offered("Which subscriptions renew this week?"))
+        assertTrue("add_lent_or_borrowed" in offered("I lent Arjun 500"))
+        assertTrue("group_by" in offered("Which category did I spend most on?"))
+        // The basics are there however it's worded.
+        assertTrue(offered("coffee 250").containsAll(listOf("add_entry", "find_entries", "summarize")))
+        // Few tools: all of them, as before.
+        assertEquals(3, OnDeviceSession.shortlist("anything", tools.take(3)).size)
+    }
+
+    @Test fun resultsAreGivenAsPlainLines() {
+        val json = """{"owed_to_user":1950,"people":[{"person":"Anil","owes_user":1550,"entries":[{"date":"2026-11-11","what":"Anil's share of a bill the user paid, so Anil owes the user","amount":200}]}]}"""
+        val text = OnDeviceSession.plain(json)
+        assertTrue("owed to user: 1950" in text)
+        // Each person and each entry on a line of its own (the order of facts within a line isn't fixed here).
+        val anil = text.lines().single { "person: Anil" in it }
+        assertTrue(anil.trimStart().startsWith("- ") && "owes user: 1550" in anil)
+        val entry = text.lines().single { "so Anil owes the user" in it }
+        assertTrue("amount: 200" in entry && "date: 2026-11-11" in entry)
+        assertTrue('{' !in text && '"' !in text)
+        assertEquals("Applied: added", OnDeviceSession.plain("Applied: added"))
     }
 }

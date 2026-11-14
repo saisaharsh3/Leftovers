@@ -21,18 +21,35 @@ object CsvImporter {
         val category: String?,
         val note: String,
         val account: String?,
+        /** The rest of what the file says about it (#62): a purpose or reference line. */
+        val details: String = "",
     )
 
     /** What was read: the rows, how many lines couldn't be (no date or amount), and how many were transfers between accounts. */
     data class Parsed(val rows: List<Row>, val unreadable: Int, val error: String? = null, val transfers: Int = 0)
 
-    private val dateNames = listOf("date", "transaction date", "txn date", "value date", "posting date", "posted", "booking date")
-    private val amountNames = listOf("amount", "amt", "transaction amount", "value", "sum", "total", "price")
+    private val dateNames = listOf("date", "transaction date", "txn date", "value date", "posting date", "posted", "booking date", "buchungstag", "buchungsdatum", "datum", "valutadatum", "wertstellung")
+    private val amountNames = listOf("amount", "amt", "transaction amount", "value", "sum", "total", "price", "betrag", "umsatz")
     private val debitNames = listOf("debit", "withdrawal", "withdrawals", "dr", "money out", "paid out", "debit amount", "withdrawal amt")
     private val creditNames = listOf("credit", "deposit", "deposits", "cr", "money in", "paid in", "credit amount", "deposit amt")
     private val typeNames = listOf("type", "transaction type", "dr/cr", "cr/dr")
     private val categoryNames = listOf("category", "categories", "category name")
-    private val noteNames = listOf("note", "notes", "title", "description", "comment", "comments", "label", "narration", "details", "particulars", "memo", "payee", "remarks", "merchant", "name")
+    private val noteNames = listOf("note", "notes", "title", "description", "comment", "comments", "label", "narration", "details", "particulars", "memo", "payee", "remarks", "merchant", "name", "recipient", "beneficiary", "counterparty", "empfaenger", "empfänger", "zahlungsempfänger", "zahlungsempfaenger", "auftraggeber", "beguenstigter", "begünstigter")
+    /** A line about the payment beyond who it was to (#62): German "Verwendungszweck", "purpose", a reference. */
+    private val detailNames = listOf("purpose", "verwendungszweck", "payment reference", "reference", "booking text", "buchungstext", "remittance information", "additional info", "additional information")
+
+    /**
+     * Payment companies that stand in for the real shop in a statement's payee: then the purpose line names it.
+     * "SumUp", "DZ BANK AG", "PayPal Europe", "Stripe".
+     */
+    private val processors = Regex("""\b(sumup|zettle|izettle|stripe|adyen|paypal|klarna|dz bank|worldline|nexi|wirecard|square|razorpay|paytm payments|billdesk|ccavenue|cashfree|payu)\b""", RegexOption.IGNORE_CASE)
+
+    /** The shop at the start of a purpose line: "CPH COFFEE LAB/Schirmerstrabe 80/Dusseldorf/DE/0 11.09.2026" is "Cph Coffee Lab". */
+    internal fun shopIn(purpose: String): String? {
+        val first = purpose.split('/', '*', '|').firstOrNull()?.trim().orEmpty()
+        if (first.length < 3 || first.count(Char::isLetter) < 3 || first.any(Char::isDigit) && first.count(Char::isDigit) > first.length / 2) return null
+        return first.lowercase().split(Regex("\\s+")).joinToString(" ") { w -> w.replaceFirstChar { it.uppercase() } }.take(60)
+    }
     private val accountNames = listOf("account", "account name", "wallet")
     private val tagNames = listOf("tags", "tag", "hashtags", "labels")
 
@@ -82,8 +99,12 @@ object CsvImporter {
         val tagCol = tagNames.firstNotNullOfOrNull { n -> header.indexOf(n).takeIf { it >= 0 } }
         // A title and a description (or a note) are both kept, in that order, as one note.
         val taken = setOfNotNull(dateCol, amountCol, debitCol, creditCol, typeCol, categoryCol, accountCol, tagCol)
-        val noteCols = noteNames.mapNotNull { n -> header.indexOf(n).takeIf { it >= 0 && it !in taken } }.distinct()
-            .ifEmpty { listOfNotNull(column(noteNames)?.takeIf { it !in taken }) }
+        val detailCol = detailNames.firstNotNullOfOrNull { n -> header.indexOf(n).takeIf { it >= 0 && it !in taken } }
+            ?: header.indexOfFirst { h -> detailNames.any { n -> h.contains(n) && n.length > 5 } }.takeIf { it >= 0 && it !in taken }
+            // "Details" next to a "Note" (Leftovers' own export) is the details; on its own, a bank's description.
+            ?: header.indexOf("details").takeIf { it >= 0 && it !in taken && header.indexOf("note") >= 0 }
+        val noteCols = noteNames.mapNotNull { n -> header.indexOf(n).takeIf { it >= 0 && it !in taken && it != detailCol } }.distinct()
+            .ifEmpty { listOfNotNull(column(noteNames)?.takeIf { it !in taken && it != detailCol }) }
 
         val dayFirst = dayComesFirst(body.mapNotNull { it.getOrNull(dateCol) })
         var unreadable = 0
@@ -133,8 +154,14 @@ object CsvImporter {
                 amountMinor = kotlin.math.abs(signed),
                 type = type,
                 category = categoryCol?.let { cells.getOrNull(it) }?.trim()?.takeIf { it.isNotEmpty() },
-                note = noteOf(notes.map(::payee), tagCol?.let { cells.getOrNull(it) }),
+                note = noteOf(notes.map(::payee), tagCol?.let { cells.getOrNull(it) }).let { n ->
+                    // Paid through a payment company: the shop is in the purpose line.
+                    val purpose = detailCol?.let { cells.getOrNull(it) }.orEmpty()
+                    val shop = if (n.isBlank() || processors.containsMatchIn(n)) shopIn(purpose) else null
+                    shop?.let { s -> noteOf(listOf(s), tagCol?.let { cells.getOrNull(it) }) } ?: n
+                },
                 account = accountCol?.let { cells.getOrNull(it) }?.trim()?.takeIf { it.isNotEmpty() },
+                details = detailCol?.let { cells.getOrNull(it) }?.trim()?.take(500).orEmpty(),
             )
         }
         return Parsed(rows, unreadable, transfers = transfers)

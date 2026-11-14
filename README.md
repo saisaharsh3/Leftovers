@@ -211,7 +211,8 @@ Usage is billed by the provider to your own account (*On this phone* is free and
   If several entries match, it asks which one instead of guessing.
 - Set the monthly budget and category limits, add or stop subscriptions, move money between accounts,
   and add to savings goals.
-- **Read bills:** tap the camera in the chat to take a photo or pick a screenshot of a bill or receipt.
+- **Read files:** attach a CSV, Excel sheet, PDF or text file (a statement, an export) and ask about it, or ask it to add what's in it. It's read on the phone, with card and account numbers and UPI IDs hidden, and every change still waits for **Apply**.
+- **Read bills:** tap **+** in the chat to take a photo or pick a screenshot of a bill or receipt.
   It proposes one entry per category, dated from the bill, with any discount or tax spread so the
   entries add up to what you paid.
 
@@ -226,7 +227,7 @@ Usage is billed by the provider to your own account (*On this phone* is free and
   never sent; a photo goes only when you attach it, resized and re-encoded so location and camera data are removed.
 - **Your key is protected.** It's encrypted with an Android Keystore key, never included in backups, and
   deleted when you disconnect. Custom servers must use HTTPS.
-- **Nothing is kept.** Chats are held in memory only (so an answer can finish while you look elsewhere) and are gone when the app closes. The AI is told to treat your data as data, not
+- **Chats stay on the phone.** They're saved in the app's private storage to open again from History (never in backups or sent anywhere), and *Keep chats on this phone* off deletes them all. Switching to another AI keeps the chat: the new one gets the whole conversation as its own earlier messages (the newest 50), with personal numbers hidden; the phone's own AI keeps as much as it can hold. The AI is told to treat your data as data, not
   instructions, and each message is limited in how many steps and changes it can make.
 
 What you send is handled under the chosen provider's privacy policy (DeepSeek stores data in China;
@@ -345,8 +346,9 @@ app/src/main/java/com/leftovers/app/
 - **Try the newest changes:** every push to `dev` is published as a
   [Dev build](https://github.com/saisaharsh3/Leftovers/releases/tag/dev-build) that installs next to the real app, with its
   own data. To get each new one automatically, [add Leftovers Dev to Obtainium](https://apps.obtainium.imranr.dev/redirect?r=obtainium%3A%2F%2Fapp%2F%257B%2522id%2522%253A%2522com.leftovers.app.dev%2522%252C%2522url%2522%253A%2522https%253A%252F%252Fgithub.com%252Fsaisaharsh3%252FLeftovers%2522%252C%2522author%2522%253A%2522saisaharsh3%2522%252C%2522name%2522%253A%2522Leftovers%2520Dev%2522%252C%2522preferredApkIndex%2522%253A0%252C%2522additionalSettings%2522%253A%2522%257B%255C%2522includePrereleases%255C%2522%253A%2520true%252C%2520%255C%2522fallbackToOlderReleases%255C%2522%253A%2520false%252C%2520%255C%2522filterReleaseTitlesByRegEx%255C%2522%253A%2520%255C%2522%255EDev%2520build%255C%2522%252C%2520%255C%2522filterReleaseNotesByRegEx%255C%2522%253A%2520%255C%2522%255C%2522%252C%2520%255C%2522verifyLatestTag%255C%2522%253A%2520false%252C%2520%255C%2522useLatestAssetDateAsReleaseDate%255C%2522%253A%2520true%252C%2520%255C%2522releaseTitleAsVersion%255C%2522%253A%2520false%252C%2520%255C%2522trackOnly%255C%2522%253A%2520false%252C%2520%255C%2522versionExtractionRegEx%255C%2522%253A%2520%255C%2522%255C%2522%252C%2520%255C%2522matchGroupToUse%255C%2522%253A%2520%255C%2522%255C%2522%252C%2520%255C%2522versionDetection%255C%2522%253A%2520false%252C%2520%255C%2522releaseDateAsVersion%255C%2522%253A%2520true%252C%2520%255C%2522apkFilterRegEx%255C%2522%253A%2520%255C%2522leftovers-dev%255C%255C%255C%255C.apk%255C%2522%252C%2520%255C%2522invertAPKFilter%255C%2522%253A%2520false%252C%2520%255C%2522autoApkFilterByArch%255C%2522%253A%2520true%252C%2520%255C%2522appName%255C%2522%253A%2520%255C%2522Leftovers%2520Dev%255C%2522%257D%2522%257D) (tap **Continue** when it asks to import).
-- **Report a bug or suggest an idea** with the [issue forms](https://github.com/saisaharsh3/Leftovers/issues/new/choose),
-  or ask a question in [Discussions](https://github.com/saisaharsh3/Leftovers/discussions).
+- **Report a bug, suggest an idea or ask a question** with the [issue forms](https://github.com/saisaharsh3/Leftovers/issues/new/choose).
+  [Discussions](https://github.com/saisaharsh3/Leftovers/discussions/categories/announcements) is for announcements: new
+  versions, pre-releases to test and big news.
 - **Your bank's messages not detected?** Paste one (with personal details removed) in an issue; adding it to
   the tests is a great first contribution.
 - **Write code:** start with a

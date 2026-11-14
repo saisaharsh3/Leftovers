@@ -55,19 +55,7 @@ import com.leftovers.app.util.WhatsNew
  * top as phones show a new system version, then each change with its icon, title and line, and one button.
  */
 @Composable
-fun WhatsNewDialog(version: String, onClose: () -> Unit) {
-    val c = LocalAppColors.current
-    GlassSheet(onClose) {
-        Column(
-            Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 24.dp).padding(bottom = 20.dp),
-            verticalArrangement = Arrangement.spacedBy(22.dp),
-        ) {
-            VersionHero(version, compact = true)
-            Column(verticalArrangement = Arrangement.spacedBy(20.dp)) { WhatsNewNotes() }
-            com.leftovers.app.ui.components.PrimaryButton("Continue", onClose, Modifier.fillMaxWidth())
-        }
-    }
-}
+fun WhatsNewDialog(version: String, onClose: () -> Unit) = HighlightsScreen(version, onClose)
 
 /** A button as a phone's update page has them: a bright pill for the main action, a glass one for the other. */
 @Composable
@@ -144,7 +132,7 @@ private fun WhatsNewNotes() {
     val c = LocalAppColors.current
     WhatsNew.items.forEach { note ->
         Row(verticalAlignment = Alignment.Top) {
-            Icon(noteIcon(note.icon), contentDescription = null, tint = c.accent, modifier = Modifier.padding(top = 2.dp).size(30.dp))
+            Icon(whatsNewIcon(note.icon), contentDescription = null, tint = c.accent, modifier = Modifier.padding(top = 2.dp).size(30.dp))
             Spacer(Modifier.width(16.dp))
             Column(Modifier.weight(1f)) {
                 Text(note.title, style = MaterialTheme.typography.titleSmall, color = c.textPrimary)
@@ -154,7 +142,7 @@ private fun WhatsNewNotes() {
     }
 }
 
-private fun noteIcon(name: String) = when (name) {
+internal fun whatsNewIcon(name: String) = when (name) {
     "palette" -> Lucide.Palette
     "party" -> Lucide.PartyPopper
     "search" -> Lucide.Search
@@ -269,5 +257,5 @@ fun NoticesScreen(onBack: () -> Unit, viewModel: NoticesViewModel = androidx.lif
             }
         }
     }
-    if (highlights) WhatsNewDialog(version) { highlights = false }
+    if (highlights) HighlightsScreen(version) { highlights = false }
 }

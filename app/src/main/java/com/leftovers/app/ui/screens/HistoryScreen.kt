@@ -125,6 +125,7 @@ internal fun searchMatches(item: TransactionItem, query: String, accountName: St
     query.trim().split(Regex("""\s+""")).filter { it.isNotEmpty() }.all { word ->
         val amount = AmountInput.toMinor(word.replace(",", ""))
         item.note.contains(word, ignoreCase = true) ||
+            item.details.contains(word, ignoreCase = true) ||
             item.categoryName.contains(word, ignoreCase = true) ||
             accountName?.contains(word, ignoreCase = true) == true ||
             (amount != null && item.amountMinor == amount)
@@ -157,7 +158,7 @@ data class ActivityFilters(
 enum class ActivitySort(val label: String) { NEWEST("Newest"), HIGHEST("Highest"), LOWEST("Lowest") }
 
 /** How another screen asks Activity to open: which tab, and optionally one account. */
-data class ActivityRequest(val filter: TypeFilter, val accountId: Long? = null)
+data class ActivityRequest(val filter: TypeFilter, val accountId: Long? = null, val tag: String? = null)
 
 data class FilterOption(val id: Long, val name: String, val icon: String, val color: Long)
 
@@ -337,7 +338,7 @@ fun HistoryScreen(
             mode = ActivityView.LIST
             searchOpen = false
             search("")
-            viewModel.setFilters(ActivityFilters(accountId = it.accountId))
+            viewModel.setFilters(ActivityFilters(accountId = it.accountId, tag = it.tag))
             viewModel.setMonth(YearMonth.now())
             viewModel.setFilter(it.filter)
             onRequestHandled()

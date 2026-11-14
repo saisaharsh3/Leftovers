@@ -6,6 +6,10 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
+import com.leftovers.app.ui.components.appear
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -96,6 +100,7 @@ import com.leftovers.app.ui.components.IconTile
 import com.leftovers.app.ui.components.PrimaryButton
 import com.leftovers.app.ui.components.RoundButton
 import com.leftovers.app.ui.components.SecondaryButton
+import com.leftovers.app.util.friendlyLabel
 import com.leftovers.app.ui.components.SegmentedToggle
 import com.leftovers.app.ui.components.frosted
 import com.leftovers.app.ui.components.pressable
@@ -110,7 +115,8 @@ import kotlinx.coroutines.sync.withLock
 sealed interface ChatItem {
     val key: Long
 
-    data class User(override val key: Long, val text: String, val image: android.graphics.Bitmap? = null) : ChatItem
+    /** [photo]: a photo went with it (kept for a saved chat, where the picture itself isn't); [file]: an attached file's name. */
+    data class User(override val key: Long, val text: String, val image: android.graphics.Bitmap? = null, val file: String? = null, val photo: Boolean = image != null) : ChatItem
     data class Bot(override val key: Long, val text: String) : ChatItem
     data class Change(override val key: Long, val kind: ChangeKind, val summary: String, val state: ChangeState) : ChatItem
 
@@ -148,16 +154,43 @@ class AssistantViewModel(private val container: AppContainer, private val assist
     /** The request being answered, so Stop can cancel it. */
     private var job: Job? = null
 
+    /** Chats kept on this phone to come back to. */
+    val store = com.leftovers.app.ai.ChatStore(container.appContext)
+    /** This chat's id in [store]; a new one for each new chat. */
+    private var chatId = System.currentTimeMillis()
+    /**
+     * The chat so far, for an AI that hasn't seen it: after switching AI, or opening a saved chat. It becomes that AI's
+     * own earlier messages when it starts.
+     */
+    private var carry: List<com.leftovers.app.ai.PastTurn>? = null
+    private var lastPrivacy = privacy.value
+    /** Messages up to this key were there already (a saved chat opened): they don't animate in. */
+    var settledKey by androidx.compose.runtime.mutableLongStateOf(-1L)
+        private set
+
     init {
         // The phone's own AI takes a few seconds to start after the app opens: begin now, so it's ready by the
         // first question.
         viewModelScope.launch {
             config.collect { if (it?.provider == AiProvider.ON_DEVICE) com.leftovers.app.ai.OnDevice.warmUp() }
         }
-        // A new provider, key or privacy setting starts a fresh conversation.
+        // Another AI (or model, or key): the chat stays, and the new one gets a short recap of it with the next message.
+        // A privacy setting changed: the chat stays on screen, but nothing from it is sent under the old rules.
         viewModelScope.launch {
-            combine(config, privacy) { c, p -> c to p }.drop(1).collect {
-                reset(if (items.any { it is ChatItem.User }) "Settings changed, so this is a new conversation." else null)
+            combine(config, privacy) { c, p -> c to p }.drop(1).collect { (c, p) ->
+                val privacyChanged = p != lastPrivacy
+                lastPrivacy = p
+                if (busy) { job?.cancel(); job = null; busy = false }
+                dropSession()
+                if (c == null || items.none { it is ChatItem.User }) return@collect
+                if (privacyChanged) {
+                    carry = null
+                    items += ChatItem.Note(nextKey++, "Privacy settings changed. The chat stays here, and the AI starts afresh from your next message.")
+                } else {
+                    carry = history()
+                    items += ChatItem.Note(nextKey++, if (c.provider == AiProvider.ON_DEVICE) "Now with ${c.provider.label}. The chat stays: it sees the latest part of it, as much as it can hold."
+                        else "Now with ${c.provider.label}. The chat stays, and it sees all of it.")
+                }
             }
         }
     }
@@ -166,11 +199,29 @@ class AssistantViewModel(private val container: AppContainer, private val assist
      * Sends a message, optionally with a photo of a bill. The photo is resized and re-encoded on the
      * phone first, and [cleanup] runs once it's been read (e.g. to delete a camera capture).
      */
-    fun send(text: String, photo: android.net.Uri? = null, context: android.content.Context? = null, cleanup: () -> Unit = {}) {
-        val message = text.trim().ifEmpty { if (photo != null) "Here's a bill. Add it as entries, grouped by category." else "" }
+    fun send(text: String, photo: android.net.Uri? = null, context: android.content.Context? = null, cleanup: () -> Unit = {}, file: android.net.Uri? = null) {
+        val message = text.trim().ifEmpty {
+            if (photo != null) "Here's a bill. Add it as entries, grouped by category." else if (file != null) "What's in this file?" else ""
+        }
         if (message.isEmpty() || busy || waiting > 0 || config.value == null) return
         rounds = 0
         changesThisMessage = 0
+        if (file != null && context != null) {
+            // Read on the phone, hidden and capped, then sent as text with the message.
+            busy = true
+            job = viewModelScope.launch {
+                val limit = if (config.value?.provider == AiProvider.ON_DEVICE) 3_000 else 20_000
+                val read = runCatching { kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { com.leftovers.app.ai.AttachedFile.read(context, file, limit) } }
+                read.onSuccess { f ->
+                    items += ChatItem.User(nextKey++, message, file = f.name)
+                    runTurn { ensureSession().sendUser(message + "\n\n" + f.block) }
+                }.onFailure {
+                    busy = false
+                    items += ChatItem.Note(nextKey++, it.message ?: "Couldn't read that file", error = true)
+                }
+            }
+            return
+        }
         if (photo == null || context == null) {
             items += ChatItem.User(nextKey++, message)
             runTurn { ensureSession().sendUser(message) }
@@ -212,7 +263,7 @@ class AssistantViewModel(private val container: AppContainer, private val assist
         }
         results += outcome
         waiting = pending.size
-        if (pending.isEmpty()) runTurn { session!!.sendToolResults(takeResults()) }
+        if (pending.isEmpty()) runTurn { session!!.sendToolResults(takeResults()) } else persist()
     }
 
     fun decideAll(apply: Boolean) = pending.keys.toList().forEach { decide(it, apply) }
@@ -227,13 +278,121 @@ class AssistantViewModel(private val container: AppContainer, private val assist
         job = null
         busy = false
         dropSession()
-        items += ChatItem.Note(nextKey++, "Stopped. Your next message starts afresh.")
+        // The provider's own history may be half-finished, but the chat itself isn't lost: it goes to the next session.
+        carry = history()
+        items += ChatItem.Note(nextKey++, "Stopped.")
+        persist()
     }
 
+    /** A new chat; the one before stays among the saved chats. */
     fun reset(note: String? = null) {
+        persist()
+        dropSession()
+        carry = null
+        items.clear()
+        chatId = System.currentTimeMillis()
+        note?.let { items += ChatItem.Note(nextKey++, it) }
+    }
+
+    /** Opens a saved chat to carry on with: as it was, and the AI gets a recap of it with the next message. */
+    fun open(saved: com.leftovers.app.ai.ChatStore.Saved) {
+        if (busy) return
+        persist()
         dropSession()
         items.clear()
-        note?.let { items += ChatItem.Note(nextKey++, it) }
+        chatId = saved.id
+        saved.lines.forEach { l ->
+            items += when (l.type) {
+                'u' -> ChatItem.User(nextKey++, l.text, file = l.kind.ifEmpty { null }, photo = l.state == "photo")
+                'b' -> ChatItem.Bot(nextKey++, l.text)
+                'c' -> ChatItem.Change(
+                    nextKey++,
+                    runCatching { com.leftovers.app.ai.ChangeKind.valueOf(l.kind) }.getOrDefault(com.leftovers.app.ai.ChangeKind.ADD),
+                    l.text,
+                    // A change still waiting when the chat was left can't be applied now.
+                    runCatching { ChangeState.valueOf(l.state) }.getOrDefault(ChangeState.CANCELLED).let { if (it == ChangeState.PENDING) ChangeState.CANCELLED else it },
+                )
+                's' -> ChatItem.Seen(nextKey++, l.text)
+                else -> ChatItem.Note(nextKey++, l.text, l.error)
+            }
+        }
+        carry = history()
+        items += ChatItem.Note(nextKey++, "Carry on where you left off: the AI sees this chat. Files and photos from it aren't kept, so attach one again to ask about it.")
+        settledKey = nextKey
+    }
+
+    /** Whether the last question can simply be asked again: it failed, and had no photo or file to send with it. */
+    val canRetry: Boolean
+        get() {
+            if (busy || waiting > 0) return false
+            val last = items.lastOrNull() as? ChatItem.Note ?: return false
+            val asked = items.lastOrNull { it is ChatItem.User } as? ChatItem.User ?: return false
+            return last.error && asked.file == null && !asked.photo && items.indexOf(asked) >= items.indexOfLast { it is ChatItem.Bot }
+        }
+
+    /** Asks the last question again after it failed, without a second copy of it in the chat. */
+    fun retry() {
+        if (!canRetry) return
+        val asked = items.last { it is ChatItem.User } as ChatItem.User
+        while (items.lastOrNull().let { it is ChatItem.Note && it.error }) items.removeAt(items.lastIndex)
+        rounds = 0
+        changesThisMessage = 0
+        dropSession()
+        // The chat before that question; the question itself is what's sent now.
+        carry = history(upTo = asked.key)
+        runTurn { ensureSession().sendUser(asked.text) }
+    }
+
+    fun deleteSaved(id: Long) {
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) { store.delete(id) }
+        if (id == chatId) chatId = System.currentTimeMillis()
+    }
+
+    /** Saves this chat among the saved ones, as it is now. */
+    private fun persist() {
+        if (!store.enabled || items.none { it is ChatItem.User }) return
+        val lines = items.map { i ->
+            when (i) {
+                is ChatItem.User -> com.leftovers.app.ai.ChatStore.Line('u', i.text, kind = i.file.orEmpty(), state = if (i.photo) "photo" else "")
+                is ChatItem.Bot -> com.leftovers.app.ai.ChatStore.Line('b', i.text)
+                is ChatItem.Change -> com.leftovers.app.ai.ChatStore.Line('c', i.summary, i.kind.name, i.state.name)
+                is ChatItem.Seen -> com.leftovers.app.ai.ChatStore.Line('s', i.text)
+                is ChatItem.Note -> com.leftovers.app.ai.ChatStore.Line('n', i.text, error = i.error)
+            }
+        }
+        val title = (items.firstOrNull { it is ChatItem.User } as? ChatItem.User)?.text?.lineSequence()?.firstOrNull().orEmpty().take(60)
+        val chat = com.leftovers.app.ai.ChatStore.Saved(chatId, title, System.currentTimeMillis(), lines)
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) { store.save(chat) }
+    }
+
+    /**
+     * The chat so far as messages, for an AI that hasn't seen it: what was asked and answered, with what was changed.
+     * Personal numbers are hidden, as another company's AI may get it. The newest [MAX_HISTORY] messages, up to about
+     * [MAX_HISTORY_CHARS], so a very long chat doesn't get slow or costly; the phone's own AI keeps what fits.
+     */
+    private fun history(upTo: Long = Long.MAX_VALUE): List<com.leftovers.app.ai.PastTurn>? {
+        val turns = mutableListOf<com.leftovers.app.ai.PastTurn>()
+        items.filter { it.key < upTo }.forEach { i ->
+            when (i) {
+                is ChatItem.User -> turns += com.leftovers.app.ai.PastTurn(true, i.text +
+                    (i.file?.let { "\n(Attached the file \"$it\"; its contents aren't available now.)" } ?: "") +
+                    (if (i.photo) "\n(Attached a photo; it isn't available now.)" else ""))
+                is ChatItem.Bot -> turns += com.leftovers.app.ai.PastTurn(false, i.text)
+                // A change belongs to the AI's turn that proposed it.
+                is ChatItem.Change -> turns += com.leftovers.app.ai.PastTurn(false, "(Change ${i.state.name.lowercase()}: ${i.summary})")
+                else -> Unit
+            }
+        }
+        if (turns.isEmpty()) return null
+        val kept = ArrayDeque<com.leftovers.app.ai.PastTurn>()
+        var size = 0
+        for (t in turns.asReversed()) {
+            val clean = t.copy(text = com.leftovers.app.ai.AssistantTools.scrub(t.text))
+            if (kept.size >= MAX_HISTORY || size + clean.text.length > MAX_HISTORY_CHARS) break
+            kept.addFirst(clean)
+            size += clean.text.length
+        }
+        return kept.toList()
     }
 
     private fun dropSession() {
@@ -250,7 +409,12 @@ class AssistantViewModel(private val container: AppContainer, private val assist
         val t = AssistantTools(container, privacy.value)
         val currency = container.settings.settings.first().currencyCode
         tools = t
-        return chatSession(cfg, t.systemPrompt(currency), t.specs).also { session = it }
+        return chatSession(cfg, t.systemPrompt(currency), t.specs).also { s ->
+            // A chat it hasn't seen (another AI's, or a saved one): its own earlier messages, before the next one.
+            carry?.let { s.seed(it) }
+            carry = null
+            session = s
+        }
     }
 
     /** Runs one exchange with the model; named so it can never resolve to Kotlin's scope function `run`. */
@@ -265,17 +429,21 @@ class AssistantViewModel(private val container: AppContainer, private val assist
             } catch (e: CancellationException) {
                 throw e // Stopped by the user; stop() already tidied up.
             } catch (e: AiException) {
-                items += ChatItem.Note(nextKey++, e.message ?: "Something went wrong", error = true)
-                // A failed request can leave the provider's history half-finished; start clean next time.
+                // A failed request can leave the provider's history half-finished: a new session next time, given
+                // the chat so far, so nothing said is forgotten.
                 dropSession()
+                carry = history()
+                items += ChatItem.Note(nextKey++, e.message ?: "Something went wrong", error = true)
             } catch (e: Exception) {
                 dropSession()
+                carry = history()
                 items += ChatItem.Note(nextKey++, "Something went wrong: ${e.message}", error = true)
             } finally {
                 if (job == coroutineContext[Job]) {
                     busy = false
                     job = null
                 }
+                persist()
             }
         }
         job = turn
@@ -339,6 +507,9 @@ class AssistantViewModel(private val container: AppContainer, private val assist
         const val SOFT_ROUNDS = 8
         const val HARD_ROUNDS = 10
         const val MAX_CHANGES = 15
+        /** Earlier messages given to an AI that hasn't seen the chat. */
+        const val MAX_HISTORY = 50
+        const val MAX_HISTORY_CHARS = 60_000
     }
 }
 
@@ -356,7 +527,7 @@ fun AssistantScreen(
     /** A question to send straight away, e.g. from Insights; sent once, only when an AI is connected. */
     ask: String = "",
     // Kept by the activity, not this screen: going back doesn't stop an answer, and the chat is still here
-    // on return. It lives only in memory and is gone when the app closes.
+    // on return. Chats are also saved on the phone (unless that's turned off), to open again from History.
     viewModel: AssistantViewModel = viewModel(
         viewModelStoreOwner = LocalActivity.current as androidx.activity.ComponentActivity,
         factory = AppViewModelProvider.Factory,
@@ -375,9 +546,18 @@ fun AssistantScreen(
     }
     val listState = rememberLazyListState()
     val context = androidx.compose.ui.platform.LocalContext.current
+    // Which messages were already here when the screen opened, and which have finished arriving since.
+    val born = remember { viewModel.items.maxOfOrNull { it.key } ?: -1L }
+    val arrived = remember { mutableSetOf<Long>() }
     var attached by rememberSaveable { mutableStateOf<android.net.Uri?>(null) }
     var cameraFile by remember { mutableStateOf<java.io.File?>(null) }
     var photoMenu by remember { mutableStateOf(false) }
+    var showHistory by rememberSaveable { mutableStateOf(false) }
+    // A CSV, Excel, PDF or text file to send with the next message.
+    var attachedFile by rememberSaveable { mutableStateOf<android.net.Uri?>(null) }
+    val pickFile = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) { attachedFile = uri; attached = null }
+    }
     val pickImage = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia()) { uri ->
         if (uri != null) attached = uri
     }
@@ -400,7 +580,8 @@ fun AssistantScreen(
         subtitle = cfg?.let { "${it.provider.label} · ${it.model}" } ?: "Not connected",
         onBack = onBack,
         actions = {
-            if (cfg != null && viewModel.items.isNotEmpty()) RoundButton(Lucide.Plus, "New conversation", { viewModel.reset() })
+            if (cfg != null) RoundButton(Lucide.History, "Saved chats", { showHistory = true })
+            if (cfg != null && viewModel.items.isNotEmpty()) RoundButton(Lucide.PenLine, "New chat", { viewModel.reset() })
             RoundButton(Lucide.Settings, "AI settings", { showSetup = true })
         },
         bottomBar = {
@@ -432,8 +613,20 @@ fun AssistantScreen(
                         }, size = 36.dp, tint = c.textSecondary)
                     }
                 }
+                attachedFile?.let { uri ->
+                    val fileName = remember(uri) { com.leftovers.app.ai.AttachedFile.name(context, uri) }
+                    Row(Modifier.padding(bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        IconTile(Lucide.ReceiptText, c.accent, size = 44.dp)
+                        Spacer(Modifier.width(10.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(fileName, style = MaterialTheme.typography.titleSmall, color = c.textPrimary, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                            Text("Only its text is sent, with card and account numbers hidden.", style = MaterialTheme.typography.bodySmall, color = c.textSecondary)
+                        }
+                        RoundButton(Lucide.X, "Remove file", { attachedFile = null }, size = 36.dp, tint = c.textSecondary)
+                    }
+                }
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    RoundButton(Lucide.Camera, "Attach a bill or receipt", { photoMenu = true }, size = 52.dp, tint = c.textSecondary, enabled = !locked)
+                    RoundButton(Lucide.Plus, "Attach a photo or a file", { photoMenu = true }, size = 52.dp, tint = c.textSecondary, enabled = !locked)
                     Spacer(Modifier.width(8.dp))
                     GlassTextField(
                         input,
@@ -443,24 +636,34 @@ fun AssistantScreen(
                         singleLine = false,
                     )
                     Spacer(Modifier.width(8.dp))
-                    if (viewModel.busy) {
-                        // While it's answering, the send button becomes Stop.
+                    // While it's answering, the send button becomes Stop: one shrinks away as the other grows in.
+                    androidx.compose.animation.AnimatedContent(
+                        viewModel.busy,
+                        transitionSpec = {
+                            (androidx.compose.animation.scaleIn(androidx.compose.animation.core.spring(dampingRatio = 0.8f, stiffness = 500f), initialScale = 0.6f) + fadeIn(androidx.compose.animation.core.tween(120))) togetherWith
+                                (androidx.compose.animation.scaleOut(androidx.compose.animation.core.tween(120), targetScale = 0.6f) + androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(100)))
+                        },
+                        label = "sendOrStop",
+                    ) { answering ->
+                    if (answering) {
                         RoundButton(Lucide.Square, "Stop", viewModel::stop, size = 52.dp, tint = c.textPrimary, container = c.glassStrong)
                     } else {
                         RoundButton(
                             Lucide.ArrowUp, "Send",
                             {
                                 val file = cameraFile
-                                viewModel.send(input, attached, context.applicationContext) { file?.delete() }
+                                viewModel.send(input, attached, context.applicationContext, { file?.delete() }, attachedFile)
                                 input = ""
                                 attached = null
+                                attachedFile = null
                                 cameraFile = null
                             },
                             size = 52.dp,
                             tint = c.onAccent,
                             container = c.accent,
-                            enabled = !locked && (input.isNotBlank() || attached != null),
+                            enabled = !locked && (input.isNotBlank() || attached != null || attachedFile != null),
                         )
+                    }
                     }
                 }
                 }
@@ -476,8 +679,11 @@ fun AssistantScreen(
                 contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = padding.calculateTopPadding() + 12.dp, bottom = padding.calculateBottomPadding() + 16.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                if (viewModel.items.isEmpty()) item { Suggestions { viewModel.send(it) } }
+                if (viewModel.items.isEmpty()) item(key = "suggestions") { Suggestions { viewModel.send(it) } }
                 items(viewModel.items, key = { it.key }) { item ->
+                    // New since the screen opened (or the saved chat was): it arrives; what was there is just there.
+                    val fresh = item.key > born && item.key >= viewModel.settledKey && item.key !in arrived
+                    Box(Modifier.fillMaxWidth().animateItem(fadeInSpec = null, fadeOutSpec = null).arrive(fresh, mine = item is ChatItem.User) { arrived += item.key }) {
                     when (item) {
                         is ChatItem.User -> Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.End) {
                             item.image?.let { bmp ->
@@ -487,6 +693,15 @@ fun AssistantScreen(
                                     contentScale = androidx.compose.ui.layout.ContentScale.Crop,
                                     modifier = Modifier.padding(bottom = 6.dp).size(width = 160.dp, height = 200.dp).clip(RoundedCornerShape(16.dp)),
                                 )
+                            }
+                            if (item.file != null) {
+                                Row(Modifier.padding(bottom = 6.dp).clip(RoundedCornerShape(14.dp)).background(c.glassStrong).padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(Lucide.ReceiptText, contentDescription = null, tint = c.textSecondary, modifier = Modifier.size(16.dp))
+                                    Spacer(Modifier.width(8.dp))
+                                    Text(item.file, style = MaterialTheme.typography.bodySmall, color = c.textPrimary, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                                }
+                            } else if (item.photo && item.image == null) {
+                                Text("Photo", style = MaterialTheme.typography.bodySmall, color = c.textTertiary, modifier = Modifier.padding(bottom = 4.dp))
                             }
                             Bubble(item.text, mine = true)
                         }
@@ -507,20 +722,30 @@ fun AssistantScreen(
                             onDecideAll = viewModel::decideAll,
                         )
                     }
+                    }
                 }
-                if (viewModel.busy) item { TypingBubble() }
+                if (viewModel.busy) item(key = "typing") {
+                    Box(Modifier.animateItem(fadeInSpec = null, fadeOutSpec = null).arrive(true, mine = false) {}) { TypingBubble() }
+                }
+                // The last question failed: ask it again with one tap.
+                if (viewModel.canRetry) item(key = "retry") {
+                    Box(Modifier.fillMaxWidth().animateItem(), contentAlignment = Alignment.Center) {
+                        com.leftovers.app.ui.components.Chip("Try again", onClick = viewModel::retry, icon = Lucide.RotateCcw)
+                    }
+                }
             }
         }
     }
 
     if (showSetup) AssistantSetupSheet(onDismiss = { showSetup = false })
+    if (showHistory) SavedChatsSheet(viewModel, onDismiss = { showHistory = false })
 
     if (photoMenu) {
         GlassSheet(onDismiss = { photoMenu = false }) {
             Column(Modifier.padding(horizontal = 20.dp).padding(bottom = 16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("Add a bill or receipt", style = MaterialTheme.typography.headlineSmall, color = c.textPrimary)
+                Text("Attach", style = MaterialTheme.typography.headlineSmall, color = c.textPrimary)
                 Text(
-                    "The AI reads it and suggests entries, grouped by category. Nothing is added until you confirm.",
+                    "A bill, a receipt or a statement: the AI reads it, answers about it, and suggests entries. Nothing is added until you confirm.",
                     style = MaterialTheme.typography.bodySmall,
                     color = c.textSecondary,
                 )
@@ -533,7 +758,11 @@ fun AssistantScreen(
                 Glass(Modifier.fillMaxWidth(), onClick = {
                     photoMenu = false
                     pickImage.launch(androidx.activity.result.PickVisualMediaRequest(androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia.ImageOnly))
-                }) { com.leftovers.app.ui.components.ListRow("Choose a photo or screenshot", leading = { Icon(Lucide.ReceiptText, null, tint = c.textPrimary) }) }
+                }) { com.leftovers.app.ui.components.ListRow("Choose a photo or screenshot", leading = { Icon(Lucide.Camera, null, tint = c.textPrimary) }) }
+                Glass(Modifier.fillMaxWidth(), onClick = {
+                    photoMenu = false
+                    pickFile.launch(arrayOf("text/*", "application/pdf", "application/vnd.ms-excel", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "application/json", "application/octet-stream"))
+                }) { com.leftovers.app.ui.components.ListRow("A file", subtitle = "CSV, Excel, PDF or text", leading = { Icon(Lucide.ReceiptText, null, tint = c.textPrimary) }) }
             }
         }
     }
@@ -574,7 +803,7 @@ private fun Suggestions(onPick: (String) -> Unit) {
                 suggestions.forEachIndexed { i, text ->
                     if (i > 0) com.leftovers.app.ui.components.RowDivider(inset = 16.dp)
                     Row(
-                        Modifier.fillMaxWidth().pressable({ onPick(text) }, pressedScale = 0.98f).padding(horizontal = 16.dp, vertical = 14.dp),
+                        Modifier.fillMaxWidth().appear(i + 1).pressable({ onPick(text) }, pressedScale = 0.98f).padding(horizontal = 16.dp, vertical = 14.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Text(text, style = MaterialTheme.typography.bodyMedium, color = c.textPrimary, modifier = Modifier.weight(1f))
@@ -589,6 +818,9 @@ private fun Suggestions(onPick: (String) -> Unit) {
 @Composable
 private fun Bubble(text: String, mine: Boolean) {
     val c = LocalAppColors.current
+    val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
+    val haptics = androidx.compose.ui.platform.LocalHapticFeedback.current
+    val context = androidx.compose.ui.platform.LocalContext.current
     // Small "tail" corner on the speaker's side, like a messaging app.
     val shape = if (mine) RoundedCornerShape(20.dp, 20.dp, 6.dp, 20.dp) else RoundedCornerShape(20.dp, 20.dp, 20.dp, 6.dp)
     Box(Modifier.fillMaxWidth(), contentAlignment = if (mine) Alignment.CenterEnd else Alignment.CenterStart) {
@@ -596,6 +828,14 @@ private fun Bubble(text: String, mine: Boolean) {
             Modifier
                 .widthIn(max = 300.dp)
                 .then(if (mine) Modifier.background(c.accent, shape) else Modifier.replyGlass(shape))
+                // Held: copied, to paste into a note or a message.
+                .pointerInput(text) {
+                    detectTapGestures(onLongPress = {
+                        haptics.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                        clipboard.setText(AnnotatedString(text))
+                        android.widget.Toast.makeText(context, "Copied", android.widget.Toast.LENGTH_SHORT).show()
+                    })
+                }
                 .padding(horizontal = 14.dp, vertical = 10.dp),
         ) {
             Text(
@@ -615,7 +855,10 @@ private fun Bubble(text: String, mine: Boolean) {
 private fun Modifier.replyGlass(shape: androidx.compose.ui.graphics.Shape): Modifier {
     val c = LocalAppColors.current
     val darkText = c.textPrimary.luminance() < 0.5f
-    return glassSurface(shape, strong = true, tint = if (darkText) androidx.compose.ui.graphics.Color.White.copy(alpha = 0.55f) else androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.42f))
+    // Over a photo the reply needs a darker body to stay readable; over the app's own backgrounds that much black
+    // made the bubble look solid, not glass (#41), so there it's only lightly tinted.
+    val dark = if (c.photo != null) 0.42f else 0.14f
+    return glassSurface(shape, strong = true, tint = if (darkText) androidx.compose.ui.graphics.Color.White.copy(alpha = 0.55f) else androidx.compose.ui.graphics.Color.Black.copy(alpha = dark))
         .then(androidx.compose.foundation.BorderStroke(1.dp, com.leftovers.app.ui.components.glassBorder(c)).let { Modifier.border(it, shape) })
 }
 
@@ -651,7 +894,7 @@ private fun TypingBubble() {
                     ),
                     label = "dot$i",
                 )
-                Box(Modifier.size(7.dp).graphicsLayer { this.alpha = alpha }.background(c.textSecondary, CircleShape))
+                Box(Modifier.size(7.dp).graphicsLayer { this.alpha = alpha; translationY = -(alpha - 0.25f) * 4.dp.toPx() }.background(c.textSecondary, CircleShape))
             }
         }
     }
@@ -1185,3 +1428,82 @@ private fun PrivacyToggle(title: String, detail: String, checked: Boolean, onCha
 }
 
 class AssistantSetupViewModel(val settings: AssistantSettings) : ViewModel()
+
+/** Chats kept on the phone: open one to carry on, delete one or all, or stop keeping them. */
+@Composable
+private fun SavedChatsSheet(viewModel: AssistantViewModel, onDismiss: () -> Unit) {
+    val c = LocalAppColors.current
+    var keep by remember { mutableStateOf(viewModel.store.enabled) }
+    var chats by remember { mutableStateOf<List<com.leftovers.app.ai.ChatStore.Saved>?>(null) }
+    LaunchedEffect(Unit) { chats = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { viewModel.store.list() } }
+    val use24 = com.leftovers.app.util.LocalUse24Hour.current
+    GlassSheet(onDismiss) {
+        Column(
+            Modifier.verticalScroll(androidx.compose.foundation.rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text("Saved chats", style = MaterialTheme.typography.headlineSmall, color = c.textPrimary)
+            Glass(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(vertical = 6.dp)) {
+                    PrivacyToggle(
+                        "Keep chats on this phone",
+                        "Only here, never in backups or sent anywhere. Off deletes them all.",
+                        keep,
+                    ) { on -> viewModel.store.enabled = on; keep = on; if (!on) chats = emptyList() }
+                }
+            }
+            val list = chats
+            if (list != null && list.isEmpty()) {
+                Text(if (keep) "No saved chats yet. Each chat is kept here once you've asked something." else "Chats aren't kept.", style = MaterialTheme.typography.bodyMedium, color = c.textSecondary)
+            }
+            if (!list.isNullOrEmpty()) {
+                Glass(Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(vertical = 6.dp)) {
+                        list.forEachIndexed { i, chat ->
+                            if (i > 0) com.leftovers.app.ui.components.RowDivider()
+                            val whenText = remember(chat.updated, use24) {
+                                val t = java.time.Instant.ofEpochMilli(chat.updated).atZone(java.time.ZoneId.systemDefault())
+                                t.toLocalDate().friendlyLabel() + " · " + t.toLocalTime().format(java.time.format.DateTimeFormatter.ofPattern(if (use24) "HH:mm" else "h:mm a"))
+                            }
+                            com.leftovers.app.ui.components.ListRow(
+                                chat.title.ifBlank { "Chat" },
+                                subtitle = whenText,
+                                leading = { IconTile(Lucide.MessageCircle, c.accent, size = 38.dp) },
+                                trailing = {
+                                    RoundButton(Lucide.Trash2, "Delete this chat", {
+                                        viewModel.deleteSaved(chat.id)
+                                        chats = chats?.filter { it.id != chat.id }
+                                    }, size = 36.dp, tint = c.textSecondary)
+                                },
+                                onClick = { viewModel.open(chat); onDismiss() },
+                            )
+                        }
+                    }
+                }
+                SecondaryButton("Delete all", { viewModel.store.deleteAll(); chats = emptyList() }, Modifier.fillMaxWidth())
+            }
+        }
+    }
+}
+
+/**
+ * A message arriving: it grows out of its speaker's corner (yours from the right, the AI's from the left) and settles
+ * on a spring, with no bounce to speak of. [fresh] is false for messages that were already there, which don't move.
+ */
+@Composable
+private fun Modifier.arrive(fresh: Boolean, mine: Boolean, onArrived: () -> Unit): Modifier {
+    if (!fresh) return this
+    val p = remember { androidx.compose.animation.core.Animatable(0f) }
+    LaunchedEffect(Unit) {
+        p.animateTo(1f, androidx.compose.animation.core.spring(dampingRatio = 0.86f, stiffness = 380f))
+        onArrived()
+    }
+    return graphicsLayer {
+        val k = p.value
+        alpha = (k * 1.8f).coerceIn(0f, 1f)
+        scaleX = 0.88f + 0.12f * k
+        scaleY = 0.88f + 0.12f * k
+        translationY = (1f - k) * 16.dp.toPx()
+        transformOrigin = androidx.compose.ui.graphics.TransformOrigin(if (mine) 1f else 0f, 1f)
+    }
+}

@@ -75,6 +75,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.map
 import java.time.Month
 import java.time.YearMonth
 import java.time.format.TextStyle
@@ -87,6 +88,13 @@ class BudgetPlanViewModel(
 ) : ViewModel() {
     val accountList: StateFlow<List<com.leftovers.app.data.AccountWithBalance>> =
         accounts.accounts.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** Over today's allowance, Home shows the new daily limit for the days left (#61). Saved at once. */
+    val newDailyLimit: StateFlow<Boolean> =
+        settings.settings.map { it.showNewDailyLimit }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+    fun setNewDailyLimit(on: Boolean) {
+        viewModelScope.launch { settings.setShowNewDailyLimit(on) }
+    }
     /** An envelope (#42): only entries with this tag and/or from this account count. */
     var envelope by mutableStateOf(false)
     var rangeTagText by mutableStateOf("")
@@ -398,6 +406,36 @@ fun BudgetPlanScreen(
             }
 
             item {
+                val newLimit by viewModel.newDailyLimit.collectAsStateWithLifecycle()
+                Glass(Modifier.fillMaxWidth().padding(top = 12.dp)) {
+                    Row(Modifier.padding(18.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text("Over today, show the new daily limit", style = MaterialTheme.typography.titleSmall, color = c.textPrimary)
+                            Spacer(Modifier.height(2.dp))
+                            Text(
+                                if (newLimit) "Spent more than today's allowance: Home shows what each day after today can be, like a fresh start tomorrow."
+                                else "Spent more than today's allowance: Home shows how much over you are.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = c.textSecondary,
+                            )
+                        }
+                        Spacer(Modifier.width(12.dp))
+                        androidx.compose.material3.Switch(
+                            checked = newLimit,
+                            onCheckedChange = com.leftovers.app.ui.components.toggleHaptic({ viewModel.setNewDailyLimit(it) }),
+                            colors = androidx.compose.material3.SwitchDefaults.colors(
+                                checkedTrackColor = c.accent,
+                                checkedThumbColor = c.onAccent,
+                                uncheckedTrackColor = c.glass,
+                                uncheckedBorderColor = c.borderTop,
+                                uncheckedThumbColor = c.textSecondary,
+                            ),
+                        )
+                    }
+                }
+            }
+
+            item {
                 // 50/30/20 (#39): needs, wants and savings as shares of income.
                 Glass(Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -571,26 +609,31 @@ private fun PeriodCard(viewModel: BudgetPlanViewModel, plan: BudgetPlan) {
     val c = LocalAppColors.current
     val money = com.leftovers.app.util.LocalMoney.current
     var picking by androidx.compose.runtime.remember { mutableStateOf(false) }
-    var customDays by androidx.compose.runtime.remember { mutableStateOf(viewModel.periodDays.takeIf { it !in listOf(7, 14, 28) }?.toString() ?: "") }
+
     val fmt = java.time.format.DateTimeFormatter.ofPattern("EEE, d MMM")
     val amount = AmountInput.toMinor(viewModel.periodText) ?: 0L
     Glass(Modifier.fillMaxWidth(), strong = true, shape = RoundedCornerShape(30.dp)) {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             MoneyField(viewModel.periodText, { viewModel.periodText = it }, label = "Budget " + periodName(viewModel.periodDays), large = true)
             Text("Every", style = MaterialTheme.typography.labelMedium, color = c.textSecondary, modifier = Modifier.padding(start = 4.dp))
+            // Common lengths, up to three months, without typing (#61).
             androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf(7 to "Week", 14 to "2 weeks", 28 to "4 weeks").forEach { (d, label) ->
-                    com.leftovers.app.ui.components.Chip(label, { viewModel.periodDays = d; customDays = "" }, selected = viewModel.periodDays == d && customDays.isEmpty())
+                listOf(7 to "Week", 14 to "2 weeks", 28 to "4 weeks", 42 to "6 weeks", 56 to "8 weeks", 84 to "12 weeks").forEach { (d, label) ->
+                    com.leftovers.app.ui.components.Chip(label, { viewModel.periodDays = d }, selected = viewModel.periodDays == d)
                 }
             }
-            // Any other length, in days.
-            GlassTextField(
-                customDays,
-                { t -> customDays = t.filter(Char::isDigit).take(3); customDays.toIntOrNull()?.takeIf { it in 1..366 }?.let { viewModel.periodDays = it } },
-                placeholder = "Or a number of days",
-                modifier = Modifier.fillMaxWidth(),
-                keyboardType = androidx.compose.ui.text.input.KeyboardType.Number,
-            )
+            // Any other length: a day either way, held to go faster.
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                com.leftovers.app.ui.components.RoundButton(Lucide.Minus, "A day shorter", { viewModel.periodDays = (viewModel.periodDays - 1).coerceAtLeast(1) }, enabled = viewModel.periodDays > 1)
+                Text(
+                    "${viewModel.periodDays} ${if (viewModel.periodDays == 1) "day" else "days"}",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = c.textPrimary,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                    modifier = Modifier.weight(1f),
+                )
+                com.leftovers.app.ui.components.RoundButton(Lucide.Plus, "A day longer", { viewModel.periodDays = (viewModel.periodDays + 1).coerceAtMost(366) }, enabled = viewModel.periodDays < 366)
+            }
             Row(
                 Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(c.glass).pressable({ picking = true }).padding(16.dp),
                 verticalAlignment = Alignment.CenterVertically,

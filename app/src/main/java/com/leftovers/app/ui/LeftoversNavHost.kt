@@ -412,6 +412,11 @@ fun LeftoversNavHost(
                             onOpenSubscriptions = { nav.navigate(Routes.subscriptions()) },
                             onOpenGoals = { nav.navigate(Routes.GOALS) },
                             onAdd = { note -> nav.navigate(Routes.add(note = note)) },
+                            onSeeEntries = { tag ->
+                                activityRequest = ActivityRequest(TypeFilter.EXPENSE, tag = tag)
+                                nav.switchTab(Routes.ACTIVITY)
+                            },
+                            onOpenEntry = { nav.navigate(Routes.edit(it)) },
                         )
                     }
                     screen(Routes.BUDGET_PLAN) { BudgetPlanScreen(onBack = back) }

@@ -18,6 +18,13 @@ data class DailyBudget(
 ) {
     val leftToday: Long get() = dailyLimit - spentToday
     val usedFraction: Float get() = if (dailyLimit > 0) spentToday.toFloat() / dailyLimit else 1f
+    /**
+     * Over today's allowance, what each day after today can be instead (#61): what's left of the budget, after
+     * today's spending and the bills still due, spread over the days after today. Null when today is the last day,
+     * or nothing is left.
+     */
+    fun newDailyLimit(daysLeft: Int): Long? = if (daysLeft > 1 && monthLeft > 0) monthLeft / (daysLeft - 1) else null
+
     /** The month's budget was used up before today: there's no daily allowance, and [monthLeft] says by how much it's over. */
     val monthUsedUp: Boolean get() = monthlyBudget > 0 && monthLeft + spentToday <= 0
 }

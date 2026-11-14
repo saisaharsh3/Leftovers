@@ -82,8 +82,13 @@ import kotlin.math.abs
 class DebtsViewModel(
     private val planning: PlanningRepository,
     accountRepository: com.leftovers.app.data.AccountRepository,
-    settings: com.leftovers.app.data.SettingsRepository,
+    private val settings: com.leftovers.app.data.SettingsRepository,
 ) : ViewModel() {
+    /** How friends can pay you back, put in your reminders. */
+    val pay: StateFlow<com.leftovers.app.util.SharedOwed.Pay?> =
+        settings.payDetailsFlow.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+    fun setPay(pay: com.leftovers.app.util.SharedOwed.Pay) = viewModelScope.launch { settings.setPayDetails(com.leftovers.app.util.SharedOwed.clean(pay)) }
+
     val accounts: StateFlow<List<com.leftovers.app.data.AccountWithBalance>> =
         accountRepository.accounts.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
     val defaultAccountId: StateFlow<Long?> =
@@ -117,6 +122,8 @@ fun DebtsScreen(onBack: () -> Unit, viewModel: DebtsViewModel = viewModel(factor
     val money = LocalMoney.current
     var editing by remember { mutableStateOf<Debt?>(null) }
     var settling by remember { mutableStateOf<String?>(null) }
+    val pay by viewModel.pay.collectAsStateWithLifecycle()
+    var editingPay by remember { mutableStateOf(false) }
     val view = androidx.compose.ui.platform.LocalView.current
     val owedToYou = balances.filter { it.netMinor > 0 }.sumOf { it.netMinor }
     val youOwe = balances.filter { it.netMinor < 0 }.sumOf { -it.netMinor }
@@ -160,6 +167,21 @@ fun DebtsScreen(onBack: () -> Unit, viewModel: DebtsViewModel = viewModel(factor
                             Text("You owe", style = MaterialTheme.typography.labelLarge, color = c.textSecondary)
                             Text(money.format(youOwe), style = MaterialTheme.typography.headlineSmall, color = c.textPrimary)
                         }
+                    }
+                }
+            }
+            // Someone owes you: your UPI ID or payment link can go in the reminder, so paying you back is one tap for them.
+            if (owedToYou > 0 && pay != null) {
+                item(key = "pay") {
+                    val p = pay!!
+                    Glass(Modifier.fillMaxWidth().appear(1), shape = RoundedCornerShape(26.dp)) {
+                        com.leftovers.app.ui.components.ListRow(
+                            if (p.isEmpty) "Get paid back in one tap" else "Reminders say how to pay you",
+                            subtitle = if (p.isEmpty) "Add your UPI ID or a payment link" else listOf(p.upi, p.linkHost).filter { it.isNotBlank() }.joinToString(" · "),
+                            leading = { com.leftovers.app.ui.components.IconTile(Lucide.Wallet, c.positive, size = 38.dp) },
+                            trailing = { androidx.compose.material3.Icon(Lucide.ChevronRight, contentDescription = null, tint = c.textTertiary, modifier = Modifier.size(18.dp)) },
+                            onClick = { editingPay = true },
+                        )
                     }
                 }
             }
@@ -232,6 +254,7 @@ fun DebtsScreen(onBack: () -> Unit, viewModel: DebtsViewModel = viewModel(factor
         }
     }
 
+    if (editingPay) PayDetailsSheet(pay ?: com.leftovers.app.util.SharedOwed.Pay(), onSave = { viewModel.setPay(it); editingPay = false }, onDismiss = { editingPay = false })
     editing?.let { debt ->
         DebtEditor(
             initial = debt,

@@ -32,6 +32,31 @@ class ImageInput(val mimeType: String, val base64: String)
 interface ChatSession {
     suspend fun sendUser(text: String, image: ImageInput? = null): ModelTurn
     suspend fun sendToolResults(results: List<ToolOutcome>): ModelTurn
+
+    /**
+     * The chat so far, from another AI or a saved chat, put in this one's history as its own earlier messages, so it
+     * carries on as if it had been there. Only the words: the other AI's lookups were in its own format, and this one
+     * looks things up again when it needs them, getting today's numbers.
+     */
+    fun seed(history: List<PastTurn>)
+}
+
+/** One earlier message in the chat: the user's ([user]) or the AI's. */
+data class PastTurn(val user: Boolean, val text: String)
+
+/**
+ * [history] as every API accepts it: the user first, turns alternating (two in a row are joined), and the AI last, as
+ * the next message is the user's.
+ */
+internal fun normalised(history: List<PastTurn>): List<PastTurn> {
+    val out = mutableListOf<PastTurn>()
+    history.filter { it.text.isNotBlank() }.forEach { t ->
+        val last = out.lastOrNull()
+        if (last != null && last.user == t.user) out[out.lastIndex] = last.copy(text = last.text + "\n\n" + t.text)
+        else if (out.isNotEmpty() || t.user) out += t
+    }
+    if (out.lastOrNull()?.user == true) out += PastTurn(false, "(No answer was given to that.)")
+    return out
 }
 
 fun chatSession(config: AssistantConfig, system: String, tools: List<ToolSpec>): ChatSession = when (config.provider.style) {
@@ -72,6 +97,10 @@ private class ClaudeSession(private val config: AssistantConfig, private val sys
     private val toolsJson = JSONArray(tools.map { t ->
         JSONObject().put("name", t.name).put("description", t.description).put("input_schema", t.jsonSchema())
     })
+
+    override fun seed(history: List<PastTurn>) {
+        normalised(history).forEach { messages.put(JSONObject().put("role", if (it.user) "user" else "assistant").put("content", it.text)) }
+    }
 
     override suspend fun sendUser(text: String, image: ImageInput?): ModelTurn {
         val content: Any = if (image == null) text else JSONArray()
@@ -145,6 +174,10 @@ private class OpenAiSession(private val config: AssistantConfig, system: String,
         )
     })
 
+    override fun seed(history: List<PastTurn>) {
+        normalised(history).forEach { messages.put(JSONObject().put("role", if (it.user) "user" else "assistant").put("content", it.text)) }
+    }
+
     override suspend fun sendUser(text: String, image: ImageInput?): ModelTurn {
         val content: Any = if (image == null) text else JSONArray()
             .put(JSONObject().put("type", "text").put("text", text))
@@ -201,6 +234,12 @@ private class GeminiSession(private val config: AssistantConfig, private val sys
             JSONObject().put("name", t.name).put("description", t.description).put("parameters", t.geminiSchema())
         })),
     )
+
+    override fun seed(history: List<PastTurn>) {
+        normalised(history).forEach {
+            contents.put(JSONObject().put("role", if (it.user) "user" else "model").put("parts", JSONArray().put(JSONObject().put("text", it.text))))
+        }
+    }
 
     override suspend fun sendUser(text: String, image: ImageInput?): ModelTurn {
         val parts = JSONArray()

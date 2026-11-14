@@ -1,0 +1,17 @@
+name: Question
+description: Ask how something works, or whether the app can do something
+labels: [question]
+body:
+  - type: textarea
+    id: question
+    attributes:
+      label: What would you like to know?
+      description: Where in the app, and what you were trying to do. A screenshot helps.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Settings → About shows it. Leave blank if you're not sure.
+      placeholder: "1.10.0"

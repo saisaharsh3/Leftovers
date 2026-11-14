@@ -76,4 +76,18 @@ class MigrationTest {
         helper.runMigrationsAndValidate(name, 16, true, *ALL_MIGRATIONS).close()
         helper.runMigrationsAndValidate(name, 17, true, *ALL_MIGRATIONS).close()
     }
+
+    @Test fun version30AddsWaitingSubscriptionsAndDetailsKeepingData() {
+        helper.createDatabase(name, 29).apply {
+            execSQL("INSERT INTO categories (id, name, emoji, color, type, budgetMinor, addsToBudget, bucket, hidden) VALUES (1, 'Home', 'house', 1, 'EXPENSE', NULL, 0, NULL, 0)")
+            execSQL("INSERT INTO recurring (id, name, amountMinor, type, categoryId, dayOfMonth, startMonth, lastPostedMonth, active, everyMonths) VALUES (1, 'Rent', 1800000, 'EXPENSE', 1, 1, '2026-01', NULL, 1, 1)")
+            close()
+        }
+        val db = helper.runMigrationsAndValidate(name, 30, true, *ALL_MIGRATIONS)
+        db.query("SELECT name, manual FROM recurring WHERE id = 1").use {
+            it.moveToFirst()
+            assertEquals("Rent", it.getString(0))
+            assertEquals(0, it.getInt(1)) // existing subscriptions still log themselves
+        }
+    }
 }

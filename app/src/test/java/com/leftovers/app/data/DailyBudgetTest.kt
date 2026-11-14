@@ -36,4 +36,15 @@ class DailyBudgetTest {
         assertEquals(0, b.dailyLimit)
         assertFalse(b.monthUsedUp)
     }
+
+    @Test
+    fun overToday_theNewLimitSpreadsWhatsLeftOverTheDaysAfter() {
+        // ₹10,000 for the month, ₹5,000 spent before today: ₹500 a day for the 10 days left. Today ₹1,400 went.
+        val b = dailyBudget(10_000_00, listOf(spend(5_000_00, today.minusDays(3)), spend(1_400_00, today)), today = today)!!
+        assertEquals(-900_00, b.leftToday)
+        // ₹3,600 left, over the 9 days after today: ₹400 a day from tomorrow.
+        assertEquals(400_00L, b.newDailyLimit(10))
+        // The last day of the budget: nothing to spread over.
+        assertEquals(null, b.newDailyLimit(1))
+    }
 }

@@ -281,6 +281,8 @@ class EditorViewModel(
     /** New entries can start on a specific day, e.g. when adding from the calendar. */
     var date by mutableStateOf(savedState.get<Long>("day")?.takeIf { it >= 0 }?.let(LocalDate::ofEpochDay) ?: LocalDate.now())
     var note by mutableStateOf(savedState.get<String>("note").orEmpty())
+    /** More about it than its name (#62), kept out of lists. */
+    var details by mutableStateOf("")
     var accountId by mutableStateOf<Long?>(null)
     var receiptPath by mutableStateOf<String?>(null)
         private set
@@ -385,6 +387,7 @@ class EditorViewModel(
                     categoryId = tx.categoryId
                     date = LocalDate.ofEpochDay(tx.epochDay)
                     note = tx.note
+                    details = tx.details
                     createdAt = tx.createdAt
                     accountId = tx.accountId
                     receiptPath = tx.receiptPath
@@ -687,6 +690,7 @@ class EditorViewModel(
                     categoryId = category,
                     epochDay = savedDate.toEpochDay(),
                     note = note.trim(),
+                    details = details.trim(),
                     createdAt = createdAt,
                     accountId = accountId,
                     receiptPath = receiptPath,
@@ -1433,6 +1437,7 @@ fun EditorScreen(
             mutableStateOf(androidx.compose.ui.text.input.TextFieldValue(startText, androidx.compose.ui.text.TextRange(startText.length)))
         }
         var tags by rememberSaveable { mutableStateOf(com.leftovers.app.data.hashtags(viewModel.note)) }
+        var detailsDraft by rememberSaveable { mutableStateOf(viewModel.details) }
         var tagDraft by rememberSaveable { mutableStateOf("") }
         fun addTag(raw: String) {
             val tag = raw.trim().trimStart('#').lowercase().filter { it.isLetterOrDigit() || it == '_' || it == '-' }
@@ -1453,6 +1458,13 @@ fun EditorScreen(
                         { next -> if (next.text.length <= 120) draft = next },
                         placeholder = "e.g. Lunch with friends",
                         focusRequester = focus,
+                    )
+                    // Anything more (#62): who it was with, an import's purpose line. Shown when the entry is opened, not in lists.
+                    GlassTextField(
+                        detailsDraft,
+                        { detailsDraft = it.take(500) },
+                        placeholder = "More details (optional)",
+                        singleLine = false,
                     )
                     Text("Tags", style = MaterialTheme.typography.labelMedium, color = c.textSecondary, modifier = Modifier.padding(start = 6.dp, top = 4.dp))
                     if (tags.isNotEmpty()) {
@@ -1487,6 +1499,7 @@ fun EditorScreen(
                     val words = com.leftovers.app.data.noteText(draft.text)
                     val all = tags + com.leftovers.app.data.hashtags(draft.text) + listOfNotNull(tagDraft.trim().trimStart('#').lowercase().takeIf { t -> t.any { it.isLetter() } })
                     viewModel.note = com.leftovers.app.data.withTags(words, all).take(160)
+                    viewModel.details = detailsDraft.trim()
                     showNote = false
                 }) { Text("Done", color = c.textPrimary) }
             },

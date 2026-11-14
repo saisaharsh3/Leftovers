@@ -11,6 +11,7 @@ on:
       - "docs/wallpapers/**"
       - "docs/icon.svg"
       - "docs/social-preview.png"
+      - "docs/og-owed.png"
       - ".github/workflows/pages.yml"
   workflow_dispatch:
 
@@ -35,7 +36,7 @@ jobs:
         run: |
           mkdir -p _site/assets
           cp website/* _site/
-          cp docs/screenshots/*.jpg docs/icon.svg docs/social-preview.png _site/assets/
+          cp docs/screenshots/*.jpg docs/icon.svg docs/social-preview.png docs/og-owed.png _site/assets/
           # The same screens in the light theme, shown when the page is light.
           mkdir -p _site/assets/light && cp docs/screenshots/light/*.jpg _site/assets/light/
           # The backgrounds to try in Make it yours.

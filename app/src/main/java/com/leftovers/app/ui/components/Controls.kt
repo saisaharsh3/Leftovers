@@ -161,7 +161,7 @@ fun PrimaryButton(
                 Icon(icon, contentDescription = null, tint = fg, modifier = Modifier.size(20.dp))
                 Spacer(Modifier.width(8.dp))
             }
-            Text(text, style = MaterialTheme.typography.titleMedium, color = fg)
+            Text(text, style = MaterialTheme.typography.titleMedium, color = fg, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 }
@@ -175,7 +175,7 @@ fun SecondaryButton(text: String, onClick: () -> Unit, modifier: Modifier = Modi
                 Icon(icon, contentDescription = null, tint = c.textPrimary, modifier = Modifier.size(20.dp))
                 Spacer(Modifier.width(8.dp))
             }
-            Text(text, style = MaterialTheme.typography.titleMedium, color = c.textPrimary)
+            Text(text, style = MaterialTheme.typography.titleMedium, color = c.textPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 }
@@ -217,7 +217,7 @@ fun GlassHeader(
                     Text(shown, style = MaterialTheme.typography.headlineSmall, color = c.textPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
                 if (subtitle != null) {
-                    Text(subtitle, style = MaterialTheme.typography.bodySmall, color = c.textSecondary, maxLines = 1)
+                    Text(subtitle, style = MaterialTheme.typography.bodySmall, color = c.textSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), content = actions)
@@ -577,6 +577,8 @@ fun ListRow(
     title: String,
     modifier: Modifier = Modifier,
     subtitle: String? = null,
+    /** Lines the subtitle may take: one for a value, more for a sentence explaining a setting. */
+    subtitleLines: Int = 1,
     leading: @Composable (() -> Unit)? = null,
     trailing: @Composable (() -> Unit)? = null,
     onClick: (() -> Unit)? = null,
@@ -596,7 +598,7 @@ fun ListRow(
         Column(Modifier.weight(1f)) {
             Text(title, style = MaterialTheme.typography.titleSmall, color = c.textPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
             if (subtitle != null) {
-                Text(subtitle, style = MaterialTheme.typography.bodySmall, color = c.textSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(subtitle, style = MaterialTheme.typography.bodySmall, color = c.textSecondary, maxLines = subtitleLines, overflow = TextOverflow.Ellipsis)
             }
         }
         if (trailing != null) {

@@ -10,6 +10,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import java.time.YearMonth
 import java.util.Currency
@@ -72,6 +73,8 @@ data class AppSettings(
     /** Small spending from bank SMS added straight away, up to [smsAutoMaxMinor], instead of waiting to be checked. */
     val smsAutoAdd: Boolean = false,
     val smsAutoMaxMinor: Long = 20_000,
+    /** Over today's allowance, Home shows the new daily limit for the days left instead of how much it's over (#61). */
+    val showNewDailyLimit: Boolean = false,
     /** Read payment apps' notifications (FamApp, Google Pay, PhonePe...) for payments; needs notification access. */
     val appNotifications: Boolean = false,
     /** Month (yyyy-MM) whose recap the user has already opened or dismissed. */
@@ -186,6 +189,7 @@ class SettingsRepository(context: Context) {
             smsDetection = p[SMS] ?: false,
             smsAutoAdd = p[SMS_AUTO_ADD] ?: false,
             smsAutoMaxMinor = p[SMS_AUTO_MAX] ?: 20_000,
+            showNewDailyLimit = p[NEW_DAILY_LIMIT] ?: false,
             appNotifications = p[APP_NOTIFICATIONS] ?: false,
             recapSeen = p[RECAP_SEEN].orEmpty(),
             autoBackupDir = p[AUTO_BACKUP_DIR],
@@ -308,6 +312,27 @@ class SettingsRepository(context: Context) {
     suspend fun setSmsDetection(enabled: Boolean) = store.edit { it[SMS] = enabled }
     suspend fun setSmsAutoAdd(enabled: Boolean) = store.edit { it[SMS_AUTO_ADD] = enabled }
     suspend fun setSmsAutoMax(minor: Long) = store.edit { it[SMS_AUTO_MAX] = minor }
+    suspend fun setShowNewDailyLimit(on: Boolean) = store.edit { it[NEW_DAILY_LIMIT] = on }
+
+    /** How friends can pay you back, put in the reminders you send from Money owed. Empty until it's set. */
+    val payDetailsFlow = store.data.map { p ->
+        com.leftovers.app.util.SharedOwed.Pay(p[PAY_UPI].orEmpty(), p[PAY_NAME].orEmpty(), p[PAY_LINK].orEmpty(), p[PAY_BANK].orEmpty())
+    }
+    /** Whether reminders carry the payment details (on unless turned off). */
+    val payShareFlow = store.data.map { it[PAY_SHARE] ?: true }
+    suspend fun payShare(): Boolean = payShareFlow.first()
+    suspend fun setPayShare(on: Boolean) = store.edit { it[PAY_SHARE] = on }
+    /** Whether reminders carry the link a friend opens to see it, pay, or add it to their Leftovers (on unless turned off). */
+    val reminderLinkFlow = store.data.map { it[REMINDER_LINK] ?: true }
+    suspend fun reminderLink(): Boolean = reminderLinkFlow.first()
+    suspend fun setReminderLink(on: Boolean) = store.edit { it[REMINDER_LINK] = on }
+    suspend fun payDetails(): com.leftovers.app.util.SharedOwed.Pay = payDetailsFlow.first()
+    suspend fun setPayDetails(pay: com.leftovers.app.util.SharedOwed.Pay) = store.edit {
+        it[PAY_UPI] = pay.upi
+        it[PAY_NAME] = pay.name
+        it[PAY_LINK] = pay.link
+        it[PAY_BANK] = pay.bank
+    }
 
     suspend fun setAppNotifications(enabled: Boolean) = store.edit { it[APP_NOTIFICATIONS] = enabled }
     suspend fun setRecapSeen(month: String) = store.edit { it[RECAP_SEEN] = month }
@@ -444,6 +469,13 @@ class SettingsRepository(context: Context) {
         val SMS = booleanPreferencesKey("sms_detection")
         val SMS_AUTO_ADD = booleanPreferencesKey("sms_auto_add")
         val SMS_AUTO_MAX = longPreferencesKey("sms_auto_max")
+        val PAY_UPI = stringPreferencesKey("pay_upi")
+        val NEW_DAILY_LIMIT = booleanPreferencesKey("new_daily_limit")
+        val PAY_NAME = stringPreferencesKey("pay_name")
+        val PAY_LINK = stringPreferencesKey("pay_link")
+        val PAY_BANK = stringPreferencesKey("pay_bank")
+        val PAY_SHARE = booleanPreferencesKey("pay_share")
+        val REMINDER_LINK = booleanPreferencesKey("reminder_link")
         val APP_NOTIFICATIONS = booleanPreferencesKey("app_notifications")
         val RECAP_SEEN = stringPreferencesKey("recap_seen")
         val AUTO_BACKUP_DIR = stringPreferencesKey("auto_backup_dir")

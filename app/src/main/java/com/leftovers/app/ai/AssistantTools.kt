@@ -406,9 +406,19 @@ class AssistantTools(private val container: AppContainer, private val privacy: A
                         JSONObject().put("person", scrub(b.person))
                             .put(if (b.netMinor > 0) "owes_user" else "user_owes_them", major(kotlin.math.abs(b.netMinor)))
                             .put("entries", JSONArray(b.entries.map { d ->
+                                // Said in words, whose money went where: a bare "lent" was read the wrong way round
+                                // ("Anil lent you"), and a payback looked like more borrowing.
+                                val who = scrub(b.person)
+                                val what = when {
+                                    d.repayment && d.amountMinor < 0 -> "$who paid the user back"
+                                    d.repayment -> "the user paid $who back"
+                                    d.splitOf != null && d.amountMinor > 0 -> "$who's share of a bill the user paid, so $who owes the user"
+                                    d.amountMinor > 0 -> "the user lent $who money, so $who owes the user"
+                                    else -> "the user borrowed from $who, so the user owes $who"
+                                }
                                 JSONObject().put("date", LocalDate.ofEpochDay(d.epochDay).toString())
-                                    .put(if (d.amountMinor > 0) "lent" else "borrowed", major(kotlin.math.abs(d.amountMinor)))
-                                    .also { if (d.splitOf != null) it.put("share_of_split_bill", d.splitOf) }
+                                    .put("what", what)
+                                    .put("amount", major(kotlin.math.abs(d.amountMinor)))
                                     .also { if (d.isPending) it.put("amount_pending", if (d.theyOwe) "they will owe the user" else "the user will owe them") }
                                     .also { if (d.note.isNotBlank()) it.put("note", if (privacy.shareNotes) scrub(d.note) else "[hidden: the user keeps notes private]") }
                             }))

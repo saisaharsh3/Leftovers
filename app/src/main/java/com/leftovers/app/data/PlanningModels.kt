@@ -40,8 +40,23 @@ data class Recurring(
      * account's balance for the months it covers; [amountMinor] then holds an estimate at the latest balance.
      */
     val ratePercent: String? = null,
+    /**
+     * Marked paid by the user (#64) instead of logged by itself on its day: until then it waits on Home as due, and
+     * the amount and date can be what was really paid.
+     */
+    @ColumnInfo(defaultValue = "0") val manual: Boolean = false,
 ) {
     val yearly: Boolean get() = everyMonths == 12
+
+    /** The earliest month whose charge is due by [today] and not paid yet; null when nothing is due. */
+    fun dueMonth(today: LocalDate = LocalDate.now()): YearMonth? {
+        var month = lastPostedMonth?.let { YearMonth.parse(it).plusMonths(1) } ?: YearMonth.parse(startMonth)
+        while (month <= YearMonth.from(today)) {
+            if (isPendingIn(month) && chargeDate(month) <= today) return month
+            month = month.plusMonths(1)
+        }
+        return null
+    }
 
     /** What [balanceMinor] earns for one payment at [ratePercent], or null when this isn't interest. */
     fun interestOn(balanceMinor: Long): Long? {
@@ -96,8 +111,9 @@ data class RecurringItem(
     val categoryEmoji: String,
     val categoryColor: Long,
     val ratePercent: String? = null,
+    val manual: Boolean = false,
 ) {
-    fun toRecurring() = Recurring(id, name, amountMinor, type, categoryId, dayOfMonth, startMonth, lastPostedMonth, active, everyMonths, accountId, ratePercent)
+    fun toRecurring() = Recurring(id, name, amountMinor, type, categoryId, dayOfMonth, startMonth, lastPostedMonth, active, everyMonths, accountId, ratePercent, manual)
 
     /**
      * True when an entry looks like one this subscription logged: same type and category, and the same name.

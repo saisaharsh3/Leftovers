@@ -1,5 +1,9 @@
 package com.leftovers.app.ui.screens
 
+import androidx.compose.animation.animateContentSize
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.heightIn
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
@@ -271,6 +275,30 @@ fun TransactionPeekCard(
                 modifier = Modifier.padding(top = 2.dp),
             )
         }
+        // Its details (#62), when it has any: what lists leave out.
+        if (item.details.isNotBlank()) {
+            var allDetails by remember { mutableStateOf(false) }
+            var cut by remember { mutableStateOf(false) }
+            Column(Modifier.padding(horizontal = 6.dp)) {
+                Text(
+                    item.details,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = c.textSecondary,
+                    maxLines = if (allDetails) Int.MAX_VALUE else 4,
+                    overflow = TextOverflow.Ellipsis,
+                    onTextLayout = { if (!allDetails) cut = it.hasVisualOverflow },
+                    modifier = Modifier.animateContentSize().then(if (allDetails) Modifier.heightIn(max = 220.dp).verticalScroll(rememberScrollState()) else Modifier),
+                )
+                if (cut || allDetails) {
+                    Text(
+                        if (allDetails) "Less" else "More",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = c.accent,
+                        modifier = Modifier.padding(top = 4.dp).pressable({ allDetails = !allDetails }),
+                    )
+                }
+            }
+        }
         if (photos.isNotEmpty()) {
             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 photos.forEach { path -> ReceiptThumb(path, onOpen = { photo = path }, size = 64.dp) }
@@ -289,7 +317,22 @@ fun TransactionPeekCard(
                         color = c.textSecondary,
                         modifier = Modifier.weight(1f),
                     )
+                    // Split with people who still owe: one message to the group's chat, each finds their own share.
+                    if (shares.any { it.amountMinor > 0 && !it.settled }) {
+                        val context = androidx.compose.ui.platform.LocalContext.current
+                        val shareScope = androidx.compose.runtime.rememberCoroutineScope()
+                        com.leftovers.app.ui.components.RoundButton(Lucide.Share2, "Share with the group", {
+                            shareScope.launch {
+                                com.leftovers.app.util.DebtReminder.groupWithLink(context, main.id, money.currency.currencyCode, money::format)
+                                    ?.let { com.leftovers.app.util.DebtReminder.share(context, it, "the group") }
+                            }
+                        }, size = 36.dp, tint = c.textPrimary)
+                    }
                 }
+                // A big group: the first few people, then Show all, which opens the whole list to scroll in its own space.
+                var allShares by remember { mutableStateOf(false) }
+                val many = shares.size > 5
+                Column(if (allShares) Modifier.heightIn(max = 320.dp).verticalScroll(rememberScrollState()) else Modifier) {
                 // Tapping a line opens it to change: a part on its own, the main entry with the whole bill.
                 bill.forEach { b ->
                     Row(
@@ -313,7 +356,7 @@ fun TransactionPeekCard(
                         androidx.compose.material3.Icon(Lucide.ChevronRight, contentDescription = "Edit", tint = c.textTertiary, modifier = Modifier.padding(start = 6.dp).size(16.dp))
                     }
                 }
-                shares.forEach { d ->
+                (if (many && !allShares) shares.take(4) else shares).forEach { d ->
                     Row(
                         Modifier.fillMaxWidth().pressable({ close { peek.share = d } }, pressedScale = 0.98f).padding(horizontal = 16.dp, vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
@@ -330,6 +373,21 @@ fun TransactionPeekCard(
                         )
                         Text(money.format(d.amountMinor), style = MaterialTheme.typography.titleSmall, color = if (d.settled) c.textTertiary else c.positive)
                         androidx.compose.material3.Icon(Lucide.ChevronRight, contentDescription = "Edit ${d.person}'s share", tint = c.textTertiary, modifier = Modifier.padding(start = 6.dp).size(16.dp))
+                    }
+                }
+                }
+                if (many) {
+                    Row(
+                        Modifier.fillMaxWidth().pressable({ allShares = !allShares }, pressedScale = 0.98f).padding(horizontal = 16.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            if (allShares) "Show fewer" else "Show all ${shares.size} people",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = c.accent,
+                            modifier = Modifier.weight(1f),
+                        )
+                        androidx.compose.material3.Icon(if (allShares) Lucide.ChevronDown else Lucide.ChevronRight, contentDescription = null, tint = c.accent, modifier = Modifier.size(16.dp).graphicsLayer { rotationZ = if (allShares) 180f else 0f })
                     }
                 }
             }
