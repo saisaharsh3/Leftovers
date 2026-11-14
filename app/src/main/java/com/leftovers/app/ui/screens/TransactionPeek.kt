@@ -329,8 +329,10 @@ fun TransactionPeekCard(
                         }, size = 36.dp, tint = c.textPrimary)
                     }
                 }
-                // Many lines (a bill shared with a big group): they scroll here, in their own space, and the card stays put.
-                Column(Modifier.heightIn(max = 300.dp).verticalScroll(rememberScrollState())) {
+                // A big group: the first few people, then Show all, which opens the whole list to scroll in its own space.
+                var allShares by remember { mutableStateOf(false) }
+                val many = shares.size > 5
+                Column(if (allShares) Modifier.heightIn(max = 320.dp).verticalScroll(rememberScrollState()) else Modifier) {
                 // Tapping a line opens it to change: a part on its own, the main entry with the whole bill.
                 bill.forEach { b ->
                     Row(
@@ -354,7 +356,7 @@ fun TransactionPeekCard(
                         androidx.compose.material3.Icon(Lucide.ChevronRight, contentDescription = "Edit", tint = c.textTertiary, modifier = Modifier.padding(start = 6.dp).size(16.dp))
                     }
                 }
-                shares.forEach { d ->
+                (if (many && !allShares) shares.take(4) else shares).forEach { d ->
                     Row(
                         Modifier.fillMaxWidth().pressable({ close { peek.share = d } }, pressedScale = 0.98f).padding(horizontal = 16.dp, vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
@@ -373,6 +375,20 @@ fun TransactionPeekCard(
                         androidx.compose.material3.Icon(Lucide.ChevronRight, contentDescription = "Edit ${d.person}'s share", tint = c.textTertiary, modifier = Modifier.padding(start = 6.dp).size(16.dp))
                     }
                 }
+                }
+                if (many) {
+                    Row(
+                        Modifier.fillMaxWidth().pressable({ allShares = !allShares }, pressedScale = 0.98f).padding(horizontal = 16.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            if (allShares) "Show fewer" else "Show all ${shares.size} people",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = c.accent,
+                            modifier = Modifier.weight(1f),
+                        )
+                        androidx.compose.material3.Icon(if (allShares) Lucide.ChevronDown else Lucide.ChevronRight, contentDescription = null, tint = c.accent, modifier = Modifier.size(16.dp).graphicsLayer { rotationZ = if (allShares) 180f else 0f })
+                    }
                 }
             }
         }

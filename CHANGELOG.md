@@ -5,7 +5,7 @@ All notable changes to Leftovers. Download any version from
 
 ## Unreleased
 
-- An entry's card fits any amount: long details show four lines with More, a bill shared with many people scrolls its list in place, and Delete and Edit stay in reach
+- An entry's card fits any amount: long details show four lines with More, a bill shared with many people shows four with Show all, which opens the list to scroll in place, and Delete and Edit stay in reach
 - Highlights shows amounts in your own currency, and UPI only for rupees
 - Getting paid: the payment link and bank details are one row
 - Reminders can leave out the link (Settings → Getting paid → Add a link to reminders, on unless turned off): then just the message is sent
