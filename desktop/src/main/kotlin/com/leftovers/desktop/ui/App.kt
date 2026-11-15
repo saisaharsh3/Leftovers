@@ -138,6 +138,7 @@ private fun Shell(state: AppState, view: View) {
                 when (page) {
                     Page.HOME -> com.leftovers.desktop.ui.screens.HomeScreen(view)
                     Page.ACTIVITY -> com.leftovers.desktop.ui.screens.ActivityScreen(view)
+                    Page.INSIGHTS -> com.leftovers.desktop.ui.screens.InsightsScreen(view)
                     Page.SETTINGS -> SettingsScreen(view)
                     else -> Placeholder(page)
                 }
