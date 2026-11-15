@@ -39,6 +39,10 @@ data class Prefs(
     val rates: Map<String, String> = emptyMap(),
     /** "Looks like a subscription" suggestions the user said no to. */
     val dismissed: Set<String> = emptySet(),
+    /** Closing the window keeps Leftovers in the tray, so bill reminders still come. */
+    val tray: Boolean = true,
+    /** Windows notifications for bills that are due. */
+    val billReminders: Boolean = true,
 )
 
 enum class Theme { SYSTEM, LIGHT, DARK }

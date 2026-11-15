@@ -49,6 +49,14 @@ fun SettingsScreen(view: View) {
                 Toggle(prefs.showNewDailyLimit) { on -> store.setPrefs { copy(showNewDailyLimit = on) } }
             }
         }
+        Group("On this computer") {
+            SettingRow("Keep running in the tray", "Closing the window leaves Leftovers by the clock, so reminders still come.") {
+                Toggle(prefs.tray) { on -> store.setPrefs { copy(tray = on) } }
+            }
+            SettingRow("Remind me of bills", "A Windows notification when a bill is due, and the day before one is logged.") {
+                Toggle(prefs.billReminders) { on -> store.setPrefs { copy(billReminders = on) } }
+            }
+        }
         Group("Backup") {
             SettingRow("Save a backup", "A file your phone can open.", onClick = { saving = true }) { Chevron() }
             SettingRow("Open a backup", "From your phone, or from this computer.", onClick = { opener.start() }) { Chevron() }

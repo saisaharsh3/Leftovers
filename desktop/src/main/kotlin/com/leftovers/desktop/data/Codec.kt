@@ -301,6 +301,8 @@ object Codec {
         put("syncLast", p.syncLast)
         put("rates", JSONObject(p.rates))
         put("dismissed", JSONArray(p.dismissed.toList()))
+        put("tray", p.tray)
+        put("billReminders", p.billReminders)
     }
 
     private fun decodePrefs(o: JSONObject): Prefs {
@@ -323,6 +325,8 @@ object Codec {
             syncLast = o.optLong("syncLast"),
             rates = o.optJSONObject("rates")?.let { r -> r.keys().asSequence().associateWith { r.getString(it) } }.orEmpty(),
             dismissed = o.optJSONArray("dismissed")?.let { a -> (0 until a.length()).map(a::getString).toSet() }.orEmpty(),
+            tray = o.optBoolean("tray", true),
+            billReminders = o.optBoolean("billReminders", true),
         )
     }
 }
