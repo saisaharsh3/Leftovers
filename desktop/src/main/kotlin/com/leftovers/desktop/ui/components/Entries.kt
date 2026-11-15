@@ -6,6 +6,8 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.background
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -70,12 +72,26 @@ fun EntryRow(
     part: Boolean = false,
     showDay: Boolean = true,
     account: String? = null,
+    selected: Boolean = false,
+    /** Clicks handled by the caller (selection, right-click) instead of [onClick]. */
+    clicks: Modifier? = null,
 ) {
     val c = T.c
     val money = LocalMoney.current
     val icons = LocalApp.current.store.book.icons
-    HoverRow(onClick, modifier.fillMaxWidth().padding(start = if (part) 34.dp else 0.dp)) {
-        IconBadge(item.categoryEmoji, item.categoryColor, if (part) 30.dp else 36.dp, icons)
+    HoverRow(
+        if (clicks == null) onClick else null,
+        modifier.fillMaxWidth().padding(start = if (part) 34.dp else 0.dp).then(clicks ?: Modifier),
+        selected = selected, hoverTint = true,
+    ) {
+        val size = if (part) 30.dp else 36.dp
+        androidx.compose.animation.AnimatedContent(
+            selected, transitionSpec = { (androidx.compose.animation.scaleIn(Motion.moved(), 0.6f) + fadeIn(Motion.settle())) togetherWith fadeOut(Motion.quick()) }, label = "pick",
+        ) { on ->
+            if (on) Box(Modifier.size(size).clip(androidx.compose.foundation.shape.CircleShape).background(c.accent), contentAlignment = Alignment.Center) {
+                Icon(Lucide.Check, "Selected", Modifier.size(size * 0.5f), tint = c.onAccent)
+            } else IconBadge(item.categoryEmoji, item.categoryColor, size, icons)
+        }
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
             Text(

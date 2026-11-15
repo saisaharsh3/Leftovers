@@ -122,6 +122,8 @@ fun HoverRow(
     selected: Boolean = false,
     shape: RoundedCornerShape = RoundedCornerShape(10.dp),
     padding: PaddingValues = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
+    /** Tints on hover even with no [onClick], for rows whose clicks are handled outside (selection). */
+    hoverTint: Boolean = onClick != null,
     content: @Composable RowScope.() -> Unit,
 ) {
     val c = T.c
@@ -132,7 +134,7 @@ fun HoverRow(
         when {
             selected -> c.raised
             pressed -> c.hover.copy(alpha = (c.hover.alpha * 2).coerceAtMost(1f))
-            hovered && onClick != null -> c.hover
+            hovered && hoverTint -> c.hover
             else -> Color.Transparent
         },
         Motion.quick(),

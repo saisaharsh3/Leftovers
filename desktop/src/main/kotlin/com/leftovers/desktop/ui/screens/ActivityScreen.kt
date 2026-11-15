@@ -46,6 +46,15 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.foundation.onClick
+import androidx.compose.ui.input.pointer.isCtrlPressed
+import androidx.compose.ui.input.pointer.isShiftPressed
+import com.leftovers.desktop.data.setCategory
+import com.leftovers.desktop.data.setAccount
+import com.leftovers.desktop.data.duplicate
+import com.leftovers.desktop.data.deleteEntries
+import androidx.compose.ui.input.pointer.PointerIcon
+import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.unit.dp
 import com.leftovers.app.data.allTags
 import com.leftovers.app.ui.icons.Lucide
@@ -79,6 +88,20 @@ object ActivityMemory {
     var query by mutableStateOf(ActivityQuery())
     var started = false
     val searchFocus = FocusRequester()
+    /** Entries picked with Ctrl or Shift and a click, for changing them together. */
+    val selected = androidx.compose.runtime.mutableStateListOf<Long>()
+    /** Where a Shift+click range starts. */
+    var anchor: Long? = null
+    /** The entries on screen in order, for Shift+click and Ctrl+A. */
+    var visible: List<Long> = emptyList()
+
+    fun toggle(id: Long) { if (id in selected) selected.remove(id) else selected.add(id); anchor = id }
+    fun range(id: Long) {
+        val from = visible.indexOf(anchor ?: id).takeIf { it >= 0 } ?: visible.indexOf(id)
+        val to = visible.indexOf(id)
+        if (from < 0 || to < 0) return toggle(id)
+        (minOf(from, to)..maxOf(from, to)).map { visible[it] }.forEach { if (it !in selected) selected.add(it) }
+    }
 }
 
 @Composable
@@ -93,6 +116,9 @@ fun ActivityScreen(view: View) {
         if (!ActivityMemory.started) { ActivityMemory.started = true; if (q.accountId == null) q = q.copy(accountId = view.book.prefs.homeAccountId) }
     }
     val model = remember(view, q) { ActivityModel.of(view, q) }
+    ActivityMemory.visible = model.groups.flatMap { g -> g.items.map { it.id } }
+    // Entries that went away (deleted, filtered out) leave the selection.
+    LaunchedEffect(model) { ActivityMemory.selected.retainAll(ActivityMemory.visible.toSet()) }
     val list = rememberLazyListState()
     LaunchedEffect(q.month, q.allTime, q.type, q.sort) { list.scrollToItem(0) }
     val searching = q.search.isNotBlank()
@@ -147,7 +173,9 @@ fun ActivityScreen(view: View) {
             items(model.groups, key = { (it.label ?: "") + it.date.toEpochDay() }) { g ->
                 Box(Modifier.widthIn(max = 1080.dp).fillMaxWidth().padding(horizontal = 40.dp, vertical = 8.dp).animateItem()) { Day(view, g) }
             }
+            item(key = "end") { Spacer(Modifier.height(72.dp)) }
         }
+        SelectionBar(view, Modifier.align(Alignment.BottomCenter))
         VerticalScrollbar(
             rememberScrollbarAdapter(list), Modifier.align(Alignment.CenterEnd).fillMaxHeight().padding(vertical = 4.dp, horizontal = 2.dp),
             style = defaultScrollbarStyle().copy(unhoverColor = c.text.copy(alpha = 0.12f), hoverColor = c.text.copy(alpha = 0.28f), shape = RoundedCornerShape(4.dp)),
@@ -183,10 +211,16 @@ private fun Day(view: View, g: DayGroup) {
         Column(Modifier.fillMaxWidth().clip(CardShape).background(c.surface).border(1.dp, c.line, CardShape).padding(6.dp)) {
             g.items.forEach { item ->
                 androidx.compose.runtime.key(item.id) {
-                    EntryRow(
-                        item, { app.edit(item.id) }, part = item.splitOf != null && item.splitOf in ids, showDay = g.label != null,
-                        account = view.account(item.accountId)?.name?.takeIf { view.accounts.size > 1 },
-                    )
+                    var menu by remember { mutableStateOf(false) }
+                    Box {
+                        EntryRow(
+                            item, { app.edit(item.id) }, part = item.splitOf != null && item.splitOf in ids, showDay = g.label != null,
+                            account = view.account(item.accountId)?.name?.takeIf { view.accounts.size > 1 },
+                            selected = item.id in ActivityMemory.selected,
+                            clicks = selectionClicks(item.id, onOpen = { app.edit(item.id) }, onMenu = { menu = true }),
+                        )
+                        EntryMenu(view, item.id, menu) { menu = false }
+                    }
                 }
             }
             g.transfers.forEach { line ->
@@ -287,6 +321,159 @@ private fun SortMenu(sort: ActivitySort, onPick: (ActivitySort) -> Unit) {
                     trailingIcon = { if (s == sort) Icon(Lucide.Check, null, Modifier.size(16.dp), tint = c.text) },
                 )
             }
+        }
+    }
+}
+
+/**
+ * Clicks on an entry: Ctrl adds or removes it from the selection, Shift adds the run up to it, a plain click
+ * opens it (or, while some are selected, picks it too), and a right-click opens its menu.
+ */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+@Composable
+private fun selectionClicks(id: Long, onOpen: () -> Unit, onMenu: () -> Unit): Modifier = Modifier
+    .pointerHoverIcon(PointerIcon.Hand)
+    .onClick(keyboardModifiers = { isCtrlPressed }) { ActivityMemory.toggle(id) }
+    .onClick(keyboardModifiers = { isShiftPressed && !isCtrlPressed }) { ActivityMemory.range(id) }
+    .onClick(keyboardModifiers = { !isCtrlPressed && !isShiftPressed }) {
+        if (ActivityMemory.selected.isNotEmpty()) ActivityMemory.toggle(id) else { ActivityMemory.anchor = id; onOpen() }
+    }
+    .onClick(matcher = androidx.compose.foundation.PointerMatcher.mouse(androidx.compose.ui.input.pointer.PointerButton.Secondary)) { onMenu() }
+
+private val menuColor: Color @Composable get() = if (T.c.dark) Color(0xFF1E1E26) else Color.White
+
+@Composable
+private fun MenuItem(text: String, icon: androidx.compose.ui.graphics.vector.ImageVector?, color: Color = T.c.text, action: () -> Unit) {
+    val c = T.c
+    DropdownMenuItem(
+        { Text(text, style = T.type.body, color = color) }, action,
+        leadingIcon = icon?.let { { Icon(it, null, Modifier.size(16.dp), tint = if (color == c.text) c.text2 else color) } },
+    )
+}
+
+/** Right-click on an entry: for it, or for all that are selected when it's one of them. */
+@Composable
+private fun EntryMenu(view: View, id: Long, open: Boolean, onClose: () -> Unit) {
+    val app = LocalApp.current
+    val store = app.store
+    val c = T.c
+    var step by remember(open) { mutableStateOf("") }
+    val ids = if (id in ActivityMemory.selected) ActivityMemory.selected.toSet() else setOf(id)
+    val many = ids.size > 1
+    DropdownMenu(open, onClose, shape = RoundedCornerShape(12.dp), containerColor = menuColor) {
+        when (step) {
+            "category" -> {
+                val type = view.entries.firstOrNull { it.id == id }?.type
+                view.book.categories.filter { it.type == type && !it.hidden }.forEach { cat ->
+                    MenuItem(cat.name, null) {
+                        val n = store.setCategory(ids, cat.id)
+                        app.tell("${if (n == 1) "1 entry" else "$n entries"} moved to ${cat.name}") { store.undo() }
+                        onClose()
+                    }
+                }
+            }
+            "account" -> view.accounts.forEach { a ->
+                MenuItem(a.name, null) {
+                    val n = store.setAccount(ids, a.id)
+                    app.tell("${if (n == 1) "1 entry" else "$n entries"} moved to ${a.name}") { store.undo() }
+                    onClose()
+                }
+            }
+            else -> {
+                if (!many) MenuItem("Edit", Lucide.Pencil) { onClose(); app.edit(id) }
+                if (!many) MenuItem("Duplicate for today", Lucide.Plus) {
+                    store.duplicate(id)
+                    app.tell("Added a copy for today") { store.undo() }
+                    onClose()
+                }
+                MenuItem(if (many) "Change category of ${ids.size}" else "Change category", Lucide.LayoutGrid) { step = "category" }
+                if (view.accounts.size > 1) MenuItem(if (many) "Move ${ids.size} to an account" else "Move to an account", Lucide.Wallet) { step = "account" }
+                if (!many) MenuItem(if (id in ActivityMemory.selected) "Unselect" else "Select", Lucide.CircleCheck) { ActivityMemory.toggle(id); onClose() }
+                MenuItem(if (many) "Delete ${ids.size}" else "Delete", Lucide.Trash2, c.negative) {
+                    store.deleteEntries(ids)
+                    ActivityMemory.selected.clear()
+                    app.tell(if (many) "${ids.size} entries deleted" else "Entry deleted") { store.undo() }
+                    onClose()
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun BarButton(text: String, icon: androidx.compose.ui.graphics.vector.ImageVector, tint: Color = Color.White, onClick: () -> Unit) {
+    Row(
+        Modifier.clip(RoundedCornerShape(10.dp)).pressable(onClick = onClick).background(Color.White.copy(alpha = 0.08f)).padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(icon, null, Modifier.size(15.dp), tint = tint)
+        Spacer(Modifier.width(6.dp))
+        Text(text, style = T.type.small.copy(fontWeight = FontWeight.SemiBold), color = tint)
+    }
+}
+
+/** While entries are picked: how many, what they come to, and what to do with them. Slides up from the bottom. */
+@Composable
+private fun SelectionBar(view: View, modifier: Modifier) {
+    val app = LocalApp.current
+    val store = app.store
+    val c = T.c
+    val money = LocalMoney.current
+    val ids = ActivityMemory.selected.toSet()
+    var shown by remember { mutableStateOf(ids) }
+    if (ids.isNotEmpty()) shown = ids
+    var menu by remember { mutableStateOf("") }
+    androidx.compose.animation.AnimatedVisibility(
+        ids.isNotEmpty(), modifier.padding(bottom = 22.dp),
+        enter = androidx.compose.animation.slideInVertically(com.leftovers.desktop.ui.theme.Motion.offset) { it } + fadeIn(),
+        exit = androidx.compose.animation.slideOutVertically(com.leftovers.desktop.ui.theme.Motion.offset) { it } + fadeOut(),
+    ) {
+        val items = view.entries.filter { it.id in shown }
+        val spent = items.filter { it.type == com.leftovers.app.data.TxType.EXPENSE }.sumOf { it.amountMinor }
+        val earned = items.filter { it.type == com.leftovers.app.data.TxType.INCOME }.sumOf { it.amountMinor }
+        Row(
+            Modifier.clip(RoundedCornerShape(16.dp)).background(if (c.dark) Color(0xFF26262E) else Color(0xFF18181D))
+                .padding(start = 20.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
+            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Text(
+                "${shown.size} selected · " + listOfNotNull(spent.takeIf { it > 0 }?.let { money.format(it) }, earned.takeIf { it > 0 }?.let { "+" + money.format(it) }).joinToString(" · "),
+                style = T.type.bodyStrong, color = Color.White,
+            )
+            Spacer(Modifier.width(10.dp))
+            Box {
+                BarButton("Category", Lucide.LayoutGrid) { menu = "category" }
+                DropdownMenu(menu == "category", { menu = "" }, shape = RoundedCornerShape(12.dp), containerColor = menuColor) {
+                    val types = items.map { it.type }.toSet()
+                    view.book.categories.filter { it.type in types && !it.hidden }.forEach { cat ->
+                        val kind = if (types.size > 1) (if (cat.type == com.leftovers.app.data.TxType.INCOME) " · income" else " · spending") else ""
+                        MenuItem(cat.name + kind, null) {
+                            val n = store.setCategory(shown, cat.id)
+                            app.tell("${if (n == 1) "1 entry" else "$n entries"} moved to ${cat.name}") { store.undo() }
+                            menu = ""
+                        }
+                    }
+                }
+            }
+            if (view.accounts.size > 1) Box {
+                BarButton("Account", Lucide.Wallet) { menu = "account" }
+                DropdownMenu(menu == "account", { menu = "" }, shape = RoundedCornerShape(12.dp), containerColor = menuColor) {
+                    view.accounts.forEach { a ->
+                        MenuItem(a.name, null) {
+                            val n = store.setAccount(shown, a.id)
+                            app.tell("${if (n == 1) "1 entry" else "$n entries"} moved to ${a.name}") { store.undo() }
+                            menu = ""
+                        }
+                    }
+                }
+            }
+            BarButton("Delete", Lucide.Trash2, Color(0xFFF58A8A)) {
+                val n = shown.size
+                store.deleteEntries(shown)
+                ActivityMemory.selected.clear()
+                app.tell("$n ${if (n == 1) "entry" else "entries"} deleted") { store.undo() }
+            }
+            IconButton(Lucide.X, { ActivityMemory.selected.clear() }, tint = Color.White.copy(alpha = 0.7f), tooltip = "Clear the selection (Esc)")
         }
     }
 }

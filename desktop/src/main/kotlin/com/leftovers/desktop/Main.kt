@@ -50,7 +50,14 @@ fun main() {
             },
             // After the focused thing had its turn: a text box undoes its own typing; anywhere else, the last change.
             onKeyEvent = { e ->
-                if (e.type != KeyEventType.KeyDown || !e.isCtrlPressed) return@Window false
+                if (e.type != KeyEventType.KeyDown) return@Window false
+                val picked = com.leftovers.desktop.ui.screens.ActivityMemory.selected
+                if (e.key == Key.Escape && picked.isNotEmpty()) { picked.clear(); return@Window true }
+                if (!e.isCtrlPressed) return@Window false
+                // Ctrl+A in Activity, outside a text box: every entry on screen.
+                if (e.key == Key.A && state.page == Page.ACTIVITY && state.editing == null) {
+                    picked.clear(); picked.addAll(com.leftovers.desktop.ui.screens.ActivityMemory.visible); return@Window true
+                }
                 when {
                     e.key == Key.Z && !e.isShiftPressed -> { if (store.undo()) state.tell("Undone"); true }
                     e.key == Key.Y || (e.key == Key.Z && e.isShiftPressed) -> { if (store.redo()) state.tell("Redone"); true }

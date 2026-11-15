@@ -96,3 +96,51 @@ class UndoTest {
         assertTrue(!s.redo())
     }
 }
+
+/** Changing many entries at once. Made-up data only. */
+class BulkTest {
+    private fun store() = Store(Files.createTempDirectory("leftovers-test").toFile()).apply {
+        save(Book.starter("EUR"))
+        saveEntry(EntryDraft(amountMinor = 500, categoryId = 1, accountId = 1), { "" })
+        saveEntry(EntryDraft(amountMinor = 700, categoryId = 1, accountId = 1, people = listOf("Ana")), { "" })
+        saveEntry(EntryDraft(amountMinor = 9_000, type = TxType.INCOME, categoryId = 13, accountId = 1), { "" })
+    }
+
+    @Test
+    fun recategorisingLeavesTheOtherKindAlone() {
+        val s = store()
+        val all = s.book.transactions.map { it.id }.toSet()
+        assertEquals(2, s.setCategory(all, 2))
+        assertEquals(13L, s.book.transactions.single { it.type == TxType.INCOME }.categoryId)
+        s.undo()
+        assertTrue(s.book.transactions.filter { it.type == TxType.EXPENSE }.all { it.categoryId == 1L })
+    }
+
+    @Test
+    fun movingAccountMovesTheSharesToo() {
+        val s = store()
+        assertEquals(3, s.setAccount(s.book.transactions.map { it.id }.toSet(), 2))
+        assertEquals(2L, s.book.debts.single().accountId)
+    }
+
+    @Test
+    fun deletingManyIsOneUndo() {
+        val s = store()
+        s.deleteEntries(s.book.transactions.map { it.id }.toSet())
+        assertTrue(s.book.transactions.isEmpty() && s.book.debts.isEmpty())
+        s.undo()
+        assertEquals(3, s.book.transactions.size)
+        assertEquals(1, s.book.debts.size)
+    }
+
+    @Test
+    fun aDuplicateIsANewEntryToday() {
+        val s = store()
+        val first = s.book.transactions.first { it.amountMinor == 500L }
+        val id = s.duplicate(first.id, LocalDate.of(2026, 11, 20))!!
+        val copy = s.book.transactions.single { it.id == id }
+        assertEquals(500L, copy.amountMinor)
+        assertEquals(LocalDate.of(2026, 11, 20).toEpochDay(), copy.epochDay)
+        assertTrue(id != first.id)
+    }
+}

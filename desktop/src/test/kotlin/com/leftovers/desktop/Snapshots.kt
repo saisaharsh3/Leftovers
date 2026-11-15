@@ -32,7 +32,7 @@ object Snapshots {
     fun main(args: Array<String>) {
         val out = File(args.getOrElse(0) { "snapshots" }).apply { mkdirs() }
         val names = args.getOrElse(1) { "" }.split(',').filter { it.isNotBlank() }
-        val pages = names.filter { it != "EDITOR" && it != "PALETTE" && it != "SHORTCUTS" }.map { Page.valueOf(it) }.ifEmpty { if (names.isNotEmpty()) emptyList() else Page.entries }
+        val pages = names.filter { it != "EDITOR" && it != "PALETTE" && it != "SHORTCUTS" && it != "SELECT" }.map { Page.valueOf(it) }.ifEmpty { if (names.isNotEmpty()) emptyList() else Page.entries }
         val theme = Theme.valueOf(args.getOrElse(2) { "LIGHT" })
         val glass = args.getOrElse(3) { "false" } == "true"
         val welcome = args.getOrElse(4) { "false" } == "true"
@@ -46,6 +46,13 @@ object Snapshots {
             state.edit(store.book.transactions.firstOrNull { it.note == "Lunch with Mia" }?.id)
             shoot(File(out, "editor-${theme.name.lowercase()}${if (glass) "-glass" else ""}.png")) { App(state) }
             state.editing = null
+        }
+        if ("SELECT" in names) {
+            state.page = Page.ACTIVITY
+            val ids = store.view.value.entries.filter { it.type == com.leftovers.app.data.TxType.EXPENSE }.take(4).drop(1).map { it.id }
+            com.leftovers.desktop.ui.screens.ActivityMemory.selected.addAll(ids)
+            shoot(File(out, "select-${theme.name.lowercase()}.png")) { App(state) }
+            com.leftovers.desktop.ui.screens.ActivityMemory.selected.clear()
         }
         if ("PALETTE" in names) {
             state.palette = true

@@ -161,3 +161,35 @@ fun ordinal(n: Int): String = n.toString() + when {
     n % 10 == 3 -> "rd"
     else -> "th"
 }
+
+/** Moves the entries with [ids] to [categoryId]; only those of the category's kind (spending or income). One step for undo. */
+fun Store.setCategory(ids: Set<Long>, categoryId: Long): Int {
+    val type = book.categories.firstOrNull { it.id == categoryId }?.type ?: return 0
+    var n = 0
+    edit { copy(transactions = transactions.map { if (it.id in ids && it.type == type && it.categoryId != categoryId) { n++; it.copy(categoryId = categoryId) } else it }) }
+    return n
+}
+
+/** Moves the entries with [ids] to [accountId], with the shares people owe for them. One step for undo. */
+fun Store.setAccount(ids: Set<Long>, accountId: Long): Int {
+    var n = 0
+    edit {
+        copy(
+            transactions = transactions.map { if (it.id in ids && it.accountId != accountId) { n++; it.copy(accountId = accountId) } else it },
+            debts = debts.map { if (it.splitOf in ids && !it.repayment) it.copy(accountId = accountId) else it },
+        )
+    }
+    return n
+}
+
+/** Deletes the entries with [ids] (each with its parts and shares) as one step. */
+fun Store.deleteEntries(ids: Set<Long>) = batch { ids.forEach { deleteEntry(it) } }
+
+/** A copy of an entry dated [day], as a new entry; returns its id. */
+fun Store.duplicate(id: Long, day: java.time.LocalDate = java.time.LocalDate.now()): Long? {
+    val d = draftOf(id) ?: return null
+    return batch {
+        saveEntry(d.copy(id = 0, day = day, createdAt = System.currentTimeMillis(), receiptPath = null), { "" })
+        book.transactions.maxByOrNull { it.createdAt }?.id
+    }
+}
