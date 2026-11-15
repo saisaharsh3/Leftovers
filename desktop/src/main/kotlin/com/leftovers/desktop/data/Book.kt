@@ -37,6 +37,8 @@ data class Prefs(
     val syncLast: Long = 0,
     /** Exchange rates the user set for accounts in other currencies: "AED" to how much one is in the app's. */
     val rates: Map<String, String> = emptyMap(),
+    /** "Looks like a subscription" suggestions the user said no to. */
+    val dismissed: Set<String> = emptySet(),
 )
 
 enum class Theme { SYSTEM, LIGHT, DARK }
