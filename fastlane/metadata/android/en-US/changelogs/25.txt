@@ -1,9 +1,7 @@
-- Friends paying you back, settled in Money owed
-- Get paid back in one tap: UPI ID, payment link or bank details in reminders
-- Group splits in one message to the group
-- Subscriptions logged when you really pay
-- Bank balances from SMS, with Match
-- New daily limit after a big day; envelope budgets
-- AI assistant: saved chats, files to ask about
-- Settings like your phone's, with search
-- Your own photo, icons and accent colour
+Getting paid back just got easy.
+
+Split a bill and send each friend their share, with your UPI ID, payment link or bank details. When they pay, tick it off in Money owed.
+
+Also new: subscriptions that wait for the real payment, a fresh daily limit after a big spend, and an assistant that keeps your chats.
+
+No account. No ads. Your money stays on your phone.
