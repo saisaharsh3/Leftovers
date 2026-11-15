@@ -215,6 +215,27 @@ object SharedOwed {
     }
 
     /** [line] as the receiver's own entry with [person], who sent it: the other way round, and in no account. */
+    /** The shares in [lines] that the receiver owes for a bill (not money lent, nor a payback): their own spending. */
+    fun shares(lines: List<Line>): List<Line> = lines.filter { it.amountMinor > 0 && !it.repayment }
+
+    /**
+     * The receiver's own share of each bill as their spending, when they choose to add it there too: on its day, in
+     * [categoryId], with what it was a share of. No account: [person] paid, so no money left yours yet; it does when
+     * you pay them back, so it's counted once.
+     */
+    fun spending(lines: List<Line>, person: String, categoryId: Long, format: (Long) -> String): List<com.leftovers.app.data.Transaction> =
+        shares(lines).map { l ->
+            com.leftovers.app.data.Transaction(
+                amountMinor = l.amountMinor,
+                type = com.leftovers.app.data.TxType.EXPENSE,
+                categoryId = categoryId,
+                epochDay = l.epochDay,
+                note = l.note.trim().ifBlank { "Split with ${person.trim()}" },
+                details = if (l.splitPeople > 1) "Your share of ${format(l.splitTotalMinor)}, split ${l.splitPeople} ways · paid by ${person.trim()}"
+                else "Paid by ${person.trim()}",
+            )
+        }
+
     fun mirror(line: Line, person: String): Debt =
         Debt(person = person.trim(), amountMinor = -line.amountMinor, note = line.note, epochDay = line.epochDay, repayment = line.repayment, sharedId = line.id)
 }

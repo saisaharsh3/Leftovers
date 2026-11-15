@@ -199,4 +199,22 @@ class SharedOwedTest {
         assertEquals("", DebtReminder.payLines(SharedOwed.Pay(upi = "asha.k@okaxis"), "EUR"))
         assertTrue("Pay here: https://paypal.me/a" in DebtReminder.payLines(SharedOwed.Pay(upi = "asha.k@okaxis", link = "paypal.me/a"), "EUR"))
     }
+
+    @Test
+    fun `your share of their bill can go in your spending, with no account`() {
+        val lines = listOf(
+            SharedOwed.Line("a1", 300_00, 20_770, "Dinner", repayment = false, splitTotalMinor = 1_200_00, splitPeople = 4),
+            // Money they lent you, and a payback: neither is your spending.
+            SharedOwed.Line("a2", -50_00, 20_771, "Paid back", repayment = true),
+            SharedOwed.Line("a3", 500_00, 20_772, "", repayment = true),
+        )
+        val spent = SharedOwed.spending(lines, " Ravi ", categoryId = 1, format = { "₹" + it / 100 })
+        val dinner = spent.single()
+        assertEquals(300_00L, dinner.amountMinor)
+        assertEquals(com.leftovers.app.data.TxType.EXPENSE, dinner.type)
+        assertEquals(20_770L, dinner.epochDay)
+        assertEquals("Dinner", dinner.note)
+        assertEquals("Your share of ₹1200, split 4 ways · paid by Ravi", dinner.details)
+        assertEquals(null, dinner.accountId)
+    }
 }
