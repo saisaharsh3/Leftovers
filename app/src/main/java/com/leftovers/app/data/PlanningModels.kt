@@ -48,6 +48,12 @@ data class Recurring(
 ) {
     val yearly: Boolean get() = everyMonths == 12
 
+    /**
+     * A one-off entry scheduled for a later day (#68), not a subscription: [everyMonths] 0, charged once on
+     * [dayOfMonth] of [startMonth]. It's added on its day, set aside from the budget until then, and then it's gone.
+     */
+    val once: Boolean get() = everyMonths == 0
+
     /** The earliest month whose charge is due by [today] and not paid yet; null when nothing is due. */
     fun dueMonth(today: LocalDate = LocalDate.now()): YearMonth? {
         var month = lastPostedMonth?.let { YearMonth.parse(it).plusMonths(1) } ?: YearMonth.parse(startMonth)
@@ -72,6 +78,7 @@ data class Recurring(
     fun isDueIn(month: YearMonth): Boolean {
         val start = YearMonth.parse(startMonth)
         if (month < start) return false
+        if (once) return month == start
         val months = (month.year - start.year) * 12 + (month.monthValue - start.monthValue)
         return months % everyMonths.coerceAtLeast(1) == 0
     }
@@ -114,6 +121,9 @@ data class RecurringItem(
     val manual: Boolean = false,
 ) {
     fun toRecurring() = Recurring(id, name, amountMinor, type, categoryId, dayOfMonth, startMonth, lastPostedMonth, active, everyMonths, accountId, ratePercent, manual)
+
+    /** Scheduled once for a later day (#68), not a subscription. */
+    val once: Boolean get() = everyMonths == 0
 
     /**
      * True when an entry looks like one this subscription logged: same type and category, and the same name.

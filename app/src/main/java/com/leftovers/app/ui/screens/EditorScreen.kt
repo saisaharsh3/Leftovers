@@ -659,8 +659,36 @@ class EditorViewModel(
      * Saves and reports a short confirmation message. Returns false (and flags the category row)
      * when the entry isn't complete yet.
      */
+    /**
+     * A new entry on a later day (#68) isn't spending yet: it's scheduled, added by itself on that day and set aside
+     * from the budget until then. Not for a split bill, a repeating entry, or lent and borrowed money.
+     */
+    val scheduled: Boolean get() = !isEditing && !owed && !repeatMonthly && date > LocalDate.now() && people.isEmpty() && splits.isEmpty()
+
+    /** Whether [day] can be picked: a later day only when it can be scheduled, or the entry repeats. */
+    fun canPick(day: LocalDate): Boolean = day <= LocalDate.now() || repeatMonthly || (!isEditing && !owed && people.isEmpty() && splits.isEmpty())
+
+    private fun saveScheduled(onDone: (String) -> Unit, describe: (Long) -> String): Boolean {
+        val category = categoryId ?: run { needCategory = true; return false }
+        val amount = totalMinor.takeIf { it > 0 } ?: return false
+        val savedDate = date
+        val savedType = type
+        viewModelScope.launch {
+            val name = note.trim().ifBlank { categories.value.find { it.id == category }?.name.orEmpty() }
+            planning.saveRecurring(
+                Recurring(
+                    name = name, amountMinor = amount, type = savedType, categoryId = category, dayOfMonth = savedDate.dayOfMonth,
+                    startMonth = YearMonth.from(savedDate).toString(), everyMonths = 0, accountId = accountId,
+                ),
+            )
+            onDone("${describe(amount)} scheduled for ${savedDate.friendlyLabel()}")
+        }
+        return true
+    }
+
     fun save(onDone: (String) -> Unit, describe: (Long) -> String): Boolean {
         if (owed) return saveOwed(onDone, describe)
+        if (scheduled) return saveScheduled(onDone, describe)
         if (amountMinor <= 0 || totalMinor <= 0) return false
         val category = categoryId
         if (category == null) {
@@ -892,7 +920,7 @@ fun EditorScreen(
                     if (!ok) view.performHapticFeedback(HapticFeedbackConstants.REJECT)
                 },
                 confirmEnabled = viewModel.amountMinor > 0,
-                confirmLabel = if (viewModel.isEditing) "Save" else "Add",
+                confirmLabel = if (viewModel.isEditing) "Save" else if (viewModel.scheduled) "Schedule" else "Add",
                 modifier = Modifier
                     .navigationBarsPadding()
                     .padding(16.dp),
@@ -1390,18 +1418,18 @@ fun EditorScreen(
     }
 
     if (showCalendar) {
-        val todayUtc = LocalDate.now().atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
         val pickerState = rememberDatePickerState(
             initialSelectedDateMillis = viewModel.date.atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli(),
             selectableDates = object : SelectableDates {
-                // Every day can be tapped; a later day is only accepted for a repeating entry (see below).
+                // Every day can be tapped; a later day is accepted to schedule the entry, or for a repeating one.
                 override fun isSelectableDate(utcTimeMillis: Long) = true
             },
         )
         GlassDatePickerDialog(
             onDismissRequest = { showCalendar = false },
             confirmButton = {
-                val laterDay = (pickerState.selectedDateMillis ?: 0L) > todayUtc && !viewModel.repeatMonthly
+                val picked = pickerState.selectedDateMillis?.let { Instant.ofEpochMilli(it).atZone(ZoneOffset.UTC).toLocalDate() }
+                val laterDay = picked != null && !viewModel.canPick(picked)
                 TextButton(enabled = !laterDay, onClick = {
                     pickerState.selectedDateMillis?.let { viewModel.date = Instant.ofEpochMilli(it).atZone(ZoneOffset.UTC).toLocalDate() }
                     showCalendar = false
@@ -1412,10 +1440,20 @@ fun EditorScreen(
             DatePicker(
                 pickerState,
                 title = {
-                    val laterDay = (pickerState.selectedDateMillis ?: 0L) > todayUtc && !viewModel.repeatMonthly
-                    if (laterDay) {
+                    val picked = pickerState.selectedDateMillis?.let { Instant.ofEpochMilli(it).atZone(ZoneOffset.UTC).toLocalDate() }
+                    val laterDay = picked != null && !viewModel.canPick(picked)
+                    val schedules = picked != null && picked > LocalDate.now() && !viewModel.repeatMonthly && !laterDay
+                    if (schedules) {
                         Text(
-                            "Later days are for repeating entries. Close this and tap Repeat (↻) to pick this day.",
+                            "Scheduled: it's added by itself on that day, and set aside from your budget until then.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = c.textSecondary,
+                            modifier = Modifier.padding(start = 24.dp, end = 24.dp, top = 20.dp),
+                        )
+                    } else if (laterDay) {
+                        Text(
+                            if (viewModel.isEditing) "An entry already logged can't move to a later day. Add a new one on that day to schedule it."
+                            else "A split bill or money lent can't be scheduled. Pick today or an earlier day.",
                             style = MaterialTheme.typography.bodyMedium,
                             color = c.warning,
                             modifier = Modifier.padding(start = 24.dp, end = 24.dp, top = 20.dp),
@@ -1712,7 +1750,10 @@ internal fun ReceiptViewer(path: String, onDismiss: () -> Unit, onRemove: (() ->
 private fun DateStrip(selected: LocalDate, onSelect: (LocalDate) -> Unit, onOpenCalendar: () -> Unit) {
     val c = LocalAppColors.current
     val today = LocalDate.now()
-    val days = remember(today) { (0L until 45L).map { today.minusDays(it) } }
+    // The last few weeks; a day picked from the calendar outside them (a later one, to schedule it) is shown too.
+    val days = remember(today, selected) {
+        ((0L until 45L).map { today.minusDays(it) } + listOf(selected).filter { it > today || it < today.minusDays(44) }).sortedDescending()
+    }
     val listState = rememberLazyListState()
     LaunchedEffect(selected) {
         val index = days.indexOf(selected)

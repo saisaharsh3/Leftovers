@@ -233,6 +233,26 @@ class HomeViewModel(
         viewModelScope.launch { settings.setCarryChoice(YearMonth.now().minusMonths(1), carry) }
     }
 
+    /** A one-off scheduled for later (#68), added today instead; Undo puts it back as scheduled. */
+    fun addScheduledNow(item: RecurringItem, done: (suspend () -> Unit) -> Unit) {
+        viewModelScope.launch {
+            val r = item.toRecurring()
+            val id = planning.addScheduledNow(r)
+            done {
+                repository.getTransaction(id)?.let { repository.removeTransaction(it) }
+                planning.saveRecurring(r)
+            }
+        }
+    }
+
+    fun cancelScheduled(item: RecurringItem, done: (suspend () -> Unit) -> Unit) {
+        viewModelScope.launch {
+            val r = item.toRecurring()
+            planning.deleteRecurring(r)
+            done { planning.saveRecurring(r) }
+        }
+    }
+
     fun setSubscriptionActive(item: RecurringItem, active: Boolean) {
         viewModelScope.launch { planning.saveRecurring(item.toRecurring().copy(active = active)) }
     }
@@ -497,6 +517,7 @@ fun HomeScreen(
     // Tapping an entry opens a card about it; Edit there opens the full editor.
     val peek = rememberTransactionPeek()
     TransactionPeekCard(peek, onEdit = onOpenTransaction)
+    val scheduledUndo = LocalUndo.current
     state.upcoming.firstOrNull { it.id == viewingSubscription }?.let { r ->
         SubscriptionCard(
             r,
@@ -510,6 +531,8 @@ fun HomeScreen(
                 onOpenSubscription(r)
             },
             onSetActive = { viewModel.setSubscriptionActive(r, it) },
+            onAddNow = { viewModel.addScheduledNow(r) { restore -> scheduledUndo.show("${r.name} added", restore) } },
+            onCancel = { viewModel.cancelScheduled(r) { restore -> scheduledUndo.show("${r.name} cancelled", restore) } },
         )
     }
 
@@ -1367,6 +1390,7 @@ private fun DueRow(
         var amountText by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(com.leftovers.app.util.AmountInput.fromMinor(d.item.amountMinor)) }
         var day by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(today.toEpochDay()) }
         var account by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(d.item.accountId ?: accounts.firstOrNull()?.id) }
+        var calendar by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
         val amount = com.leftovers.app.util.AmountInput.toMinor(amountText) ?: 0L
         GlassSheet(onDismiss = { paying = false }) {
             Column(Modifier.padding(horizontal = 20.dp).padding(bottom = 16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -1374,7 +1398,7 @@ private fun DueRow(
                 MoneyField(amountText, { amountText = it }, label = "Amount")
                 Text("When", style = MaterialTheme.typography.labelMedium, color = c.textSecondary, modifier = Modifier.padding(start = 6.dp))
                 androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    val choices = listOf(today, today.minusDays(1), d.date).distinct()
+                    val choices = listOf(today, today.minusDays(1), d.date).filter { it <= today }.distinct()
                     choices.forEach { date ->
                         val label = when (date) {
                             today -> "Today"
@@ -1383,6 +1407,15 @@ private fun DueRow(
                         }
                         com.leftovers.app.ui.components.Chip(label, onClick = { day = date.toEpochDay() }, selected = day == date.toEpochDay())
                     }
+                    // Any other day, from a calendar: the chosen one shows on the chip.
+                    val other = choices.none { it.toEpochDay() == day }
+                    com.leftovers.app.ui.components.Chip(
+                        if (other) LocalDate.ofEpochDay(day).friendlyLabel() else "Another day",
+                        onClick = { calendar = true }, selected = other, icon = Lucide.Calendar,
+                    )
+                }
+                if (calendar) {
+                    DayPickerDialog(LocalDate.ofEpochDay(day), if (income) "Which day did it come in?" else "Which day was it paid?", onPick = { day = it.toEpochDay() }, onDismiss = { calendar = false })
                 }
                 if (accounts.size > 1) {
                     Text("Account", style = MaterialTheme.typography.labelMedium, color = c.textSecondary, modifier = Modifier.padding(start = 6.dp))

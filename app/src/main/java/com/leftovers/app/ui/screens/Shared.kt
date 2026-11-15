@@ -1005,3 +1005,44 @@ private fun FrozenBlur(backdrop: com.kyant.backdrop.backdrops.LayerBackdrop, dim
 
 /** The tag an envelope budget counts, when there is one: entries carry it, but rows don't show it (#57). */
 val LocalEnvelopeTag = androidx.compose.runtime.compositionLocalOf<String?> { null }
+
+/**
+ * A calendar to pick one day, in the glass style. Days after [latest] can't be picked (a payment that's been
+ * made); null lets any day be picked.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun DayPickerDialog(
+    initial: java.time.LocalDate,
+    title: String,
+    onPick: (java.time.LocalDate) -> Unit,
+    onDismiss: () -> Unit,
+    latest: java.time.LocalDate? = java.time.LocalDate.now(),
+) {
+    val c = LocalAppColors.current
+    val utc = java.time.ZoneOffset.UTC
+    val lastMillis = latest?.atStartOfDay(utc)?.toInstant()?.toEpochMilli()
+    val state = androidx.compose.material3.rememberDatePickerState(
+        initialSelectedDateMillis = initial.atStartOfDay(utc).toInstant().toEpochMilli(),
+        selectableDates = object : androidx.compose.material3.SelectableDates {
+            override fun isSelectableDate(utcTimeMillis: Long) = lastMillis == null || utcTimeMillis <= lastMillis
+            override fun isSelectableYear(year: Int) = latest == null || year <= latest.year
+        },
+    )
+    GlassDatePickerDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {
+            androidx.compose.material3.TextButton(onClick = {
+                state.selectedDateMillis?.let { onPick(java.time.Instant.ofEpochMilli(it).atZone(utc).toLocalDate()) }
+                onDismiss()
+            }) { Text("Done", color = c.textPrimary) }
+        },
+        dismissButton = { androidx.compose.material3.TextButton(onClick = onDismiss) { Text("Cancel", color = c.textSecondary) } },
+    ) {
+        androidx.compose.material3.DatePicker(
+            state,
+            title = { Text(title, style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(start = 24.dp, top = 20.dp)) },
+            colors = DatePickerDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
+        )
+    }
+}

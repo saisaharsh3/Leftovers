@@ -102,7 +102,8 @@ class PlanViewModel(
             budget = budget,
             spent = items.filter { !it.outOfBudget }.totalOf(TxType.EXPENSE),
             dailyLimit = dailyBudget(budget, items, if (s.plan.envelope) 0L else recurring.pendingExpenses(cycle), periodEnd = cycle.end)?.dailyLimit ?: 0,
-            recurring = recurring,
+            // Scheduled one-offs (#68) are on Home, not counted as subscriptions here.
+            recurring = recurring.filterNot { it.once },
             goals = goals,
             owedToYou = open.filter { it.netMinor > 0 }.sumOf { it.netMinor },
             youOwe = open.filter { it.netMinor < 0 }.sumOf { -it.netMinor },

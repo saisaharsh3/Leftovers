@@ -127,6 +127,18 @@ class PlanningRepository(private val database: AppDatabase) {
         return id
     }
 
+    /** A scheduled one-off (#68) added now instead of on its day; returns the entry's id. */
+    suspend fun addScheduledNow(r: Recurring, today: LocalDate = LocalDate.now()): Long {
+        var id = 0L
+        database.withTransaction {
+            id = transactionDao.upsert(
+                Transaction(amountMinor = r.amountMinor, type = r.type, categoryId = r.categoryId, epochDay = today.toEpochDay(), note = r.name, accountId = r.accountId),
+            )
+            recurringDao.delete(r)
+        }
+        return id
+    }
+
     /** Skips [r]'s [month]: nothing logged, and it's no longer due. */
     suspend fun skipRecurring(r: Recurring, month: YearMonth) = recurringDao.setLastPosted(r.id, month.toString())
 
@@ -200,7 +212,9 @@ class PlanningRepository(private val database: AppDatabase) {
                     lastPosted = month
                     month = month.plusMonths(1)
                 }
-                lastPosted?.let { recurringDao.setLastPosted(r.id, it.toString()) }
+                // A one-off that's been added (or was logged some other way) has done its job.
+                if (r.once && lastPosted != null) recurringDao.delete(r)
+                else lastPosted?.let { recurringDao.setLastPosted(r.id, it.toString()) }
             }
         }
         return posted
