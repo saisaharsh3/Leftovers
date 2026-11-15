@@ -31,7 +31,8 @@ object Snapshots {
     @JvmStatic
     fun main(args: Array<String>) {
         val out = File(args.getOrElse(0) { "snapshots" }).apply { mkdirs() }
-        val pages = args.getOrElse(1) { "" }.split(',').filter { it.isNotBlank() }.map { Page.valueOf(it) }.ifEmpty { Page.entries }
+        val names = args.getOrElse(1) { "" }.split(',').filter { it.isNotBlank() }
+        val pages = names.filter { it != "EDITOR" }.map { Page.valueOf(it) }.ifEmpty { if ("EDITOR" in names) emptyList() else Page.entries }
         val theme = Theme.valueOf(args.getOrElse(2) { "LIGHT" })
         val glass = args.getOrElse(3) { "false" } == "true"
         val welcome = args.getOrElse(4) { "false" } == "true"
@@ -40,6 +41,11 @@ object Snapshots {
         if (welcome) {
             shoot(File(out, "welcome-${theme.name.lowercase()}${if (glass) "-glass" else ""}.png")) { App(state) }
             return
+        }
+        if ("EDITOR" in names) {
+            state.edit(store.book.transactions.firstOrNull { it.note == "Lunch with Mia" }?.id)
+            shoot(File(out, "editor-${theme.name.lowercase()}${if (glass) "-glass" else ""}.png")) { App(state) }
+            state.editing = null
         }
         pages.forEach { p ->
             state.page = p
@@ -81,7 +87,7 @@ object Snapshots {
         store.saveRecurring(Recurring(name = "Rent", amountMinor = 95_000, type = TxType.EXPENSE, categoryId = 6, dayOfMonth = 1, startMonth = YearMonth.from(today).plusMonths(1).toString(), lastPostedMonth = null, manual = true))
         val goal = store.saveGoal(Goal(name = "New laptop", emoji = "laptop", color = 0xFF7DB7F5L, targetMinor = 140_000, targetMonth = YearMonth.from(today).plusMonths(5).toString()))
         store.saveDeposit(GoalDeposit(goalId = goal, amountMinor = 52_000, epochDay = today.minusDays(10).toEpochDay()))
-        store.saveDebt(Debt(person = "Mia", amountMinor = 1_430, note = "Lunch, her half", epochDay = today.minusDays(3).toEpochDay(), accountId = 2))
+        store.saveDebt(Debt(person = "Mia", amountMinor = 1_430, note = "Lunch, her half", epochDay = today.minusDays(14).toEpochDay(), accountId = 2, splitOf = store.book.transactions.first { it.note == "Lunch with Mia" }.id))
         return store
     }
 }

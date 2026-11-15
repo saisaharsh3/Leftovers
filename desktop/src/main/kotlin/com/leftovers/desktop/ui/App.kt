@@ -82,7 +82,12 @@ private val navGroups = listOf(
 class AppState(val store: Store) {
     var page by mutableStateOf(Page.HOME)
     var notice by mutableStateOf<Notice?>(null)
+    var editing by mutableStateOf<com.leftovers.desktop.ui.screens.EditRequest?>(null)
     fun tell(text: String, undo: (() -> Unit)? = null) { notice = Notice(text, undo) }
+    /** Opens the add panel, or the entry with [id] in it. */
+    fun edit(id: Long? = null, type: com.leftovers.app.data.TxType = com.leftovers.app.data.TxType.EXPENSE, transfer: Boolean = false) {
+        if (store.book.prefs.onboarded) editing = com.leftovers.desktop.ui.screens.EditRequest(id, type, transfer)
+    }
 }
 
 val LocalApp = staticCompositionLocalOf<AppState> { error("No app") }
@@ -96,6 +101,7 @@ fun App(state: AppState) {
             Box(Modifier.fillMaxSize().background(T.c.ground)) {
                 if (T.c.glass) GlassField()
                 if (!prefs.onboarded) WelcomeScreen() else Shell(state, view)
+                com.leftovers.desktop.ui.screens.EditorPanel(state.editing) { state.editing = null }
                 NoticeBar(state.notice) { state.notice = null }
             }
         }
@@ -130,6 +136,8 @@ private fun Shell(state: AppState, view: View) {
                 label = "page",
             ) { page ->
                 when (page) {
+                    Page.HOME -> com.leftovers.desktop.ui.screens.HomeScreen(view)
+                    Page.ACTIVITY -> com.leftovers.desktop.ui.screens.ActivityScreen(view)
                     Page.SETTINGS -> SettingsScreen(view)
                     else -> Placeholder(page)
                 }

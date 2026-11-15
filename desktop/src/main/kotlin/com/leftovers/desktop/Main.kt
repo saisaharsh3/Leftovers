@@ -8,6 +8,12 @@ import androidx.compose.ui.window.rememberWindowState
 import com.leftovers.desktop.data.Store
 import com.leftovers.desktop.ui.App
 import com.leftovers.desktop.ui.AppState
+import com.leftovers.desktop.ui.Page
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.type
 import java.awt.Dimension
 
 fun main() {
@@ -20,6 +26,25 @@ fun main() {
             onCloseRequest = ::exitApplication,
             title = "Leftovers",
             state = rememberWindowState(size = DpSize(1240.dp, 820.dp)),
+            onPreviewKeyEvent = { e ->
+                // Ctrl+N adds an entry from anywhere; Ctrl+1 to Ctrl+9 open the pages in the sidebar's order.
+                if (e.type != KeyEventType.KeyDown || !e.isCtrlPressed) return@Window false
+                when {
+                    e.key == Key.N -> { state.edit(); true }
+                    e.key == Key.F && state.editing == null -> {
+                        state.page = Page.ACTIVITY
+                        // Once Activity is on screen, its search box takes the typing.
+                        java.awt.EventQueue.invokeLater { runCatching { com.leftovers.desktop.ui.screens.ActivityMemory.searchFocus.requestFocus() } }
+                        true
+                    }
+                    e.key == Key.T && store.book.accounts.size > 1 -> { state.edit(transfer = true); true }
+                    e.key == Key.Comma -> { state.page = Page.SETTINGS; true }
+                    e.key.keyCode in Key.One.keyCode..Key.Nine.keyCode && state.editing == null -> {
+                        state.page = Page.entries[(e.key.keyCode - Key.One.keyCode).toInt()]; true
+                    }
+                    else -> false
+                }
+            },
         ) {
             window.minimumSize = Dimension(980, 660)
             App(state)
