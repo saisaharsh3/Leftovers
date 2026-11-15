@@ -112,8 +112,64 @@ class Store(val dir: File = defaultDir()) {
         }
     }
 
+    // Undo and redo: the book as it was before each change, newest last. A change made of several steps (an
+    // entry with its people's shares, say) is one step back. Look and settings changes aren't undone.
+    private val undoStack = ArrayDeque<Book>()
+    private val redoStack = ArrayDeque<Book>()
+    private var batchDepth = 0
+    private var batchStart: Book? = null
+    private val _history = MutableStateFlow(0 to 0)
+    /** How many steps can be undone and redone. */
+    val history: StateFlow<Pair<Int, Int>> = _history
+
+    private fun sameData(a: Book, b: Book) = a.copy(prefs = b.prefs) == b
+
+    /** Runs [block] as one step for undo, however many changes it makes. */
+    fun <T> batch(block: () -> T): T {
+        if (batchDepth++ == 0) batchStart = book
+        try { return block() } finally {
+            if (--batchDepth == 0) {
+                val start = batchStart!!
+                batchStart = null
+                if (!sameData(start, book)) remember(start)
+            }
+        }
+    }
+
+    private fun remember(before: Book) {
+        undoStack.addLast(before)
+        while (undoStack.size > 200) undoStack.removeFirst()
+        redoStack.clear()
+        _history.value = undoStack.size to redoStack.size
+    }
+
+    /** Puts the data back as it was before the last change; false when there's nothing to undo. */
+    @Synchronized
+    fun undo(): Boolean {
+        val before = undoStack.removeLastOrNull() ?: return false
+        redoStack.addLast(book)
+        write(before.copy(prefs = book.prefs))
+        _history.value = undoStack.size to redoStack.size
+        return true
+    }
+
+    @Synchronized
+    fun redo(): Boolean {
+        val after = redoStack.removeLastOrNull() ?: return false
+        undoStack.addLast(book)
+        write(after.copy(prefs = book.prefs))
+        _history.value = undoStack.size to redoStack.size
+        return true
+    }
+
     @Synchronized
     fun save(book: Book) {
+        val before = _view.value.book
+        if (batchDepth == 0 && !sameData(before, book)) remember(before)
+        write(book)
+    }
+
+    private fun write(book: Book) {
         _view.value = View(book)
         dir.mkdirs()
         val tmp = File(dir, "leftovers.json.tmp")
@@ -273,15 +329,15 @@ class Store(val dir: File = defaultDir()) {
     private fun Book.withLastPosted(id: Long, month: String?) = copy(recurring = recurring.map { if (it.id == id) it.copy(lastPostedMonth = month) else it })
 
     /** Marks [r]'s [month] paid with an entry for what was really paid, and when (#64). Returns the entry's id. */
-    fun payRecurring(r: Recurring, month: YearMonth, amountMinor: Long, epochDay: Long, accountId: Long?): Long {
+    fun payRecurring(r: Recurring, month: YearMonth, amountMinor: Long, epochDay: Long, accountId: Long?): Long = batch {
         val id = saveTransaction(Transaction(amountMinor = amountMinor, type = r.type, categoryId = r.categoryId, epochDay = epochDay, note = r.name, accountId = accountId ?: r.accountId))
         edit { withLastPosted(r.id, month.toString()) }
-        return id
+        id
     }
 
     fun skipRecurring(r: Recurring, month: YearMonth) = edit { withLastPosted(r.id, month.toString()) }
 
-    fun unpayRecurring(r: Recurring, entryId: Long?) {
+    fun unpayRecurring(r: Recurring, entryId: Long?) = batch {
         entryId?.let { id -> book.transactions.firstOrNull { it.id == id }?.let(::removeTransaction) }
         edit { withLastPosted(r.id, r.lastPostedMonth) }
     }

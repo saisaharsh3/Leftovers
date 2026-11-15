@@ -77,6 +77,7 @@ import java.util.Locale
 /** Activity's search and filters stay while the app is open, as they were left. */
 object ActivityMemory {
     var query by mutableStateOf(ActivityQuery())
+    var started = false
     val searchFocus = FocusRequester()
 }
 
@@ -85,8 +86,12 @@ fun ActivityScreen(view: View) {
     val app = LocalApp.current
     val c = T.c
     val money = LocalMoney.current
-    var q by remember { mutableStateOf(ActivityMemory.query.copy(accountId = ActivityMemory.query.accountId ?: view.book.prefs.homeAccountId)) }
-    LaunchedEffect(q) { ActivityMemory.query = q }
+    // Shared with the command palette, which can open Activity on an account or category.
+    var q by ActivityMemory::query
+    LaunchedEffect(Unit) {
+        // The first time, Activity shows the account Home is showing.
+        if (!ActivityMemory.started) { ActivityMemory.started = true; if (q.accountId == null) q = q.copy(accountId = view.book.prefs.homeAccountId) }
+    }
     val model = remember(view, q) { ActivityModel.of(view, q) }
     val list = rememberLazyListState()
     LaunchedEffect(q.month, q.allTime, q.type, q.sort) { list.scrollToItem(0) }

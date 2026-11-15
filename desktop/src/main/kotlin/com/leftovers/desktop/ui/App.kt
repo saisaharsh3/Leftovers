@@ -83,6 +83,12 @@ class AppState(val store: Store) {
     var page by mutableStateOf(Page.HOME)
     var notice by mutableStateOf<Notice?>(null)
     var editing by mutableStateOf<com.leftovers.desktop.ui.screens.EditRequest?>(null)
+    var palette by mutableStateOf(false)
+    var shortcuts by mutableStateOf(false)
+    /** Something the palette asked a page to do once it's open ("new", "plan", "backup"); the page clears it. */
+    var intent by mutableStateOf<String?>(null)
+    /** Takes [intent] if it's [what], so it's acted on once. */
+    fun take(what: String): Boolean = (intent == what).also { if (it) intent = null }
     fun tell(text: String, undo: (() -> Unit)? = null) { notice = Notice(text, undo) }
     /** Opens the add panel, or the entry with [id] in it. */
     fun edit(id: Long? = null, type: com.leftovers.app.data.TxType = com.leftovers.app.data.TxType.EXPENSE, transfer: Boolean = false) {
@@ -102,6 +108,8 @@ fun App(state: AppState) {
                 if (T.c.glass) GlassField()
                 if (!prefs.onboarded) WelcomeScreen() else Shell(state, view)
                 com.leftovers.desktop.ui.screens.EditorPanel(state.editing) { state.editing = null }
+                if (prefs.onboarded) CommandPalette(state, view, state.palette) { state.palette = false }
+                ShortcutsDialog(state.shortcuts) { state.shortcuts = false }
                 NoticeBar(state.notice) { state.notice = null }
             }
         }
@@ -202,6 +210,38 @@ fun Mark(size: androidx.compose.ui.unit.Dp = 26.dp) {
         Canvas(Modifier.size(size * 0.56f)) {
             val stroke = androidx.compose.ui.graphics.drawscope.Stroke(width = this.size.minDimension * 0.2f, cap = androidx.compose.ui.graphics.StrokeCap.Round)
             drawArc(c.onAccent, startAngle = -90f, sweepAngle = 270f, useCenter = false, style = stroke)
+        }
+    }
+}
+
+private val shortcutList = listOf(
+    "Ctrl+K" to "Go to anything, or do anything",
+    "Ctrl+N" to "Add an entry",
+    "Ctrl+T" to "Move money between accounts",
+    "Ctrl+F" to "Search entries",
+    "Ctrl+Z" to "Undo the last change",
+    "Ctrl+Y" to "Redo",
+    "Ctrl+1 to 9" to "Open a page, in the sidebar's order",
+    "Ctrl+," to "Settings",
+    "Ctrl+Enter" to "Save, in a panel",
+    "Esc" to "Close a panel or dialog",
+    "Ctrl+/" to "This list",
+)
+
+@Composable
+private fun ShortcutsDialog(visible: Boolean, onDismiss: () -> Unit) {
+    val c = T.c
+    com.leftovers.desktop.ui.components.Dialog(visible, onDismiss, width = 480.dp) {
+        Text("Keyboard shortcuts", style = T.type.title, color = c.text)
+        Spacer(Modifier.height(16.dp))
+        shortcutList.forEach { (keys, what) ->
+            Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(what, style = T.type.body, color = c.text2, modifier = Modifier.weight(1f))
+                Text(
+                    keys, style = T.type.small.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold), color = c.text,
+                    modifier = Modifier.clip(RoundedCornerShape(6.dp)).background(c.raised).padding(horizontal = 8.dp, vertical = 3.dp),
+                )
+            }
         }
     }
 }

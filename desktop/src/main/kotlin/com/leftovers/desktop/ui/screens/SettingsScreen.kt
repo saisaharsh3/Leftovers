@@ -30,6 +30,7 @@ fun SettingsScreen(view: View) {
     val opener = remember { BackupOpener() }
     var saving by remember { mutableStateOf(false) }
     var currency by remember { mutableStateOf(false) }
+    androidx.compose.runtime.LaunchedEffect(app.intent) { if (app.take("backup")) saving = true }
     Screen("Settings", maxWidth = 760.dp) {
         Group("Look") {
             SettingRow("Theme") {

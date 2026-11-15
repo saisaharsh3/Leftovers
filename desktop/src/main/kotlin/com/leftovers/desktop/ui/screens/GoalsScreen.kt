@@ -88,6 +88,8 @@ fun GoalsScreen(view: View) {
     val goals = view.goals
     val active = goals.filter { !it.reached }
     val shown = goals.firstOrNull { it.id == selected } ?: goals.firstOrNull()
+    val app = LocalApp.current
+    LaunchedEffect(app.intent) { if (app.take("new")) creating = true }
     Screen(
         "Savings goals",
         actions = { Button("New goal", { creating = true }, kind = ButtonKind.Primary, icon = Lucide.Plus) },

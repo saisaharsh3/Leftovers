@@ -104,6 +104,7 @@ fun SubscriptionsScreen(view: View) {
         categoryId = categoryId ?: view.book.categories.firstOrNull { it.type == type && !it.hidden }?.id ?: 0,
         dayOfMonth = day, startMonth = YearMonth.now().toString(), accountId = view.book.prefs.defaultAccountId.takeIf { it != 0L },
     )
+    androidx.compose.runtime.LaunchedEffect(app.intent) { if (app.take("new")) editing = new() }
     Screen(
         "Subscriptions",
         subtitle = "Logged by themselves on their day",

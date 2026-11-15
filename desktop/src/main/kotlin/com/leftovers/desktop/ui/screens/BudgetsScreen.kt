@@ -88,6 +88,7 @@ fun BudgetsScreen(view: View) {
     val c = T.c
     val money = LocalMoney.current
     var editing by remember { mutableStateOf(false) }
+    LaunchedEffect(app.intent) { if (app.take("plan")) editing = true }
     val plan = view.book.plan
     val today = LocalDate.now()
     val cycle = plan.cycleOf(today)

@@ -86,7 +86,9 @@ data class EntryDraft(
 }
 
 /** Saves an entry as the phone's add screen does; returns the line to show, or null when it isn't complete. */
-fun Store.saveEntry(d: EntryDraft, money: (Long) -> String): String? {
+fun Store.saveEntry(d: EntryDraft, money: (Long) -> String): String? = batch { saveEntryNow(d, money) }
+
+private fun Store.saveEntryNow(d: EntryDraft, money: (Long) -> String): String? {
     if (d.amountMinor <= 0) return null
     val category = d.categoryId ?: return null
     val people = if (d.repeatMonthly || d.type != TxType.EXPENSE) emptyList() else d.people.map { it.trim() }.filter { it.isNotEmpty() }.distinctBy { it.lowercase() }
@@ -141,7 +143,9 @@ fun Store.draftOf(id: Long): EntryDraft? {
 }
 
 /** Deletes an entry and what came with it (its split parts, what people owe for it); returns how to undo it. */
-fun Store.deleteEntry(id: Long): () -> Unit {
+fun Store.deleteEntry(id: Long): () -> Unit = batch { deleteEntryNow(id) }
+
+private fun Store.deleteEntryNow(id: Long): () -> Unit {
     val before = book
     val t = book.transactions.firstOrNull { it.id == id } ?: return {}
     book.transactions.filter { it.splitOf == id }.forEach { deleteTransaction(it) }

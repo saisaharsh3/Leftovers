@@ -70,3 +70,29 @@ class EntryDraftTest {
         assertNull(store().saveEntry(EntryDraft(amountMinor = 100), { "" }))
     }
 }
+
+/** Undo and redo across every change. Made-up data only. */
+class UndoTest {
+    @Test
+    fun aSplitBillIsOneStepBackAndForth() {
+        val s = Store(Files.createTempDirectory("leftovers-test").toFile()).apply { save(Book.starter("EUR")) }
+        s.saveEntry(EntryDraft(amountMinor = 6_000, categoryId = 1, people = listOf("Ana")), { "" })
+        assertEquals(1, s.book.debts.size)
+        assertTrue(s.undo())
+        assertTrue(s.book.transactions.isEmpty() && s.book.debts.isEmpty())
+        assertTrue(s.redo())
+        assertEquals(1, s.book.transactions.size)
+        assertEquals(1, s.book.debts.size)
+    }
+
+    @Test
+    fun lookChangesAreNotUndoneAndANewChangeClearsRedo() {
+        val s = Store(Files.createTempDirectory("leftovers-test").toFile()).apply { save(Book.starter("EUR")) }
+        s.setPrefs { copy(glass = true) }
+        s.saveEntry(EntryDraft(amountMinor = 100, categoryId = 1), { "" })
+        s.undo()
+        assertTrue(s.book.prefs.glass)
+        s.saveEntry(EntryDraft(amountMinor = 200, categoryId = 1), { "" })
+        assertTrue(!s.redo())
+    }
+}

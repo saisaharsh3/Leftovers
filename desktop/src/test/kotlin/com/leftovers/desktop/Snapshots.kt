@@ -32,7 +32,7 @@ object Snapshots {
     fun main(args: Array<String>) {
         val out = File(args.getOrElse(0) { "snapshots" }).apply { mkdirs() }
         val names = args.getOrElse(1) { "" }.split(',').filter { it.isNotBlank() }
-        val pages = names.filter { it != "EDITOR" }.map { Page.valueOf(it) }.ifEmpty { if ("EDITOR" in names) emptyList() else Page.entries }
+        val pages = names.filter { it != "EDITOR" && it != "PALETTE" && it != "SHORTCUTS" }.map { Page.valueOf(it) }.ifEmpty { if (names.isNotEmpty()) emptyList() else Page.entries }
         val theme = Theme.valueOf(args.getOrElse(2) { "LIGHT" })
         val glass = args.getOrElse(3) { "false" } == "true"
         val welcome = args.getOrElse(4) { "false" } == "true"
@@ -46,6 +46,16 @@ object Snapshots {
             state.edit(store.book.transactions.firstOrNull { it.note == "Lunch with Mia" }?.id)
             shoot(File(out, "editor-${theme.name.lowercase()}${if (glass) "-glass" else ""}.png")) { App(state) }
             state.editing = null
+        }
+        if ("PALETTE" in names) {
+            state.palette = true
+            shoot(File(out, "palette-${theme.name.lowercase()}${if (glass) "-glass" else ""}.png")) { App(state) }
+            state.palette = false
+        }
+        if ("SHORTCUTS" in names) {
+            state.shortcuts = true
+            shoot(File(out, "shortcuts-${theme.name.lowercase()}.png")) { App(state) }
+            state.shortcuts = false
         }
         pages.forEach { p ->
             state.page = p
