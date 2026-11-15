@@ -403,7 +403,11 @@ class Store(val dir: File = defaultDir()) {
 
     // ---- Settings ----
 
-    fun setPlan(plan: BudgetPlan) = edit { copy(plan = plan) }
+    /** Saves the budget plan; carrying over counts from the month a budget was first set, as on the phone. */
+    fun setPlan(plan: BudgetPlan) = edit {
+        val from = plan.carryFrom ?: this.plan.carryFrom
+        copy(plan = plan.copy(carryFrom = if (plan.isSet) from ?: YearMonth.now() else null, carryChoices = plan.carryChoices.ifEmpty { this.plan.carryChoices }))
+    }
     fun setCurrency(code: String) = edit { copy(currency = code) }
     fun setPrefs(change: Prefs.() -> Prefs) = edit { copy(prefs = prefs.change()) }
     fun setCarryChoice(month: YearMonth, carry: Boolean) = edit { copy(plan = plan.copy(carryChoices = plan.carryChoices + (month to carry))) }

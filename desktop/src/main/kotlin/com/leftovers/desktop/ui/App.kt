@@ -139,6 +139,7 @@ private fun Shell(state: AppState, view: View) {
                     Page.HOME -> com.leftovers.desktop.ui.screens.HomeScreen(view)
                     Page.ACTIVITY -> com.leftovers.desktop.ui.screens.ActivityScreen(view)
                     Page.INSIGHTS -> com.leftovers.desktop.ui.screens.InsightsScreen(view)
+                    Page.BUDGETS -> com.leftovers.desktop.ui.screens.BudgetsScreen(view)
                     Page.SETTINGS -> SettingsScreen(view)
                     else -> Placeholder(page)
                 }
