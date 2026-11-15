@@ -21,7 +21,7 @@ val shared = listOf(
     "util/BackupCrypto.kt", "util/BackupMerge.kt", "util/CsvImporter.kt", "util/JsonExport.kt", "util/MerchantMemory.kt",
     "util/MoneyText.kt", "util/Payback.kt", "util/SyncRemoved.kt", "util/CategoryGuess.kt", "util/Formatting.kt",
     "util/SmsParser.kt", "util/BankSenders.kt", "util/BankBalance.kt", "util/EmailParser.kt", "util/AutoAdd.kt",
-    "ui/icons/Lucide.kt", "ui/icons/IconBuilder.kt", "ui/icons/CategoryIcons.kt",
+    "ui/icons/Lucide.kt", "ui/icons/IconBuilder.kt", "ui/icons/CategoryIcons.kt", "util/ProductPrice.kt",
 )
 val sharedSrc = layout.buildDirectory.dir("shared-src")
 val copyShared by tasks.registering(Sync::class) {
