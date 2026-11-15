@@ -67,6 +67,7 @@ enum class Page(val title: String, val icon: ImageVector) {
     HOME("Home", Lucide.House),
     ACTIVITY("Activity", Lucide.ReceiptText),
     INSIGHTS("Insights", Lucide.ChartPie),
+    DASHBOARDS("Dashboards", Lucide.LayoutGrid),
     BUDGETS("Budgets", Lucide.Target),
     SUBSCRIPTIONS("Subscriptions", Lucide.Repeat),
     GOALS("Goals", Lucide.PiggyBank),
@@ -77,7 +78,7 @@ enum class Page(val title: String, val icon: ImageVector) {
 }
 
 private val navGroups = listOf(
-    null to listOf(Page.HOME, Page.ACTIVITY, Page.INSIGHTS),
+    null to listOf(Page.HOME, Page.ACTIVITY, Page.INSIGHTS, Page.DASHBOARDS),
     "Plan" to listOf(Page.BUDGETS, Page.SUBSCRIPTIONS, Page.GOALS, Page.OWED),
     "Money" to listOf(Page.ACCOUNTS, Page.CATEGORIES),
 )
@@ -206,6 +207,7 @@ private fun Shell(state: AppState, view: View) {
                     Page.HOME -> com.leftovers.desktop.ui.screens.HomeScreen(view)
                     Page.ACTIVITY -> com.leftovers.desktop.ui.screens.ActivityScreen(view)
                     Page.INSIGHTS -> com.leftovers.desktop.ui.screens.InsightsScreen(view)
+                    Page.DASHBOARDS -> com.leftovers.desktop.ui.screens.DashboardScreen(view)
                     Page.BUDGETS -> com.leftovers.desktop.ui.screens.BudgetsScreen(view)
                     Page.SUBSCRIPTIONS -> com.leftovers.desktop.ui.screens.SubscriptionsScreen(view)
                     Page.GOALS -> com.leftovers.desktop.ui.screens.GoalsScreen(view)

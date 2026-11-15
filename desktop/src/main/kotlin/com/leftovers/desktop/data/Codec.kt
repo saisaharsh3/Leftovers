@@ -303,6 +303,21 @@ object Codec {
         put("dismissed", JSONArray(p.dismissed.toList()))
         put("tray", p.tray)
         put("billReminders", p.billReminders)
+        put("dashboards", JSONArray(p.dashboards.map { d ->
+            JSONObject().put("name", d.name).put("period", d.period.name).put("columns", d.columns)
+                .put("widgets", JSONArray(d.widgets.map { w ->
+                    JSONObject().put("kind", w.kind.name).put("id", w.id).put("span", w.span).put("height", w.height.name)
+                        .put("measure", w.measure.name).put("groupBy", w.groupBy.name).put("chart", w.chart.name)
+                        .put("categories", JSONArray(w.categoryIds.toList()))
+                        .apply {
+                            w.title?.let { put("title", it) }
+                            w.period?.let { put("period", it.name) }
+                            w.accountId?.let { put("account", it) }
+                            w.tag?.let { put("tag", it) }
+                            w.color?.let { put("color", it) }
+                        }
+                }))
+        }))
     }
 
     private fun decodePrefs(o: JSONObject): Prefs {
@@ -327,6 +342,34 @@ object Codec {
             dismissed = o.optJSONArray("dismissed")?.let { a -> (0 until a.length()).map(a::getString).toSet() }.orEmpty(),
             tray = o.optBoolean("tray", true),
             billReminders = o.optBoolean("billReminders", true),
+            dashboards = o.optJSONArray("dashboards")?.let { a ->
+                (0 until a.length()).map { i ->
+                    val d = a.getJSONObject(i)
+                    val ws = d.optJSONArray("widgets")
+                    Dashboard(
+                        d.optString("name").ifBlank { "Dashboard" },
+                        (0 until (ws?.length() ?: 0)).mapNotNull { j ->
+                            val w = ws!!.getJSONObject(j)
+                            WidgetKind.entries.firstOrNull { it.name == w.optString("kind") }?.let { k ->
+                                fun <E : Enum<E>> pick(values: Array<E>, key: String, default: E) = values.firstOrNull { it.name == w.optString(key) } ?: default
+                                Widget(
+                                    k, id = w.optLong("id", j + 1L), title = w.optString("title").takeIf { w.has("title") },
+                                    span = w.optInt("span", k.span).coerceIn(1, 4), height = pick(WidgetHeight.values(), "height", WidgetHeight.MEDIUM),
+                                    period = DashPeriod.entries.firstOrNull { it.name == w.optString("period") },
+                                    accountId = if (w.has("account")) w.optLong("account") else null,
+                                    categoryIds = w.optJSONArray("categories")?.let { a -> (0 until a.length()).map(a::getLong).toSet() }.orEmpty(),
+                                    tag = w.optString("tag").takeIf { w.has("tag") && it.isNotBlank() },
+                                    color = if (w.has("color")) w.optLong("color") else null,
+                                    measure = pick(Measure.values(), "measure", Measure.SPENT), groupBy = pick(GroupBy.values(), "groupBy", GroupBy.MONTH),
+                                    chart = pick(ChartStyle.values(), "chart", ChartStyle.BARS),
+                                )
+                            }
+                        },
+                        DashPeriod.entries.firstOrNull { it.name == d.optString("period") } ?: DashPeriod.HALF,
+                        d.optInt("columns", 3).coerceIn(1, 4),
+                    )
+                }
+            }?.takeIf { it.isNotEmpty() } ?: listOf(Dashboard.starter),
         )
     }
 }

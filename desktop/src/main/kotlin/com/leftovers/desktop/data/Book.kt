@@ -43,6 +43,8 @@ data class Prefs(
     val tray: Boolean = true,
     /** Windows notifications for bills that are due. */
     val billReminders: Boolean = true,
+    /** The user's dashboards, in tab order. */
+    val dashboards: List<Dashboard> = listOf(Dashboard.starter),
 )
 
 enum class Theme { SYSTEM, LIGHT, DARK }

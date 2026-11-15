@@ -32,7 +32,7 @@ object Snapshots {
     fun main(args: Array<String>) {
         val out = File(args.getOrElse(0) { "snapshots" }).apply { mkdirs() }
         val names = args.getOrElse(1) { "" }.split(',').filter { it.isNotBlank() }
-        val pages = names.filter { it != "EDITOR" && it != "PALETTE" && it != "SHORTCUTS" && it != "SELECT" }.map { Page.valueOf(it) }.ifEmpty { if (names.isNotEmpty()) emptyList() else Page.entries }
+        val pages = names.filter { it != "EDITOR" && it != "PALETTE" && it != "SHORTCUTS" && it != "SELECT" && it != "DASHEDIT" }.map { Page.valueOf(it) }.ifEmpty { if (names.isNotEmpty()) emptyList() else Page.entries }
         val theme = Theme.valueOf(args.getOrElse(2) { "LIGHT" })
         val glass = args.getOrElse(3) { "false" } == "true"
         val welcome = args.getOrElse(4) { "false" } == "true"
@@ -53,6 +53,15 @@ object Snapshots {
             com.leftovers.desktop.ui.screens.ActivityMemory.selected.addAll(ids)
             shoot(File(out, "select-${theme.name.lowercase()}.png")) { App(state) }
             com.leftovers.desktop.ui.screens.ActivityMemory.selected.clear()
+        }
+        if ("DASHEDIT" in names) {
+            state.page = Page.DASHBOARDS
+            com.leftovers.desktop.ui.screens.DashboardTesting.customise = true
+            shoot(File(out, "dashedit-${theme.name.lowercase()}.png")) { App(state) }
+            com.leftovers.desktop.ui.screens.DashboardTesting.settingsFor = store.book.prefs.dashboards.first().widgets[1].id
+            shoot(File(out, "dashsettings-${theme.name.lowercase()}.png")) { App(state) }
+            com.leftovers.desktop.ui.screens.DashboardTesting.customise = false
+            com.leftovers.desktop.ui.screens.DashboardTesting.settingsFor = null
         }
         if ("PALETTE" in names) {
             state.palette = true
@@ -98,6 +107,19 @@ object Snapshots {
         )
         demo.forEachIndexed { i, (note, cat, amount) ->
             store.saveTransaction(Transaction(amountMinor = amount, type = TxType.EXPENSE, categoryId = cat.toLong(), epochDay = today.minusDays((i * 2).toLong()).toEpochDay(), note = note, accountId = if (i % 3 == 0) 1 else 2, createdAt = 1_000L + i))
+        }
+        // Earlier months, so charts over time have something to show.
+        val rnd = java.util.Random(7)
+        (1..5).forEach { back ->
+            val m = YearMonth.from(today).minusMonths(back.toLong())
+            store.saveTransaction(Transaction(amountMinor = 320_000, type = TxType.INCOME, categoryId = 13, epochDay = m.atDay(1).toEpochDay(), note = "Salary", accountId = 2, createdAt = back * 100L))
+            store.saveTransaction(Transaction(amountMinor = 95_000, type = TxType.EXPENSE, categoryId = 6, epochDay = m.atDay(1).toEpochDay(), note = "Rent", accountId = 2, createdAt = back * 100L + 1))
+            listOf("Fresh market" to 2, "Bakery" to 1, "Metro card" to 3, "Cinema" to 7, "Book shop" to 4, "Pharmacy" to 8, "Taxi" to 3).forEachIndexed { j, (note, cat) ->
+                repeat(2 + rnd.nextInt(3)) { k ->
+                    val day = m.atDay(1 + rnd.nextInt(m.lengthOfMonth()))
+                    store.saveTransaction(Transaction(amountMinor = 500L + rnd.nextInt(9_000), type = TxType.EXPENSE, categoryId = cat.toLong(), epochDay = day.toEpochDay(), note = note, accountId = if (k % 2 == 0) 1 else 2, createdAt = back * 100L + 10 + j * 5 + k))
+                }
+            }
         }
         store.saveTransaction(Transaction(amountMinor = 320_000, type = TxType.INCOME, categoryId = 13, epochDay = today.withDayOfMonth(1).toEpochDay(), note = "Salary", accountId = 2, createdAt = 50))
         store.saveRecurring(Recurring(name = "Music", amountMinor = 1_099, type = TxType.EXPENSE, categoryId = 7, dayOfMonth = 24, startMonth = YearMonth.from(today).toString(), lastPostedMonth = null))
