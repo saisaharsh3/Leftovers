@@ -309,17 +309,33 @@ private fun UpcomingRow(r: RecurringItem) {
     val app = LocalApp.current
     val next = r.toRecurring().nextChargeDate()
     val days = (next.toEpochDay() - LocalDate.now().toEpochDay()).toInt()
-    HoverRow({ app.page = Page.SUBSCRIPTIONS }, Modifier.fillMaxWidth()) {
+    var menu by remember { mutableStateOf(false) }
+    Box {
+    HoverRow({ if (r.once) menu = true else app.page = Page.SUBSCRIPTIONS }, Modifier.fillMaxWidth()) {
         IconBadge(r.categoryEmoji, r.categoryColor, 34.dp, app.store.book.icons)
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
             Text(r.name, style = T.type.bodyStrong, color = c.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(
-                when (days) { 0 -> "Today"; 1 -> "Tomorrow"; else -> "In $days days · ${next.format(DateTimeFormatter.ofPattern("d MMM"))}" },
+                (if (r.once) "Scheduled · " else "") + when (days) { 0 -> "Today"; 1 -> "Tomorrow"; else -> "In $days days · ${next.format(DateTimeFormatter.ofPattern("d MMM"))}" },
                 style = T.type.small, color = c.text2,
             )
         }
         Text((if (r.type == TxType.INCOME) "+" else "") + money.format(r.amountMinor), style = T.type.bodyStrong, color = if (r.type == TxType.INCOME) c.positive else c.text)
+    }
+    // A scheduled one-off: add it now, or cancel it.
+    androidx.compose.material3.DropdownMenu(menu, { menu = false }, shape = RoundedCornerShape(12.dp), containerColor = if (c.dark) Color(0xFF1E1E26) else Color.White) {
+        androidx.compose.material3.DropdownMenuItem({ Text("Add it now", style = T.type.body, color = c.text) }, {
+            menu = false
+            app.store.addScheduledNow(r.toRecurring())
+            app.tell("${r.name} added") { app.store.undo() }
+        }, leadingIcon = { Icon(Lucide.Check, null, Modifier.size(16.dp), tint = c.text2) })
+        androidx.compose.material3.DropdownMenuItem({ Text("Cancel it", style = T.type.body, color = c.negative) }, {
+            menu = false
+            app.store.deleteRecurring(r.toRecurring())
+            app.tell("${r.name} cancelled") { app.store.undo() }
+        }, leadingIcon = { Icon(Lucide.X, null, Modifier.size(16.dp), tint = c.negative) })
+    }
     }
 }
 

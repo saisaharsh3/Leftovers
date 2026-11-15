@@ -80,6 +80,8 @@ data class EntryDraft(
     val foreignCurrency: String? = null,
 ) {
     val isEditing get() = id != 0L
+    /** A new entry on a later day, not split or repeating: it's scheduled for that day instead of added now. */
+    val scheduled get() = !isEditing && day > LocalDate.now() && people.isEmpty() && !repeatMonthly
     /** Each person's share, splitting the bill evenly with you; the remainder stays yours. */
     val share: Long get() = if (people.isEmpty() || type != TxType.EXPENSE) 0 else amountMinor / (people.size + 1)
     val yours: Long get() = amountMinor - share * people.size
@@ -91,6 +93,17 @@ fun Store.saveEntry(d: EntryDraft, money: (Long) -> String): String? = batch { s
 private fun Store.saveEntryNow(d: EntryDraft, money: (Long) -> String): String? {
     if (d.amountMinor <= 0) return null
     val category = d.categoryId ?: return null
+    // A new entry on a later day is scheduled (#68): added by itself on its day, set aside from the budget till then.
+    if (d.scheduled) {
+        val name = d.note.trim().ifBlank { book.categories.firstOrNull { it.id == category }?.name.orEmpty() }
+        saveRecurring(
+            Recurring(
+                name = name, amountMinor = d.amountMinor, type = d.type, categoryId = category, dayOfMonth = d.day.dayOfMonth,
+                startMonth = YearMonth.from(d.day).toString(), everyMonths = 0, accountId = d.accountId,
+            ),
+        )
+        return "${money(d.amountMinor)} scheduled for ${d.day.friendlyLabel()}"
+    }
     val people = if (d.repeatMonthly || d.type != TxType.EXPENSE) emptyList() else d.people.map { it.trim() }.filter { it.isNotEmpty() }.distinctBy { it.lowercase() }
     val draft = d.copy(people = people)
     val savedShares = if (d.isEditing) book.debts.filter { it.splitOf == d.id && !it.repayment } else emptyList()

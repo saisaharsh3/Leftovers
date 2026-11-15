@@ -280,7 +280,8 @@ private fun EditorBody(req: EditRequest, onClose: () -> Unit) {
             }
             Spacer(Modifier.weight(1f))
             Text("Ctrl+Enter", style = T.type.small, color = c.text3)
-            Button(if (draft.isEditing) "Save" else "Add", ::save, kind = ButtonKind.Primary, enabled = amount > 0)
+            val later = kind != Kind.TRANSFER && draft.copy(people = draft.people + personText.split(',').map { it.trim() }.filter { it.isNotEmpty() }).scheduled
+            Button(if (draft.isEditing) "Save" else if (later) "Schedule" else "Add", ::save, kind = ButtonKind.Primary, enabled = amount > 0)
         }
     }
     LaunchedEffect(Unit) { runCatching { amountFocus.requestFocus() } }
@@ -372,6 +373,9 @@ private fun DayChooser(day: LocalDate, onPick: (LocalDate) -> Unit) {
             Chip(if (other) day.friendlyLabel() else "Another day", other || calendar, icon = Lucide.Calendar) { calendar = !calendar }
         }
         AnimatedVisibility(calendar) { MonthCalendar(day) { onPick(it); calendar = false } }
+        AnimatedVisibility(day > today) {
+            Text("Scheduled: it's added by itself on that day, and set aside from your budget until then.", style = T.type.small, color = T.c.text2)
+        }
     }
 }
 

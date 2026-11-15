@@ -95,10 +95,11 @@ fun SubscriptionsScreen(view: View) {
     var editing by remember { mutableStateOf<Recurring?>(null) }
     var calendarMonth by remember { mutableStateOf(YearMonth.now()) }
     val income = type == TxType.INCOME
-    val shown = view.recurring.filter { it.type == type }
+    // One-offs scheduled for a later day aren't subscriptions; they're on Home, under Upcoming.
+    val shown = view.recurring.filter { it.type == type && !it.once }
     val active = shown.filter { it.active }
     val monthly = active.sumOf { it.toRecurring().monthlyShareMinor }
-    val suggestions = remember(view) { if (income) emptyList() else findLikelySubscriptions(view.entries, view.recurring, view.book.prefs.dismissed).take(3) }
+    val suggestions = remember(view) { if (income) emptyList() else findLikelySubscriptions(view.entries, view.recurring.filterNot { it.once }, view.book.prefs.dismissed).take(3) }
     fun new(name: String = "", amount: Long = 0, categoryId: Long? = null, day: Int = LocalDate.now().dayOfMonth) = Recurring(
         name = name, amountMinor = amount, type = type,
         categoryId = categoryId ?: view.book.categories.firstOrNull { it.type == type && !it.hidden }?.id ?: 0,

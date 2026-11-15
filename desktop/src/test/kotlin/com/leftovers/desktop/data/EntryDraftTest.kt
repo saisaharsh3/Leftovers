@@ -137,10 +137,27 @@ class BulkTest {
     fun aDuplicateIsANewEntryToday() {
         val s = store()
         val first = s.book.transactions.first { it.amountMinor == 500L }
-        val id = s.duplicate(first.id, LocalDate.of(2026, 11, 20))!!
+        val id = s.duplicate(first.id, LocalDate.of(2026, 11, 10))!!
         val copy = s.book.transactions.single { it.id == id }
         assertEquals(500L, copy.amountMinor)
-        assertEquals(LocalDate.of(2026, 11, 20).toEpochDay(), copy.epochDay)
+        assertEquals(LocalDate.of(2026, 11, 10).toEpochDay(), copy.epochDay)
         assertTrue(id != first.id)
+    }
+}
+
+/** A new entry on a later day is scheduled, not added now (#68). Made-up data only. */
+class ScheduleTest {
+    @Test
+    fun aLaterDayIsScheduledAndAddedOnItsDay() {
+        val s = Store(Files.createTempDirectory("leftovers-test").toFile()).apply { save(Book.starter("EUR")) }
+        val day = LocalDate.now().plusDays(10)
+        val msg = s.saveEntry(EntryDraft(amountMinor = 24_000, categoryId = 3, note = "New tyres", day = day, accountId = 1), { "€" + it / 100 })!!
+        assertTrue(msg.startsWith("€240 scheduled for"))
+        assertTrue(s.book.transactions.isEmpty())
+        assertTrue(s.book.recurring.single().once)
+        assertTrue(s.postDueRecurring(day.minusDays(1)).isEmpty())
+        assertEquals(1, s.postDueRecurring(day).size)
+        assertTrue(s.book.recurring.isEmpty())
+        assertEquals(day.toEpochDay(), s.book.transactions.single().epochDay)
     }
 }

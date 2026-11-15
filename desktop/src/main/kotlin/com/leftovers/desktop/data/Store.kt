@@ -335,6 +335,13 @@ class Store(val dir: File = defaultDir()) {
         id
     }
 
+    /** A scheduled one-off added today instead of on its day; returns the entry's id. */
+    fun addScheduledNow(r: Recurring, today: LocalDate = LocalDate.now()): Long = batch {
+        val id = saveTransaction(Transaction(amountMinor = r.amountMinor, type = r.type, categoryId = r.categoryId, epochDay = today.toEpochDay(), note = r.name, accountId = r.accountId))
+        deleteRecurring(r)
+        id
+    }
+
     fun skipRecurring(r: Recurring, month: YearMonth) = edit { withLastPosted(r.id, month.toString()) }
 
     fun unpayRecurring(r: Recurring, entryId: Long?) = batch {
@@ -373,7 +380,9 @@ class Store(val dir: File = defaultDir()) {
                 lastPosted = month
                 month = month.plusMonths(1)
             }
-            lastPosted?.let { b = b.withLastPosted(r.id, it.toString()) }
+            // A one-off scheduled for its day (#68) has done its job once it's added.
+            if (r.once && lastPosted != null) b = b.copy(recurring = b.recurring.filterNot { it.id == r.id })
+            else lastPosted?.let { b = b.withLastPosted(r.id, it.toString()) }
         }
         if (posted.isNotEmpty() || b != book) save(b)
         return posted

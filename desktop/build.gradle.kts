@@ -58,6 +58,8 @@ compose.desktop {
         mainClass = "com.leftovers.desktop.MainKt"
         nativeDistributions {
             targetFormats(TargetFormat.Msi, TargetFormat.Exe)
+            // Excel files are XML inside; shop links are https.
+            modules("java.instrument", "jdk.unsupported", "java.xml", "jdk.crypto.ec", "java.naming")
             packageName = "Leftovers"
             packageVersion = "1.0.0"
             description = "Know what's left"
