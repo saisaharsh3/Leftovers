@@ -27,7 +27,7 @@ fun SettingsScreen(view: View) {
     val app = LocalApp.current
     val store = app.store
     val prefs = view.book.prefs
-    val opener = remember { BackupOpener() }
+    val opener = app.backups
     var saving by remember { mutableStateOf(false) }
     var currency by remember { mutableStateOf(false) }
     androidx.compose.runtime.LaunchedEffect(app.intent) { if (app.take("backup")) saving = true }
@@ -59,20 +59,11 @@ fun SettingsScreen(view: View) {
         }
         Group("Backup") {
             SettingRow("Save a backup", "A file your phone can open.", onClick = { saving = true }) { Chevron() }
-            SettingRow("Open a backup", "From your phone, or from this computer.", onClick = { opener.start() }) { Chevron() }
+            SettingRow("Open a backup", "From your phone, or from this computer. Or drop it on the window.", onClick = { opener.start() }) { Chevron() }
+            SettingRow("Import a bank statement", "CSV, Excel or PDF, checked before anything's added. Or drop it on the window.", onClick = { app.importer.pick() }) { Chevron() }
             SettingRow("Where your data is", store.dir.absolutePath, onClick = { runCatching { java.awt.Desktop.getDesktop().open(store.dir) } }) {
                 Icon(Lucide.ExternalLink, null, tint = T.c.text3, modifier = Modifier)
             }
-        }
-    }
-    BackupDialogs(opener, askHow = true) { json, replace ->
-        if (replace) {
-            store.replaceWith(json)
-            app.tell("Backup opened")
-        } else {
-            val plan = store.mergeWith(json)
-            val n = plan.add.transactions.size
-            app.tell(if (n == 0) "Nothing new in it" else "Added $n ${if (n == 1) "entry" else "entries"}")
         }
     }
     BackupSaveDialog(saving) { saving = false }

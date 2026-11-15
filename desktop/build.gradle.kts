@@ -22,6 +22,7 @@ val shared = listOf(
     "util/MoneyText.kt", "util/Payback.kt", "util/SyncRemoved.kt", "util/CategoryGuess.kt", "util/Formatting.kt",
     "util/SmsParser.kt", "util/BankSenders.kt", "util/BankBalance.kt", "util/EmailParser.kt", "util/AutoAdd.kt",
     "ui/icons/Lucide.kt", "ui/icons/IconBuilder.kt", "ui/icons/CategoryIcons.kt", "util/ProductPrice.kt",
+    "util/StatementFile.kt", "util/PdfLines.kt", "util/ImportBatches.kt",
 )
 val sharedSrc = layout.buildDirectory.dir("shared-src")
 val copyShared by tasks.registering(Sync::class) {
@@ -46,6 +47,8 @@ dependencies {
     // The shared models carry Room's annotations; on the desktop they're just annotations.
     implementation("androidx.room:room-common:${libs.versions.room.get()}")
     implementation(libs.org.json)
+    // Reading PDF bank statements: the desktop build of the library the phone app uses.
+    implementation("org.apache.pdfbox:pdfbox:2.0.32")
     testImplementation(kotlin("test"))
     testImplementation(libs.junit)
 }

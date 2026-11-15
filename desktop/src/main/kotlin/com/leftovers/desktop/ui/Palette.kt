@@ -116,6 +116,7 @@ fun CommandPalette(state: AppState, view: View, visible: Boolean, onClose: () ->
             add(Command("Search entries", "Actions", Lucide.Search, hint = "Ctrl+F", keywords = "find") {
                 go(Page.ACTIVITY); java.awt.EventQueue.invokeLater { runCatching { ActivityMemory.searchFocus.requestFocus() } }
             })
+            add(Command("Import a bank statement", "Actions", Lucide.Download, keywords = "csv excel pdf import") { state.importer.pick() })
             add(Command("Save a backup", "Actions", Lucide.Download, keywords = "export file") { go(Page.SETTINGS); state.intent = "backup" })
             add(Command("Undo", "Actions", Lucide.RotateCcw, hint = "Ctrl+Z") { if (store.undo()) state.tell("Undone") })
             add(Command(if (view.book.prefs.glass) "Turn glass off" else "Turn glass on", "Look", Lucide.Sparkles, keywords = "frosted look") { store.setPrefs { copy(glass = !glass) } })

@@ -284,6 +284,15 @@ private fun EditorBody(req: EditRequest, onClose: () -> Unit) {
         }
     }
     LaunchedEffect(Unit) { runCatching { amountFocus.requestFocus() } }
+    // A photo dropped on the window goes to this entry.
+    LaunchedEffect(app.droppedPhoto) {
+        val f = app.droppedPhoto ?: return@LaunchedEffect
+        app.droppedPhoto = null
+        if (kind == Kind.TRANSFER) return@LaunchedEffect
+        store.photosDir.mkdirs()
+        val copy = File(store.photosDir, "receipt-${System.currentTimeMillis()}.${f.extension.lowercase()}")
+        runCatching { f.copyTo(copy) }.onSuccess { draft = draft.copy(receiptPath = copy.absolutePath); app.tell("Photo added") }
+    }
 }
 
 @OptIn(ExperimentalLayoutApi::class)

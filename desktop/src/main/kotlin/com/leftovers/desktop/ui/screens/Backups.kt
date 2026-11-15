@@ -66,6 +66,11 @@ class BackupOpener {
         tryOpen(null)
     }
 
+    fun open(f: File) {
+        file = f
+        tryOpen(null)
+    }
+
     fun tryOpen(password: String?) {
         val f = file ?: return
         try {
