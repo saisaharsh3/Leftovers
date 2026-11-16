@@ -2,6 +2,7 @@ package com.leftovers.app.util
 
 import com.leftovers.app.data.Debt
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -238,5 +239,18 @@ class SharedOwedTest {
         assertEquals(SharedOwed.Pay.BANK, SharedOwed.parse(link)!!.pay!!.first)
         // Anything else in it is dropped, not trusted.
         assertEquals("", SharedOwed.clean(pay.copy(first = "card")).first)
+    }
+
+    @Test
+    fun `PayPal and Monzo links open with the amount filled in`() {
+        assertEquals("https://paypal.me/asha/71.42INR", SharedOwed.linkWithAmount("https://paypal.me/asha", 71_42, "INR"))
+        assertEquals("https://paypal.me/asha/25EUR", SharedOwed.linkWithAmount("https://www.paypal.me/asha", 25_00, "eur"))
+        assertEquals("https://monzo.me/asha/12.50", SharedOwed.linkWithAmount("https://monzo.me/asha", 12_50, "GBP"))
+        // Monzo is pounds only; other services, and links that already say an amount, open as they are.
+        assertEquals("https://monzo.me/asha", SharedOwed.linkWithAmount("https://monzo.me/asha", 12_50, "EUR"))
+        assertEquals("https://revolut.me/asha", SharedOwed.linkWithAmount("https://revolut.me/asha", 12_50, "EUR"))
+        assertEquals("https://paypal.me/asha/10", SharedOwed.linkWithAmount("https://paypal.me/asha/10", 12_50, "EUR"))
+        assertTrue(SharedOwed.fillsAmount("https://paypal.me/asha", "USD"))
+        assertFalse(SharedOwed.fillsAmount("https://cash.app/\$asha", "USD"))
     }
 }

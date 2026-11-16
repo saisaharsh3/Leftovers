@@ -165,8 +165,13 @@ fun SharedOwedSheet(sent: SharedOwed.Shared, onDismiss: () -> Unit) {
                             runCatching { context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(upi))) }
                                 .onFailure { android.widget.Toast.makeText(context, "No UPI app on this phone. Their UPI ID is ${pay.upi}", android.widget.Toast.LENGTH_LONG).show() }
                         }
-                        SharedOwed.Pay.LINK -> Triple("Pay with ${pay.linkHost.ifBlank { "their link" }}", com.leftovers.app.ui.icons.Lucide.ExternalLink) {
-                            runCatching { context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(pay.link))) }
+                        SharedOwed.Pay.LINK -> Triple(
+                            // With the amount filled in where the service allows it (PayPal, Monzo), say so.
+                            if (SharedOwed.fillsAmount(pay.link, shared.currency)) "Pay ${theirs.format(owe)} with ${pay.linkHost}" else "Pay with ${pay.linkHost.ifBlank { "their link" }}",
+                            com.leftovers.app.ui.icons.Lucide.ExternalLink,
+                        ) {
+                            val url = SharedOwed.linkWithAmount(pay.link, owe, shared.currency)
+                            runCatching { context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))) }
                         }
                         else -> Triple(if (i == 0) "Copy their bank details to pay" else "Copy their bank details", com.leftovers.app.ui.icons.Lucide.Landmark) {
                             clipboard.setText(androidx.compose.ui.text.AnnotatedString(pay.bank))

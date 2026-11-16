@@ -224,6 +224,30 @@ object SharedOwed {
         return full
     }
 
+    /**
+     * The payment link with [amountMinor] filled in, where the service says how: PayPal.me takes the amount and its
+     * currency after the name, and Monzo.me (pounds only) the amount. Any other link, or one that already has an
+     * amount, is opened as it is, and they type the amount there.
+     */
+    fun linkWithAmount(link: String, amountMinor: Long, currency: String): String {
+        if (amountMinor <= 0) return link
+        val uri = runCatching { java.net.URI(link) }.getOrNull() ?: return link
+        val host = uri.host.orEmpty().lowercase().removePrefix("www.")
+        val parts = uri.path.orEmpty().split('/').filter { it.isNotBlank() }
+        // Just a name: nothing filled in yet, and no query to keep.
+        if (parts.size != 1 || uri.rawQuery != null || uri.rawFragment != null) return link
+        val amount = java.math.BigDecimal.valueOf(amountMinor, 2).let { if (amountMinor % 100 == 0L) it.setScale(0) else it }.toPlainString()
+        val code = currency.uppercase().takeIf { it.length == 3 && it.all(Char::isLetter) }
+        return when {
+            host == "paypal.me" && code != null -> "https://paypal.me/${parts[0]}/$amount$code"
+            host == "monzo.me" && code == "GBP" -> "https://monzo.me/${parts[0]}/$amount"
+            else -> link
+        }
+    }
+
+    /** Whether [linkWithAmount] fills in the amount for this link. */
+    fun fillsAmount(link: String, currency: String): Boolean = linkWithAmount(link, 100, currency) != link
+
     /** Only what's valid survives, from the user's own fields or from a link someone sent. */
     fun clean(pay: Pay): Pay = Pay(
         upi = pay.upi.trim().takeIf { isUpi(it) }.orEmpty(),
