@@ -130,7 +130,7 @@ class SharedOwedTest {
         val lines = DebtReminder.payLines(pay)
         assertTrue("Pay by UPI: asha.k@okaxis" in lines)
         assertTrue("Or pay here: https://paypal.me/ashak" in lines)
-        assertTrue("Bank: IBAN" in lines)
+        assertTrue("Or to my bank: IBAN" in lines)
         assertEquals("", DebtReminder.payLines(SharedOwed.Pay()))
     }
 
@@ -216,5 +216,27 @@ class SharedOwedTest {
         assertEquals("Dinner", dinner.note)
         assertEquals("Your share of ₹1200, split 4 ways · paid by Ravi", dinner.details)
         assertEquals(null, dinner.accountId)
+    }
+
+    @Test
+    fun `the way you'd rather be paid comes first, the others after it`() {
+        val pay = SharedOwed.Pay(upi = "asha.k@okaxis", link = "https://paypal.me/asha", bank = "IBAN DE00 1234", first = SharedOwed.Pay.LINK)
+        assertEquals(listOf("link", "upi", "bank"), pay.ways("INR"))
+        // UPI isn't offered outside rupees; without a choice, UPI leads where it works.
+        assertEquals(listOf("link", "bank"), pay.ways("EUR"))
+        assertEquals(listOf("upi", "link", "bank"), pay.copy(first = "").ways("INR"))
+        val lines = DebtReminder.payLines(pay, "INR")
+        assertTrue(lines.indexOf("Pay here: https://paypal.me/asha") < lines.indexOf("Or by UPI: asha.k@okaxis"))
+        assertTrue("Or to my bank: IBAN DE00 1234" in lines)
+    }
+
+    @Test
+    fun `the first way travels in the link`() {
+        val debt = com.leftovers.app.data.Debt(id = 4, person = "Ravi", amountMinor = 500_00, note = "Tickets", epochDay = 20_770)
+        val pay = SharedOwed.Pay(upi = "asha.k@okaxis", bank = "IBAN DE00 1234", first = SharedOwed.Pay.BANK)
+        val link = SharedOwed.link("phone-1", "INR", listOf(debt), pay)!!
+        assertEquals(SharedOwed.Pay.BANK, SharedOwed.parse(link)!!.pay!!.first)
+        // Anything else in it is dropped, not trusted.
+        assertEquals("", SharedOwed.clean(pay.copy(first = "card")).first)
     }
 }

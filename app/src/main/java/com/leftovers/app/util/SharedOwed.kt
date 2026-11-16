@@ -42,8 +42,37 @@ object SharedOwed {
      * payment link (PayPal.me, Revolut, Wise...) and/or bank details to copy. Sent only when set, and only for money
      * the receiver owes. Never anything that could move money out: no PIN, password or card number has a place here.
      */
-    data class Pay(val upi: String = "", val name: String = "", val link: String = "", val bank: String = "") {
+    data class Pay(
+        val upi: String = "",
+        val name: String = "",
+        val link: String = "",
+        val bank: String = "",
+        /** The way the sender would rather be paid: [UPI], [LINK] or [BANK]; blank picks UPI where it works. */
+        val first: String = "",
+    ) {
         val isEmpty: Boolean get() = upi.isBlank() && link.isBlank() && bank.isBlank()
+
+        /**
+         * The ways a friend can pay, the sender's choice first and the others after it for anyone who doesn't use
+         * that one. UPI only for rupees.
+         */
+        fun ways(currency: String = "INR"): List<String> {
+            val all = listOfNotNull(
+                UPI.takeIf { upi.isNotBlank() && (currency.isBlank() || currency == "INR") },
+                LINK.takeIf { link.isNotBlank() },
+                BANK.takeIf { bank.isNotBlank() },
+            )
+            return all.sortedBy { if (it == first) 0 else 1 }
+        }
+
+        /** How many ways are set up, whatever the currency: a first choice only matters with two or more. */
+        val count: Int get() = listOf(upi, link, bank).count { it.isNotBlank() }
+
+        companion object {
+            const val UPI = "upi"
+            const val LINK = "link"
+            const val BANK = "bank"
+        }
 
         /** The payment link's site, to say where it goes: "paypal.me". */
         val linkHost: String get() = runCatching { java.net.URI(link).host.orEmpty().removePrefix("www.") }.getOrDefault("")
@@ -81,6 +110,7 @@ object SharedOwed {
                 if (clean.name.isNotEmpty()) put("n", clean.name)
                 if (clean.link.isNotEmpty()) put("l", clean.link)
                 if (clean.bank.isNotEmpty()) put("b", clean.bank)
+                if (clean.first.isNotEmpty()) put("f", clean.first)
             })
         }
         return "$PAGE#" + encode(json.toString())
@@ -105,6 +135,7 @@ object SharedOwed {
                 if (clean.name.isNotEmpty()) put("n", clean.name)
                 if (clean.link.isNotEmpty()) put("l", clean.link)
                 if (clean.bank.isNotEmpty()) put("b", clean.bank)
+                if (clean.first.isNotEmpty()) put("f", clean.first)
             })
         }
         return "$PAGE#" + encode(json.toString())
@@ -175,7 +206,7 @@ object SharedOwed {
                 name = e.optString(7).replace(Regex("[\\p{Cntrl}]"), "").trim().take(30),
             )
         }.filter { it.id.isNotBlank() && it.amountMinor != 0L }
-        val pay = json.optJSONObject("p")?.let { p -> clean(Pay(p.optString("u"), p.optString("n"), p.optString("l"), p.optString("b"))) }?.takeIf { !it.isEmpty }
+        val pay = json.optJSONObject("p")?.let { p -> clean(Pay(p.optString("u"), p.optString("n"), p.optString("l"), p.optString("b"), p.optString("f"))) }?.takeIf { !it.isEmpty }
         val group = json.optInt("g") == 1 && lines.all { it.name.isNotBlank() }
         if (lines.isEmpty()) null else Shared(json.optString("c").take(3).uppercase(), lines, pay, group)
     }.getOrNull()
@@ -200,6 +231,7 @@ object SharedOwed {
         link = payLink(pay.link).orEmpty(),
         bank = pay.bank.trim().replace(Regex("[\\p{Cntrl}&&[^\\n]]"), "").lines().map { it.trim() }.filter { it.isNotEmpty() }.take(4)
             .joinToString("\n").take(140),
+        first = pay.first.takeIf { it == Pay.UPI || it == Pay.LINK || it == Pay.BANK }.orEmpty(),
     )
 
     /**

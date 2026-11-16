@@ -104,12 +104,14 @@ object DebtReminder {
      */
     fun payLines(pay: SharedOwed.Pay, currency: String = "INR"): String {
         val clean = SharedOwed.clean(pay)
-        val upi = clean.upi.isNotEmpty() && (currency.isBlank() || currency == "INR")
-        val lines = listOfNotNull(
-            clean.upi.takeIf { upi }?.let { "Pay by UPI: $it" },
-            clean.link.takeIf { it.isNotEmpty() }?.let { "${if (!upi) "Pay" else "Or pay"} here: $it" },
-            clean.bank.takeIf { it.isNotEmpty() }?.let { "Bank: " + it.replace("\n", ", ") },
-        )
+        // The way you'd rather be paid first, then the others for anyone who doesn't use it.
+        val lines = clean.ways(currency).mapIndexed { i, way ->
+            when (way) {
+                SharedOwed.Pay.UPI -> (if (i == 0) "Pay by UPI: " else "Or by UPI: ") + clean.upi
+                SharedOwed.Pay.LINK -> (if (i == 0) "Pay here: " else "Or pay here: ") + clean.link
+                else -> (if (i == 0) "Pay to my bank: " else "Or to my bank: ") + clean.bank.replace("\n", ", ")
+            }
+        }
         return if (lines.isEmpty()) "" else "\n\n" + lines.joinToString("\n")
     }
 

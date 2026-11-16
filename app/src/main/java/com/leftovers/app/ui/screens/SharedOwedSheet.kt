@@ -156,23 +156,25 @@ fun SharedOwedSheet(sent: SharedOwed.Shared, onDismiss: () -> Unit) {
                 val context = LocalContext.current
                 val owe = -net
                 val upi = SharedOwed.upiUri(pay, owe, shared.currency)
-                if (upi != null) {
-                    com.leftovers.app.ui.components.SecondaryButton("Pay ${theirs.format(owe)} with UPI", {
-                        runCatching { context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(upi))) }
-                            .onFailure { android.widget.Toast.makeText(context, "No UPI app on this phone. Their UPI ID is ${pay.upi}", android.widget.Toast.LENGTH_LONG).show() }
-                    }, Modifier.fillMaxWidth(), icon = com.leftovers.app.ui.icons.Lucide.Wallet)
-                }
-                if (pay.link.isNotBlank()) {
-                    com.leftovers.app.ui.components.SecondaryButton("Pay with ${pay.linkHost.ifBlank { "their link" }}", {
-                        runCatching { context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(pay.link))) }
-                    }, Modifier.fillMaxWidth(), icon = com.leftovers.app.ui.icons.Lucide.ExternalLink)
-                }
-                if (pay.bank.isNotBlank()) {
-                    val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
-                    com.leftovers.app.ui.components.SecondaryButton("Copy their bank details", {
-                        clipboard.setText(androidx.compose.ui.text.AnnotatedString(pay.bank))
-                        android.widget.Toast.makeText(context, "Copied", android.widget.Toast.LENGTH_SHORT).show()
-                    }, Modifier.fillMaxWidth(), icon = com.leftovers.app.ui.icons.Lucide.Landmark)
+                val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
+                // The way they'd rather be paid is the big button; the others are under it, for anyone who
+                // doesn't use that one.
+                pay.ways(shared.currency).filter { it != SharedOwed.Pay.UPI || upi != null }.forEachIndexed { i, way ->
+                    val (label, icon, open) = when (way) {
+                        SharedOwed.Pay.UPI -> Triple("Pay ${theirs.format(owe)} with UPI", com.leftovers.app.ui.icons.Lucide.Wallet) {
+                            runCatching { context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(upi))) }
+                                .onFailure { android.widget.Toast.makeText(context, "No UPI app on this phone. Their UPI ID is ${pay.upi}", android.widget.Toast.LENGTH_LONG).show() }
+                        }
+                        SharedOwed.Pay.LINK -> Triple("Pay with ${pay.linkHost.ifBlank { "their link" }}", com.leftovers.app.ui.icons.Lucide.ExternalLink) {
+                            runCatching { context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(pay.link))) }
+                        }
+                        else -> Triple(if (i == 0) "Copy their bank details to pay" else "Copy their bank details", com.leftovers.app.ui.icons.Lucide.Landmark) {
+                            clipboard.setText(androidx.compose.ui.text.AnnotatedString(pay.bank))
+                            android.widget.Toast.makeText(context, "Copied", android.widget.Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                    if (i == 0) PrimaryButton(label, { open() }, Modifier.fillMaxWidth(), icon = icon)
+                    else com.leftovers.app.ui.components.SecondaryButton(label, { open() }, Modifier.fillMaxWidth(), icon = icon)
                 }
                 Text(
                     listOfNotNull(pay.upi.takeIf { it.isNotBlank() }?.let { "UPI ID: $it" }, pay.name.takeIf { it.isNotBlank() }, pay.bank.takeIf { it.isNotBlank() }?.replace("\n", ", "))

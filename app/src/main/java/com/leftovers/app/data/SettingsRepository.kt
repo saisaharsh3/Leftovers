@@ -316,7 +316,7 @@ class SettingsRepository(context: Context) {
 
     /** How friends can pay you back, put in the reminders you send from Money owed. Empty until it's set. */
     val payDetailsFlow = store.data.map { p ->
-        com.leftovers.app.util.SharedOwed.Pay(p[PAY_UPI].orEmpty(), p[PAY_NAME].orEmpty(), p[PAY_LINK].orEmpty(), p[PAY_BANK].orEmpty())
+        com.leftovers.app.util.SharedOwed.Pay(p[PAY_UPI].orEmpty(), p[PAY_NAME].orEmpty(), p[PAY_LINK].orEmpty(), p[PAY_BANK].orEmpty(), p[PAY_FIRST].orEmpty())
     }
     /** Whether reminders carry the payment details (on unless turned off). */
     val payShareFlow = store.data.map { it[PAY_SHARE] ?: true }
@@ -332,6 +332,7 @@ class SettingsRepository(context: Context) {
         it[PAY_NAME] = pay.name
         it[PAY_LINK] = pay.link
         it[PAY_BANK] = pay.bank
+        it[PAY_FIRST] = pay.first
     }
 
     suspend fun setAppNotifications(enabled: Boolean) = store.edit { it[APP_NOTIFICATIONS] = enabled }
@@ -474,6 +475,8 @@ class SettingsRepository(context: Context) {
         val PAY_NAME = stringPreferencesKey("pay_name")
         val PAY_LINK = stringPreferencesKey("pay_link")
         val PAY_BANK = stringPreferencesKey("pay_bank")
+        /** The way to be paid that friends see first: upi, link or bank. */
+        val PAY_FIRST = stringPreferencesKey("pay_first")
         val PAY_SHARE = booleanPreferencesKey("pay_share")
         val REMINDER_LINK = booleanPreferencesKey("reminder_link")
         val APP_NOTIFICATIONS = booleanPreferencesKey("app_notifications")

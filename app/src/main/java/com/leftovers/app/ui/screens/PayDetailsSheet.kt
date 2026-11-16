@@ -65,7 +65,7 @@ fun PayDetailsSheet(current: SharedOwed.Pay, onSave: (SharedOwed.Pay) -> Unit, o
                 Text("That looks like a card number. Share an account number or IBAN instead: anyone with the message would see it.", style = MaterialTheme.typography.bodySmall, color = c.warning, modifier = Modifier.padding(start = 6.dp))
             }
 
-            PrimaryButton("Save", { onSave(SharedOwed.Pay(upi, name, link, bank)) }, Modifier.fillMaxWidth(), enabled = !upiBad && !linkBad && !secret)
+            PrimaryButton("Save", { onSave(SharedOwed.Pay(upi, name, link, bank, current.first)) }, Modifier.fillMaxWidth(), enabled = !upiBad && !linkBad && !secret)
             if (!current.isEmpty) SecondaryButton("Remove all", { onSave(SharedOwed.Pay()) }, Modifier.fillMaxWidth())
         }
     }
