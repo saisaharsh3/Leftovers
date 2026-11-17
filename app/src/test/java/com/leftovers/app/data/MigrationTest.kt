@@ -90,4 +90,20 @@ class MigrationTest {
             assertEquals(0, it.getInt(1)) // existing subscriptions still log themselves
         }
     }
+
+    @Test fun version31AddsTransferFeesKeepingData() {
+        helper.createDatabase(name, 30).apply {
+            execSQL("INSERT INTO accounts (id, name, icon, color, openingMinor, createdAt, outOfBudget, outOfTotal, position) VALUES (1, 'Cash', 'banknote', 1, 0, 0, 0, 0, 0)")
+            execSQL("INSERT INTO accounts (id, name, icon, color, openingMinor, createdAt, outOfBudget, outOfTotal, position) VALUES (2, 'Bank', 'landmark', 1, 0, 0, 0, 0, 1)")
+            execSQL("INSERT INTO transfers (id, fromAccountId, toAccountId, amountMinor, epochDay, note, createdAt) VALUES (1, 1, 2, 50000, 20000, 'Top up', 0)")
+            close()
+        }
+        val db = helper.runMigrationsAndValidate(name, 31, true, *ALL_MIGRATIONS)
+        db.query("SELECT amountMinor, feeMinor, note FROM transfers WHERE id = 1").use {
+            it.moveToFirst()
+            assertEquals(50000L, it.getLong(0))
+            assertEquals(0L, it.getLong(1)) // older transfers had no fee
+            assertEquals("Top up", it.getString(2))
+        }
+    }
 }

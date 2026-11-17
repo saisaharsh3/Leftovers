@@ -410,10 +410,10 @@ fun HomeScreen(
     var transferring by remember { mutableStateOf(false) }
     val transferScope = androidx.compose.runtime.rememberCoroutineScope()
     if (transferring && state.accounts.size >= 2) {
-        TransferSheet(state.accounts, onDismiss = { transferring = false }) { from, to, amount, note, day ->
+        TransferSheet(state.accounts, onDismiss = { transferring = false }) { from, to, amount, fee, note, day ->
             val accounts = (versionContext.applicationContext as com.leftovers.app.LeftoversApp).container.accounts
             transferScope.launch {
-                accounts.saveTransfer(com.leftovers.app.data.Transfer(fromAccountId = from, toAccountId = to, amountMinor = amount, epochDay = day.toEpochDay(), note = note))
+                accounts.saveTransfer(com.leftovers.app.data.Transfer(fromAccountId = from, toAccountId = to, amountMinor = amount, feeMinor = fee, epochDay = day.toEpochDay(), note = note))
             }
             transferring = false
         }

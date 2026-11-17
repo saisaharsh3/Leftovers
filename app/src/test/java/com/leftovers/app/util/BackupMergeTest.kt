@@ -7,6 +7,7 @@ import com.leftovers.app.data.Goal
 import com.leftovers.app.data.GoalDeposit
 import com.leftovers.app.data.Recurring
 import com.leftovers.app.data.Transaction
+import com.leftovers.app.data.Transfer
 import com.leftovers.app.data.TxType
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -81,5 +82,22 @@ class BackupMergeTest {
         )
         val twice = BackupMerge.plan(after, backup)
         assertEquals(0, twice.add.transactions.size + twice.add.categories.size + twice.add.goals.size + twice.add.deposits.size + twice.add.debts.size + twice.add.recurring.size)
+    }
+
+    @Test fun transferFeesComeAcrossAndSetTransfersApart() {
+        val existing = BackupMerge.Data(
+            accounts = listOf(Account(1, "Cash", "banknote", 0), Account(2, "Bank", "landmark", 0)),
+            transfers = listOf(Transfer(id = 1, fromAccountId = 1, toAccountId = 2, amountMinor = 10_000, feeMinor = 0, epochDay = 20_000)),
+        )
+        val incoming = BackupMerge.Data(
+            accounts = listOf(Account(7, "Cash", "banknote", 0), Account(8, "Bank", "landmark", 0)),
+            transfers = listOf(
+                Transfer(id = 3, fromAccountId = 7, toAccountId = 8, amountMinor = 10_000, feeMinor = 0, epochDay = 20_000),
+                Transfer(id = 4, fromAccountId = 7, toAccountId = 8, amountMinor = 10_000, feeMinor = 250, epochDay = 20_000),
+            ),
+        )
+        val plan = BackupMerge.plan(existing, incoming)
+        // The fee-less one is already here; the other differs by its fee and is added with it.
+        assertEquals(listOf(250L), plan.add.transfers.map { it.feeMinor })
     }
 }

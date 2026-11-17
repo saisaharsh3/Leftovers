@@ -824,7 +824,11 @@ private fun TransferRow(line: TransferLine, onClick: () -> Unit, modifier: Modif
         title = "${line.from} → ${line.to}",
         modifier = modifier,
         onClick = onClick,
-        subtitle = listOf("Transfer", line.transfer.note).filter { it.isNotBlank() }.joinToString(" · "),
+        subtitle = listOf(
+            "Transfer",
+            line.transfer.note,
+            line.transfer.feeMinor.takeIf { it > 0 }?.let { "Fee ${money.format(it)}" }.orEmpty(),
+        ).filter { it.isNotBlank() }.joinToString(" · "),
         leading = { com.leftovers.app.ui.components.IconTile(Lucide.Repeat, c.textSecondary, size = 42.dp) },
         trailing = {
             val sign = when (line.sign) { -1 -> "−"; 1 -> "+"; else -> "" }

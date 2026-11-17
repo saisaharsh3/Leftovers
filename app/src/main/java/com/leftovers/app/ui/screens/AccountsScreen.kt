@@ -96,6 +96,8 @@ data class BalanceBreakdown(
     val spent: Long,
     val transfersIn: Long,
     val transfersOut: Long,
+    /** Fees on transfers out of this account, counted on top of [transfersOut]. */
+    val transferFees: Long = 0,
     /** Still open: money lent out of this account, and money borrowed into it. */
     val lent: Long = 0,
     val borrowed: Long = 0,
@@ -104,7 +106,7 @@ data class BalanceBreakdown(
     val olderCount: Int,
     val olderNet: Long,
 ) {
-    val balance: Long get() = opening + income - spent + transfersIn - transfersOut - lent + borrowed
+    val balance: Long get() = opening + income - spent + transfersIn - transfersOut - transferFees - lent + borrowed
 }
 
 class AccountsViewModel(
@@ -135,6 +137,7 @@ class AccountsViewModel(
             spent = mine.filter { it.type == TxType.EXPENSE }.sumOf { it.amountMinor },
             transfersIn = transferList.filter { it.toAccountId == account.id }.sumOf { it.amountMinor },
             transfersOut = transferList.filter { it.fromAccountId == account.id }.sumOf { it.amountMinor },
+            transferFees = transferList.filter { it.fromAccountId == account.id }.sumOf { it.feeMinor },
             lent = open.filter { it.amountMinor > 0 }.sumOf { it.amountMinor },
             borrowed = open.filter { it.amountMinor < 0 }.sumOf { -it.amountMinor },
             entries = mine.size,
@@ -211,9 +214,9 @@ class AccountsViewModel(
         viewModelScope.launch { repository.setAccount(ids, backTo) }
     }
 
-    fun transfer(from: Long, to: Long, amount: Long, note: String, day: LocalDate = LocalDate.now()) {
+    fun transfer(from: Long, to: Long, amount: Long, fee: Long, note: String, day: LocalDate = LocalDate.now()) {
         viewModelScope.launch {
-            repository.saveTransfer(Transfer(fromAccountId = from, toAccountId = to, amountMinor = amount, epochDay = day.toEpochDay(), note = note))
+            repository.saveTransfer(Transfer(fromAccountId = from, toAccountId = to, amountMinor = amount, feeMinor = fee, epochDay = day.toEpochDay(), note = note))
         }
     }
 
@@ -348,7 +351,11 @@ fun AccountsScreen(
                                 val to = accounts.find { it.id == t.toAccountId }?.name ?: "?"
                                 ListRow(
                                     title = "$from → $to",
-                                    subtitle = listOf(LocalDate.ofEpochDay(t.epochDay).friendlyLabel(), t.note).filter { it.isNotBlank() }.joinToString(" · "),
+                                    subtitle = listOf(
+                                        LocalDate.ofEpochDay(t.epochDay).friendlyLabel(),
+                                        t.note,
+                                        t.feeMinor.takeIf { it > 0 }?.let { "Fee ${money.format(it)}" }.orEmpty(),
+                                    ).filter { it.isNotBlank() }.joinToString(" · "),
                                     trailing = {
                                         Row(verticalAlignment = Alignment.CenterVertically) {
                                             Text(money.format(t.amountMinor), style = MaterialTheme.typography.titleSmall, color = c.textPrimary)
@@ -532,8 +539,8 @@ fun AccountsScreen(
     }
 
     if (transferring && accounts.size >= 2) {
-        TransferSheet(accounts, onDismiss = { transferring = false }) { from, to, amount, note, day ->
-            viewModel.transfer(from, to, amount, note, day)
+        TransferSheet(accounts, onDismiss = { transferring = false }) { from, to, amount, fee, note, day ->
+            viewModel.transfer(from, to, amount, fee, note, day)
             transferring = false
         }
     }
@@ -755,7 +762,7 @@ internal fun TransferSheet(
     onDismiss: () -> Unit,
     /** A transfer being changed; null for a new one. */
     initial: Transfer? = null,
-    onSave: (Long, Long, Long, String, LocalDate) -> Unit,
+    onSave: (Long, Long, Long, Long, String, LocalDate) -> Unit,
 ) {
     val c = LocalAppColors.current
     var from by rememberSaveable { mutableStateOf(initial?.fromAccountId ?: accounts[0].id) }
@@ -764,8 +771,10 @@ internal fun TransferSheet(
     var picking by remember { mutableStateOf(false) }
     var to by rememberSaveable { mutableStateOf(initial?.toAccountId ?: accounts[1].id) }
     var amount by rememberSaveable { mutableStateOf(initial?.let { AmountInput.fromMinor(it.amountMinor) } ?: "") }
+    var fee by rememberSaveable { mutableStateOf(initial?.feeMinor?.takeIf { it > 0 }?.let(AmountInput::fromMinor).orEmpty()) }
     var note by rememberSaveable { mutableStateOf(initial?.note.orEmpty()) }
     val minor = AmountInput.toMinor(amount) ?: 0L
+    val feeMinor = AmountInput.toMinor(fee) ?: 0L
 
     GlassSheet(onDismiss) {
         Column(
@@ -783,9 +792,10 @@ internal fun TransferSheet(
                 accounts.filter { it.id != from }.forEach { a -> Chip(a.name, onClick = { to = a.id }, icon = CategoryIcons[a.icon], iconTint = Color(a.color), selected = to == a.id) }
             }
             MoneyField(amount, { amount = it }, label = "Amount", large = true)
+            MoneyField(fee, { fee = it }, label = "Fee (optional)")
             Chip(LocalDate.ofEpochDay(day).friendlyLabel(), onClick = { picking = true }, icon = com.leftovers.app.ui.icons.Lucide.Calendar)
             GlassTextField(note, { note = it.take(60) }, placeholder = "e.g. ATM withdrawal", label = "Note (optional)")
-            PrimaryButton(if (initial == null) "Transfer" else "Save", { onSave(from, to, minor, note.trim(), LocalDate.ofEpochDay(day)) }, Modifier.fillMaxWidth(), enabled = minor > 0 && from != to)
+            PrimaryButton(if (initial == null) "Transfer" else "Save", { onSave(from, to, minor, feeMinor, note.trim(), LocalDate.ofEpochDay(day)) }, Modifier.fillMaxWidth(), enabled = minor > 0 && from != to)
         }
     }
     if (picking) {
@@ -862,6 +872,7 @@ private fun BalanceBreakdownCard(b: BalanceBreakdown, createdAt: Long) {
             line("Spending", b.spent, "− ", c.negative)
             if (b.transfersIn > 0) line("Transfers in", b.transfersIn, "+ ")
             if (b.transfersOut > 0) line("Transfers out", b.transfersOut, "− ")
+            if (b.transferFees > 0) line("Transfer fees", b.transferFees, "− ")
             if (b.lent > 0) line("Lent, not paid back yet", b.lent, "− ")
             if (b.borrowed > 0) line("Borrowed, not paid back yet", b.borrowed, "+ ")
             RowDivider(inset = 0.dp)

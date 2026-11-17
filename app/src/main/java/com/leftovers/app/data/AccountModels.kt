@@ -130,6 +130,8 @@ data class Transfer(
     val fromAccountId: Long,
     val toAccountId: Long,
     val amountMinor: Long,
+    /** Taken from [fromAccountId] on top of [amountMinor]; [toAccountId] still gets [amountMinor]. */
+    @ColumnInfo(defaultValue = "0") val feeMinor: Long = 0,
     val epochDay: Long,
     val note: String = "",
     val createdAt: Long = System.currentTimeMillis(),

@@ -64,12 +64,12 @@ object BackupMerge {
             t.copy(id = transactionIds.next(), categoryId = category, accountId = account(t.accountId), splitOf = null)
         }
 
-        val haveTransfers = existing.transfers.map { listOf(it.epochDay, it.amountMinor, it.fromAccountId, it.toAccountId) }.toMutableSet()
+        val haveTransfers = existing.transfers.map { listOf(it.epochDay, it.amountMinor, it.feeMinor, it.fromAccountId, it.toAccountId) }.toMutableSet()
         val transferIds = nextIds(existing.transfers.map { it.id })
         val newTransfers = backup.transfers.mapNotNull { t ->
             val from = account(t.fromAccountId) ?: return@mapNotNull null
             val to = account(t.toAccountId) ?: return@mapNotNull null
-            if (!haveTransfers.add(listOf(t.epochDay, t.amountMinor, from, to))) return@mapNotNull null
+            if (!haveTransfers.add(listOf(t.epochDay, t.amountMinor, t.feeMinor, from, to))) return@mapNotNull null
             t.copy(id = transferIds.next(), fromAccountId = from, toAccountId = to)
         }
 

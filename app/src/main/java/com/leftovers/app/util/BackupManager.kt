@@ -125,6 +125,7 @@ class BackupManager(
                 put("transfers", JSONArray(dao.transfers().map { t ->
                     JSONObject().put("id", t.id).put("from", t.fromAccountId).put("to", t.toAccountId).put("amount", t.amountMinor)
                         .put("day", t.epochDay).put("note", t.note).put("createdAt", t.createdAt)
+                        .apply { if (t.feeMinor > 0) put("fee", t.feeMinor) }
                 }))
                 put("recurring", JSONArray(dao.recurring().map { r ->
                     JSONObject().put("id", r.id).put("name", r.name).put("amount", r.amountMinor).put("type", r.type.name)
@@ -244,7 +245,7 @@ class BackupManager(
                 )
             }
             val transfers = json.optJSONArray("transfers")?.objects().orEmpty().map {
-                Transfer(it.getLong("id"), it.getLong("from"), it.getLong("to"), it.getLong("amount"), it.getLong("day"), it.getString("note"), it.getLong("createdAt"))
+                Transfer(it.getLong("id"), it.getLong("from"), it.getLong("to"), it.getLong("amount"), it.optLong("fee"), it.getLong("day"), it.getString("note"), it.getLong("createdAt"))
             }
             val recurring = json.optJSONArray("recurring")?.objects().orEmpty().map {
                 Recurring(

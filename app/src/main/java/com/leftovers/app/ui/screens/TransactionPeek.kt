@@ -445,8 +445,8 @@ private fun TransferPeek(peek: TransactionPeek, viewModel: TransactionPeekViewMo
     var editing by remember { mutableStateOf<com.leftovers.app.data.Transfer?>(null) }
     editing?.let { transfer ->
         if (accounts.size >= 2) {
-            TransferSheet(accounts, onDismiss = { editing = null }, initial = transfer) { from, to, amount, note, day ->
-                viewModel.saveTransfer(transfer.copy(fromAccountId = from, toAccountId = to, amountMinor = amount, note = note, epochDay = day.toEpochDay()))
+            TransferSheet(accounts, onDismiss = { editing = null }, initial = transfer) { from, to, amount, fee, note, day ->
+                viewModel.saveTransfer(transfer.copy(fromAccountId = from, toAccountId = to, amountMinor = amount, feeMinor = fee, note = note, epochDay = day.toEpochDay()))
                 editing = null
             }
         }
@@ -477,6 +477,13 @@ private fun TransferPeek(peek: TransactionPeek, viewModel: TransactionPeekViewMo
         ) {
             Text("Moved", style = MaterialTheme.typography.labelLarge, color = c.textSecondary)
             Text(money.format(transfer.amountMinor), style = MaterialTheme.typography.displaySmall, color = c.textPrimary)
+            if (transfer.feeMinor > 0) {
+                Text(
+                    "Fee ${money.format(transfer.feeMinor)} · taken from ${line.from}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = c.textSecondary,
+                )
+            }
             Text(
                 java.time.LocalDate.ofEpochDay(transfer.epochDay).friendlyLabel() + " · not spending or income",
                 style = MaterialTheme.typography.bodySmall,

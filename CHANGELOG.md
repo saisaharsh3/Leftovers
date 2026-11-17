@@ -5,6 +5,8 @@ All notable changes to Leftovers. Download any version from
 
 ## Unreleased
 
+- Transfers can record an optional fee: it leaves the From account with the amount and stays with the transfer
+
 ## 1.10.0
 
 Paid back, paid on time, made yours. It installs over 1.9.0 and keeps your data.
