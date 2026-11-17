@@ -391,7 +391,8 @@ fun HomeScreen(
     // Once per feature version, the first time the app opens after updating to it (not again for its pre-releases or
     // Dev builds): after that it's in Updates → Highlights. Seen before this change, the full version was kept.
     // Kept as "highlights:1.10": what the old What's new sheet left ("1.10.0-dev.185") isn't the page having been seen.
-    val seenKey = remember(appVersion) { "highlights:" + com.leftovers.app.util.WhatsNew.release(appVersion) }
+    // The page's own version, not the app's: 1.11 brought no new page, so it doesn't open again after updating.
+    val seenKey = "highlights:" + com.leftovers.app.util.WhatsNew.HIGHLIGHTS
     if (state.loaded && state.whatsNewSeen != seenKey && !freshInstall) {
         WhatsNewDialog(appVersion) { viewModel.closeWhatsNew(seenKey) }
     }
