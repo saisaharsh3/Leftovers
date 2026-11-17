@@ -40,6 +40,8 @@ class LeftoversApp : Application() {
         private set
 
     override fun onCreate() {
+        // Leftovers Dev sends links to its own page, so they open Leftovers Dev and the real app's open the real one.
+        com.leftovers.app.util.SharedOwed.devBuild = packageName.endsWith(".dev")
         super.onCreate()
         // A crash leaves a short report the app offers to send next time; nothing is sent by itself.
         com.leftovers.app.util.CrashReports.install(this)

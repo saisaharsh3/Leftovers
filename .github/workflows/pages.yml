@@ -36,6 +36,8 @@ jobs:
         run: |
           mkdir -p _site/assets
           cp website/* _site/
+          # Leftovers Dev's links open this copy, whose button opens Leftovers Dev (see SharedOwed.DEV_PAGE).
+          cp website/add.html _site/add-dev.html
           cp docs/screenshots/*.jpg docs/icon.svg docs/social-preview.png docs/og-owed.png _site/assets/
           # The same screens in the light theme, shown when the page is light.
           mkdir -p _site/assets/light && cp docs/screenshots/light/*.jpg _site/assets/light/

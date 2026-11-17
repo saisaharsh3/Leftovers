@@ -253,4 +253,20 @@ class SharedOwedTest {
         assertTrue(SharedOwed.fillsAmount("https://paypal.me/asha", "USD"))
         assertFalse(SharedOwed.fillsAmount("https://cash.app/\$asha", "USD"))
     }
+
+    @Test
+    fun `Leftovers Dev sends links to its own page, so they open Leftovers Dev`() {
+        val debt = com.leftovers.app.data.Debt(id = 9, person = "Ravi", amountMinor = 100_00, note = "Lunch", epochDay = 20_770)
+        try {
+            SharedOwed.devBuild = true
+            val link = SharedOwed.link("phone-1", "INR", listOf(debt))!!
+            assertTrue(link.startsWith(SharedOwed.DEV_PAGE + "#"))
+            // Either kind of app still reads either kind of link.
+            assertEquals(1, SharedOwed.parse(link)!!.lines.size)
+            assertTrue(SharedOwed.isLink("leftovers-dev", "owed", ""))
+        } finally {
+            SharedOwed.devBuild = false
+        }
+        assertTrue(SharedOwed.link("phone-1", "INR", listOf(debt))!!.startsWith(SharedOwed.PAGE + "#"))
+    }
 }

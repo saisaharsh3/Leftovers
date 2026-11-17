@@ -15,10 +15,17 @@ object SharedOwed {
     const val PAGE = "https://saisaharsh3.github.io/Leftovers/add"
     const val SCHEME = "leftovers"
     const val HOST = "owed"
+    /** Leftovers Dev's own page and scheme, so a link it sends opens Leftovers Dev, not the real app. */
+    const val DEV_PAGE = "https://saisaharsh3.github.io/Leftovers/add-dev"
+    const val DEV_SCHEME = "leftovers-dev"
+
+    /** Set when Leftovers Dev starts; its links use [DEV_PAGE]. */
+    @Volatile var devBuild = false
+    val page: String get() = if (devBuild) DEV_PAGE else PAGE
 
     /** A link this app opens: the page's own (https, which Android hands to the app), or the page's button's. */
     fun isLink(scheme: String?, host: String?, path: String?): Boolean =
-        (scheme == SCHEME && host == HOST) ||
+        ((scheme == SCHEME || scheme == DEV_SCHEME) && host == HOST) ||
             (scheme == "https" && host == "saisaharsh3.github.io" && path.orEmpty().startsWith("/Leftovers/add"))
 
     /**
@@ -113,7 +120,7 @@ object SharedOwed {
                 if (clean.first.isNotEmpty()) put("f", clean.first)
             })
         }
-        return "$PAGE#" + encode(json.toString())
+        return "$page#" + encode(json.toString())
     }
 
     /**
@@ -138,7 +145,7 @@ object SharedOwed {
                 if (clean.first.isNotEmpty()) put("f", clean.first)
             })
         }
-        return "$PAGE#" + encode(json.toString())
+        return "$page#" + encode(json.toString())
     }
 
     /**

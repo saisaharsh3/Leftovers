@@ -219,9 +219,11 @@
       // On Android the button hands the entries to the app; without the app it comes back to the site.
       var android = /Android/i.test(navigator.userAgent);
       var home = new URL("./", location.href).href;
+      // Sent from Leftovers Dev (this page as add-dev): its button opens Leftovers Dev, not the real app.
+      var scheme = /\/add-dev(\.html)?$/.test(location.pathname) ? "leftovers-dev" : "leftovers";
       $("open").href = android
-        ? "intent://owed?d=" + code + "#Intent;scheme=leftovers;S.browser_fallback_url=" + encodeURIComponent(home) + ";end"
-        : "leftovers://owed?d=" + code;
+        ? "intent://owed?d=" + code + "#Intent;scheme=" + scheme + ";S.browser_fallback_url=" + encodeURIComponent(home) + ";end"
+        : scheme + "://owed?d=" + code;
       if (!android) {
         // Leftovers is for Android: on a computer or an iPhone, say where to open it.
         $("open").hidden = true;
