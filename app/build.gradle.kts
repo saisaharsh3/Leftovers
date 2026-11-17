@@ -34,8 +34,8 @@ android {
         applicationId = "com.leftovers.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 25
-        versionName = "1.10.0"
+        versionCode = 26
+        versionName = "1.10.1"
     }
 
     signingConfigs {
@@ -58,9 +58,14 @@ android {
             // Signed with the release key when it's available (local builds, and CI builds of dev), so each
             // new Leftovers Dev installs over the last one instead of failing with "App not installed".
             signingConfigs.findByName("release")?.let { signingConfig = it }
+            // Money owed links it sends open it, not the real app (see SharedOwed and the manifest).
+            manifestPlaceholders["linkPage"] = "/Leftovers/add-dev"
+            manifestPlaceholders["linkScheme"] = "leftovers-dev"
         }
         release {
             signingConfigs.findByName("release")?.let { signingConfig = it }
+            manifestPlaceholders["linkPage"] = "/Leftovers/add"
+            manifestPlaceholders["linkScheme"] = "leftovers"
             // No git commit stamp in the APK, so builds of the same code always match byte for byte.
             vcsInfo.include = false
             isMinifyEnabled = true
@@ -74,6 +79,8 @@ android {
         create("dev") {
             initWith(getByName("release"))
             applicationIdSuffix = ".dev"
+            manifestPlaceholders["linkPage"] = "/Leftovers/add-dev"
+            manifestPlaceholders["linkScheme"] = "leftovers-dev"
             // Each Dev build is numbered (1.8.2-dev.57, from the CI run), so testers can tell them apart.
             versionNameSuffix = "-dev" + (providers.gradleProperty("devNumber").orNull?.let { ".$it" } ?: "")
             matchingFallbacks += listOf("release")

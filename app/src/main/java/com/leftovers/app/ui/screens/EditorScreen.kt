@@ -192,7 +192,7 @@ class EditorViewModel(
         if (amount <= 0) return
         val income = type == TxType.INCOME
         viewModelScope.launch {
-            val undo = planning.recordPayback(match.person, amount, accountId, date.toEpochDay())
+            val undo = planning.recordPayback(match.person, amount, settledAccount(), date.toEpochDay())
             if (smsId > 0) sms.dismiss(smsId)
             onDone(if (income) "${match.person} paid you back" else "Paid ${match.person} back", undo)
         }
@@ -422,7 +422,7 @@ class EditorViewModel(
                 // The account the message matched when it arrived (digits or name); older ones by digits only.
                 val matched = (if (smsId > 0) sms.accountIdFor(smsId)?.takeIf { it in known } else null)
                     ?: fromSms?.let { d -> accountRepository.accounts.first().firstOrNull { it.matchesDigits(d) }?.id }
-                accountId = matched ?: s.homeAccountId?.takeIf { it in known } ?: s.defaultAccountId
+                accountId = matched ?: s.homeAccountId?.takeIf { it in known } ?: s.defaultAccountId.takeIf { it in known } ?: known.firstOrNull()
                 // An account in its own currency opens the amount in that currency, at its rate (#30).
                 accountRepository.accounts.first().firstOrNull { it.id == accountId }?.currency?.let { code ->
                     if (foreignCurrency == null) useForeign(code, lastRate(code))
@@ -568,6 +568,16 @@ class EditorViewModel(
         owedName = ""
     }
 
+    /**
+     * The account an entry is saved to (#67): the one picked, if it still exists; else the one the account button
+     * shows. Saved before the screen had chosen one, or with a default account that's been deleted, an entry went in
+     * with no account, so Spent counted it but no balance changed until it was saved again.
+     */
+    private suspend fun settledAccount(): Long? {
+        val s = settings.settings.first()
+        return settleAccount(accountId, accountRepository.accounts.first().map { it.id }, s.homeAccountId, s.defaultAccountId).also { accountId = it }
+    }
+
     private fun saveOwed(onDone: (String) -> Unit, describe: (Long) -> String): Boolean {
         // No amount yet: a reminder for each person, filled in once it's known (#36).
         if (amountMinor <= 0) {
@@ -579,8 +589,8 @@ class EditorViewModel(
             val people = owedWith.toList()
             val text = note.trim()
             val day = date.toEpochDay()
-            val account = accountId
             viewModelScope.launch {
+                val account = settledAccount()
                 people.forEach { planning.saveDebt(Debt(person = it, amountMinor = 0, note = text, epochDay = day, receiptPath = receiptPath, accountId = account, pending = way)) }
                 if (isEditing) repository.getTransaction(id)?.let { repository.removeTransaction(it) }
                 onDone("Saved for ${people.joinToString(" and ")} · amount pending, in Money owed")
@@ -601,8 +611,8 @@ class EditorViewModel(
         val day = date.toEpochDay()
         val text = note.trim()
         val photo = receiptPath
-        val account = accountId
         viewModelScope.launch {
+            val account = settledAccount()
             shares.forEach { (person, amount) ->
                 planning.saveDebt(Debt(person = person, amountMinor = if (wasLent) amount else -amount, note = text, epochDay = day, receiptPath = photo, accountId = account))
             }
@@ -659,8 +669,37 @@ class EditorViewModel(
      * Saves and reports a short confirmation message. Returns false (and flags the category row)
      * when the entry isn't complete yet.
      */
+    /**
+     * A new entry on a later day (#68) isn't spending yet: it's scheduled, added by itself on that day and set aside
+     * from the budget until then. Not for a split bill, a repeating entry, or lent and borrowed money.
+     */
+    val scheduled: Boolean get() = !isEditing && !owed && !repeatMonthly && date > LocalDate.now() && people.isEmpty() && splits.isEmpty()
+
+    /** Whether [day] can be picked: a later day only when it can be scheduled, or the entry repeats. */
+    fun canPick(day: LocalDate): Boolean = day <= LocalDate.now() || repeatMonthly || (!isEditing && !owed && people.isEmpty() && splits.isEmpty())
+
+    private fun saveScheduled(onDone: (String) -> Unit, describe: (Long) -> String): Boolean {
+        val category = categoryId ?: run { needCategory = true; return false }
+        val amount = totalMinor.takeIf { it > 0 } ?: return false
+        val savedDate = date
+        val savedType = type
+        viewModelScope.launch {
+            val account = settledAccount()
+            val name = note.trim().ifBlank { categories.value.find { it.id == category }?.name.orEmpty() }
+            planning.saveRecurring(
+                Recurring(
+                    name = name, amountMinor = amount, type = savedType, categoryId = category, dayOfMonth = savedDate.dayOfMonth,
+                    startMonth = YearMonth.from(savedDate).toString(), everyMonths = 0, accountId = account,
+                ),
+            )
+            onDone("${describe(amount)} scheduled for ${savedDate.friendlyLabel()}")
+        }
+        return true
+    }
+
     fun save(onDone: (String) -> Unit, describe: (Long) -> String): Boolean {
         if (owed) return saveOwed(onDone, describe)
+        if (scheduled) return saveScheduled(onDone, describe)
         if (amountMinor <= 0 || totalMinor <= 0) return false
         val category = categoryId
         if (category == null) {
@@ -682,6 +721,7 @@ class EditorViewModel(
         val savedAmount = yours - parts.sumOf { it.amountMinor }
         val savedDate = date
         viewModelScope.launch {
+            val account = settledAccount()
             val mainId = repository.saveTransaction(
                 Transaction(
                     id = if (isEditing) id else 0,
@@ -692,7 +732,7 @@ class EditorViewModel(
                     note = note.trim(),
                     details = details.trim(),
                     createdAt = createdAt,
-                    accountId = accountId,
+                    accountId = account,
                     receiptPath = receiptPath,
                     foreignMinor = if (abroad != null) abroadMinor else null,
                     foreignCurrency = abroad,
@@ -710,7 +750,7 @@ class EditorViewModel(
                         epochDay = savedDate.toEpochDay(),
                         note = part.note.trim().ifBlank { note.trim() },
                         createdAt = createdAt,
-                        accountId = accountId,
+                        accountId = account,
                         // Shown under the entry it was split from (#36).
                         splitOf = mainId,
                     ),
@@ -725,8 +765,8 @@ class EditorViewModel(
             sharers.forEach { (person, share) ->
                 val was = savedShares.firstOrNull { it.person.equals(person, ignoreCase = true) }
                 planning.saveDebt(
-                    was?.copy(amountMinor = share, note = owedNote, epochDay = savedDate.toEpochDay(), accountId = accountId)
-                        ?: Debt(person = person, amountMinor = share, note = owedNote, epochDay = savedDate.toEpochDay(), accountId = accountId, splitOf = mainId),
+                    was?.copy(amountMinor = share, note = owedNote, epochDay = savedDate.toEpochDay(), accountId = account)
+                        ?: Debt(person = person, amountMinor = share, note = owedNote, epochDay = savedDate.toEpochDay(), accountId = account, splitOf = mainId),
                 )
             }
             savedShares.filter { s -> sharers.none { it.first.equals(s.person, ignoreCase = true) } }.forEach { planning.deleteDebt(it) }
@@ -744,7 +784,7 @@ class EditorViewModel(
                         startMonth = month,
                         // The entry just saved is this month's charge.
                         lastPostedMonth = month,
-                        accountId = accountId,
+                        accountId = account,
                     ),
                 )
             }
@@ -892,7 +932,7 @@ fun EditorScreen(
                     if (!ok) view.performHapticFeedback(HapticFeedbackConstants.REJECT)
                 },
                 confirmEnabled = viewModel.amountMinor > 0,
-                confirmLabel = if (viewModel.isEditing) "Save" else "Add",
+                confirmLabel = if (viewModel.isEditing) "Save" else if (viewModel.scheduled) "Schedule" else "Add",
                 modifier = Modifier
                     .navigationBarsPadding()
                     .padding(16.dp),
@@ -1390,18 +1430,18 @@ fun EditorScreen(
     }
 
     if (showCalendar) {
-        val todayUtc = LocalDate.now().atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
         val pickerState = rememberDatePickerState(
             initialSelectedDateMillis = viewModel.date.atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli(),
             selectableDates = object : SelectableDates {
-                // Every day can be tapped; a later day is only accepted for a repeating entry (see below).
+                // Every day can be tapped; a later day is accepted to schedule the entry, or for a repeating one.
                 override fun isSelectableDate(utcTimeMillis: Long) = true
             },
         )
         GlassDatePickerDialog(
             onDismissRequest = { showCalendar = false },
             confirmButton = {
-                val laterDay = (pickerState.selectedDateMillis ?: 0L) > todayUtc && !viewModel.repeatMonthly
+                val picked = pickerState.selectedDateMillis?.let { Instant.ofEpochMilli(it).atZone(ZoneOffset.UTC).toLocalDate() }
+                val laterDay = picked != null && !viewModel.canPick(picked)
                 TextButton(enabled = !laterDay, onClick = {
                     pickerState.selectedDateMillis?.let { viewModel.date = Instant.ofEpochMilli(it).atZone(ZoneOffset.UTC).toLocalDate() }
                     showCalendar = false
@@ -1412,10 +1452,20 @@ fun EditorScreen(
             DatePicker(
                 pickerState,
                 title = {
-                    val laterDay = (pickerState.selectedDateMillis ?: 0L) > todayUtc && !viewModel.repeatMonthly
-                    if (laterDay) {
+                    val picked = pickerState.selectedDateMillis?.let { Instant.ofEpochMilli(it).atZone(ZoneOffset.UTC).toLocalDate() }
+                    val laterDay = picked != null && !viewModel.canPick(picked)
+                    val schedules = picked != null && picked > LocalDate.now() && !viewModel.repeatMonthly && !laterDay
+                    if (schedules) {
                         Text(
-                            "Later days are for repeating entries. Close this and tap Repeat (↻) to pick this day.",
+                            "Scheduled: it's added by itself on that day, and set aside from your budget until then.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = c.textSecondary,
+                            modifier = Modifier.padding(start = 24.dp, end = 24.dp, top = 20.dp),
+                        )
+                    } else if (laterDay) {
+                        Text(
+                            if (viewModel.isEditing) "An entry already logged can't move to a later day. Add a new one on that day to schedule it."
+                            else "A split bill or money lent can't be scheduled. Pick today or an earlier day.",
                             style = MaterialTheme.typography.bodyMedium,
                             color = c.warning,
                             modifier = Modifier.padding(start = 24.dp, end = 24.dp, top = 20.dp),
@@ -1712,7 +1762,10 @@ internal fun ReceiptViewer(path: String, onDismiss: () -> Unit, onRemove: (() ->
 private fun DateStrip(selected: LocalDate, onSelect: (LocalDate) -> Unit, onOpenCalendar: () -> Unit) {
     val c = LocalAppColors.current
     val today = LocalDate.now()
-    val days = remember(today) { (0L until 45L).map { today.minusDays(it) } }
+    // The last few weeks; a day picked from the calendar outside them (a later one, to schedule it) is shown too.
+    val days = remember(today, selected) {
+        ((0L until 45L).map { today.minusDays(it) } + listOf(selected).filter { it > today || it < today.minusDays(44) }).sortedDescending()
+    }
     val listState = rememberLazyListState()
     LaunchedEffect(selected) {
         val index = days.indexOf(selected)
@@ -2137,4 +2190,15 @@ private fun NamedRound(
         RoundButton(icon, description, onClick, size = 40.dp, tint = tint, container = container)
         Text(name, style = MaterialTheme.typography.labelSmall, color = LocalAppColors.current.textSecondary, maxLines = 1)
     }
+}
+
+/**
+ * Which account an entry is saved to (#67), from the accounts in the order the account button lists them: the one
+ * [picked], if it still exists; one picked that's gone, the first (as the button then shows); none picked yet, the
+ * account Home shows, else the default one, else the first.
+ */
+internal fun settleAccount(picked: Long?, known: List<Long>, home: Long?, default: Long): Long? = when {
+    picked != null && picked in known -> picked
+    picked != null -> known.firstOrNull()
+    else -> home?.takeIf { it in known } ?: default.takeIf { it in known } ?: known.firstOrNull()
 }

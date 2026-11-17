@@ -102,7 +102,7 @@ object StatementPdf {
         val budget = if (!plan.isSet) null else months.filter { it <= YearMonth.from(today) }.sumOf { plan.budgetFor(it, all) }
         // Subscriptions and recurring payments due in the period, up to today.
         val charges = months.flatMap { m ->
-            recurring.filter { it.active && it.type == TxType.EXPENSE && it.toRecurring().isDueIn(m) }
+            recurring.filter { it.active && !it.once && it.type == TxType.EXPENSE && it.toRecurring().isDueIn(m) }
                 .map { Charge(it.name, it.toRecurring().chargeDate(m), it.amountMinor) }
         }.filter { it.date <= today }.sortedBy { it.date }
         return Statement(

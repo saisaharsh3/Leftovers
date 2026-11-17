@@ -5,6 +5,31 @@ All notable changes to Leftovers. Download any version from
 
 ## Unreleased
 
+## 1.10.1
+
+Plan ahead, split fairly. It installs over 1.10.0 and keeps your data.
+
+**The big ones**
+
+- **Schedule a payment for a later day** (#68): pick a day after today when adding an entry, and it's set aside from Safe to spend until then and added by itself on its day
+- **Taking someone off a split bill keeps its total:** their share is shared out between you and the others, or added to yours
+- **Choose how friends pay you back:** UPI, a payment link or your bank details first, with the others there for anyone who doesn't use it
+- **PayPal and Monzo links** open with the amount already filled in
+
+**Everything new since 1.10.0**
+
+- Adding an entry on a later day schedules it (#68): it shows under Upcoming on Home, is set aside from Safe to spend until its day, and is added by itself then. Its card has Add it now and Cancel it
+- Marking a bill paid by hand: Another day opens a calendar, up to today
+- Paid on a due bill settles it as it is, today, with Undo; the rest of the row opens the sheet to change it first (#64)
+- Taking a person off a split bill (Money owed, Home or the entry) asks: Share it out between you and the others who still owe, or I'll pay it. The bill keeps its total, so reminders say the right amount and head count
+- Opening a friend's split: only what you owe, or your share in your spending too, on its day and in a category you pick. Your balance changes once, when you pay them back
+- Getting paid: Ask to be paid by chooses which way friends see first (UPI, payment link or bank); reminders list them in the same order
+- Payment links: any secure link works (PayPal, Revolut, Wise, Monzo, Venmo, Cash App...), and PayPal and Monzo open with the amount filled in
+- Total balance updates as soon as an entry is added (#67): an entry saved before the add screen had chosen its account, or with a deleted default account, had no account
+- Budget dates are picked on a month calendar, like Activity's (#61)
+- Imports read an amount like 198,3 as 198.30, not 1983 (#62)
+- Money owed links open the app that sent them: from the real app, the real app, even with Leftovers Dev installed
+
 ## 1.10.0
 
 Paid back, paid on time, made yours. It installs over 1.9.0 and keeps your data.

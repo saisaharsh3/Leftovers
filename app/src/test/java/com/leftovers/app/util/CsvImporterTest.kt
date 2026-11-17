@@ -141,4 +141,15 @@ class CsvImporterTest {
         assertEquals("UPI-SWIGGY-swiggy@icici", p.rows[0].note)
         assertEquals("", p.rows[0].details)
     }
+
+    @Test
+    fun `a decimal comma with one digit after it is still a decimal`() {
+        // Some German banks write -198,3 for -198,30 (#62).
+        assertEquals(-198_30L, CsvImporter.parseAmount("-198,3"))
+        assertEquals(1_090L, CsvImporter.parseAmount("10,9"))
+        assertEquals(1_234_50L, CsvImporter.parseAmount("1.234,5"))
+        // Three digits after a comma is thousands, as before.
+        assertEquals(1_234_00L, CsvImporter.parseAmount("1,234"))
+        assertEquals(4_500L, CsvImporter.parseAmount("45,00"))
+    }
 }

@@ -744,29 +744,11 @@ private fun RangeCard(viewModel: BudgetPlanViewModel) {
         }
     }
     if (picking) {
-        val utc = java.time.ZoneOffset.UTC
-        val state = androidx.compose.material3.rememberDateRangePickerState(
-            initialSelectedStartDateMillis = viewModel.rangeFrom.atStartOfDay(utc).toInstant().toEpochMilli(),
-            initialSelectedEndDateMillis = viewModel.rangeTo.atStartOfDay(utc).toInstant().toEpochMilli(),
+        // A month calendar to tap the first and last day on (#61), not typed dates.
+        RangeCalendarSheet(
+            viewModel.rangeFrom, viewModel.rangeTo, "Budget dates",
+            onDone = { from, to -> viewModel.rangeFrom = from; viewModel.rangeTo = to; picking = false },
+            onDismiss = { picking = false },
         )
-        GlassDatePickerDialog(
-            onDismissRequest = { picking = false },
-            confirmButton = {
-                val ok = state.selectedStartDateMillis != null && state.selectedEndDateMillis != null
-                androidx.compose.material3.TextButton(enabled = ok, onClick = {
-                    viewModel.rangeFrom = java.time.Instant.ofEpochMilli(state.selectedStartDateMillis!!).atZone(utc).toLocalDate()
-                    viewModel.rangeTo = java.time.Instant.ofEpochMilli(state.selectedEndDateMillis!!).atZone(utc).toLocalDate()
-                    picking = false
-                }) { Text("Done", color = if (ok) c.textPrimary else c.textTertiary) }
-            },
-            dismissButton = { androidx.compose.material3.TextButton(onClick = { picking = false }) { Text("Cancel", color = c.textSecondary) } },
-        ) {
-            androidx.compose.material3.DateRangePicker(
-                state,
-                modifier = Modifier.weight(1f),
-                title = { Text("Budget dates", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(start = 24.dp, top = 20.dp)) },
-                colors = androidx.compose.material3.DatePickerDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
-            )
-        }
     }
 }

@@ -80,6 +80,7 @@ import java.time.LocalDate
 import kotlin.math.abs
 
 class DebtsViewModel(
+    private val repository: com.leftovers.app.data.TransactionRepository,
     private val planning: PlanningRepository,
     accountRepository: com.leftovers.app.data.AccountRepository,
     private val settings: com.leftovers.app.data.SettingsRepository,
@@ -105,6 +106,11 @@ class DebtsViewModel(
 
     fun save(debt: Debt) = viewModelScope.launch { planning.saveDebt(debt) }
     fun delete(debt: Debt) = viewModelScope.launch { planning.deleteDebt(debt) }
+
+    /** Takes a split bill's person off it, keeping the bill's total; [done] gets the Undo. */
+    fun removeFromSplit(debt: Debt, spread: Boolean, done: (suspend () -> Unit) -> Unit) = viewModelScope.launch {
+        done(planning.removeFromSplit(debt, spread) { repository.saveTransaction(it) })
+    }
     fun settleEntry(debt: Debt) = viewModelScope.launch { planning.settleEntry(debt) }
     fun settle(person: String) = viewModelScope.launch { planning.settle(person) }
     fun settleUp(person: String, amountMinor: Long, accountId: Long?) = viewModelScope.launch { planning.settleUp(person, amountMinor, accountId, chosen = true) }
@@ -255,6 +261,7 @@ fun DebtsScreen(onBack: () -> Unit, viewModel: DebtsViewModel = viewModel(factor
     }
 
     if (editingPay) PayDetailsSheet(pay ?: com.leftovers.app.util.SharedOwed.Pay(), onSave = { viewModel.setPay(it); editingPay = false }, onDismiss = { editingPay = false })
+    val undoBar = com.leftovers.app.ui.components.LocalUndo.current
     editing?.let { debt ->
         DebtEditor(
             initial = debt,
@@ -264,6 +271,10 @@ fun DebtsScreen(onBack: () -> Unit, viewModel: DebtsViewModel = viewModel(factor
             onDismiss = { editing = null },
             onSave = {
                 viewModel.save(it)
+                editing = null
+            },
+            onRemoveFromSplit = { spread ->
+                viewModel.removeFromSplit(debt, spread) { restore -> undoBar.show("${debt.person.trim()} taken off the bill", restore) }
                 editing = null
             },
             onDelete = if (debt.id != 0L) {
@@ -327,6 +338,8 @@ fun DebtEditor(
     onSettle: ((Debt) -> Unit)? = null,
     accounts: List<com.leftovers.app.data.AccountWithBalance> = emptyList(),
     defaultAccountId: Long? = null,
+    /** For a share of a split bill: take its person off the bill, sharing their amount out or taking it on. */
+    onRemoveFromSplit: ((spread: Boolean) -> Unit)? = null,
 ) {
     val c = LocalAppColors.current
     // New entries start on the default account; older ones made before this keep no account until one is picked.
@@ -464,7 +477,27 @@ fun DebtEditor(
                     color = c.negative,
                     modifier = Modifier.align(Alignment.CenterHorizontally).pressable({ askDelete = true }),
                 )
-                if (askDelete) {
+                val splitShare = onRemoveFromSplit != null && initial.splitOf != null && !initial.repayment && initial.amountMinor > 0
+                if (askDelete && splitShare) {
+                    // Off a split bill: the bill keeps its total, so their share goes somewhere.
+                    val money = com.leftovers.app.util.LocalMoney.current
+                    GlassAlertDialog(
+                        onDismissRequest = { askDelete = false },
+                        title = { Text("Take ${initial.person.trim()} off this bill?") },
+                        text = {
+                            Text(
+                                "The bill stays the same. Their ${money.format(initial.amountMinor)} can be shared out between you and the others, or added to your share.",
+                                color = c.textSecondary,
+                            )
+                        },
+                        confirmButton = {
+                            androidx.compose.material3.TextButton(onClick = { askDelete = false; onRemoveFromSplit!!(true) }) { Text("Share it out", color = c.textPrimary) }
+                        },
+                        dismissButton = {
+                            androidx.compose.material3.TextButton(onClick = { askDelete = false; onRemoveFromSplit!!(false) }) { Text("I'll pay it", color = c.textSecondary) }
+                        },
+                    )
+                } else if (askDelete) {
                     GlassAlertDialog(
                         onDismissRequest = { askDelete = false },
                         title = { Text("Delete this entry?") },

@@ -20,6 +20,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -78,6 +79,18 @@ fun SharedOwedSheet(sent: SharedOwed.Shared, onDismiss: () -> Unit) {
     // Entries received from them before say who this is.
     val sender = have.firstOrNull { it.sharedId != null && shared.lines.any { l -> l.id == it.sharedId } }?.person
     var person by rememberSaveable { mutableStateOf(sender.orEmpty()) }
+    // Your share of a bill they paid: only what you owe them, or that and your spending too.
+    val shares = SharedOwed.shares(fresh)
+    var withSpending by rememberSaveable { mutableStateOf(false) }
+    val categories by container.repository.categories.collectAsState(initial = emptyList())
+    val history by container.repository.allTransactions.collectAsState(initial = emptyList())
+    val spendingCategories = categories.filter { it.type == com.leftovers.app.data.TxType.EXPENSE && !it.hidden }
+    var categoryId by rememberSaveable { mutableStateOf<Long?>(null) }
+    val guessed = remember(categories, history, shares) {
+        val past = history.map { com.leftovers.app.util.MerchantMemory.Past(it.note, it.type, it.categoryId, it.epochDay, it.createdAt) }
+        com.leftovers.app.util.AutoAdd.category(shares.firstOrNull()?.note.orEmpty(), past, categories)
+    }
+    val chosenCategory = categoryId ?: guessed
     val people = have.map { it.person.trim() }.filter { it.isNotEmpty() }.distinctBy { it.lowercase() }.take(8)
 
     GlassSheet(onDismiss) {
@@ -143,23 +156,30 @@ fun SharedOwedSheet(sent: SharedOwed.Shared, onDismiss: () -> Unit) {
                 val context = LocalContext.current
                 val owe = -net
                 val upi = SharedOwed.upiUri(pay, owe, shared.currency)
-                if (upi != null) {
-                    com.leftovers.app.ui.components.SecondaryButton("Pay ${theirs.format(owe)} with UPI", {
-                        runCatching { context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(upi))) }
-                            .onFailure { android.widget.Toast.makeText(context, "No UPI app on this phone. Their UPI ID is ${pay.upi}", android.widget.Toast.LENGTH_LONG).show() }
-                    }, Modifier.fillMaxWidth(), icon = com.leftovers.app.ui.icons.Lucide.Wallet)
-                }
-                if (pay.link.isNotBlank()) {
-                    com.leftovers.app.ui.components.SecondaryButton("Pay with ${pay.linkHost.ifBlank { "their link" }}", {
-                        runCatching { context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(pay.link))) }
-                    }, Modifier.fillMaxWidth(), icon = com.leftovers.app.ui.icons.Lucide.ExternalLink)
-                }
-                if (pay.bank.isNotBlank()) {
-                    val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
-                    com.leftovers.app.ui.components.SecondaryButton("Copy their bank details", {
-                        clipboard.setText(androidx.compose.ui.text.AnnotatedString(pay.bank))
-                        android.widget.Toast.makeText(context, "Copied", android.widget.Toast.LENGTH_SHORT).show()
-                    }, Modifier.fillMaxWidth(), icon = com.leftovers.app.ui.icons.Lucide.Landmark)
+                val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
+                // The way they'd rather be paid is the big button; the others are under it, for anyone who
+                // doesn't use that one.
+                pay.ways(shared.currency).filter { it != SharedOwed.Pay.UPI || upi != null }.forEachIndexed { i, way ->
+                    val (label, icon, open) = when (way) {
+                        SharedOwed.Pay.UPI -> Triple("Pay ${theirs.format(owe)} with UPI", com.leftovers.app.ui.icons.Lucide.Wallet) {
+                            runCatching { context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(upi))) }
+                                .onFailure { android.widget.Toast.makeText(context, "No UPI app on this phone. Their UPI ID is ${pay.upi}", android.widget.Toast.LENGTH_LONG).show() }
+                        }
+                        SharedOwed.Pay.LINK -> Triple(
+                            // With the amount filled in where the service allows it (PayPal, Monzo), say so.
+                            if (SharedOwed.fillsAmount(pay.link, shared.currency)) "Pay ${theirs.format(owe)} with ${pay.linkHost}" else "Pay with ${pay.linkHost.ifBlank { "their link" }}",
+                            com.leftovers.app.ui.icons.Lucide.ExternalLink,
+                        ) {
+                            val url = SharedOwed.linkWithAmount(pay.link, owe, shared.currency)
+                            runCatching { context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))) }
+                        }
+                        else -> Triple(if (i == 0) "Copy their bank details to pay" else "Copy their bank details", com.leftovers.app.ui.icons.Lucide.Landmark) {
+                            clipboard.setText(androidx.compose.ui.text.AnnotatedString(pay.bank))
+                            android.widget.Toast.makeText(context, "Copied", android.widget.Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                    if (i == 0) PrimaryButton(label, { open() }, Modifier.fillMaxWidth(), icon = icon)
+                    else com.leftovers.app.ui.components.SecondaryButton(label, { open() }, Modifier.fillMaxWidth(), icon = icon)
                 }
                 Text(
                     listOfNotNull(pay.upi.takeIf { it.isNotBlank() }?.let { "UPI ID: $it" }, pay.name.takeIf { it.isNotBlank() }, pay.bank.takeIf { it.isNotBlank() }?.replace("\n", ", "))
@@ -169,19 +189,42 @@ fun SharedOwedSheet(sent: SharedOwed.Shared, onDismiss: () -> Unit) {
                     modifier = Modifier.padding(horizontal = 6.dp),
                 )
             }
+            if (shares.isNotEmpty() && spendingCategories.isNotEmpty()) {
+                com.leftovers.app.ui.components.SegmentedToggle(
+                    listOf(false, true), withSpending, { if (it) "Add to my spending too" else "Only what I owe" }, { withSpending = it }, Modifier.fillMaxWidth(),
+                )
+                val mine = shares.sumOf { it.amountMinor }
+                Text(
+                    if (withSpending) "Your ${theirs.format(mine)} goes in your spending on its day, as well as in Money owed. Your balance changes once, when you pay them back."
+                    else "Added to Money owed only, as what you owe them.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = c.textSecondary,
+                    modifier = Modifier.padding(horizontal = 6.dp),
+                )
+                if (withSpending) {
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        spendingCategories.forEach { cat -> Chip(cat.name, onClick = { categoryId = cat.id }, selected = chosenCategory == cat.id) }
+                    }
+                }
+            }
             GlassTextField(person, { person = it.take(30) }, placeholder = "Their name", label = "Who sent this?")
             if (people.isNotEmpty() && sender == null) {
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     people.forEach { name -> Chip(name, onClick = { person = name }, selected = person.trim().equals(name, ignoreCase = true)) }
                 }
             }
-            PrimaryButton("Add to Money owed", {
+            PrimaryButton(if (withSpending && shares.isNotEmpty()) "Add to Money owed and spending" else "Add to Money owed", {
                 val added: List<Debt> = fresh.map { SharedOwed.mirror(it, person) }
                 val ids = fresh.map { it.id }.toSet()
+                val spend = if (withSpending && chosenCategory != null) SharedOwed.spending(fresh, person, chosenCategory, theirs::format) else emptyList()
                 // Closed only once all of it is saved: closing ends this sheet's work, and would cut the saving short.
                 scope.launch {
                     added.forEach { planning.saveDebt(it) }
-                    undo.show("Added to Money owed") { planning.debts.first().filter { it.sharedId in ids }.forEach { planning.deleteDebt(it) } }
+                    val entryIds = spend.map { container.repository.saveTransaction(it) }
+                    undo.show(if (spend.isEmpty()) "Added to Money owed" else "Added to Money owed and spending") {
+                        planning.debts.first().filter { it.sharedId in ids }.forEach { planning.deleteDebt(it) }
+                        entryIds.forEach { id -> container.repository.getTransaction(id)?.let { container.repository.removeTransaction(it) } }
+                    }
                     onDismiss()
                 }
             }, Modifier.fillMaxWidth(), enabled = person.isNotBlank())

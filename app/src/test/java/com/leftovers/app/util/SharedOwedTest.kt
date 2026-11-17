@@ -2,6 +2,7 @@ package com.leftovers.app.util
 
 import com.leftovers.app.data.Debt
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -130,7 +131,7 @@ class SharedOwedTest {
         val lines = DebtReminder.payLines(pay)
         assertTrue("Pay by UPI: asha.k@okaxis" in lines)
         assertTrue("Or pay here: https://paypal.me/ashak" in lines)
-        assertTrue("Bank: IBAN" in lines)
+        assertTrue("Or to my bank: IBAN" in lines)
         assertEquals("", DebtReminder.payLines(SharedOwed.Pay()))
     }
 
@@ -198,5 +199,74 @@ class SharedOwedTest {
     fun `UPI is offered only for rupees`() {
         assertEquals("", DebtReminder.payLines(SharedOwed.Pay(upi = "asha.k@okaxis"), "EUR"))
         assertTrue("Pay here: https://paypal.me/a" in DebtReminder.payLines(SharedOwed.Pay(upi = "asha.k@okaxis", link = "paypal.me/a"), "EUR"))
+    }
+
+    @Test
+    fun `your share of their bill can go in your spending, with no account`() {
+        val lines = listOf(
+            SharedOwed.Line("a1", 300_00, 20_770, "Dinner", repayment = false, splitTotalMinor = 1_200_00, splitPeople = 4),
+            // Money they lent you, and a payback: neither is your spending.
+            SharedOwed.Line("a2", -50_00, 20_771, "Paid back", repayment = true),
+            SharedOwed.Line("a3", 500_00, 20_772, "", repayment = true),
+        )
+        val spent = SharedOwed.spending(lines, " Ravi ", categoryId = 1, format = { "₹" + it / 100 })
+        val dinner = spent.single()
+        assertEquals(300_00L, dinner.amountMinor)
+        assertEquals(com.leftovers.app.data.TxType.EXPENSE, dinner.type)
+        assertEquals(20_770L, dinner.epochDay)
+        assertEquals("Dinner", dinner.note)
+        assertEquals("Your share of ₹1200, split 4 ways · paid by Ravi", dinner.details)
+        assertEquals(null, dinner.accountId)
+    }
+
+    @Test
+    fun `the way you'd rather be paid comes first, the others after it`() {
+        val pay = SharedOwed.Pay(upi = "asha.k@okaxis", link = "https://paypal.me/asha", bank = "IBAN DE00 1234", first = SharedOwed.Pay.LINK)
+        assertEquals(listOf("link", "upi", "bank"), pay.ways("INR"))
+        // UPI isn't offered outside rupees; without a choice, UPI leads where it works.
+        assertEquals(listOf("link", "bank"), pay.ways("EUR"))
+        assertEquals(listOf("upi", "link", "bank"), pay.copy(first = "").ways("INR"))
+        val lines = DebtReminder.payLines(pay, "INR")
+        assertTrue(lines.indexOf("Pay here: https://paypal.me/asha") < lines.indexOf("Or by UPI: asha.k@okaxis"))
+        assertTrue("Or to my bank: IBAN DE00 1234" in lines)
+    }
+
+    @Test
+    fun `the first way travels in the link`() {
+        val debt = com.leftovers.app.data.Debt(id = 4, person = "Ravi", amountMinor = 500_00, note = "Tickets", epochDay = 20_770)
+        val pay = SharedOwed.Pay(upi = "asha.k@okaxis", bank = "IBAN DE00 1234", first = SharedOwed.Pay.BANK)
+        val link = SharedOwed.link("phone-1", "INR", listOf(debt), pay)!!
+        assertEquals(SharedOwed.Pay.BANK, SharedOwed.parse(link)!!.pay!!.first)
+        // Anything else in it is dropped, not trusted.
+        assertEquals("", SharedOwed.clean(pay.copy(first = "card")).first)
+    }
+
+    @Test
+    fun `PayPal and Monzo links open with the amount filled in`() {
+        assertEquals("https://paypal.me/asha/71.42INR", SharedOwed.linkWithAmount("https://paypal.me/asha", 71_42, "INR"))
+        assertEquals("https://paypal.me/asha/25EUR", SharedOwed.linkWithAmount("https://www.paypal.me/asha", 25_00, "eur"))
+        assertEquals("https://monzo.me/asha/12.50", SharedOwed.linkWithAmount("https://monzo.me/asha", 12_50, "GBP"))
+        // Monzo is pounds only; other services, and links that already say an amount, open as they are.
+        assertEquals("https://monzo.me/asha", SharedOwed.linkWithAmount("https://monzo.me/asha", 12_50, "EUR"))
+        assertEquals("https://revolut.me/asha", SharedOwed.linkWithAmount("https://revolut.me/asha", 12_50, "EUR"))
+        assertEquals("https://paypal.me/asha/10", SharedOwed.linkWithAmount("https://paypal.me/asha/10", 12_50, "EUR"))
+        assertTrue(SharedOwed.fillsAmount("https://paypal.me/asha", "USD"))
+        assertFalse(SharedOwed.fillsAmount("https://cash.app/\$asha", "USD"))
+    }
+
+    @Test
+    fun `Leftovers Dev sends links to its own page, so they open Leftovers Dev`() {
+        val debt = com.leftovers.app.data.Debt(id = 9, person = "Ravi", amountMinor = 100_00, note = "Lunch", epochDay = 20_770)
+        try {
+            SharedOwed.devBuild = true
+            val link = SharedOwed.link("phone-1", "INR", listOf(debt))!!
+            assertTrue(link.startsWith(SharedOwed.DEV_PAGE + "#"))
+            // Either kind of app still reads either kind of link.
+            assertEquals(1, SharedOwed.parse(link)!!.lines.size)
+            assertTrue(SharedOwed.isLink("leftovers-dev", "owed", ""))
+        } finally {
+            SharedOwed.devBuild = false
+        }
+        assertTrue(SharedOwed.link("phone-1", "INR", listOf(debt))!!.startsWith(SharedOwed.PAGE + "#"))
     }
 }

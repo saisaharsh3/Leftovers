@@ -100,6 +100,11 @@ class TransactionPeekViewModel(
         viewModelScope.launch { planning.settleEntry(debt) }
     }
 
+    /** Takes a split bill's person off it, keeping the bill's total; [done] gets the Undo. */
+    fun removeFromSplit(debt: com.leftovers.app.data.Debt, spread: Boolean, done: (suspend () -> Unit) -> Unit) {
+        viewModelScope.launch { done(planning.removeFromSplit(debt, spread) { repository.saveTransaction(it) }) }
+    }
+
     fun deleteShare(debt: com.leftovers.app.data.Debt) {
         viewModelScope.launch { planning.deleteDebt(debt) }
     }
@@ -177,6 +182,7 @@ fun TransactionPeekCard(
     viewModel: TransactionPeekViewModel = viewModel(factory = AppViewModelProvider.Factory),
 ) {
     // A person's share, on its own: the same editor as on Money owed.
+    val undoBar = LocalUndo.current
     peek.share?.let { debt ->
         val owing by viewModel.debts.collectAsStateWithLifecycle()
         val accountList by viewModel.accounts.collectAsStateWithLifecycle()
@@ -187,6 +193,10 @@ fun TransactionPeekCard(
             onDismiss = { peek.share = null },
             onSave = { viewModel.saveShare(it); peek.share = null },
             onDelete = { viewModel.deleteShare(debt); peek.share = null },
+            onRemoveFromSplit = { spread ->
+                viewModel.removeFromSplit(debt, spread) { restore -> undoBar.show("${debt.person.trim()} taken off the bill", restore) }
+                peek.share = null
+            },
             onSettle = { viewModel.settleShare(it); peek.share = null },
         )
     }

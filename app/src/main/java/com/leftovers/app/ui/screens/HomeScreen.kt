@@ -233,6 +233,26 @@ class HomeViewModel(
         viewModelScope.launch { settings.setCarryChoice(YearMonth.now().minusMonths(1), carry) }
     }
 
+    /** A one-off scheduled for later (#68), added today instead; Undo puts it back as scheduled. */
+    fun addScheduledNow(item: RecurringItem, done: (suspend () -> Unit) -> Unit) {
+        viewModelScope.launch {
+            val r = item.toRecurring()
+            val id = planning.addScheduledNow(r)
+            done {
+                repository.getTransaction(id)?.let { repository.removeTransaction(it) }
+                planning.saveRecurring(r)
+            }
+        }
+    }
+
+    fun cancelScheduled(item: RecurringItem, done: (suspend () -> Unit) -> Unit) {
+        viewModelScope.launch {
+            val r = item.toRecurring()
+            planning.deleteRecurring(r)
+            done { planning.saveRecurring(r) }
+        }
+    }
+
     fun setSubscriptionActive(item: RecurringItem, active: Boolean) {
         viewModelScope.launch { planning.saveRecurring(item.toRecurring().copy(active = active)) }
     }
@@ -247,6 +267,11 @@ class HomeViewModel(
 
     fun settleDebt(debt: com.leftovers.app.data.Debt) {
         viewModelScope.launch { planning.settleEntry(debt) }
+    }
+
+    /** Takes a split bill's person off it, keeping the bill's total; [done] gets the Undo. */
+    fun removeFromSplit(debt: com.leftovers.app.data.Debt, spread: Boolean, done: (suspend () -> Unit) -> Unit) {
+        viewModelScope.launch { done(planning.removeFromSplit(debt, spread) { repository.saveTransaction(it) }) }
     }
 
     fun deleteDebt(debt: com.leftovers.app.data.Debt) {
@@ -356,7 +381,6 @@ fun HomeScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val c = LocalAppColors.current
     val versionContext = androidx.compose.ui.platform.LocalContext.current
-    val appVersion = remember { com.leftovers.app.util.WhatsNew.version(versionContext) }
     val freshInstall = remember { com.leftovers.app.util.WhatsNew.freshInstall(versionContext) }
     val update = remember(state.updateFound) {
         com.leftovers.app.util.UpdateCheck.decode(state.updateFound)
@@ -366,9 +390,10 @@ fun HomeScreen(
     // Once per feature version, the first time the app opens after updating to it (not again for its pre-releases or
     // Dev builds): after that it's in Updates → Highlights. Seen before this change, the full version was kept.
     // Kept as "highlights:1.10": what the old What's new sheet left ("1.10.0-dev.185") isn't the page having been seen.
-    val seenKey = remember(appVersion) { "highlights:" + com.leftovers.app.util.WhatsNew.release(appVersion) }
+    // The page's own version, not the app's: 1.10.1 brought no new page, so it doesn't open again after updating.
+    val seenKey = "highlights:" + com.leftovers.app.util.WhatsNew.HIGHLIGHTS
     if (state.loaded && state.whatsNewSeen != seenKey && !freshInstall) {
-        WhatsNewDialog(appVersion) { viewModel.closeWhatsNew(seenKey) }
+        WhatsNewDialog { viewModel.closeWhatsNew(seenKey) }
     }
     val money = LocalMoney.current
     if (!state.loaded) return
@@ -497,6 +522,7 @@ fun HomeScreen(
     // Tapping an entry opens a card about it; Edit there opens the full editor.
     val peek = rememberTransactionPeek()
     TransactionPeekCard(peek, onEdit = onOpenTransaction)
+    val scheduledUndo = LocalUndo.current
     state.upcoming.firstOrNull { it.id == viewingSubscription }?.let { r ->
         SubscriptionCard(
             r,
@@ -510,6 +536,8 @@ fun HomeScreen(
                 onOpenSubscription(r)
             },
             onSetActive = { viewModel.setSubscriptionActive(r, it) },
+            onAddNow = { viewModel.addScheduledNow(r) { restore -> scheduledUndo.show("${r.name} added", restore) } },
+            onCancel = { viewModel.cancelScheduled(r) { restore -> scheduledUndo.show("${r.name} cancelled", restore) } },
         )
     }
 
@@ -664,6 +692,10 @@ fun HomeScreen(
             },
             onDelete = {
                 viewModel.deleteDebt(debt)
+                editingDebt = null
+            },
+            onRemoveFromSplit = { spread ->
+                viewModel.removeFromSplit(debt, spread) { restore -> scheduledUndo.show("${debt.person.trim()} taken off the bill", restore) }
                 editingDebt = null
             },
             onSettle = {
@@ -1356,7 +1388,12 @@ private fun DueRow(
         leading = { CategoryIcon(d.item.categoryEmoji, d.item.categoryColor, size = 42.dp) },
         trailing = {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                com.leftovers.app.ui.components.Chip(if (income) "Received" else "Paid", onClick = { paying = true }, icon = Lucide.Check)
+                // Paid settles it as it is, today (#64); the rest of the row opens the sheet to change it first.
+                com.leftovers.app.ui.components.Chip(if (income) "Received" else "Paid", onClick = {
+                    onPaid(d.item.amountMinor, today.toEpochDay(), d.item.accountId ?: accounts.firstOrNull()?.id) { restore ->
+                        undo.show(if (income) "${d.item.name} received" else "${d.item.name} paid", restore)
+                    }
+                }, icon = Lucide.Check)
                 Spacer(Modifier.width(6.dp))
                 RoundButton(Lucide.X, "Skip this time", { onSkip { restore -> undo.show("${d.item.name} skipped this time", restore) } }, size = 34.dp, tint = c.textTertiary)
             }
@@ -1367,6 +1404,7 @@ private fun DueRow(
         var amountText by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(com.leftovers.app.util.AmountInput.fromMinor(d.item.amountMinor)) }
         var day by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(today.toEpochDay()) }
         var account by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(d.item.accountId ?: accounts.firstOrNull()?.id) }
+        var calendar by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
         val amount = com.leftovers.app.util.AmountInput.toMinor(amountText) ?: 0L
         GlassSheet(onDismiss = { paying = false }) {
             Column(Modifier.padding(horizontal = 20.dp).padding(bottom = 16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -1374,7 +1412,7 @@ private fun DueRow(
                 MoneyField(amountText, { amountText = it }, label = "Amount")
                 Text("When", style = MaterialTheme.typography.labelMedium, color = c.textSecondary, modifier = Modifier.padding(start = 6.dp))
                 androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    val choices = listOf(today, today.minusDays(1), d.date).distinct()
+                    val choices = listOf(today, today.minusDays(1), d.date).filter { it <= today }.distinct()
                     choices.forEach { date ->
                         val label = when (date) {
                             today -> "Today"
@@ -1383,6 +1421,15 @@ private fun DueRow(
                         }
                         com.leftovers.app.ui.components.Chip(label, onClick = { day = date.toEpochDay() }, selected = day == date.toEpochDay())
                     }
+                    // Any other day, from a calendar: the chosen one shows on the chip.
+                    val other = choices.none { it.toEpochDay() == day }
+                    com.leftovers.app.ui.components.Chip(
+                        if (other) LocalDate.ofEpochDay(day).friendlyLabel() else "Another day",
+                        onClick = { calendar = true }, selected = other, icon = Lucide.Calendar,
+                    )
+                }
+                if (calendar) {
+                    DayPickerDialog(LocalDate.ofEpochDay(day), if (income) "Which day did it come in?" else "Which day was it paid?", onPick = { day = it.toEpochDay() }, onDismiss = { calendar = false })
                 }
                 if (accounts.size > 1) {
                     Text("Account", style = MaterialTheme.typography.labelMedium, color = c.textSecondary, modifier = Modifier.padding(start = 6.dp))

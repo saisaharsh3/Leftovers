@@ -58,6 +58,10 @@ fun PayDetailsSheet(current: SharedOwed.Pay, onSave: (SharedOwed.Pay) -> Unit, o
             Text("For friends where UPI isn't used.", style = MaterialTheme.typography.bodySmall, color = c.textSecondary)
             GlassTextField(link, { link = it.trim().take(200) }, placeholder = "paypal.me/you or revolut.me/you", label = "Payment link")
             if (linkBad) Text("A web link, like paypal.me/yourname.", style = MaterialTheme.typography.bodySmall, color = c.negative, modifier = Modifier.padding(start = 6.dp))
+            else Text(
+                "Any secure payment link works: PayPal, Revolut, Wise, Monzo, Venmo, Cash App and others. With PayPal and Monzo, the amount is filled in for them.",
+                style = MaterialTheme.typography.bodySmall, color = c.textSecondary, modifier = Modifier.padding(start = 6.dp),
+            )
             GlassTextField(bank, { bank = it.take(140) }, placeholder = "IBAN, or account and sort code", label = "Bank details (optional)", singleLine = false)
             if (secret) {
                 Text("Only details for paying you in: never a PIN, OTP, CVV or password.", style = MaterialTheme.typography.bodySmall, color = c.negative, modifier = Modifier.padding(start = 6.dp))
@@ -65,7 +69,7 @@ fun PayDetailsSheet(current: SharedOwed.Pay, onSave: (SharedOwed.Pay) -> Unit, o
                 Text("That looks like a card number. Share an account number or IBAN instead: anyone with the message would see it.", style = MaterialTheme.typography.bodySmall, color = c.warning, modifier = Modifier.padding(start = 6.dp))
             }
 
-            PrimaryButton("Save", { onSave(SharedOwed.Pay(upi, name, link, bank)) }, Modifier.fillMaxWidth(), enabled = !upiBad && !linkBad && !secret)
+            PrimaryButton("Save", { onSave(SharedOwed.Pay(upi, name, link, bank, current.first)) }, Modifier.fillMaxWidth(), enabled = !upiBad && !linkBad && !secret)
             if (!current.isEmpty) SecondaryButton("Remove all", { onSave(SharedOwed.Pay()) }, Modifier.fillMaxWidth())
         }
     }

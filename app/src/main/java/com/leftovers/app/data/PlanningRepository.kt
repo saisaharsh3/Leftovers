@@ -46,6 +46,30 @@ class PlanningRepository(private val database: AppDatabase) {
             }
         }
     }
+    /**
+     * Takes [share]'s person off the bill it was split from, keeping the bill's total: their amount is shared out
+     * evenly between you and the others who haven't paid ([spread]), or becomes yours. Your share is saved through
+     * [saveBill], so a synced phone sees the change. Returns how to put it all back, for Undo.
+     */
+    suspend fun removeFromSplit(share: Debt, spread: Boolean, saveBill: suspend (Transaction) -> Unit): suspend () -> Unit {
+        val billId = share.splitOf
+        val bill = billId?.let { transactionDao.getById(it) }
+        if (bill == null || share.repayment) {
+            debtDao.delete(share)
+            return { debtDao.upsert(share) }
+        }
+        val others = debtDao.getAll().filter { it.splitOf == billId && !it.repayment && it.id != share.id }
+        val plan = SplitRemoval.plan(bill.amountMinor, share.amountMinor, others, spread)
+        debtDao.delete(share)
+        plan.shares.forEach { debtDao.upsert(it) }
+        saveBill(bill.copy(amountMinor = plan.mineMinor))
+        return {
+            debtDao.upsert(share)
+            others.forEach { debtDao.upsert(it) }
+            saveBill(bill)
+        }
+    }
+
     suspend fun deleteDebt(debt: Debt) {
         debtDao.delete(debt)
         debt.photos.forEach { com.leftovers.app.util.ReceiptStore.delete(it) }
@@ -127,6 +151,18 @@ class PlanningRepository(private val database: AppDatabase) {
         return id
     }
 
+    /** A scheduled one-off (#68) added now instead of on its day; returns the entry's id. */
+    suspend fun addScheduledNow(r: Recurring, today: LocalDate = LocalDate.now()): Long {
+        var id = 0L
+        database.withTransaction {
+            id = transactionDao.upsert(
+                Transaction(amountMinor = r.amountMinor, type = r.type, categoryId = r.categoryId, epochDay = today.toEpochDay(), note = r.name, accountId = r.accountId),
+            )
+            recurringDao.delete(r)
+        }
+        return id
+    }
+
     /** Skips [r]'s [month]: nothing logged, and it's no longer due. */
     suspend fun skipRecurring(r: Recurring, month: YearMonth) = recurringDao.setLastPosted(r.id, month.toString())
 
@@ -200,7 +236,9 @@ class PlanningRepository(private val database: AppDatabase) {
                     lastPosted = month
                     month = month.plusMonths(1)
                 }
-                lastPosted?.let { recurringDao.setLastPosted(r.id, it.toString()) }
+                // A one-off that's been added (or was logged some other way) has done its job.
+                if (r.once && lastPosted != null) recurringDao.delete(r)
+                else lastPosted?.let { recurringDao.setLastPosted(r.id, it.toString()) }
             }
         }
         return posted

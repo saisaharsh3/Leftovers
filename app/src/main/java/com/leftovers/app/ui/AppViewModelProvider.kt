@@ -48,7 +48,7 @@ object AppViewModelProvider {
         }
         initializer { GoalsViewModel(container().planning) }
         initializer { NoticesViewModel(container().settings) }
-        initializer { DebtsViewModel(container().planning, container().accounts, container().settings) }
+        initializer { DebtsViewModel(container().repository, container().planning, container().accounts, container().settings) }
         initializer { DeletedViewModel(container().repository, container().settings) }
         initializer { GoalDetailViewModel(createSavedStateHandle(), container().planning) }
         initializer { CategoriesViewModel(container().repository, container().settings) }

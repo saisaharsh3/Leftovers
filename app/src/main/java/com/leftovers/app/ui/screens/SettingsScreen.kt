@@ -1001,6 +1001,28 @@ fun SettingsScreen(
                                     ) { editingPay = true }
                                 }
                             }
+                            // With more than one way set up: which one friends see first. The others stay, for anyone
+                            // who doesn't use it.
+                            if (pay.count >= 2) {
+                                val ways = listOfNotNull(
+                                    com.leftovers.app.util.SharedOwed.Pay.UPI.takeIf { pay.upi.isNotBlank() },
+                                    com.leftovers.app.util.SharedOwed.Pay.LINK.takeIf { pay.link.isNotBlank() },
+                                    com.leftovers.app.util.SharedOwed.Pay.BANK.takeIf { pay.bank.isNotBlank() },
+                                )
+                                SectionHeader("Ask to be paid by", Modifier.padding(top = 8.dp))
+                                com.leftovers.app.ui.components.SegmentedToggle(
+                                    ways, pay.first.takeIf { it in ways } ?: ways.first(),
+                                    { when (it) { com.leftovers.app.util.SharedOwed.Pay.UPI -> "UPI"; com.leftovers.app.util.SharedOwed.Pay.LINK -> "Payment link"; else -> "Bank" } },
+                                    { viewModel.setPay(pay.copy(first = it)) },
+                                    Modifier.fillMaxWidth(),
+                                )
+                                Text(
+                                    "Friends see this first, as the big Pay button. The other ways are there too, for anyone who doesn't use it.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = c.textTertiary,
+                                    modifier = Modifier.padding(start = 8.dp, end = 8.dp, top = 8.dp, bottom = 2.dp),
+                                )
+                            }
                             SectionHeader("In reminders", Modifier.padding(top = 8.dp))
                             Glass(Modifier.fillMaxWidth()) {
                                 Column(Modifier.padding(vertical = 6.dp)) {

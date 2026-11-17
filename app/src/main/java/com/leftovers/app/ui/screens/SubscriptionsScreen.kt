@@ -85,6 +85,7 @@ import com.leftovers.app.data.findLikelySubscriptions
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.rememberCoroutineScope
@@ -102,7 +103,8 @@ class SubscriptionsViewModel(
 ) : ViewModel() {
     /** Null until loaded, so the screen doesn't flash its empty state first. */
     val items: StateFlow<List<RecurringItem>?> =
-        planning.recurring.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+        // One-offs scheduled for a later day (#68) aren't subscriptions; they're on Home, under Upcoming.
+        planning.recurring.map { list -> list.filterNot { it.once } }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
     val categories: StateFlow<List<Category>> =
         repository.categories.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
     val accounts: StateFlow<List<AccountWithBalance>> =
@@ -940,6 +942,9 @@ internal fun SubscriptionCard(
     from: androidx.compose.ui.geometry.Rect? = null,
     onReveal: () -> Unit = {},
     onShown: () -> Unit = {},
+    /** For a one-off scheduled for a later day (#68): add it now, or cancel it. */
+    onAddNow: () -> Unit = {},
+    onCancel: () -> Unit = {},
 ) {
     val c = LocalAppColors.current
     val money = LocalMoney.current
@@ -949,6 +954,7 @@ internal fun SubscriptionCard(
     val next = if (item.active) r.nextChargeDate() else null
     val days = next?.let { java.time.temporal.ChronoUnit.DAYS.between(LocalDate.now(), it) }
     val cycle = when (item.everyMonths) {
+        0 -> "Once"
         12 -> "Yearly"
         6 -> "Every 6 months"
         3 -> "Every 3 months"
@@ -979,6 +985,7 @@ internal fun SubscriptionCard(
                 ) {
                     Text(
                         when {
+                            item.once -> "Scheduled"
                             !item.active -> "Paused"
                             income -> "Next payment"
                             else -> "Next charge"
@@ -1000,7 +1007,14 @@ internal fun SubscriptionCard(
                     )
                 }
                 // Label on the left, value on the right, so long amounts and dates never get cut.
-                Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(c.glass).padding(horizontal = 14.dp, vertical = 4.dp)) {
+                if (item.once) {
+                    Text(
+                        "Added by itself on its day, and set aside from your budget until then.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = c.textSecondary,
+                        modifier = Modifier.padding(horizontal = 6.dp),
+                    )
+                } else Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(c.glass).padding(horizontal = 14.dp, vertical = 4.dp)) {
                     SubscriptionFact(if (income) "In a year" else "Costs a year", money.format(r.monthlyShareMinor * 12))
                     RowDivider(inset = 0.dp)
                     SubscriptionFact(
@@ -1011,7 +1025,10 @@ internal fun SubscriptionCard(
                     SubscriptionFact("Since", started)
                 }
             
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            if (item.once) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                SecondaryButton("Cancel it", { onCancel(); onDismiss() }, Modifier.weight(1f), icon = Lucide.X)
+                PrimaryButton("Add it now", { onAddNow(); onDismiss() }, Modifier.weight(1f), icon = Lucide.Check)
+            } else Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 SecondaryButton("Edit", { close(onEdit) }, Modifier.weight(1f))
                 if (item.active) {
                     SecondaryButton("Pause", { onSetActive(false); onDismiss() }, Modifier.weight(1f), icon = Lucide.Pause)

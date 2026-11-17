@@ -10,6 +10,12 @@ object WhatsNew {
     /** One change: an icon (a [com.leftovers.app.ui.icons.Lucide] name), a short title and a line about it. */
     data class Note(val icon: String, val title: String, val text: String)
 
+    /**
+     * The version the Highlights page is about. It opens by itself once for it; a smaller update after it (1.10.1)
+     * doesn't open it again, and a new page means changing this along with the page.
+     */
+    const val HIGHLIGHTS = "1.10"
+
     /** The big changes, each a section of Highlights: its kicker, title and line. */
     data class Headline(val kicker: String, val title: String, val text: String)
 
@@ -36,12 +42,6 @@ object WhatsNew {
 
     /** The changes in a line each, for the AI assistant. */
     val notes: List<String> get() = headlines.map { "${it.kicker}: ${it.title} ${it.text}" } + items.map { "${it.title}: ${it.text}" }
-
-    /**
-     * The feature version Highlights is about: "1.10" for 1.10.0, its pre-releases and every Dev build of it. Highlights
-     * opens by itself once for each, the first time the app is opened after updating to it.
-     */
-    fun release(version: String): String = version.substringBefore("-").split('.').take(2).joinToString(".")
 
     fun version(context: Context): String =
         runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull().orEmpty()

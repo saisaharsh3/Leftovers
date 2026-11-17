@@ -780,6 +780,7 @@ class AssistantTools(private val container: AppContainer, private val privacy: A
 private fun Transaction.date(): LocalDate = LocalDate.ofEpochDay(epochDay)
 
 private fun cycleName(months: Int) = when (months) {
+    0 -> "once, scheduled"
     12 -> "yearly"
     6 -> "half-yearly"
     3 -> "quarterly"
