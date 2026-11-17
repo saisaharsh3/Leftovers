@@ -55,7 +55,7 @@ import com.leftovers.app.util.WhatsNew
  * top as phones show a new system version, then each change with its icon, title and line, and one button.
  */
 @Composable
-fun WhatsNewDialog(version: String, onClose: () -> Unit) = HighlightsScreen(version, onClose)
+fun WhatsNewDialog(onClose: () -> Unit) = HighlightsScreen(onClose)
 
 /** A button as a phone's update page has them: a bright pill for the main action, a glass one for the other. */
 @Composable
@@ -257,5 +257,5 @@ fun NoticesScreen(onBack: () -> Unit, viewModel: NoticesViewModel = androidx.lif
             }
         }
     }
-    if (highlights) HighlightsScreen(version) { highlights = false }
+    if (highlights) HighlightsScreen { highlights = false }
 }

@@ -381,7 +381,6 @@ fun HomeScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val c = LocalAppColors.current
     val versionContext = androidx.compose.ui.platform.LocalContext.current
-    val appVersion = remember { com.leftovers.app.util.WhatsNew.version(versionContext) }
     val freshInstall = remember { com.leftovers.app.util.WhatsNew.freshInstall(versionContext) }
     val update = remember(state.updateFound) {
         com.leftovers.app.util.UpdateCheck.decode(state.updateFound)
@@ -394,7 +393,7 @@ fun HomeScreen(
     // The page's own version, not the app's: 1.11 brought no new page, so it doesn't open again after updating.
     val seenKey = "highlights:" + com.leftovers.app.util.WhatsNew.HIGHLIGHTS
     if (state.loaded && state.whatsNewSeen != seenKey && !freshInstall) {
-        WhatsNewDialog(appVersion) { viewModel.closeWhatsNew(seenKey) }
+        WhatsNewDialog { viewModel.closeWhatsNew(seenKey) }
     }
     val money = LocalMoney.current
     if (!state.loaded) return

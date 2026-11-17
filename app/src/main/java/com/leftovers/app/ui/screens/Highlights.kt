@@ -94,13 +94,13 @@ private val onLime = Color(0xFF151A04)
  * scrolled to; photos ease in closer; the numbers count up. Then the smaller changes, and Continue.
  */
 @Composable
-fun HighlightsScreen(version: String, onClose: () -> Unit) {
+fun HighlightsScreen(onClose: () -> Unit) {
     Dialog(onClose, DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
         val list = rememberLazyListState()
         val h = WhatsNew.headlines
         Box(Modifier.fillMaxSize().background(night)) {
             LazyColumn(Modifier.fillMaxSize(), state = list) {
-                item { Opening(version, list) }
+                item { Opening(list) }
                 item { Statement(list, 1, "Money owed settles itself.", h[0].text, dark = true) { Shot(R.drawable.hl_shot_payback, Modifier.width(250.dp)) } }
                 item { PhotoStatement(list, 2, R.drawable.hl_photo_mountain, "Pay me back, in one tap.", h[1].text) { UpiPills() } }
                 item { Statement(list, 3, "One message for the whole group.", h[2].text, dark = false) { GroupCard(list, 3) } }
@@ -154,8 +154,9 @@ private fun ease(x: Float): Float = 1f - (1f - x.coerceIn(0f, 1f)).let { it * it
 // ---- The opening: three real screens dealt out of one, and the version under them.
 
 @Composable
-private fun Opening(version: String, list: LazyListState) {
-    val number = version.substringBefore("-").split('.').take(2).joinToString(".")
+private fun Opening(list: LazyListState) {
+    // The version this page is about, not the one installed: after 1.11 it still says 1.10.
+    val number = WhatsNew.HIGHLIGHTS
     val fan = remember { Animatable(0f) }
     LaunchedEffect(Unit) {
         kotlinx.coroutines.delay(150)
