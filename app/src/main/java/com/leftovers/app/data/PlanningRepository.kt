@@ -46,6 +46,30 @@ class PlanningRepository(private val database: AppDatabase) {
             }
         }
     }
+    /**
+     * Takes [share]'s person off the bill it was split from, keeping the bill's total: their amount is shared out
+     * evenly between you and the others who haven't paid ([spread]), or becomes yours. Your share is saved through
+     * [saveBill], so a synced phone sees the change. Returns how to put it all back, for Undo.
+     */
+    suspend fun removeFromSplit(share: Debt, spread: Boolean, saveBill: suspend (Transaction) -> Unit): suspend () -> Unit {
+        val billId = share.splitOf
+        val bill = billId?.let { transactionDao.getById(it) }
+        if (bill == null || share.repayment) {
+            debtDao.delete(share)
+            return { debtDao.upsert(share) }
+        }
+        val others = debtDao.getAll().filter { it.splitOf == billId && !it.repayment && it.id != share.id }
+        val plan = SplitRemoval.plan(bill.amountMinor, share.amountMinor, others, spread)
+        debtDao.delete(share)
+        plan.shares.forEach { debtDao.upsert(it) }
+        saveBill(bill.copy(amountMinor = plan.mineMinor))
+        return {
+            debtDao.upsert(share)
+            others.forEach { debtDao.upsert(it) }
+            saveBill(bill)
+        }
+    }
+
     suspend fun deleteDebt(debt: Debt) {
         debtDao.delete(debt)
         debt.photos.forEach { com.leftovers.app.util.ReceiptStore.delete(it) }

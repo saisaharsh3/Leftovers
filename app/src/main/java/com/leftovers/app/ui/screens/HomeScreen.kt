@@ -269,6 +269,11 @@ class HomeViewModel(
         viewModelScope.launch { planning.settleEntry(debt) }
     }
 
+    /** Takes a split bill's person off it, keeping the bill's total; [done] gets the Undo. */
+    fun removeFromSplit(debt: com.leftovers.app.data.Debt, spread: Boolean, done: (suspend () -> Unit) -> Unit) {
+        viewModelScope.launch { done(planning.removeFromSplit(debt, spread) { repository.saveTransaction(it) }) }
+    }
+
     fun deleteDebt(debt: com.leftovers.app.data.Debt) {
         viewModelScope.launch { planning.deleteDebt(debt) }
     }
@@ -687,6 +692,10 @@ fun HomeScreen(
             },
             onDelete = {
                 viewModel.deleteDebt(debt)
+                editingDebt = null
+            },
+            onRemoveFromSplit = { spread ->
+                viewModel.removeFromSplit(debt, spread) { restore -> scheduledUndo.show("${debt.person.trim()} taken off the bill", restore) }
                 editingDebt = null
             },
             onSettle = {
@@ -1379,7 +1388,12 @@ private fun DueRow(
         leading = { CategoryIcon(d.item.categoryEmoji, d.item.categoryColor, size = 42.dp) },
         trailing = {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                com.leftovers.app.ui.components.Chip(if (income) "Received" else "Paid", onClick = { paying = true }, icon = Lucide.Check)
+                // Paid settles it as it is, today (#64); the rest of the row opens the sheet to change it first.
+                com.leftovers.app.ui.components.Chip(if (income) "Received" else "Paid", onClick = {
+                    onPaid(d.item.amountMinor, today.toEpochDay(), d.item.accountId ?: accounts.firstOrNull()?.id) { restore ->
+                        undo.show(if (income) "${d.item.name} received" else "${d.item.name} paid", restore)
+                    }
+                }, icon = Lucide.Check)
                 Spacer(Modifier.width(6.dp))
                 RoundButton(Lucide.X, "Skip this time", { onSkip { restore -> undo.show("${d.item.name} skipped this time", restore) } }, size = 34.dp, tint = c.textTertiary)
             }
