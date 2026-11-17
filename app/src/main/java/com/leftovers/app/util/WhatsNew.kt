@@ -11,7 +11,7 @@ object WhatsNew {
     data class Note(val icon: String, val title: String, val text: String)
 
     /**
-     * The version the Highlights page is about. It opens by itself once for it; a smaller update after it (1.11)
+     * The version the Highlights page is about. It opens by itself once for it; a smaller update after it (1.10.1)
      * doesn't open it again, and a new page means changing this along with the page.
      */
     const val HIGHLIGHTS = "1.10"

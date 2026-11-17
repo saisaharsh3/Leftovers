@@ -155,7 +155,7 @@ private fun ease(x: Float): Float = 1f - (1f - x.coerceIn(0f, 1f)).let { it * it
 
 @Composable
 private fun Opening(list: LazyListState) {
-    // The version this page is about, not the one installed: after 1.11 it still says 1.10.
+    // The version this page is about, not the one installed: after 1.10.1 it still says 1.10.
     val number = WhatsNew.HIGHLIGHTS
     val fan = remember { Animatable(0f) }
     LaunchedEffect(Unit) {

@@ -5,7 +5,7 @@ All notable changes to Leftovers. Download any version from
 
 ## Unreleased
 
-## 1.11.0
+## 1.10.1
 
 Plan ahead, split fairly. It installs over 1.10.0 and keeps your data.
 
