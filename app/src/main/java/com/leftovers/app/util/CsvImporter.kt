@@ -223,9 +223,10 @@ object CsvImporter {
         val negative = t.startsWith("-") || t.startsWith("(") && t.endsWith(")") || t.endsWith("-")
         t = t.replace(Regex("""[^0-9.,]"""), "")
         if (t.isEmpty() || t.none(Char::isDigit)) return null
-        // Decimal comma ("1.234,56" or "45,00"): the last separator is followed by exactly two digits.
+        // Decimal comma ("1.234,56", "45,00", or "198,3" as some banks write it): the last separator is followed by
+        // one or two digits. Three ("1,234") is a thousands separator.
         val lastComma = t.lastIndexOf(','); val lastDot = t.lastIndexOf('.')
-        t = if (lastComma > lastDot && t.length - lastComma - 1 == 2) t.replace(".", "").replace(',', '.') else t.replace(",", "")
+        t = if (lastComma > lastDot && t.length - lastComma - 1 in 1..2) t.replace(".", "").replace(',', '.') else t.replace(",", "")
         val value = t.toBigDecimalOrNull() ?: return null
         val minor = value.movePointRight(2).setScale(0, RoundingMode.HALF_UP).toLong()
         return if (negative) -minor else minor
