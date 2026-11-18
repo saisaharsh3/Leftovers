@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -675,9 +676,21 @@ private fun FilterBar(
                         active = picked != null,
                         modifier = Modifier.weight(1f, fill = false),
                     ) { close ->
-                        MenuItem("All categories", state.categoryId == null, Lucide.Tag, c.textSecondary) { onCategory(null); close() }
-                        categories.forEach { cat ->
-                            MenuItem(cat.name, state.categoryId == cat.id, com.leftovers.app.ui.icons.CategoryIcons[cat.emoji], Color(cat.color)) { onCategory(cat.id); close() }
+                        // Many categories: a search box first. Most used come first either way, with how many entries each has.
+                        var query by remember { mutableStateOf("") }
+                        if (categories.size > SEARCH_FROM) MenuSearch(query) { query = it }
+                        val found = if (query.isBlank()) categories else categories.filter { it.name.contains(query.trim(), ignoreCase = true) }
+                        if (query.isBlank()) MenuItem("All categories", state.categoryId == null, Lucide.Tag, c.textSecondary) { onCategory(null); close() }
+                        found.forEach { cat ->
+                            MenuItem(cat.name, state.categoryId == cat.id, com.leftovers.app.ui.icons.CategoryIcons[cat.emoji], Color(cat.color), detail = "${cat.uses}") { onCategory(cat.id); close() }
+                        }
+                        if (found.isEmpty()) {
+                            Text(
+                                "No category called “${query.trim()}”",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = c.textTertiary,
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+                            )
                         }
                     }
                 }
@@ -780,23 +793,74 @@ private fun MenuChip(
             onDismissRequest = { open = false },
             shape = RoundedCornerShape(20.dp),
             containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-            modifier = Modifier.heightIn(max = 380.dp),
+            modifier = Modifier.width(272.dp).heightIn(max = 420.dp),
         ) { items { open = false } }
     }
 }
 
-/** One choice in a [MenuChip]'s menu, with a tick on the one in use. */
+/** From how many choices a menu gets a search box. */
+private const val SEARCH_FROM = 8
+
+/**
+ * One choice in a [MenuChip]'s menu: its icon, its name (cut short when long), a small [detail] like how many
+ * entries it has, and a tick on the one in use.
+ */
 @Composable
-private fun MenuItem(text: String, selected: Boolean, icon: androidx.compose.ui.graphics.vector.ImageVector, tint: Color, onClick: () -> Unit) {
+private fun MenuItem(
+    text: String,
+    selected: Boolean,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    tint: Color,
+    detail: String? = null,
+    onClick: () -> Unit,
+) {
     val c = LocalAppColors.current
     androidx.compose.material3.DropdownMenuItem(
-        text = { Text(text, color = c.textPrimary, maxLines = 1) },
+        text = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(text, color = c.textPrimary, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                if (detail != null) Text(detail, style = MaterialTheme.typography.labelMedium, color = c.textTertiary, modifier = Modifier.padding(start = 8.dp))
+            }
+        },
         leadingIcon = { Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(18.dp)) },
-        trailingIcon = if (selected) {
-            { Icon(Lucide.Check, contentDescription = "Selected", tint = c.accent, modifier = Modifier.size(18.dp)) }
-        } else null,
+        trailingIcon = {
+            // Always the same room, so the counts line up whether or not this one is ticked.
+            Box(Modifier.size(18.dp)) {
+                if (selected) Icon(Lucide.Check, contentDescription = "Selected", tint = c.accent, modifier = Modifier.size(18.dp))
+            }
+        },
         onClick = onClick,
     )
+}
+
+/** A search box at the top of a long menu; it takes the keyboard as soon as the menu opens. */
+@Composable
+private fun MenuSearch(query: String, onChange: (String) -> Unit) {
+    val c = LocalAppColors.current
+    val focus = remember { androidx.compose.ui.focus.FocusRequester() }
+    LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
+    Row(
+        Modifier.padding(horizontal = 12.dp, vertical = 6.dp).fillMaxWidth().height(40.dp)
+            .clip(RoundedCornerShape(12.dp)).background(c.glass).padding(horizontal = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(Lucide.Search, contentDescription = null, tint = c.textTertiary, modifier = Modifier.size(16.dp))
+        Spacer(Modifier.width(8.dp))
+        Box(Modifier.weight(1f)) {
+            if (query.isEmpty()) Text("Search categories", style = MaterialTheme.typography.bodyMedium, color = c.textTertiary)
+            androidx.compose.foundation.text.BasicTextField(
+                value = query,
+                onValueChange = onChange,
+                singleLine = true,
+                textStyle = MaterialTheme.typography.bodyMedium.copy(color = c.textPrimary),
+                cursorBrush = androidx.compose.ui.graphics.SolidColor(c.accent),
+                modifier = Modifier.fillMaxWidth().focusRequester(focus),
+            )
+        }
+        if (query.isNotEmpty()) {
+            Icon(Lucide.X, contentDescription = "Clear the search", tint = c.textTertiary, modifier = Modifier.size(16.dp).clip(CircleShape).pressable({ onChange("") }))
+        }
+    }
 }
 
 /** What's worth knowing: the trends spotted, then asking the AI about it and the phone's own AI summing up a month. */
