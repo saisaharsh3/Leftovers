@@ -142,27 +142,31 @@ fun DailyBars(
     var touched by remember(values) { mutableStateOf<Int?>(null) }
     val input = if (tooltip == null || values.isEmpty()) Modifier else Modifier.pointerInput(values.size) {
         fun indexAt(x: Float) = (x / (size.width.toFloat() / values.size)).toInt().coerceIn(0, values.size - 1)
+        // A tap shows a bar (or hides the one showing) and sliding sideways follows the finger; a drag that's mostly
+        // up or down is the page scrolling, and leaves no label behind.
         awaitEachGesture {
             val down = awaitFirstDown(requireUnconsumed = false)
-            val first = indexAt(down.position.x)
-            // A tap on the bar that is already showing hides it again.
-            val clearOnUp = touched == first
-            touched = first
-            var moved = false
+            val slop = viewConfiguration.touchSlop
+            var following = false
+            var scrolled = false
             while (true) {
                 val change = awaitPointerEvent().changes.firstOrNull() ?: break
-                if (!change.pressed) break
-                // Let a vertical scroll of the page win; follow the finger only while it isn't scrolling.
-                if (change.isConsumed) continue
-                val delta = change.position - change.previousPosition
-                if (abs(delta.x) > abs(delta.y)) change.consume()
-                val i = indexAt(change.position.x)
-                if (i != touched) {
-                    moved = true
-                    touched = i
+                if (!change.pressed) {
+                    if (!following && !scrolled) {
+                        val i = indexAt(down.position.x)
+                        touched = if (touched == i) null else i
+                    }
+                    break
                 }
+                if (scrolled || change.isConsumed) { scrolled = true; continue }
+                val moved = change.position - down.position
+                if (!following) {
+                    if (abs(moved.y) > slop && abs(moved.y) >= abs(moved.x)) { scrolled = true; continue }
+                    if (abs(moved.x) > slop) following = true else continue
+                }
+                change.consume()
+                touched = indexAt(change.position.x)
             }
-            if (clearOnUp && !moved) touched = null
         }
     }
     Canvas(modifier.then(input)) {

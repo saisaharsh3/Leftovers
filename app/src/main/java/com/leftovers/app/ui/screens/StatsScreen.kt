@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -275,109 +276,24 @@ fun StatsScreen(
     ) { padding ->
         if (!state.loaded) return@GlassScreen
         // Sideways swipes switch tabs here like everywhere else; the arrows change the period.
+        // Top to bottom: what's shown, the money as a whole, then spending or income in detail.
         LazyColumn(
             Modifier.fillMaxSize(),
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = padding.calculateTopPadding() + 12.dp, bottom = DockClearance),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             item { PeriodBar(state, viewModel::setPeriod) { showFilter = true } }
+            // Balance, and in and out: they don't depend on Spending or Income, so they come before that choice.
+            item { MoneyCard(state) }
             item {
                 SegmentedToggle(
                     TxType.entries, state.type,
                     { if (it == TxType.EXPENSE) "Spending" else "Income" },
-                    viewModel::setType, Modifier.fillMaxWidth(),
+                    viewModel::setType, Modifier.fillMaxWidth().padding(top = 8.dp),
                 )
             }
-
-            item {
-                Glass(Modifier.fillMaxWidth().appear(0), strong = true, shape = RoundedCornerShape(32.dp)) {
-                    Column(Modifier.padding(22.dp)) {
-                        Text(
-                            (if (isExpense) "Spent" else "Earned") + if (state.period.kind == PeriodKind.ALL) " in all" else if (state.isMonth) " in $monthName" else "",
-                            style = MaterialTheme.typography.labelLarge,
-                            color = c.textSecondary,
-                        )
-                        Spacer(Modifier.height(4.dp))
-                        RollingText(money.format(state.total), MaterialTheme.typography.displaySmall, c.textPrimary)
-                        Spacer(Modifier.height(10.dp))
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            ComparisonChip(state)
-                            if (isExpense && state.budget > 0) {
-                                Spacer(Modifier.width(8.dp))
-                                Text(
-                                    "${(state.total * 100 / state.budget)}% of budget",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = c.textSecondary,
-                                )
-                            }
-                        }
-                        Spacer(Modifier.height(20.dp))
-                        val today = LocalDate.now()
-                        val start = state.start
-                        val monthFmt = remember { java.time.format.DateTimeFormatter.ofPattern("MMM") }
-                        DailyBars(
-                            values = state.bars,
-                            highlight = when {
-                                state.barsByMonth -> ChronoUnit.MONTHS.between(YearMonth.from(start), YearMonth.from(today)).toInt().takeIf { it in state.bars.indices }
-                                else -> ChronoUnit.DAYS.between(start, today).toInt().takeIf { it in state.bars.indices }
-                            },
-                            modifier = Modifier.fillMaxWidth().height(150.dp),
-                            tooltip = { i ->
-                                val v = money.format(state.bars.getOrElse(i) { 0L })
-                                if (state.barsByMonth) "${YearMonth.from(start).plusMonths(i.toLong()).label()} · $v" else "${start.plusDays(i.toLong()).shortLabel()} · $v"
-                            },
-                            axis = when {
-                                state.isMonth -> null
-                                state.barsByMonth -> { i ->
-                                    val m = YearMonth.from(start).plusMonths(i.toLong())
-                                    val every = ((state.bars.size + 5) / 6).coerceAtLeast(1)
-                                    if (i % every == 0) (if (m.monthValue == 1 || i == 0) "${m.format(monthFmt)} ${m.year % 100}" else m.format(monthFmt)) else null
-                                }
-                                else -> { i ->
-                                    val d = start.plusDays(i.toLong())
-                                    if (i == 0 || d.dayOfMonth == 1) d.format(java.time.format.DateTimeFormatter.ofPattern("d MMM")) else if (d.dayOfMonth % 5 == 0 && d.dayOfMonth < 30) d.dayOfMonth.toString() else null
-                                }
-                            },
-                        )
-                        Text(
-                            if (state.barsByMonth) "Touch the bars to see each month" else "Touch the bars to see each day",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = c.textTertiary,
-                            modifier = Modifier.padding(top = 6.dp),
-                        )
-                    }
-                }
-            }
-
-            if (state.trends.isNotEmpty()) {
-                item {
-                    Glass(Modifier.fillMaxWidth().appear(1)) {
-                        Column(Modifier.padding(horizontal = 18.dp, vertical = 14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                            state.trends.forEach { t ->
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(
-                                        if (t.down) Lucide.TrendingDown else Lucide.TrendingUp,
-                                        contentDescription = null,
-                                        tint = when (t.good) {
-                                            true -> c.positive
-                                            false -> c.warning
-                                            null -> c.accent
-                                        },
-                                        modifier = Modifier.size(16.dp),
-                                    )
-                                    Spacer(Modifier.width(10.dp))
-                                    Text(t.text, style = MaterialTheme.typography.bodyMedium, color = c.textPrimary)
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            // The AI, when there is one: asking about the period, and the phone's own short summary of a month.
-            if (state.count > 0) {
-                item { AiCard(state, aiConnected, onAskAi) }
-            }
+            item { TotalCard(state) }
+            item { NoticedCard(state, aiConnected, onAskAi) }
 
             if (state.total == 0L) {
                 item {
@@ -388,80 +304,14 @@ fun StatsScreen(
                     )
                 }
             } else {
-                item {
-                    Row(Modifier.appear(1), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        StatTile("Daily average", money.formatWhole(state.total / state.days), Modifier.weight(1f))
-                        StatTile(
-                            if (isExpense) "Biggest spend" else "Biggest income",
-                            money.format(state.max?.amountMinor ?: 0),
-                            Modifier.weight(1f),
-                            footnote = state.max?.let { "${it.categoryName} · ${it.date.shortLabel()}" },
-                        )
-                    }
-                }
-
-                item { SectionHeader("By category", Modifier.appear(2)) }
-                item {
-                    Glass(Modifier.fillMaxWidth().appear(2)) {
-                        Column(Modifier.padding(20.dp)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                DonutChart(
-                                    slices = state.categories.map { ChartSlice(it.totalMinor.toFloat(), Color(it.color)) },
-                                    modifier = Modifier.size(132.dp),
-                                ) {
-                                    Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
-                                        Text("${state.count}", style = MaterialTheme.typography.headlineSmall, color = c.textPrimary)
-                                        Text("entries", style = MaterialTheme.typography.labelSmall, color = c.textSecondary)
-                                    }
-                                }
-                                Spacer(Modifier.width(18.dp))
-                                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    state.categories.take(4).forEach { cat ->
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            Box(Modifier.size(8.dp).clip(CircleShape).background(Color(cat.color)))
-                                            Spacer(Modifier.width(8.dp))
-                                            Text(cat.name, style = MaterialTheme.typography.bodySmall, color = c.textSecondary, maxLines = 1)
-                                        }
-                                    }
-                                }
-                            }
-                            Spacer(Modifier.height(18.dp))
-                            var openCategory by rememberSaveable(state.period, state.type, state.accountId) { mutableStateOf<Long?>(null) }
-                            state.categories.forEach { cat ->
-                                val open = openCategory == cat.categoryId
-                                CategoryShare(cat, state.total, open) { openCategory = if (open) null else cat.categoryId }
-                                AnimatedVisibility(open, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
-                                    Column(Modifier.padding(start = 30.dp, bottom = 6.dp)) {
-                                        state.items.filter { it.categoryId == cat.categoryId }.forEach { item ->
-                                            TransactionRow(item, onClick = { peek.show(item) }, subtitle = item.date.friendlyLabel(), modifier = Modifier.peekSource(peek, item.id))
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-
-                if (state.isMonth) {
-                    item { SectionHeader("Calendar", Modifier.appear(3)) }
-                    item { CalendarCard(state, peek) }
-                }
-            }
-
-            // How the money itself moved: the balance over the period, and what came in and went out each month.
-            if (state.balance.size >= 2) {
-                item { SectionHeader("Balance", Modifier.appear(3)) }
-                item { BalanceCard(state) }
-            }
-            if (state.inOut.any { it.inMinor > 0 || it.outMinor > 0 }) {
-                item { SectionHeader("Money in and out", Modifier.appear(4)) }
-                item { InOutCard(state) }
+                item { CategoryCard(state, peek) }
+                if (state.isMonth) item { CalendarCard(state, peek) }
             }
 
             // The month and the year as a story.
             item {
                 val year = state.month.year
-                Glass(Modifier.fillMaxWidth().padding(top = 12.dp).appear(4)) {
+                Glass(Modifier.fillMaxWidth().appear(4)) {
                     Column(Modifier.padding(vertical = 6.dp)) {
                         com.leftovers.app.ui.components.ListRow(
                             "$monthName recap",
@@ -478,6 +328,145 @@ fun StatsScreen(
                             trailing = { Icon(Lucide.ChevronRight, contentDescription = null, tint = c.textTertiary) },
                             onClick = { onOpenYear(year) },
                         )
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** A card's own title, with something small on the right when there's more to say. */
+@Composable
+private fun CardTitle(title: String, modifier: Modifier = Modifier, trailing: @Composable (() -> Unit)? = null) {
+    val c = LocalAppColors.current
+    Row(modifier.fillMaxWidth().height(32.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(title, style = MaterialTheme.typography.titleMedium, color = c.textPrimary, modifier = Modifier.weight(1f), maxLines = 1)
+        trailing?.invoke()
+    }
+}
+
+/** A small figure with its caption, for the foot of a card. */
+@Composable
+private fun Figure(label: String, value: String, modifier: Modifier = Modifier, footnote: String? = null) {
+    val c = LocalAppColors.current
+    Column(modifier) {
+        Text(label, style = MaterialTheme.typography.labelMedium, color = c.textSecondary, maxLines = 1)
+        Text(value, style = MaterialTheme.typography.titleMedium, color = c.textPrimary, maxLines = 1)
+        if (footnote != null) Text(footnote, style = MaterialTheme.typography.labelSmall, color = c.textTertiary, maxLines = 1)
+    }
+}
+
+/** What was spent or earned: the total, how it compares, its bars, and the daily average and biggest at its foot. */
+@Composable
+private fun TotalCard(state: StatsUiState) {
+    val c = LocalAppColors.current
+    val money = LocalMoney.current
+    val isExpense = state.type == TxType.EXPENSE
+    val monthName = state.month.month.getDisplayName(TextStyle.FULL, Locale.getDefault())
+    Glass(Modifier.fillMaxWidth().appear(1), strong = true, shape = RoundedCornerShape(32.dp)) {
+        Column(Modifier.padding(22.dp)) {
+            Text(
+                (if (isExpense) "Spent" else "Earned") + if (state.period.kind == PeriodKind.ALL) " in all" else if (state.isMonth) " in $monthName" else "",
+                style = MaterialTheme.typography.labelLarge,
+                color = c.textSecondary,
+            )
+            Spacer(Modifier.height(4.dp))
+            RollingText(money.format(state.total), MaterialTheme.typography.displaySmall, c.textPrimary)
+            Spacer(Modifier.height(10.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                ComparisonChip(state)
+                if (isExpense && state.budget > 0) {
+                    Spacer(Modifier.width(8.dp))
+                    Text("${(state.total * 100 / state.budget)}% of budget", style = MaterialTheme.typography.labelMedium, color = c.textSecondary)
+                }
+            }
+            Spacer(Modifier.height(18.dp))
+            val today = LocalDate.now()
+            val start = state.start
+            val monthFmt = remember { java.time.format.DateTimeFormatter.ofPattern("MMM") }
+            DailyBars(
+                values = state.bars,
+                highlight = when {
+                    state.barsByMonth -> ChronoUnit.MONTHS.between(YearMonth.from(start), YearMonth.from(today)).toInt().takeIf { it in state.bars.indices }
+                    else -> ChronoUnit.DAYS.between(start, today).toInt().takeIf { it in state.bars.indices }
+                },
+                modifier = Modifier.fillMaxWidth().height(140.dp),
+                tooltip = { i ->
+                    val v = money.format(state.bars.getOrElse(i) { 0L })
+                    if (state.barsByMonth) "${YearMonth.from(start).plusMonths(i.toLong()).label()} · $v" else "${start.plusDays(i.toLong()).shortLabel()} · $v"
+                },
+                axis = when {
+                    state.isMonth -> null
+                    state.barsByMonth -> { i ->
+                        val m = YearMonth.from(start).plusMonths(i.toLong())
+                        val every = ((state.bars.size + 5) / 6).coerceAtLeast(1)
+                        if (i % every == 0) (if (m.monthValue == 1 || i == 0) "${m.format(monthFmt)} ${m.year % 100}" else m.format(monthFmt)) else null
+                    }
+                    else -> { i ->
+                        val d = start.plusDays(i.toLong())
+                        if (i == 0 || d.dayOfMonth == 1) d.format(java.time.format.DateTimeFormatter.ofPattern("d MMM")) else if (d.dayOfMonth % 5 == 0 && d.dayOfMonth < 30) d.dayOfMonth.toString() else null
+                    }
+                },
+            )
+            if (state.total > 0) {
+                Spacer(Modifier.height(16.dp))
+                RowDivider(inset = 0.dp)
+                Spacer(Modifier.height(14.dp))
+                Row {
+                    Figure("Daily average", money.formatWhole(state.total / state.days), Modifier.weight(1f))
+                    Figure(
+                        if (isExpense) "Biggest spend" else "Biggest income",
+                        money.format(state.max?.amountMinor ?: 0),
+                        Modifier.weight(1f),
+                        footnote = state.max?.let { "${it.categoryName} · ${it.date.shortLabel()}" },
+                    )
+                }
+            }
+        }
+    }
+}
+
+/** The categories: a ring with what most went on, then each one, tapped to list its entries. */
+@Composable
+private fun CategoryCard(state: StatsUiState, peek: TransactionPeek) {
+    val c = LocalAppColors.current
+    Glass(Modifier.fillMaxWidth().appear(2)) {
+        Column(Modifier.padding(20.dp)) {
+            val top = state.categories.firstOrNull()
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                DonutChart(
+                    slices = state.categories.map { ChartSlice(it.totalMinor.toFloat(), Color(it.color)) },
+                    modifier = Modifier.size(96.dp),
+                ) {
+                    Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("${state.categories.size}", style = MaterialTheme.typography.titleLarge, color = c.textPrimary)
+                    }
+                }
+                Spacer(Modifier.width(18.dp))
+                Column(Modifier.weight(1f)) {
+                    Text("By category", style = MaterialTheme.typography.titleMedium, color = c.textPrimary)
+                    Text("${state.count} ${if (state.count == 1) "entry" else "entries"}", style = MaterialTheme.typography.bodySmall, color = c.textSecondary)
+                    if (top != null && state.total > 0) {
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            "Most on ${top.name}, ${(top.totalMinor * 100f / state.total).roundToInt()}%",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color(top.color),
+                            maxLines = 2,
+                        )
+                    }
+                }
+            }
+            Spacer(Modifier.height(14.dp))
+            var openCategory by rememberSaveable(state.period, state.type, state.accountId) { mutableStateOf<Long?>(null) }
+            state.categories.forEach { cat ->
+                val open = openCategory == cat.categoryId
+                CategoryShare(cat, state.total, open) { openCategory = if (open) null else cat.categoryId }
+                AnimatedVisibility(open, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
+                    Column(Modifier.padding(start = 30.dp, bottom = 6.dp)) {
+                        state.items.filter { it.categoryId == cat.categoryId }.forEach { item ->
+                            TransactionRow(item, onClick = { peek.show(item) }, subtitle = item.date.friendlyLabel(), modifier = Modifier.peekSource(peek, item.id))
+                        }
                     }
                 }
             }
@@ -570,9 +559,9 @@ private fun ShowSheet(state: StatsUiState, onPeriod: (InsightsPeriod) -> Unit, o
     }
 }
 
-/** Asking the AI about the period, and the phone's own AI summing up a month: one card for both. */
+/** What's worth knowing: the trends spotted, then asking the AI about it and the phone's own AI summing up a month. */
 @Composable
-private fun AiCard(state: StatsUiState, aiConnected: Boolean, onAskAi: (String) -> Unit) {
+private fun NoticedCard(state: StatsUiState, aiConnected: Boolean, onAskAi: (String) -> Unit) {
     val c = LocalAppColors.current
     val money = LocalMoney.current
     val isExpense = state.type == TxType.EXPENSE
@@ -581,11 +570,33 @@ private fun AiCard(state: StatsUiState, aiConnected: Boolean, onAskAi: (String) 
     if (com.leftovers.app.ai.OnDevice.inBuild && isExpense && state.isMonth) {
         LaunchedEffect(Unit) { ready = com.leftovers.app.ai.OnDevice.status() == com.leftovers.app.ai.LocalStatus.READY }
     }
-    val summarise = ready && isExpense && state.isMonth
-    if (!aiConnected && !summarise) return
-    Glass(Modifier.fillMaxWidth().appear(1)) {
+    val summarise = ready && isExpense && state.isMonth && state.count > 0
+    val ask = aiConnected && state.count > 0
+    if (!ask && !summarise && state.trends.isEmpty()) return
+    Glass(Modifier.fillMaxWidth().appear(2)) {
         Column(Modifier.padding(vertical = 6.dp)) {
-            if (aiConnected) {
+            if (state.trends.isNotEmpty()) {
+                Column(Modifier.padding(horizontal = 18.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    state.trends.forEach { t ->
+                        Row(verticalAlignment = Alignment.Top) {
+                            Icon(
+                                if (t.down) Lucide.TrendingDown else Lucide.TrendingUp,
+                                contentDescription = null,
+                                tint = when (t.good) {
+                                    true -> c.positive
+                                    false -> c.warning
+                                    null -> c.accent
+                                },
+                                modifier = Modifier.padding(top = 2.dp).size(16.dp),
+                            )
+                            Spacer(Modifier.width(12.dp))
+                            Text(t.text, style = MaterialTheme.typography.bodyMedium, color = c.textPrimary)
+                        }
+                    }
+                }
+                if (ask || summarise) RowDivider(inset = 18.dp)
+            }
+            if (ask) {
                 val question = when {
                     state.period.kind == PeriodKind.MONTH && isExpense -> {
                         val previous = state.month.minusMonths(1).month.getDisplayName(TextStyle.FULL, Locale.getDefault())
@@ -605,7 +616,7 @@ private fun AiCard(state: StatsUiState, aiConnected: Boolean, onAskAi: (String) 
             }
             // On a tap, not on its own, as Android limits how often an app can use the phone's AI.
             if (summarise) {
-                if (aiConnected) RowDivider()
+                if (ask) RowDivider()
                 var summary by remember(state.period) { mutableStateOf<String?>(null) }
                 var writing by remember { mutableStateOf(false) }
                 val scope = rememberCoroutineScope()
@@ -636,58 +647,81 @@ private fun AiCard(state: StatsUiState, aiConnected: Boolean, onAskAi: (String) 
     }
 }
 
-/** The month as a calendar, shaded by how heavy each day was; tapping a day lists it. */
+/** The month as a calendar, shaded by how heavy each day was; folded to a row until it's opened. */
 @Composable
 private fun CalendarCard(state: StatsUiState, peek: TransactionPeek) {
     val c = LocalAppColors.current
     val money = LocalMoney.current
+    var open by rememberSaveable { mutableStateOf(false) }
+    val turn by animateFloatAsState(if (open) 90f else 0f, label = "calendarChevron")
+    val heaviest = state.daily.withIndex().maxByOrNull { it.value }?.takeIf { it.value > 0 }
     Glass(Modifier.fillMaxWidth().appear(3)) {
-        Column(Modifier.padding(16.dp)) {
-            var selectedDay by rememberSaveable(state.month) { mutableStateOf<Int?>(null) }
-            SpendingCalendar(
-                state.month,
-                state.daily,
-                selected = selectedDay,
-                onSelect = { selectedDay = if (selectedDay == it) null else it },
-            )
-            Spacer(Modifier.height(12.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                Legend(c.positive, "Lighter day")
-                Legend(c.warning, "Typical")
-                Legend(c.negative, "Heavier")
+        Column(Modifier.padding(horizontal = 20.dp, vertical = 14.dp)) {
+            Row(
+                Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).pressable({ open = !open }, pressedScale = 0.98f),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text("Calendar", style = MaterialTheme.typography.titleMedium, color = c.textPrimary)
+                    heaviest?.let {
+                        Text(
+                            (if (state.type == TxType.EXPENSE) "Heaviest day " else "Best day ") + "${state.month.atDay(it.index + 1).shortLabel()}, ${money.formatWhole(it.value)}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = c.textSecondary,
+                        )
+                    }
+                }
+                Icon(Lucide.ChevronRight, contentDescription = if (open) "Hide the calendar" else "Show the calendar", tint = c.textTertiary, modifier = Modifier.size(18.dp).rotate(turn))
             }
-            AnimatedContent(selectedDay, label = "dayDetail") { day ->
-                if (day == null) {
-                    Text(
-                        "Tap a day to see what you ${if (state.type == TxType.EXPENSE) "spent" else "received"}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = c.textTertiary,
-                        modifier = Modifier.fillMaxWidth().padding(top = 14.dp),
-                        textAlign = TextAlign.Center,
+            AnimatedVisibility(open, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
+                Column(Modifier.padding(top = 14.dp)) {
+                    var selectedDay by rememberSaveable(state.month) { mutableStateOf<Int?>(null) }
+                    SpendingCalendar(
+                        state.month,
+                        state.daily,
+                        selected = selectedDay,
+                        onSelect = { selectedDay = if (selectedDay == it) null else it },
                     )
-                } else {
-                    val date = state.month.atDay(day)
-                    val entries = state.items.filter { it.date == date }
-                    Column(Modifier.fillMaxWidth().padding(top = 14.dp)) {
-                        RowDivider()
-                        Row(Modifier.padding(top = 12.dp, bottom = 4.dp, start = 4.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Text(date.friendlyLabel(), style = MaterialTheme.typography.titleSmall, color = c.textPrimary, modifier = Modifier.weight(1f))
+                    Spacer(Modifier.height(12.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                        Legend(c.positive, "Lighter day")
+                        Legend(c.warning, "Typical")
+                        Legend(c.negative, "Heavier")
+                    }
+                    AnimatedContent(selectedDay, label = "dayDetail") { day ->
+                        if (day == null) {
                             Text(
-                                money.format(entries.sumOf { it.amountMinor }),
-                                style = MaterialTheme.typography.titleMedium,
-                                color = if (state.type == TxType.INCOME) c.positive else c.textPrimary,
-                            )
-                        }
-                        if (entries.isEmpty()) {
-                            Text(
-                                if (state.type == TxType.EXPENSE) "No spending on this day" else "No income on this day",
+                                "Tap a day to see what you ${if (state.type == TxType.EXPENSE) "spent" else "received"}",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = c.textTertiary,
-                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 6.dp),
+                                modifier = Modifier.fillMaxWidth().padding(top = 14.dp),
+                                textAlign = TextAlign.Center,
                             )
                         } else {
-                            entries.forEach { item ->
-                                TransactionRow(item, onClick = { peek.show(item) }, modifier = Modifier.peekSource(peek, item.id))
+                            val date = state.month.atDay(day)
+                            val entries = state.items.filter { it.date == date }
+                            Column(Modifier.fillMaxWidth().padding(top = 14.dp)) {
+                                RowDivider(inset = 0.dp)
+                                Row(Modifier.padding(top = 12.dp, bottom = 4.dp, start = 4.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    Text(date.friendlyLabel(), style = MaterialTheme.typography.titleSmall, color = c.textPrimary, modifier = Modifier.weight(1f))
+                                    Text(
+                                        money.format(entries.sumOf { it.amountMinor }),
+                                        style = MaterialTheme.typography.titleMedium,
+                                        color = if (state.type == TxType.INCOME) c.positive else c.textPrimary,
+                                    )
+                                }
+                                if (entries.isEmpty()) {
+                                    Text(
+                                        if (state.type == TxType.EXPENSE) "No spending on this day" else "No income on this day",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = c.textTertiary,
+                                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 6.dp),
+                                    )
+                                } else {
+                                    entries.forEach { item ->
+                                        TransactionRow(item, onClick = { peek.show(item) }, modifier = Modifier.peekSource(peek, item.id))
+                                    }
+                                }
                             }
                         }
                     }
@@ -697,9 +731,63 @@ private fun CalendarCard(state: StatsUiState, peek: TransactionPeek) {
     }
 }
 
-/** The balance over the period (#72), of every account counted in the total or the one picked. */
+/**
+ * The money as a whole over the period: the balance (#72), or what came in and went out. One card with a switch,
+ * so the page doesn't grow by two charts; each view is a big number, a line saying what it means, and its chart.
+ */
 @Composable
-private fun BalanceCard(state: StatsUiState) {
+private fun MoneyCard(state: StatsUiState) {
+    val c = LocalAppColors.current
+    val hasBalance = state.balance.size >= 2
+    val hasFlow = state.inOut.any { it.inMinor > 0 || it.outMinor > 0 }
+    if (!hasBalance && !hasFlow) return
+    var tab by rememberSaveable { mutableStateOf(0) }
+    val shown = when {
+        !hasBalance -> 1
+        !hasFlow -> 0
+        else -> tab
+    }
+    Glass(Modifier.fillMaxWidth().appear(0)) {
+        Column(Modifier.padding(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 18.dp)) {
+            CardTitle("Your money", trailing = if (hasBalance && hasFlow) {
+                { PillTabs(listOf("Balance", "In & out"), shown) { tab = it } }
+            } else null)
+            Spacer(Modifier.height(10.dp))
+            AnimatedContent(
+                shown,
+                transitionSpec = {
+                    (fadeIn(androidx.compose.animation.core.tween(220, delayMillis = 60))).togetherWith(fadeOut(androidx.compose.animation.core.tween(120)))
+                        .using(androidx.compose.animation.SizeTransform(clip = false))
+                },
+                label = "moneyView",
+            ) { view -> if (view == 0) BalanceView(state) else FlowView(state) }
+        }
+    }
+}
+
+/** Two small choices side by side, the picked one raised. */
+@Composable
+private fun PillTabs(options: List<String>, selected: Int, onSelect: (Int) -> Unit) {
+    val c = LocalAppColors.current
+    val view = androidx.compose.ui.platform.LocalView.current
+    Row(Modifier.clip(CircleShape).background(c.glass).padding(3.dp)) {
+        options.forEachIndexed { i, text ->
+            val on = i == selected
+            val bg by androidx.compose.animation.animateColorAsState(if (on) c.glassStrong else Color.Transparent, label = "pill")
+            Box(
+                Modifier.clip(CircleShape)
+                    .pressable({ if (!on) { com.leftovers.app.ui.components.Haptics.select(view); onSelect(i) } }, pressedScale = 0.95f)
+                    .background(bg)
+                    .padding(horizontal = 12.dp, vertical = 6.dp),
+            ) {
+                Text(text, style = MaterialTheme.typography.labelMedium, color = if (on) c.textPrimary else c.textSecondary, maxLines = 1)
+            }
+        }
+    }
+}
+
+@Composable
+private fun BalanceView(state: StatsUiState) {
     val c = LocalAppColors.current
     val money = LocalMoney.current
     val points = state.balance
@@ -707,76 +795,94 @@ private fun BalanceCard(state: StatsUiState) {
     val last = points.last()
     val change = last.balanceMinor - first.balanceMinor
     val color = state.accountId?.let { id -> state.accounts.find { it.id == id }?.color }?.let { Color(it) } ?: c.accent
+    val spansYears = first.day.year != last.day.year
     val day = remember { java.time.format.DateTimeFormatter.ofPattern("d MMM") }
     val dayYear = remember { java.time.format.DateTimeFormatter.ofPattern("d MMM yyyy") }
-    val spansYears = first.day.year != last.day.year
-    Glass(Modifier.fillMaxWidth().appear(3)) {
-        Column(Modifier.padding(20.dp)) {
-            Text(
-                (state.accountName ?: "All accounts") + if (last.day == LocalDate.now()) " · today" else " · ${last.day.format(day)}",
-                style = MaterialTheme.typography.labelLarge,
-                color = c.textSecondary,
-            )
-            Spacer(Modifier.height(2.dp))
-            RollingText(money.format(last.balanceMinor), MaterialTheme.typography.headlineMedium, if (last.balanceMinor < 0) c.negative else c.textPrimary)
-            Text(
-                when {
-                    change == 0L -> "No change since ${first.day.format(if (spansYears) dayYear else day)}"
-                    change > 0 -> "Up ${money.format(change)} since ${first.day.format(if (spansYears) dayYear else day)}"
-                    else -> "Down ${money.format(-change)} since ${first.day.format(if (spansYears) dayYear else day)}"
-                },
-                style = MaterialTheme.typography.labelMedium,
-                color = if (change == 0L) c.textSecondary else if (change > 0) c.positive else c.negative,
-            )
-            Spacer(Modifier.height(14.dp))
-            val marks = setOf(0, points.size / 3, points.size * 2 / 3, points.lastIndex)
-            TrendLine(
-                values = points.map { it.balanceMinor },
-                color = color,
-                modifier = Modifier.fillMaxWidth().height(170.dp),
-                axis = { i -> if (i in marks) points[i].day.format(if (spansYears) java.time.format.DateTimeFormatter.ofPattern("MMM yy") else day) else null },
-                tooltip = { i -> "${points[i].day.format(if (spansYears) dayYear else day)} · ${money.format(points[i].balanceMinor)}" },
-            )
-        }
+    val since = first.day.format(if (spansYears) dayYear else day)
+    Column {
+        RollingText(money.format(last.balanceMinor), MaterialTheme.typography.headlineMedium, if (last.balanceMinor < 0) c.negative else c.textPrimary)
+        Text(
+            (state.accountName ?: "All accounts") + " · " + when {
+                change == 0L -> "no change since $since"
+                change > 0 -> "up ${money.format(change)} since $since"
+                else -> "down ${money.format(-change)} since $since"
+            },
+            style = MaterialTheme.typography.labelMedium,
+            color = if (change == 0L) c.textSecondary else if (change > 0) c.positive else c.negative,
+            maxLines = 1,
+        )
+        Spacer(Modifier.height(8.dp))
+        // Four dates along the bottom, evenly apart.
+        val marks = (0..3).map { (it * points.lastIndex / 3f).roundToInt() }.toSet()
+        TrendLine(
+            values = points.map { it.balanceMinor },
+            color = color,
+            modifier = Modifier.fillMaxWidth().height(150.dp),
+            axis = { i -> if (i in marks) points[i].day.format(if (spansYears) java.time.format.DateTimeFormatter.ofPattern("MMM yy") else day) else null },
+            tooltip = { i -> "${points[i].day.format(if (spansYears) dayYear else day)} · ${money.format(points[i].balanceMinor)}" },
+        )
     }
 }
 
-/** What came in and what went out, a pair of bars a month, with what was saved over them. */
 @Composable
-private fun InOutCard(state: StatsUiState) {
+private fun FlowView(state: StatsUiState) {
     val c = LocalAppColors.current
     val money = LocalMoney.current
     val months = state.inOut
     val saved = months.sumOf { it.savedMinor }
-    val short = remember { java.time.format.DateTimeFormatter.ofPattern("MMM") }
-    Glass(Modifier.fillMaxWidth().appear(4)) {
-        Column(Modifier.padding(20.dp)) {
-            Text(
-                if (months.size == 1) months.first().month.label() else "${months.first().month.label()} – ${months.last().month.label()}",
-                style = MaterialTheme.typography.labelLarge,
-                color = c.textSecondary,
-            )
-            Spacer(Modifier.height(2.dp))
-            Text(
-                if (saved >= 0) "Saved ${money.formatWhole(saved)}" else "${money.formatWhole(-saved)} more out than in",
-                style = MaterialTheme.typography.titleLarge,
-                color = if (saved >= 0) c.positive else c.negative,
-            )
-            Spacer(Modifier.height(14.dp))
+    val over = if (months.size == 1) months.first().month.label() else "${months.first().month.label()} – ${months.last().month.label()}"
+    // Out is kept neutral, so it doesn't read as a second kind of good.
+    val outColor = c.textSecondary
+    Column {
+        RollingText(money.formatWhole(kotlin.math.abs(saved)), MaterialTheme.typography.headlineMedium, c.textPrimary)
+        Text(
+            (if (saved >= 0) "Saved" else "More out than in") + " · $over",
+            style = MaterialTheme.typography.labelMedium,
+            color = if (saved >= 0) c.positive else c.negative,
+            maxLines = 1,
+        )
+        Spacer(Modifier.height(14.dp))
+        if (months.size == 1) {
+            // One month: two bars across, which say more than two lone columns.
+            val m = months.first()
+            val max = maxOf(m.inMinor, m.outMinor).coerceAtLeast(1L).toFloat()
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                FlowBar("In", m.inMinor, m.inMinor / max, c.positive)
+                FlowBar("Out", m.outMinor, m.outMinor / max, outColor)
+            }
+            Spacer(Modifier.height(4.dp))
+        } else {
+            val short = remember { java.time.format.DateTimeFormatter.ofPattern("MMM") }
             PairBars(
                 pairs = months.map { it.inMinor to it.outMinor },
                 first = c.positive,
-                second = c.accent,
-                modifier = Modifier.fillMaxWidth().height(160.dp),
+                second = outColor,
+                modifier = Modifier.fillMaxWidth().height(150.dp),
                 axis = { i -> months[i].month.format(short) },
                 tooltip = { i -> "${months[i].month.format(short)} · in ${money.formatWhole(months[i].inMinor)} · out ${money.formatWhole(months[i].outMinor)}" },
             )
             Spacer(Modifier.height(10.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                 Legend(c.positive, "In")
-                Legend(c.accent, "Out")
+                Legend(outColor, "Out")
             }
         }
+    }
+}
+
+/** One row of the single-month view: a label, a bar as long as its share, and the amount. */
+@Composable
+private fun FlowBar(label: String, amount: Long, fraction: Float, color: Color) {
+    val c = LocalAppColors.current
+    val money = LocalMoney.current
+    val grow by animateFloatAsState(fraction, androidx.compose.animation.core.tween(700, easing = androidx.compose.animation.core.FastOutSlowInEasing), label = "flowBar")
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(label, style = MaterialTheme.typography.labelLarge, color = c.textSecondary, modifier = Modifier.width(40.dp))
+        Box(Modifier.weight(1f).height(12.dp).clip(CircleShape).background(c.glass)) {
+            Box(Modifier.fillMaxWidth(grow.coerceIn(0.02f, 1f)).fillMaxHeight().clip(CircleShape).background(color))
+        }
+        Spacer(Modifier.width(12.dp))
+        Text(money.formatWhole(amount), style = MaterialTheme.typography.titleSmall, color = c.textPrimary)
     }
 }
 

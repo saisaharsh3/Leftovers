@@ -98,32 +98,39 @@ fun TrendLine(
     LaunchedEffect(values) { grow.animateTo(1f, tween(900, easing = FastOutSlowInEasing)) }
     val touched = remember(values) { mutableStateOf<Int?>(null) }
     val count = values.size
-    Canvas(modifier.scrub(count, touched) { x, w -> if (count < 2) 0 else (x / (w / (count - 1)) + 0.5f).toInt().coerceIn(0, count - 1) }) {
+    val edge = with(androidx.compose.ui.platform.LocalDensity.current) { 6.dp.toPx() }
+    Canvas(modifier.scrub(count, touched) { x, w -> if (count < 2) 0 else (((x - edge) / ((w - edge * 2) / (count - 1))) + 0.5f).toInt().coerceIn(0, count - 1) }) {
         if (count < 2) return@Canvas
         val tipH = 30.dp.toPx()
-        val labelH = 18.dp.toPx()
-        val top = tipH + 6.dp.toPx()
-        val room = size.height - top - labelH
+        val labelH = 20.dp.toPx()
+        // Room above and below the line, so its highest and lowest points don't touch the card.
+        val top = tipH + 10.dp.toPx()
+        val room = size.height - top - labelH - 8.dp.toPx()
+        val floor = top + room + 8.dp.toPx()
         val max = values.max()
         val min = values.min()
         val span = (max - min).coerceAtLeast(1L).toFloat()
-        fun x(i: Int) = size.width * i / (count - 1)
-        fun y(v: Long) = top + room * (1f - (v - min) / span)
-        // Where zero is, when the line goes below it.
-        if (min < 0 && max > 0) drawLine(c.textTertiary.copy(alpha = 0.4f), Offset(0f, y(0)), Offset(size.width, y(0)), 1.dp.toPx())
+        val width = size.width - edge * 2
+        fun x(i: Int) = edge + width * i / (count - 1)
+        fun y(v: Long) = if (max == min) top + room / 2 else top + room * (1f - (v - min) / span)
+        // Where zero is, when the line goes below it: faint and dashed, so it reads as a guide.
+        if (min < 0 && max > 0) drawLine(
+            c.textTertiary.copy(alpha = 0.45f), Offset(0f, y(0)), Offset(size.width, y(0)), 1.dp.toPx(),
+            pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(6.dp.toPx(), 5.dp.toPx())),
+        )
         val shown = (count * grow.value).toInt().coerceIn(2, count)
         val path = Path()
         for (i in 0 until shown) if (i == 0) path.moveTo(x(i), y(values[i])) else path.lineTo(x(i), y(values[i]))
-        val area = Path().apply { addPath(path); lineTo(x(shown - 1), top + room); lineTo(0f, top + room); close() }
-        drawPath(area, Brush.verticalGradient(listOf(color.copy(alpha = 0.26f), color.copy(alpha = 0f)), startY = top, endY = top + room))
+        val area = Path().apply { addPath(path); lineTo(x(shown - 1), floor); lineTo(x(0), floor); close() }
+        drawPath(area, Brush.verticalGradient(listOf(color.copy(alpha = 0.24f), color.copy(alpha = 0f)), startY = top, endY = floor))
         drawPath(path, color, style = Stroke(2.4.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
         for (i in 0 until count) {
             val text = axis(i) ?: continue
             val layout = measurer.measure(text, labelStyle)
-            drawText(layout, topLeft = Offset((x(i) - layout.size.width / 2f).coerceIn(0f, size.width - layout.size.width), top + room + 4.dp.toPx()))
+            drawText(layout, topLeft = Offset((x(i) - layout.size.width / 2f).coerceIn(0f, size.width - layout.size.width), floor + 4.dp.toPx()))
         }
         touched.value?.let { i ->
-            drawLine(c.textTertiary, Offset(x(i), tipH), Offset(x(i), top + room), 1.dp.toPx())
+            drawLine(c.textTertiary, Offset(x(i), tipH), Offset(x(i), floor), 1.dp.toPx())
             drawCircle(color, 5.dp.toPx(), Offset(x(i), y(values[i])))
             drawCircle(tipBg, 2.2.dp.toPx(), Offset(x(i), y(values[i])))
             tip(measurer, tooltip(i), tipStyle, tipBg, x(i), tipH)
