@@ -110,6 +110,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.sync.withLock
 
 sealed interface ChatItem {
@@ -122,6 +123,12 @@ sealed interface ChatItem {
 
     /** What the AI looked at to answer, e.g. "Looked at totals for 1–31 Oct". */
     data class Seen(override val key: Long, val text: String) : ChatItem
+
+    /** A chart the AI asked for, drawn from the user's entries. */
+    data class Chart(override val key: Long, val chart: com.leftovers.app.ai.ChartData) : ChatItem
+
+    /** A file the AI made, waiting in the app's cache for the user to Save or Share it. */
+    data class File(override val key: Long, val file: com.leftovers.app.ai.Attachment.File) : ChatItem
 
     /** Small grey line, e.g. what the AI looked at; [error] lines are red. */
     data class Note(override val key: Long, val text: String, val error: Boolean = false) : ChatItem
@@ -285,6 +292,11 @@ class AssistantViewModel(private val container: AppContainer, private val assist
     }
 
     /** A new chat; the one before stays among the saved chats. */
+    /** A small line in the chat from the app itself, like "Saved Report.docx." */
+    fun note(text: String, error: Boolean = false) {
+        items += ChatItem.Note(nextKey++, text, error)
+    }
+
     fun reset(note: String? = null) {
         persist()
         dropSession()
@@ -357,6 +369,8 @@ class AssistantViewModel(private val container: AppContainer, private val assist
                 is ChatItem.Bot -> com.leftovers.app.ai.ChatStore.Line('b', i.text)
                 is ChatItem.Change -> com.leftovers.app.ai.ChatStore.Line('c', i.summary, i.kind.name, i.state.name)
                 is ChatItem.Seen -> com.leftovers.app.ai.ChatStore.Line('s', i.text)
+                is ChatItem.Chart -> com.leftovers.app.ai.ChatStore.Line('n', "Chart: ${i.chart.title}, ${i.chart.subtitle}. Ask for it again to see it.")
+                is ChatItem.File -> com.leftovers.app.ai.ChatStore.Line('n', "File: ${i.file.name}. Ask for it again to save or share it.")
                 is ChatItem.Note -> com.leftovers.app.ai.ChatStore.Line('n', i.text, error = i.error)
             }
         }
@@ -380,6 +394,8 @@ class AssistantViewModel(private val container: AppContainer, private val assist
                 is ChatItem.Bot -> turns += com.leftovers.app.ai.PastTurn(false, i.text)
                 // A change belongs to the AI's turn that proposed it.
                 is ChatItem.Change -> turns += com.leftovers.app.ai.PastTurn(false, "(Change ${i.state.name.lowercase()}: ${i.summary})")
+                is ChatItem.Chart -> turns += com.leftovers.app.ai.PastTurn(false, "(Showed a chart: ${i.chart.title}, ${i.chart.subtitle})")
+                is ChatItem.File -> turns += com.leftovers.app.ai.PastTurn(false, "(Made a file: ${i.file.name})")
                 else -> Unit
             }
         }
@@ -478,6 +494,11 @@ class AssistantViewModel(private val container: AppContainer, private val assist
                 is Prepared.Answer -> {
                     results += ToolOutcome(call, p.content, p.isError)
                     p.shared?.let(shared::add)
+                    when (val made = p.attachment) {
+                        is com.leftovers.app.ai.Attachment.Chart -> items += ChatItem.Chart(nextKey++, made.chart)
+                        is com.leftovers.app.ai.Attachment.File -> items += ChatItem.File(nextKey++, made)
+                        null -> {}
+                    }
                 }
                 is Prepared.Change -> {
                     if (changesThisMessage >= MAX_CHANGES) {
@@ -550,6 +571,36 @@ fun AssistantScreen(
     val born = remember { viewModel.items.maxOfOrNull { it.key } ?: -1L }
     val arrived = remember { mutableSetOf<Long>() }
     var attached by rememberSaveable { mutableStateOf<android.net.Uri?>(null) }
+    // A made file on its way to where the user picks; nothing is written outside the app until they do.
+    val scope = rememberCoroutineScope()
+    var saving by remember { mutableStateOf<android.net.Uri?>(null) }
+    var savingName by remember { mutableStateOf("") }
+    val saveAs = androidx.activity.compose.rememberLauncherForActivityResult(com.leftovers.app.util.SaveAs()) { to ->
+        val from = saving
+        saving = null
+        if (to != null && from != null) scope.launch {
+            val done = runCatching { com.leftovers.app.util.Exports.copy(context, from, to) }
+            viewModel.note(if (done.isSuccess) "Saved $savingName." else "Couldn't save it: ${done.exceptionOrNull()?.message}", error = done.isFailure)
+        }
+    }
+    val money = com.leftovers.app.util.LocalMoney.current
+    fun save(uri: android.net.Uri, name: String, kind: com.leftovers.app.util.Exports.Kind) {
+        saving = uri
+        savingName = name
+        saveAs.launch(name to kind.mime)
+    }
+    fun share(uri: android.net.Uri, kind: com.leftovers.app.util.Exports.Kind, title: String) {
+        runCatching { context.startActivity(com.leftovers.app.util.Exports.shareIntent(uri, kind, title)) }
+    }
+    /** A chart becomes a picture only when it's saved or shared. */
+    fun chartImage(chart: com.leftovers.app.ai.ChartData, then: (android.net.Uri, String) -> Unit) = scope.launch {
+        val name = com.leftovers.app.util.Exports.fileName(chart.title + ", " + chart.subtitle, com.leftovers.app.util.Exports.Kind.PNG)
+        val made = runCatching {
+            val bytes = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { com.leftovers.app.util.ChartImage.png(chart, money) }
+            com.leftovers.app.util.Exports.write(context, name, bytes)
+        }
+        made.onSuccess { then(it, name) }.onFailure { viewModel.note("Couldn't make the picture: ${it.message}", error = true) }
+    }
     var cameraFile by remember { mutableStateOf<java.io.File?>(null) }
     var photoMenu by remember { mutableStateOf(false) }
     var showHistory by rememberSaveable { mutableStateOf(false) }
@@ -707,6 +758,16 @@ fun AssistantScreen(
                         }
                         is ChatItem.Bot -> Bubble(item.text, mine = false)
                         is ChatItem.Seen -> SeenLine(item.text)
+                        is ChatItem.Chart -> ChartCard(
+                            item.chart,
+                            onSave = { chartImage(item.chart) { uri, name -> save(uri, name, com.leftovers.app.util.Exports.Kind.PNG) } },
+                            onShare = { chartImage(item.chart) { uri, _ -> share(uri, com.leftovers.app.util.Exports.Kind.PNG, item.chart.title) } },
+                        )
+                        is ChatItem.File -> FileCard(
+                            item.file,
+                            onSave = { save(item.file.uri, item.file.name, item.file.kind) },
+                            onShare = { share(item.file.uri, item.file.kind, item.file.title) },
+                        )
                         is ChatItem.Note -> Text(
                             item.text,
                             style = MaterialTheme.typography.bodySmall,
@@ -761,7 +822,7 @@ fun AssistantScreen(
                 }) { com.leftovers.app.ui.components.ListRow("Choose a photo or screenshot", leading = { Icon(Lucide.Camera, null, tint = c.textPrimary) }) }
                 Glass(Modifier.fillMaxWidth(), onClick = {
                     photoMenu = false
-                    pickFile.launch(arrayOf("text/*", "application/pdf", "application/vnd.ms-excel", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "application/json", "application/octet-stream"))
+                    pickFile.launch(arrayOf("text/*", "application/pdf", "application/vnd.ms-excel", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "application/json", "application/octet-stream"))
                 }) { com.leftovers.app.ui.components.ListRow("A file", subtitle = "CSV, Excel, PDF or text", leading = { Icon(Lucide.ReceiptText, null, tint = c.textPrimary) }) }
             }
         }
@@ -924,6 +985,65 @@ private fun simpleMarkdown(text: String): AnnotatedString = buildAnnotatedString
             rest = rest.substring(m.range.last + 1)
         }
         append(rest)
+    }
+}
+
+@Composable
+private fun ChartCard(chart: com.leftovers.app.ai.ChartData, onSave: () -> Unit, onShare: () -> Unit) {
+    val c = LocalAppColors.current
+    val money = com.leftovers.app.util.LocalMoney.current
+    Glass(Modifier.fillMaxWidth(), shape = RoundedCornerShape(24.dp)) {
+        Column(Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 12.dp)) {
+            Text(chart.title, style = MaterialTheme.typography.titleMedium, color = c.textPrimary)
+            Text(
+                chart.subtitle + (chart.total?.let { " · Total ${money.format(it)}" } ?: ""),
+                style = MaterialTheme.typography.bodySmall,
+                color = c.textSecondary,
+            )
+            Spacer(Modifier.height(10.dp))
+            com.leftovers.app.ui.components.ChatChart(chart)
+            Spacer(Modifier.height(10.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                DecisionButton("Save image", primary = false, Modifier.weight(1f), onClick = onSave)
+                DecisionButton("Share", primary = false, Modifier.weight(1f), onClick = onShare)
+            }
+        }
+    }
+}
+
+/** A file the AI made: what it is, then Save (choose where) or Share. It stays in the app until one is tapped. */
+@Composable
+private fun FileCard(file: com.leftovers.app.ai.Attachment.File, onSave: () -> Unit, onShare: () -> Unit) {
+    val c = LocalAppColors.current
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val size = remember(file.uri) { com.leftovers.app.util.Exports.size(context, file.uri) }
+    val icon = when (file.kind) {
+        com.leftovers.app.util.Exports.Kind.XLSX, com.leftovers.app.util.Exports.Kind.CSV -> Lucide.FileSpreadsheet
+        com.leftovers.app.util.Exports.Kind.PNG -> Lucide.Image
+        else -> Lucide.FileText
+    }
+    Glass(Modifier.fillMaxWidth(), strong = true, shape = RoundedCornerShape(22.dp)) {
+        Column(Modifier.padding(14.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconTile(icon, c.accent, size = 40.dp)
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(file.name, style = MaterialTheme.typography.bodyMedium, color = c.textPrimary, maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                    Text(listOfNotNull(file.detail, size).joinToString(" · "), style = MaterialTheme.typography.labelMedium, color = c.textSecondary)
+                }
+            }
+            Spacer(Modifier.height(12.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                DecisionButton("Save", primary = true, Modifier.weight(1f), onClick = onSave)
+                DecisionButton("Share", primary = false, Modifier.weight(1f), onClick = onShare)
+            }
+            Text(
+                "Kept in the app until you save or share it.",
+                style = MaterialTheme.typography.labelSmall,
+                color = c.textTertiary,
+                modifier = Modifier.padding(top = 8.dp, start = 2.dp),
+            )
+        }
     }
 }
 

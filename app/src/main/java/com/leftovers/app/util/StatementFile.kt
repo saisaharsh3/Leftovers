@@ -51,6 +51,10 @@ object StatementFile {
         val names = runCatching {
             ZipInputStream(ByteArrayInputStream(bytes)).use { z -> generateSequence { z.nextEntry }.map { it.name }.toList() }
         }.getOrDefault(emptyList())
+        if ("word/document.xml" in names) {
+            return runCatching { Result.Text(readDocx(bytes)) }
+                .getOrElse { Result.Unsupported("Couldn't read this Word file. Try saving it again as .docx or .pdf.") }
+        }
         if (names.any { it.startsWith("xl/") }) {
             return runCatching { Result.Table(readXlsx(bytes)) }
                 .getOrElse { Result.Unsupported("Couldn't read this Excel file. Try saving it again as .xlsx or .csv.") }
@@ -96,6 +100,31 @@ object StatementFile {
         .replace("&nbsp;", " ").replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", "\"").replace("&#39;", "'")
         .replace(Regex("""\s+"""), " ")
         .trim()
+
+    // ---- .docx: a zip whose word/document.xml holds the text ----
+
+    /** A Word document's text: a line per paragraph, a table's cells joined by " | ", tabs kept. */
+    internal fun readDocx(bytes: ByteArray): String {
+        var body: String? = null
+        ZipInputStream(ByteArrayInputStream(bytes)).use { z ->
+            generateSequence { z.nextEntry }.forEach { e -> if (e.name == "word/document.xml") body = String(z.readBytes(), Charsets.UTF_8) }
+        }
+        val doc = body ?: throw IllegalStateException("no document")
+        val text = StringBuilder()
+        val token = Regex("<w:t(?:\\s[^>]*)?>([^<]*)</w:t>|<w:tab/>|<w:br/>|</w:p>|</w:tc>|</w:tr>")
+        token.findAll(doc).forEach { m ->
+            when {
+                m.value.startsWith("<w:t") -> text.append(unescapeXml(m.groupValues[1]))
+                m.value == "<w:tab/>" -> text.append('\t')
+                m.value == "<w:br/>" || m.value == "</w:p>" -> if (!text.endsWith(" | ")) text.append('\n')
+                m.value == "</w:tc>" -> { while (text.endsWith("\n")) text.setLength(text.length - 1); text.append(" | ") }
+                m.value == "</w:tr>" -> { if (text.endsWith(" | ")) text.setLength(text.length - 3); text.append('\n') }
+            }
+        }
+        return text.toString().lines().joinToString("\n") { it.trimEnd() }.replace(Regex("\n{3,}"), "\n\n").trim()
+    }
+
+    private fun unescapeXml(s: String) = s.replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", "\"").replace("&apos;", "'").replace("&amp;", "&")
 
     // ---- .xlsx: a zip of XML files ----
 
