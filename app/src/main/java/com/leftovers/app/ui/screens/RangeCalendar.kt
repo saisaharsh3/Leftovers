@@ -16,6 +16,10 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -99,6 +103,8 @@ private fun RangeCalendar(
     val first = LocalDate.ofEpochDay(start)
     val last = end?.let(LocalDate::ofEpochDay)
     val fmt = DateTimeFormatter.ofPattern("d MMM yyyy")
+    // Tapping the month's name swaps the days for a year of months, to jump far without stepping month by month.
+    var picking by rememberSaveable { mutableStateOf(false) }
 
     fun tap(day: LocalDate) {
         when {
@@ -118,25 +124,88 @@ private fun RangeCalendar(
                 color = c.textSecondary,
             )
             Row(verticalAlignment = Alignment.CenterVertically) {
-                RoundButton(Lucide.ChevronLeft, "Previous month", { month = shown.minusMonths(1).toString() }, size = 44.dp)
+                RoundButton(
+                    Lucide.ChevronLeft, if (picking) "Previous year" else "Previous month",
+                    { month = (if (picking) shown.minusYears(1) else shown.minusMonths(1)).toString() }, size = 44.dp,
+                )
                 AnimatedContent(
-                    shown,
+                    shown to picking,
                     transitionSpec = {
-                        val forward = targetState > initialState
+                        val forward = targetState.first > initialState.first
                         (slideInHorizontally { if (forward) it / 3 else -it / 3 } + fadeIn()).togetherWith(slideOutHorizontally { if (forward) -it / 3 else it / 3 } + fadeOut())
                     },
                     modifier = Modifier.weight(1f),
                     label = "rangeMonth",
-                ) { m ->
-                    Text(
-                        m.month.getDisplayName(TextStyle.FULL, Locale.getDefault()) + " " + m.year,
-                        style = MaterialTheme.typography.titleMedium, color = c.textPrimary, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth(),
-                    )
+                ) { (m, years) ->
+                    Row(
+                        Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).pressable({ picking = !picking }, pressedScale = 0.96f).padding(vertical = 8.dp),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            if (years) "${m.year}" else m.month.getDisplayName(TextStyle.FULL, Locale.getDefault()) + " " + m.year,
+                            style = MaterialTheme.typography.titleMedium, color = c.textPrimary,
+                        )
+                        Spacer(Modifier.width(4.dp))
+                        androidx.compose.material3.Icon(
+                            if (years) Lucide.ChevronUp else Lucide.ChevronDown,
+                            contentDescription = if (years) "Back to the days" else "Pick a month and year",
+                            tint = c.textSecondary,
+                            modifier = Modifier.size(16.dp),
+                        )
+                    }
                 }
-                RoundButton(Lucide.ChevronRight, "Next month", { month = shown.plusMonths(1).toString() }, size = 44.dp)
+                RoundButton(
+                    Lucide.ChevronRight, if (picking) "Next year" else "Next month",
+                    { month = (if (picking) shown.plusYears(1) else shown.plusMonths(1)).toString() }, size = 44.dp,
+                )
             }
-            Month(shown, first, last, onTap = ::tap)
+            AnimatedContent(picking, transitionSpec = { fadeIn().togetherWith(fadeOut()) }, label = "rangeView") { years ->
+                if (years) MonthGrid(shown.year, shown, first, last) { m -> month = m.toString(); picking = false }
+                else Month(shown, first, last, onTap = ::tap)
+            }
             PrimaryButton("Done", { last?.let { onDone(first, it) } }, Modifier.fillMaxWidth(), enabled = last != null)
+        }
+    }
+}
+
+/** A year's twelve months; the one showing is filled, months in the picked range are tinted, this month is ringed. */
+@Composable
+private fun MonthGrid(year: Int, shown: YearMonth, first: LocalDate, last: LocalDate?, onPick: (YearMonth) -> Unit) {
+    val c = LocalAppColors.current
+    val now = YearMonth.now()
+    val shape = RoundedCornerShape(14.dp)
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        (1..12).chunked(3).forEach { row ->
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                row.forEach { n ->
+                    val m = YearMonth.of(year, n)
+                    val on = m == shown
+                    val inside = last != null && m >= YearMonth.from(first) && m <= YearMonth.from(last)
+                    val bg by animateColorAsState(
+                        when {
+                            on -> c.accent
+                            inside -> c.accent.copy(alpha = 0.22f)
+                            else -> c.glass
+                        },
+                        label = "monthTile",
+                    )
+                    Box(
+                        Modifier.weight(1f).height(54.dp)
+                            .clip(shape)
+                            .pressable({ onPick(m) }, pressedScale = 0.94f)
+                            .background(bg)
+                            .then(if (m == now && !on) Modifier.border(1.dp, c.textSecondary, shape) else Modifier),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            m.month.getDisplayName(TextStyle.SHORT, Locale.getDefault()),
+                            style = MaterialTheme.typography.labelLarge,
+                            color = if (on) c.onAccent else c.textPrimary,
+                        )
+                    }
+                }
+            }
         }
     }
 }
