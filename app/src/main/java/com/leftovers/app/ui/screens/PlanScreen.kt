@@ -139,7 +139,7 @@ fun PlanScreen(
         ) {
             item {
                 if (state.plan.isSet) {
-                    BudgetHero(state, onOpenBudget, onEditPlan, Modifier.appear(0))
+                    BudgetHero(state, onOpenBudget, Modifier.appear(0))
                 } else {
                     Glass(Modifier.fillMaxWidth().appear(0), strong = true, shape = RoundedCornerShape(32.dp)) {
                         Column(Modifier.padding(24.dp)) {
@@ -159,7 +159,7 @@ fun PlanScreen(
                 }
             }
 
-            item { SectionHeader("Subscriptions", Modifier.appear(1), action = "Manage", onAction = onOpenSubscriptions) }
+            item { SectionHeader("Subscriptions", Modifier.appear(1)) }
             item {
                 // Payments and recurring income both count; yearly ones as their monthly share, like the Subscriptions screen.
                 val active = state.recurring.filter { it.active }
@@ -231,14 +231,6 @@ fun PlanScreen(
                 Glass(Modifier.fillMaxWidth().appear(3)) {
                     Column(Modifier.padding(vertical = 6.dp)) {
                         ListRow(
-                            "Budget plan",
-                            subtitle = planSummary(state.plan),
-                            leading = { IconTile(Lucide.SlidersHorizontal, c.textPrimary, size = 42.dp) },
-                            trailing = { Icon(Lucide.ChevronRight, contentDescription = null, tint = c.textTertiary, modifier = Modifier.size(18.dp)) },
-                            onClick = onEditPlan,
-                        )
-                        RowDivider()
-                        ListRow(
                             "Money owed",
                             subtitle = when {
                                 state.owedToYou > 0 && state.youOwe > 0 -> "You're owed ${money.format(state.owedToYou)} · you owe ${money.format(state.youOwe)}"
@@ -278,7 +270,7 @@ private fun planSummary(plan: BudgetPlan): String {
 }
 
 @Composable
-private fun BudgetHero(state: PlanUiState, onOpen: () -> Unit, onEdit: () -> Unit, modifier: Modifier = Modifier) {
+private fun BudgetHero(state: PlanUiState, onOpen: () -> Unit, modifier: Modifier = Modifier) {
     val c = LocalAppColors.current
     val money = LocalMoney.current
     val left = state.budget - state.spent
@@ -287,9 +279,10 @@ private fun BudgetHero(state: PlanUiState, onOpen: () -> Unit, onEdit: () -> Uni
         Column(Modifier.padding(22.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             Gauge(used, Modifier.size(220.dp)) {
                 Column(Modifier.align(Alignment.Center).fillMaxWidth().padding(horizontal = 28.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(if (left >= 0) "Left this month" else "Over budget", style = MaterialTheme.typography.labelLarge, color = c.textSecondary)
+                    Text(if (left < 0) "Over budget" else if (state.plan.mode == BudgetMode.MONTHLY || state.plan.mode == BudgetMode.YEARLY) "Left this month" else "Left to spend", style = MaterialTheme.typography.labelLarge, color = c.textSecondary)
                     RollingText(money.format(abs(left)), MaterialTheme.typography.headlineLarge, if (left >= 0) c.textPrimary else c.negative)
                     Text("of ${money.format(state.budget)}", style = MaterialTheme.typography.bodySmall, color = c.textSecondary)
+                    if (state.plan.mode != BudgetMode.MONTHLY) Text(planSummary(state.plan), style = MaterialTheme.typography.labelSmall, color = c.textTertiary, maxLines = 1, textAlign = TextAlign.Center)
                 }
             }
             Row(Modifier.fillMaxWidth()) {

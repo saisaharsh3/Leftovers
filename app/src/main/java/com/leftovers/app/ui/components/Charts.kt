@@ -124,7 +124,14 @@ fun Gauge(
  * the bar under the finger and shows [tooltip] for it; it stays until the chart is touched again.
  */
 @Composable
-fun DailyBars(values: List<Long>, highlight: Int?, modifier: Modifier = Modifier, tooltip: ((Int) -> String)? = null) {
+fun DailyBars(
+    values: List<Long>,
+    highlight: Int?,
+    modifier: Modifier = Modifier,
+    tooltip: ((Int) -> String)? = null,
+    /** The label under each bar, or null for none; day numbers (1, 5, 10…) when not given. */
+    axis: ((Int) -> String?)? = null,
+) {
     val c = LocalAppColors.current
     val measurer = rememberTextMeasurer()
     val labelStyle = MaterialTheme.typography.labelSmall.copy(color = c.textTertiary, fontSize = 10.sp)
@@ -185,8 +192,9 @@ fun DailyBars(values: List<Long>, highlight: Int?, modifier: Modifier = Modifier
             }
             drawRoundRect(brush, Offset(x, chartTop + chartH - h), Size(barW, h), CornerRadius(barW / 2, barW / 2))
             val day = i + 1
-            if (day == 1 || day % 5 == 0) {
-                val layout = measurer.measure(day.toString(), labelStyle)
+            val text = if (axis != null) axis(i) else if (day == 1 || day % 5 == 0) day.toString() else null
+            if (text != null) {
+                val layout = measurer.measure(text, labelStyle)
                 drawText(layout, topLeft = Offset(slot * i + slot / 2 - layout.size.width / 2f, chartTop + chartH + 4.dp.toPx()))
             }
         }
