@@ -54,6 +54,43 @@ fun RangeCalendarSheet(
     onDone: (LocalDate, LocalDate) -> Unit,
     onDismiss: () -> Unit,
 ) {
+    GlassSheet(onDismiss) {
+        RangeCalendar(from, to, title, onDone, Modifier.padding(horizontal = 20.dp).padding(bottom = 16.dp))
+    }
+}
+
+/** The same calendar as a card in the middle of the screen, for picking dates without a sheet rising. */
+@Composable
+fun RangeCalendarDialog(
+    from: LocalDate,
+    to: LocalDate,
+    title: String,
+    onDone: (LocalDate, LocalDate) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val c = LocalAppColors.current
+    val shape = RoundedCornerShape(30.dp)
+    androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .clip(shape)
+                .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                .border(1.dp, com.leftovers.app.ui.components.glassBorder(c), shape),
+        ) {
+            RangeCalendar(from, to, title, onDone, Modifier.padding(20.dp))
+        }
+    }
+}
+
+@Composable
+private fun RangeCalendar(
+    from: LocalDate,
+    to: LocalDate,
+    title: String,
+    onDone: (LocalDate, LocalDate) -> Unit,
+    modifier: Modifier,
+) {
     val c = LocalAppColors.current
     var start by rememberSaveable { mutableStateOf(from.toEpochDay()) }
     var end by rememberSaveable { mutableStateOf<Long?>(to.toEpochDay()) }
@@ -61,7 +98,7 @@ fun RangeCalendarSheet(
     val shown = YearMonth.parse(month)
     val first = LocalDate.ofEpochDay(start)
     val last = end?.let(LocalDate::ofEpochDay)
-    val fmt = DateTimeFormatter.ofPattern("EEE, d MMM yyyy")
+    val fmt = DateTimeFormatter.ofPattern("d MMM yyyy")
 
     fun tap(day: LocalDate) {
         when {
@@ -71,8 +108,8 @@ fun RangeCalendarSheet(
         }
     }
 
-    GlassSheet(onDismiss) {
-        Column(Modifier.padding(horizontal = 20.dp).padding(bottom = 16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+    run {
+        Column(modifier, verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Text(title, style = MaterialTheme.typography.headlineSmall, color = c.textPrimary)
             Text(
                 if (last == null) "From ${first.format(fmt)}. Now tap the last day."

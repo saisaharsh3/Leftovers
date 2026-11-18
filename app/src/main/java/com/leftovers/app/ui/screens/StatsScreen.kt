@@ -14,6 +14,9 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -146,8 +149,6 @@ data class StatsUiState(
     val start: LocalDate get() = period.start(oldest)
     val accountName: String? get() = accountId?.let { id -> accounts.find { it.id == id }?.name }
     val categoryName: String? get() = categoryId?.let { id -> categoryOptions.find { it.id == id }?.name }
-    /** Anything narrowed from the start: another period, one account or one category. */
-    val narrowed: Boolean get() = accountId != null || categoryId != null || period != InsightsPeriod()
 }
 
 /** A category that has entries, for the Show sheet. */
@@ -235,8 +236,7 @@ class StatsViewModel(
     // Switching between spending and income lets go of a category of the other kind.
     fun setType(value: TxType) = filter.update { it.copy(type = value, categoryId = if (value == it.type) it.categoryId else null) }
     fun setCategory(id: Long?) = filter.update { it.copy(categoryId = id) }
-    /** Back to this month, every account and category. */
-    fun reset() = filter.update { StatsFilter(type = it.type) }
+
 
     /** Makes the PDF statement for the month shown, or its whole year, and hands back the file to share. */
     fun makeStatement(context: android.content.Context, chosen: YearMonth, yearly: Boolean, notes: Boolean, entries: Boolean, onReady: (android.net.Uri, String) -> Unit) {
@@ -287,10 +287,6 @@ fun StatsScreen(
             },
         )
     }
-    var showFilter by rememberSaveable { mutableStateOf(false) }
-    if (showFilter) {
-        ShowSheet(state, viewModel::setPeriod, viewModel::setAccount, viewModel::setCategory, viewModel::reset) { showFilter = false }
-    }
 
     GlassScreen(
         title = "Insights",
@@ -310,7 +306,8 @@ fun StatsScreen(
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = padding.calculateTopPadding() + 12.dp, bottom = DockClearance),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            item { PeriodBar(state, viewModel::setPeriod) { showFilter = true } }
+            item { PeriodBar(state, viewModel::setPeriod) }
+            item { FilterBar(state, viewModel::setPeriod, viewModel::setAccount, viewModel::setCategory) }
             // Balance, and in and out: they don't depend on Spending or Income, so they come before that choice.
             // They're about accounts, so they step aside while one category is shown.
             if (state.categoryId == null) item { MoneyCard(state) }
@@ -594,17 +591,14 @@ private fun CategoryCard(state: StatsUiState, peek: TransactionPeek) {
     }
 }
 
-/** The period with arrows either side; tapping it opens [ShowSheet] to pick another period or one account. */
+/** The period with arrows either side. */
 @Composable
-private fun PeriodBar(state: StatsUiState, onChange: (InsightsPeriod) -> Unit, onOpen: () -> Unit) {
+private fun PeriodBar(state: StatsUiState, onChange: (InsightsPeriod) -> Unit) {
     val c = LocalAppColors.current
     val p = state.period
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         RoundButton(Lucide.ChevronLeft, "Earlier", { onChange(p.shift(-1)) }, size = 40.dp, enabled = p.steps, tint = if (p.steps) c.textPrimary else c.textTertiary)
-        Column(
-            Modifier.weight(1f).clip(RoundedCornerShape(16.dp)).pressable(onOpen, pressedScale = 0.97f).padding(vertical = 4.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
+        Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
             AnimatedContent(
                 p,
                 transitionSpec = {
@@ -616,11 +610,6 @@ private fun PeriodBar(state: StatsUiState, onChange: (InsightsPeriod) -> Unit, o
             ) { shown ->
                 Text(shown.label(), style = MaterialTheme.typography.titleMedium, color = c.textPrimary, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
             }
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(listOfNotNull(state.accountName ?: "All accounts", state.categoryName).joinToString(" · "), style = MaterialTheme.typography.labelMedium, color = c.textSecondary, maxLines = 1)
-                Spacer(Modifier.width(4.dp))
-                Icon(Lucide.ChevronDown, contentDescription = "Change what's shown", tint = c.textSecondary, modifier = Modifier.size(14.dp))
-            }
         }
         val next = p.hasNext()
         RoundButton(Lucide.ChevronRight, "Later", { onChange(p.shift(1)) }, size = 40.dp, enabled = next, tint = if (next) c.textPrimary else c.textTertiary)
@@ -628,145 +617,186 @@ private fun PeriodBar(state: StatsUiState, onChange: (InsightsPeriod) -> Unit, o
 }
 
 /**
- * Everything Insights can be narrowed to, in one place: how long, which account, which category. Picks apply at
- * once; Reset goes back to this month and everything, Done closes it.
+ * What Insights shows, on the page: a strip for how long, and two small menus for the account and category. Each
+ * change applies at once; Clear lets go of the account and category.
  */
 @Composable
-private fun ShowSheet(
+private fun FilterBar(
     state: StatsUiState,
     onPeriod: (InsightsPeriod) -> Unit,
     onAccount: (Long?) -> Unit,
     onCategory: (Long?) -> Unit,
-    onReset: () -> Unit,
-    onDismiss: () -> Unit,
 ) {
     val c = LocalAppColors.current
-    var pickDates by rememberSaveable { mutableStateOf(false) }
     val p = state.period
+    var pickDates by rememberSaveable { mutableStateOf(false) }
     if (pickDates) {
-        val today = LocalDate.now()
-        RangeCalendarSheet(
+        RangeCalendarDialog(
             from = state.start,
-            to = minOf(p.end(), today),
+            to = minOf(p.end(), LocalDate.now()),
             title = "Pick dates",
             onDone = { a, b -> pickDates = false; onPeriod(InsightsPeriod(PeriodKind.DATES, YearMonth.from(b), a, b)) },
             onDismiss = { pickDates = false },
         )
     }
-    fun pick(kind: PeriodKind) {
-        if (kind == PeriodKind.DATES) { pickDates = true; return }
-        // Keeps to the month or year being looked at, never past this one.
-        val anchor = minOf(p.anchor, YearMonth.now())
-        onPeriod(InsightsPeriod(kind, if (kind == PeriodKind.ALL) YearMonth.now() else anchor))
-    }
-    GlassSheet(onDismiss) {
-        Column(Modifier.padding(horizontal = 20.dp).padding(bottom = 20.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Show", style = MaterialTheme.typography.headlineSmall, color = c.textPrimary, modifier = Modifier.weight(1f))
-                if (state.narrowed) SheetAction("Reset", c.textSecondary, onReset)
-                SheetAction("Done", c.accent, onDismiss)
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        RangeStrip(p.kind) { kind ->
+            if (kind == PeriodKind.DATES) pickDates = true
+            else if (kind != p.kind) {
+                // Keeps to the month or year being looked at, never past this one.
+                val anchor = minOf(p.anchor, YearMonth.now())
+                onPeriod(InsightsPeriod(kind, if (kind == PeriodKind.ALL) YearMonth.now() else anchor))
             }
-            SheetLabel("Period")
-            val kinds = PeriodKind.entries
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                kinds.chunked(3).forEach { row ->
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        row.forEach { kind ->
-                            OptionTile(
-                                text = if (kind == PeriodKind.DATES && p.kind == PeriodKind.DATES) p.label() else kind.title,
-                                selected = p.kind == kind,
-                                onClick = { pick(kind) },
-                                modifier = Modifier.weight(1f),
-                                icon = if (kind == PeriodKind.DATES) Lucide.Calendar else null,
-                            )
+        }
+        val categories = state.categoryOptions.filter { it.type == state.type }
+        val showAccounts = state.accounts.size > 1
+        val showCategories = categories.size > 1 || state.categoryId != null
+        if (showAccounts || showCategories) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                if (showAccounts) {
+                    val picked = state.accounts.find { it.id == state.accountId }
+                    MenuChip(
+                        icon = picked?.let { com.leftovers.app.ui.icons.CategoryIcons[it.icon] } ?: Lucide.Wallet,
+                        text = picked?.name ?: "All accounts",
+                        active = picked != null,
+                        modifier = Modifier.weight(1f, fill = false),
+                    ) { close ->
+                        MenuItem("All accounts", state.accountId == null, Lucide.Wallet, c.textSecondary) { onAccount(null); close() }
+                        state.accounts.forEach { a ->
+                            MenuItem(a.name, state.accountId == a.id, com.leftovers.app.ui.icons.CategoryIcons[a.icon], Color(a.color)) { onAccount(a.id); close() }
                         }
                     }
                 }
-            }
-            if (state.accounts.size > 1) {
-                SheetLabel("Account")
-                androidx.compose.foundation.lazy.LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    item { OptionTile("All", state.accountId == null, { onAccount(null) }) }
-                    items(state.accounts.size) { i ->
-                        val a = state.accounts[i]
-                        OptionTile(a.name, state.accountId == a.id, { onAccount(a.id) })
+                if (showCategories) {
+                    val picked = state.categoryOptions.find { it.id == state.categoryId }
+                    MenuChip(
+                        icon = picked?.let { com.leftovers.app.ui.icons.CategoryIcons[it.emoji] } ?: Lucide.Tag,
+                        text = picked?.name ?: "All categories",
+                        active = picked != null,
+                        modifier = Modifier.weight(1f, fill = false),
+                    ) { close ->
+                        MenuItem("All categories", state.categoryId == null, Lucide.Tag, c.textSecondary) { onCategory(null); close() }
+                        categories.forEach { cat ->
+                            MenuItem(cat.name, state.categoryId == cat.id, com.leftovers.app.ui.icons.CategoryIcons[cat.emoji], Color(cat.color)) { onCategory(cat.id); close() }
+                        }
                     }
                 }
-            }
-            // The kind being looked at first, then the other.
-            val categories = state.categoryOptions.sortedBy { if (it.type == state.type) 0 else 1 }
-            if (categories.size > 1) {
-                SheetLabel("Category")
-                androidx.compose.foundation.lazy.LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    item { OptionTile("All", state.categoryId == null, { onCategory(null) }) }
-                    items(categories.size) { i ->
-                        val cat = categories[i]
-                        OptionTile(cat.name, state.categoryId == cat.id, { onCategory(cat.id) }, leading = {
-                            CategoryIcon(cat.emoji, cat.color, size = 22.dp)
-                        })
-                    }
+                if (state.accountId != null || state.categoryId != null) {
+                    Text(
+                        "Clear",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = c.accent,
+                        modifier = Modifier.clip(RoundedCornerShape(10.dp)).pressable({ onAccount(null); onCategory(null) }, pressedScale = 0.94f).padding(horizontal = 8.dp, vertical = 8.dp),
+                    )
                 }
             }
         }
     }
 }
 
-/** A small text button in a sheet's title row. */
-@Composable
-private fun SheetAction(text: String, color: Color, onClick: () -> Unit) {
-    Text(
-        text,
-        style = MaterialTheme.typography.titleSmall,
-        color = color,
-        modifier = Modifier.clip(RoundedCornerShape(10.dp)).pressable(onClick, pressedScale = 0.94f).padding(horizontal = 10.dp, vertical = 8.dp),
-    )
+/** Short names for the strip, so all six fit across a phone. */
+private val PeriodKind.short: String get() = when (this) {
+    PeriodKind.MONTH -> "Month"
+    PeriodKind.THREE_MONTHS -> "3M"
+    PeriodKind.SIX_MONTHS -> "6M"
+    PeriodKind.YEAR -> "Year"
+    PeriodKind.ALL -> "All"
+    PeriodKind.DATES -> "Dates"
 }
 
-/** A section's name in a sheet: small, spaced capitals. */
+/** How long, as one slim strip; the raised marker slides to the one picked, like a range switch on a chart. */
 @Composable
-private fun SheetLabel(text: String) {
-    val c = LocalAppColors.current
-    Text(
-        text.uppercase(),
-        style = MaterialTheme.typography.labelSmall.copy(letterSpacing = androidx.compose.ui.unit.TextUnit(1.2f, androidx.compose.ui.unit.TextUnitType.Sp)),
-        color = c.textTertiary,
-        modifier = Modifier.padding(top = 22.dp, bottom = 10.dp),
-    )
-}
-
-/**
- * One choice in the Show sheet. Picked, it's tinted with the accent and outlined, with the text staying in the
- * page's own colour, so it reads clearly without shouting.
- */
-@Composable
-private fun OptionTile(
-    text: String,
-    selected: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-    icon: androidx.compose.ui.graphics.vector.ImageVector? = null,
-    leading: (@Composable () -> Unit)? = null,
-) {
+private fun RangeStrip(selected: PeriodKind, onSelect: (PeriodKind) -> Unit) {
     val c = LocalAppColors.current
     val view = androidx.compose.ui.platform.LocalView.current
-    val shape = RoundedCornerShape(14.dp)
-    val bg by androidx.compose.animation.animateColorAsState(if (selected) c.accent.copy(alpha = 0.16f) else c.glass, label = "optionBg")
-    val edge by androidx.compose.animation.animateColorAsState(if (selected) c.accent.copy(alpha = 0.75f) else c.textTertiary.copy(alpha = 0.18f), label = "optionEdge")
-    Row(
-        modifier
-            .height(44.dp)
-            .clip(shape)
-            .pressable({ com.leftovers.app.ui.components.Haptics.select(view); onClick() }, pressedScale = 0.96f)
-            .background(bg)
-            .border(1.dp, edge, shape)
-            .padding(horizontal = 14.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.Center,
+    val kinds = PeriodKind.entries
+    var width by remember { mutableStateOf(0) }
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val slot = with(density) { (width / kinds.size).toDp() }
+    val offset by androidx.compose.animation.core.animateDpAsState(
+        slot * selected.ordinal,
+        androidx.compose.animation.core.spring(dampingRatio = 1f, stiffness = 500f),
+        label = "rangeMarker",
+    )
+    Box(
+        Modifier.fillMaxWidth().height(40.dp).clip(CircleShape).background(c.glass)
+            .border(1.dp, c.textTertiary.copy(alpha = 0.14f), CircleShape)
+            .padding(3.dp)
+            .onSizeChanged { width = it.width },
     ) {
-        if (leading != null) { leading(); Spacer(Modifier.width(8.dp)) }
-        if (icon != null) { Icon(icon, contentDescription = null, tint = if (selected) c.accent else c.textSecondary, modifier = Modifier.size(16.dp)); Spacer(Modifier.width(6.dp)) }
-        Text(text, style = MaterialTheme.typography.labelLarge, color = if (selected) c.textPrimary else c.textSecondary, maxLines = 1)
+        if (width > 0) {
+            Box(Modifier.offset(x = offset).width(slot).fillMaxHeight().clip(CircleShape).background(c.glassStrong))
+        }
+        Row(Modifier.fillMaxSize()) {
+            kinds.forEach { kind ->
+                val on = kind == selected
+                Row(
+                    Modifier.weight(1f).fillMaxHeight().clip(CircleShape)
+                        .pressable({ com.leftovers.app.ui.components.Haptics.select(view); onSelect(kind) }, pressedScale = 0.94f),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    if (kind == PeriodKind.DATES) {
+                        Icon(Lucide.Calendar, contentDescription = null, tint = if (on) c.textPrimary else c.textTertiary, modifier = Modifier.size(13.dp))
+                        Spacer(Modifier.width(4.dp))
+                    }
+                    Text(kind.short, style = MaterialTheme.typography.labelMedium, color = if (on) c.textPrimary else c.textSecondary, maxLines = 1)
+                }
+            }
+        }
     }
+}
+
+/** A small chip that opens a menu right under it; tinted and outlined once it narrows the page. */
+@Composable
+private fun MenuChip(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    text: String,
+    active: Boolean,
+    modifier: Modifier = Modifier,
+    items: @Composable androidx.compose.foundation.layout.ColumnScope.(close: () -> Unit) -> Unit,
+) {
+    val c = LocalAppColors.current
+    var open by remember { mutableStateOf(false) }
+    val bg by androidx.compose.animation.animateColorAsState(if (active) c.accent.copy(alpha = 0.14f) else c.glass, label = "menuChipBg")
+    val edge by androidx.compose.animation.animateColorAsState(if (active) c.accent.copy(alpha = 0.6f) else c.textTertiary.copy(alpha = 0.14f), label = "menuChipEdge")
+    Box(modifier) {
+        Row(
+            Modifier.height(38.dp).clip(CircleShape)
+                .pressable({ open = true }, pressedScale = 0.96f)
+                .background(bg)
+                .border(1.dp, edge, CircleShape)
+                .padding(start = 12.dp, end = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(icon, contentDescription = null, tint = if (active) c.accent else c.textSecondary, modifier = Modifier.size(15.dp))
+            Spacer(Modifier.width(7.dp))
+            Text(text, style = MaterialTheme.typography.labelLarge, color = c.textPrimary, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+            Spacer(Modifier.width(4.dp))
+            Icon(Lucide.ChevronDown, contentDescription = null, tint = c.textTertiary, modifier = Modifier.size(14.dp))
+        }
+        androidx.compose.material3.DropdownMenu(
+            expanded = open,
+            onDismissRequest = { open = false },
+            shape = RoundedCornerShape(20.dp),
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+            modifier = Modifier.heightIn(max = 380.dp),
+        ) { items { open = false } }
+    }
+}
+
+/** One choice in a [MenuChip]'s menu, with a tick on the one in use. */
+@Composable
+private fun MenuItem(text: String, selected: Boolean, icon: androidx.compose.ui.graphics.vector.ImageVector, tint: Color, onClick: () -> Unit) {
+    val c = LocalAppColors.current
+    androidx.compose.material3.DropdownMenuItem(
+        text = { Text(text, color = c.textPrimary, maxLines = 1) },
+        leadingIcon = { Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(18.dp)) },
+        trailingIcon = if (selected) {
+            { Icon(Lucide.Check, contentDescription = "Selected", tint = c.accent, modifier = Modifier.size(18.dp)) }
+        } else null,
+        onClick = onClick,
+    )
 }
 
 /** What's worth knowing: the trends spotted, then asking the AI about it and the phone's own AI summing up a month. */
