@@ -42,6 +42,19 @@ class Money(currencyCode: String) {
     fun formatWhole(minor: Long): String =
         format(BigDecimal.valueOf(minor, 2).setScale(0, java.math.RoundingMode.HALF_UP).movePointRight(2).toLong())
 
+    /** Short, for the labels along a chart's side: $480, $1.2k, $15k, $2.4M. */
+    fun compact(minor: Long): String {
+        val units = abs(minor) / 100.0
+        val sign = if (minor < 0) "-" else ""
+        val gap = if (wordSymbol) " " else ""
+        fun short(v: Double, suffix: String) = (if (v < 10) String.format(locale, "%.1f", v).removeSuffix(".0").removeSuffix(",0") else Math.round(v).toString()) + suffix
+        return when {
+            units < 1000 -> sign + format(Math.round(units) * 100).removePrefix("-")
+            units < 1_000_000 -> "$sign$symbol$gap" + short(units / 1000, "k")
+            else -> "$sign$symbol$gap" + short(units / 1_000_000, "M")
+        }
+    }
+
     fun signed(minor: Long, type: TxType): String =
         (if (type == TxType.INCOME) "+" else "−") + format(abs(minor))
 

@@ -67,7 +67,6 @@ import com.leftovers.app.data.totalOf
 import com.leftovers.app.ui.AppViewModelProvider
 import com.leftovers.app.ui.components.CategoryIcon
 import com.leftovers.app.ui.components.ChartSlice
-import com.leftovers.app.ui.components.DailyBars
 import com.leftovers.app.ui.components.DockClearance
 import com.leftovers.app.ui.components.DonutChart
 import com.leftovers.app.ui.components.EmptyState
@@ -99,6 +98,8 @@ import com.leftovers.app.data.balanceHistory
 import com.leftovers.app.data.monthlyInOut
 import com.leftovers.app.ui.components.PairBars
 import com.leftovers.app.ui.components.TrendLine
+import com.leftovers.app.ui.components.ColumnChart
+import androidx.compose.foundation.border
 import com.leftovers.app.util.label
 import androidx.compose.animation.togetherWith
 import java.time.temporal.ChronoUnit
@@ -136,15 +137,29 @@ data class StatsUiState(
     val trends: List<Trend> = emptyList(),
     val balance: List<BalancePoint> = emptyList(),
     val inOut: List<MonthInOut> = emptyList(),
+    /** The category shown, or null for all of them; the ones with entries, most used first, to pick from. */
+    val categoryId: Long? = null,
+    val categoryOptions: List<CategoryOption> = emptyList(),
 ) {
     val month: YearMonth get() = period.anchor
     val isMonth: Boolean get() = period.kind == PeriodKind.MONTH
     val start: LocalDate get() = period.start(oldest)
     val accountName: String? get() = accountId?.let { id -> accounts.find { it.id == id }?.name }
+    val categoryName: String? get() = categoryId?.let { id -> categoryOptions.find { it.id == id }?.name }
+    /** Anything narrowed from the start: another period, one account or one category. */
+    val narrowed: Boolean get() = accountId != null || categoryId != null || period != InsightsPeriod()
 }
 
+/** A category that has entries, for the Show sheet. */
+data class CategoryOption(val id: Long, val name: String, val emoji: String, val color: Long, val type: TxType, val uses: Int)
+
 /** What Insights is showing: the period, the account, and spending or income. */
-private data class StatsFilter(val period: InsightsPeriod = InsightsPeriod(), val accountId: Long? = null, val type: TxType = TxType.EXPENSE)
+private data class StatsFilter(
+    val period: InsightsPeriod = InsightsPeriod(),
+    val accountId: Long? = null,
+    val type: TxType = TxType.EXPENSE,
+    val categoryId: Long? = null,
+)
 
 class StatsViewModel(
     private val repository: TransactionRepository,
@@ -161,12 +176,19 @@ class StatsViewModel(
             val p = f.period
             // An account that's gone shows everything again.
             val accountId = f.accountId?.takeIf { id -> accountList.any { it.id == id } }
-            val all = if (accountId == null) everything else everything.filter { it.accountId == accountId }
+            val options = everything.groupBy { it.categoryId }.map { (id, list) ->
+                val one = list.first()
+                CategoryOption(id, one.categoryName, one.categoryEmoji, one.categoryColor, one.type, list.size)
+            }.sortedByDescending { it.uses }
+            // One category: its own kind (spending or income) is what's shown.
+            val category = f.categoryId?.let { id -> options.find { it.id == id } }
+            val type = category?.type ?: f.type
+            val all = everything.filter { (accountId == null || it.accountId == accountId) && (category == null || it.categoryId == category.id) }
             val oldest = everything.minOfOrNull { it.epochDay }?.let(LocalDate::ofEpochDay)
             val start = p.start(oldest)
             val end = p.end()
             val current = all.filter { it.date >= start && it.date <= end }
-            val ofType = current.filter { it.type == f.type }
+            val ofType = current.filter { it.type == type }
             val byMonth = p.byMonth(oldest)
             val bars = if (byMonth) {
                 val first = YearMonth.from(start)
@@ -175,7 +197,7 @@ class StatsViewModel(
             } else {
                 LongArray((ChronoUnit.DAYS.between(start, end) + 1).toInt()).also { a -> ofType.forEach { a[ChronoUnit.DAYS.between(start, it.date).toInt()] += it.amountMinor } }
             }.toList()
-            val before = p.previous()?.let { prev -> all.filter { prev.contains(it.date) }.takeIf { it.isNotEmpty() }?.totalOf(f.type) }
+            val before = p.previous()?.let { prev -> all.filter { prev.contains(it.date) }.takeIf { it.isNotEmpty() }?.totalOf(type) }
             // In and out by month: the period's months, or the six up to it when it's shorter.
             val lastMonth = minOf(YearMonth.from(end), YearMonth.from(today))
             // Never from before the first entry, so there are no empty months at the start.
@@ -188,11 +210,11 @@ class StatsViewModel(
                 accountId = accountId,
                 accounts = accountList,
                 oldest = oldest,
-                type = f.type,
-                total = current.totalOf(f.type),
+                type = type,
+                total = current.totalOf(type),
                 previousTotal = before,
-                budget = if (p.kind == PeriodKind.MONTH && accountId == null && s.plan.isSet && s.plan.cycle(m).start == m.atDay(1)) s.plan.budgetFor(m, everything) else 0L,
-                categories = current.categoryTotals(f.type),
+                budget = if (p.kind == PeriodKind.MONTH && accountId == null && category == null && s.plan.isSet && s.plan.cycle(m).start == m.atDay(1)) s.plan.budgetFor(m, everything) else 0L,
+                categories = current.categoryTotals(type),
                 daily = if (p.kind == PeriodKind.MONTH) bars else emptyList(),
                 bars = bars,
                 barsByMonth = byMonth,
@@ -200,15 +222,21 @@ class StatsViewModel(
                 days = p.daysSoFar(today, oldest),
                 max = ofType.maxByOrNull { it.amountMinor },
                 items = ofType,
-                trends = if (p.kind == PeriodKind.MONTH) spendingTrends(all, m, f.type, Money(s.currencyCode)::formatWhole) else emptyList(),
+                trends = if (p.kind == PeriodKind.MONTH && category == null) spendingTrends(all, m, type, Money(s.currencyCode)::formatWhole) else emptyList(),
                 balance = balanceHistory(counted, everything, transfers, debts, maxOf(start, oldest ?: start), end, accountId, today),
                 inOut = monthlyInOut(all, firstMonth, lastMonth),
+                categoryId = category?.id,
+                categoryOptions = options,
             )
         }.flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), StatsUiState())
 
     fun setPeriod(value: InsightsPeriod) = filter.update { it.copy(period = value) }
     fun setAccount(id: Long?) = filter.update { it.copy(accountId = id) }
-    fun setType(value: TxType) = filter.update { it.copy(type = value) }
+    // Switching between spending and income lets go of a category of the other kind.
+    fun setType(value: TxType) = filter.update { it.copy(type = value, categoryId = if (value == it.type) it.categoryId else null) }
+    fun setCategory(id: Long?) = filter.update { it.copy(categoryId = id) }
+    /** Back to this month, every account and category. */
+    fun reset() = filter.update { StatsFilter(type = it.type) }
 
     /** Makes the PDF statement for the month shown, or its whole year, and hands back the file to share. */
     fun makeStatement(context: android.content.Context, chosen: YearMonth, yearly: Boolean, notes: Boolean, entries: Boolean, onReady: (android.net.Uri, String) -> Unit) {
@@ -261,7 +289,7 @@ fun StatsScreen(
     }
     var showFilter by rememberSaveable { mutableStateOf(false) }
     if (showFilter) {
-        ShowSheet(state, viewModel::setPeriod, viewModel::setAccount) { showFilter = false }
+        ShowSheet(state, viewModel::setPeriod, viewModel::setAccount, viewModel::setCategory, viewModel::reset) { showFilter = false }
     }
 
     GlassScreen(
@@ -284,7 +312,8 @@ fun StatsScreen(
         ) {
             item { PeriodBar(state, viewModel::setPeriod) { showFilter = true } }
             // Balance, and in and out: they don't depend on Spending or Income, so they come before that choice.
-            item { MoneyCard(state) }
+            // They're about accounts, so they step aside while one category is shown.
+            if (state.categoryId == null) item { MoneyCard(state) }
             item {
                 SegmentedToggle(
                     TxType.entries, state.type,
@@ -304,7 +333,7 @@ fun StatsScreen(
                     )
                 }
             } else {
-                item { CategoryCard(state, peek) }
+                if (state.categoryId == null) item { CategoryCard(state, peek) } else item { EntriesCard(state, peek) }
                 if (state.isMonth) item { CalendarCard(state, peek) }
             }
 
@@ -356,23 +385,42 @@ private fun Figure(label: String, value: String, modifier: Modifier = Modifier, 
     }
 }
 
-/** What was spent or earned: the total, how it compares, its bars, and the daily average and biggest at its foot. */
+/** How the total card draws its period: a bar a day (or month), or the running total as a line. */
+private enum class TotalChart { BARS, LINE }
+
+/**
+ * What was spent or earned: the total, how it compares, its chart (bars, or a line adding up to the total, with the
+ * budget as a dashed level), and the daily average and biggest at its foot.
+ */
 @Composable
 private fun TotalCard(state: StatsUiState) {
     val c = LocalAppColors.current
     val money = LocalMoney.current
     val isExpense = state.type == TxType.EXPENSE
     val monthName = state.month.month.getDisplayName(TextStyle.FULL, Locale.getDefault())
+    var chart by rememberSaveable { mutableStateOf(TotalChart.BARS) }
     Glass(Modifier.fillMaxWidth().appear(1), strong = true, shape = RoundedCornerShape(32.dp)) {
         Column(Modifier.padding(22.dp)) {
-            Text(
-                (if (isExpense) "Spent" else "Earned") + if (state.period.kind == PeriodKind.ALL) " in all" else if (state.isMonth) " in $monthName" else "",
-                style = MaterialTheme.typography.labelLarge,
-                color = c.textSecondary,
-            )
-            Spacer(Modifier.height(4.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    (if (isExpense) "Spent" else "Earned") + when {
+                        state.categoryName != null -> " on ${state.categoryName}"
+                        state.period.kind == PeriodKind.ALL -> " in all"
+                        state.isMonth -> " in $monthName"
+                        else -> ""
+                    },
+                    style = MaterialTheme.typography.labelLarge,
+                    color = c.textSecondary,
+                    modifier = Modifier.weight(1f),
+                    maxLines = 1,
+                )
+                IconTabs(
+                    listOf(Lucide.ChartColumn to "Bars", Lucide.ChartLine to "Running total"),
+                    chart.ordinal,
+                ) { chart = TotalChart.entries[it] }
+            }
             RollingText(money.format(state.total), MaterialTheme.typography.displaySmall, c.textPrimary)
-            Spacer(Modifier.height(10.dp))
+            Spacer(Modifier.height(8.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 ComparisonChip(state)
                 if (isExpense && state.budget > 0) {
@@ -380,36 +428,61 @@ private fun TotalCard(state: StatsUiState) {
                     Text("${(state.total * 100 / state.budget)}% of budget", style = MaterialTheme.typography.labelMedium, color = c.textSecondary)
                 }
             }
-            Spacer(Modifier.height(18.dp))
+            Spacer(Modifier.height(14.dp))
             val today = LocalDate.now()
             val start = state.start
             val monthFmt = remember { java.time.format.DateTimeFormatter.ofPattern("MMM") }
-            DailyBars(
-                values = state.bars,
-                highlight = when {
-                    state.barsByMonth -> ChronoUnit.MONTHS.between(YearMonth.from(start), YearMonth.from(today)).toInt().takeIf { it in state.bars.indices }
-                    else -> ChronoUnit.DAYS.between(start, today).toInt().takeIf { it in state.bars.indices }
-                },
-                modifier = Modifier.fillMaxWidth().height(140.dp),
-                tooltip = { i ->
-                    val v = money.format(state.bars.getOrElse(i) { 0L })
-                    if (state.barsByMonth) "${YearMonth.from(start).plusMonths(i.toLong()).label()} · $v" else "${start.plusDays(i.toLong()).shortLabel()} · $v"
-                },
-                axis = when {
-                    state.isMonth -> null
-                    state.barsByMonth -> { i ->
-                        val m = YearMonth.from(start).plusMonths(i.toLong())
-                        val every = ((state.bars.size + 5) / 6).coerceAtLeast(1)
-                        if (i % every == 0) (if (m.monthValue == 1 || i == 0) "${m.format(monthFmt)} ${m.year % 100}" else m.format(monthFmt)) else null
-                    }
-                    else -> { i ->
-                        val d = start.plusDays(i.toLong())
-                        if (i == 0 || d.dayOfMonth == 1) d.format(java.time.format.DateTimeFormatter.ofPattern("d MMM")) else if (d.dayOfMonth % 5 == 0 && d.dayOfMonth < 30) d.dayOfMonth.toString() else null
-                    }
-                },
-            )
+            val dayFmt = remember { java.time.format.DateTimeFormatter.ofPattern("d MMM") }
+            val todayIndex = when {
+                state.barsByMonth -> ChronoUnit.MONTHS.between(YearMonth.from(start), YearMonth.from(today)).toInt()
+                else -> ChronoUnit.DAYS.between(start, today).toInt()
+            }.takeIf { it in state.bars.indices }
+            val axis: (Int) -> String? = when {
+                state.barsByMonth -> { i ->
+                    val m = YearMonth.from(start).plusMonths(i.toLong())
+                    val every = ((state.bars.size + 5) / 6).coerceAtLeast(1)
+                    if (i % every == 0) (if (m.monthValue == 1 || i == 0) "${m.format(monthFmt)} ${m.year % 100}" else m.format(monthFmt)) else null
+                }
+                state.isMonth -> { i -> val d = i + 1; if (d == 1 || d % 5 == 0 && d <= 25) d.toString() else null }
+                else -> { i ->
+                    val d = start.plusDays(i.toLong())
+                    if (i == 0 || d.dayOfMonth == 1) d.format(dayFmt) else if (d.dayOfMonth % 5 == 0 && d.dayOfMonth < 30) d.dayOfMonth.toString() else null
+                }
+            }
+            fun titleOf(i: Int) = if (state.barsByMonth) YearMonth.from(start).plusMonths(i.toLong()).label() else start.plusDays(i.toLong()).format(dayFmt)
+            AnimatedContent(chart, transitionSpec = { fadeIn(androidx.compose.animation.core.tween(200)).togetherWith(fadeOut(androidx.compose.animation.core.tween(120))) }, label = "totalChart") { kind ->
+                if (kind == TotalChart.BARS) {
+                    ColumnChart(
+                        values = state.bars,
+                        highlight = todayIndex,
+                        modifier = Modifier.fillMaxWidth().height(170.dp),
+                        axis = axis,
+                        title = ::titleOf,
+                        value = { i -> money.format(state.bars.getOrElse(i) { 0L }) },
+                        scale = money::compact,
+                    )
+                } else {
+                    // The total as it built up, stopping at today in a period that's still going.
+                    val running = remember(state.bars) { state.bars.runningReduce { a, b -> a + b } }
+                    val upTo = (todayIndex ?: running.lastIndex).coerceAtLeast(1)
+                    val shown = running.take(upTo + 1)
+                    val budget = state.budget.takeIf { isExpense && it > 0 && state.isMonth }
+                    TrendLine(
+                        values = if (shown.size >= 2) shown else running,
+                        color = c.accent,
+                        modifier = Modifier.fillMaxWidth().height(170.dp),
+                        axis = axis,
+                        title = ::titleOf,
+                        value = { i -> money.format(running.getOrElse(i) { 0L }) },
+                        scale = money::compact,
+                        reference = budget,
+                        referenceLabel = budget?.let { "Budget" },
+                        span = running.size,
+                    )
+                }
+            }
             if (state.total > 0) {
-                Spacer(Modifier.height(16.dp))
+                Spacer(Modifier.height(14.dp))
                 RowDivider(inset = 0.dp)
                 Spacer(Modifier.height(14.dp))
                 Row {
@@ -418,9 +491,56 @@ private fun TotalCard(state: StatsUiState) {
                         if (isExpense) "Biggest spend" else "Biggest income",
                         money.format(state.max?.amountMinor ?: 0),
                         Modifier.weight(1f),
-                        footnote = state.max?.let { "${it.categoryName} · ${it.date.shortLabel()}" },
+                        footnote = state.max?.let { if (state.categoryId != null) it.date.shortLabel() else "${it.categoryName} · ${it.date.shortLabel()}" },
                     )
                 }
+            }
+        }
+    }
+}
+
+/** Small icon choices side by side, the picked one raised; for how a chart is drawn. */
+@Composable
+private fun IconTabs(options: List<Pair<androidx.compose.ui.graphics.vector.ImageVector, String>>, selected: Int, onSelect: (Int) -> Unit) {
+    val c = LocalAppColors.current
+    val view = androidx.compose.ui.platform.LocalView.current
+    Row(Modifier.clip(CircleShape).background(c.glass).padding(3.dp)) {
+        options.forEachIndexed { i, (icon, name) ->
+            val on = i == selected
+            val bg by androidx.compose.animation.animateColorAsState(if (on) c.glassStrong else Color.Transparent, label = "iconTab")
+            Box(
+                Modifier.size(width = 38.dp, height = 30.dp).clip(CircleShape)
+                    .pressable({ if (!on) { com.leftovers.app.ui.components.Haptics.select(view); onSelect(i) } }, pressedScale = 0.92f)
+                    .background(bg),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(icon, contentDescription = name, tint = if (on) c.textPrimary else c.textTertiary, modifier = Modifier.size(16.dp))
+            }
+        }
+    }
+}
+
+/** One category's entries, newest first, when Insights is narrowed to it. */
+@Composable
+private fun EntriesCard(state: StatsUiState, peek: TransactionPeek) {
+    val c = LocalAppColors.current
+    var all by rememberSaveable(state.categoryId, state.period) { mutableStateOf(false) }
+    val shown = if (all) state.items else state.items.take(8)
+    Glass(Modifier.fillMaxWidth().appear(2)) {
+        Column(Modifier.padding(horizontal = 12.dp, vertical = 14.dp)) {
+            CardTitle("Entries", Modifier.padding(horizontal = 8.dp)) {
+                Text("${state.items.size}", style = MaterialTheme.typography.labelLarge, color = c.textSecondary)
+            }
+            shown.forEach { item ->
+                TransactionRow(item, onClick = { peek.show(item) }, subtitle = item.date.friendlyLabel(), modifier = Modifier.peekSource(peek, item.id))
+            }
+            if (state.items.size > shown.size) {
+                Text(
+                    "Show all ${state.items.size}",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = c.accent,
+                    modifier = Modifier.padding(horizontal = 8.dp).clip(RoundedCornerShape(10.dp)).pressable({ all = true }).padding(vertical = 10.dp),
+                )
             }
         }
     }
@@ -497,7 +617,7 @@ private fun PeriodBar(state: StatsUiState, onChange: (InsightsPeriod) -> Unit, o
                 Text(shown.label(), style = MaterialTheme.typography.titleMedium, color = c.textPrimary, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(state.accountName ?: "All accounts", style = MaterialTheme.typography.labelMedium, color = c.textSecondary, maxLines = 1)
+                Text(listOfNotNull(state.accountName ?: "All accounts", state.categoryName).joinToString(" · "), style = MaterialTheme.typography.labelMedium, color = c.textSecondary, maxLines = 1)
                 Spacer(Modifier.width(4.dp))
                 Icon(Lucide.ChevronDown, contentDescription = "Change what's shown", tint = c.textSecondary, modifier = Modifier.size(14.dp))
             }
@@ -507,10 +627,19 @@ private fun PeriodBar(state: StatsUiState, onChange: (InsightsPeriod) -> Unit, o
     }
 }
 
-/** Everything Insights can be narrowed to, in one place: how long, and which account. */
-@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+/**
+ * Everything Insights can be narrowed to, in one place: how long, which account, which category. Picks apply at
+ * once; Reset goes back to this month and everything, Done closes it.
+ */
 @Composable
-private fun ShowSheet(state: StatsUiState, onPeriod: (InsightsPeriod) -> Unit, onAccount: (Long?) -> Unit, onDismiss: () -> Unit) {
+private fun ShowSheet(
+    state: StatsUiState,
+    onPeriod: (InsightsPeriod) -> Unit,
+    onAccount: (Long?) -> Unit,
+    onCategory: (Long?) -> Unit,
+    onReset: () -> Unit,
+    onDismiss: () -> Unit,
+) {
     val c = LocalAppColors.current
     var pickDates by rememberSaveable { mutableStateOf(false) }
     val p = state.period
@@ -524,38 +653,119 @@ private fun ShowSheet(state: StatsUiState, onPeriod: (InsightsPeriod) -> Unit, o
             onDismiss = { pickDates = false },
         )
     }
+    fun pick(kind: PeriodKind) {
+        if (kind == PeriodKind.DATES) { pickDates = true; return }
+        // Keeps to the month or year being looked at, never past this one.
+        val anchor = minOf(p.anchor, YearMonth.now())
+        onPeriod(InsightsPeriod(kind, if (kind == PeriodKind.ALL) YearMonth.now() else anchor))
+    }
     GlassSheet(onDismiss) {
-        Column(Modifier.padding(horizontal = 20.dp).padding(bottom = 16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            Text("Show", style = MaterialTheme.typography.headlineSmall, color = c.textPrimary)
-            Text("Period", style = MaterialTheme.typography.labelLarge, color = c.textSecondary)
-            androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                PeriodKind.entries.forEach { kind ->
-                    com.leftovers.app.ui.components.Chip(
-                        kind.title,
-                        {
-                            if (kind == PeriodKind.DATES) pickDates = true
-                            else {
-                                // Keeps to the month or year being looked at, never past this one.
-                                val anchor = minOf(p.anchor, YearMonth.now())
-                                onPeriod(InsightsPeriod(kind, if (kind == PeriodKind.ALL) YearMonth.now() else anchor))
-                            }
-                        },
-                        selected = p.kind == kind,
-                        icon = if (kind == PeriodKind.DATES) Lucide.Calendar else null,
-                    )
-                }
+        Column(Modifier.padding(horizontal = 20.dp).padding(bottom = 20.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Show", style = MaterialTheme.typography.headlineSmall, color = c.textPrimary, modifier = Modifier.weight(1f))
+                if (state.narrowed) SheetAction("Reset", c.textSecondary, onReset)
+                SheetAction("Done", c.accent, onDismiss)
             }
-            if (state.accounts.size > 1) {
-                Text("Account", style = MaterialTheme.typography.labelLarge, color = c.textSecondary)
-                androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    com.leftovers.app.ui.components.Chip("All accounts", { onAccount(null) }, selected = state.accountId == null)
-                    state.accounts.forEach { a ->
-                        com.leftovers.app.ui.components.Chip(a.name, { onAccount(a.id) }, selected = state.accountId == a.id)
+            SheetLabel("Period")
+            val kinds = PeriodKind.entries
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                kinds.chunked(3).forEach { row ->
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        row.forEach { kind ->
+                            OptionTile(
+                                text = if (kind == PeriodKind.DATES && p.kind == PeriodKind.DATES) p.label() else kind.title,
+                                selected = p.kind == kind,
+                                onClick = { pick(kind) },
+                                modifier = Modifier.weight(1f),
+                                icon = if (kind == PeriodKind.DATES) Lucide.Calendar else null,
+                            )
+                        }
                     }
                 }
             }
-            com.leftovers.app.ui.components.PrimaryButton("Done", onDismiss, Modifier.fillMaxWidth())
+            if (state.accounts.size > 1) {
+                SheetLabel("Account")
+                androidx.compose.foundation.lazy.LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    item { OptionTile("All", state.accountId == null, { onAccount(null) }) }
+                    items(state.accounts.size) { i ->
+                        val a = state.accounts[i]
+                        OptionTile(a.name, state.accountId == a.id, { onAccount(a.id) })
+                    }
+                }
+            }
+            // The kind being looked at first, then the other.
+            val categories = state.categoryOptions.sortedBy { if (it.type == state.type) 0 else 1 }
+            if (categories.size > 1) {
+                SheetLabel("Category")
+                androidx.compose.foundation.lazy.LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    item { OptionTile("All", state.categoryId == null, { onCategory(null) }) }
+                    items(categories.size) { i ->
+                        val cat = categories[i]
+                        OptionTile(cat.name, state.categoryId == cat.id, { onCategory(cat.id) }, leading = {
+                            CategoryIcon(cat.emoji, cat.color, size = 22.dp)
+                        })
+                    }
+                }
+            }
         }
+    }
+}
+
+/** A small text button in a sheet's title row. */
+@Composable
+private fun SheetAction(text: String, color: Color, onClick: () -> Unit) {
+    Text(
+        text,
+        style = MaterialTheme.typography.titleSmall,
+        color = color,
+        modifier = Modifier.clip(RoundedCornerShape(10.dp)).pressable(onClick, pressedScale = 0.94f).padding(horizontal = 10.dp, vertical = 8.dp),
+    )
+}
+
+/** A section's name in a sheet: small, spaced capitals. */
+@Composable
+private fun SheetLabel(text: String) {
+    val c = LocalAppColors.current
+    Text(
+        text.uppercase(),
+        style = MaterialTheme.typography.labelSmall.copy(letterSpacing = androidx.compose.ui.unit.TextUnit(1.2f, androidx.compose.ui.unit.TextUnitType.Sp)),
+        color = c.textTertiary,
+        modifier = Modifier.padding(top = 22.dp, bottom = 10.dp),
+    )
+}
+
+/**
+ * One choice in the Show sheet. Picked, it's tinted with the accent and outlined, with the text staying in the
+ * page's own colour, so it reads clearly without shouting.
+ */
+@Composable
+private fun OptionTile(
+    text: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    icon: androidx.compose.ui.graphics.vector.ImageVector? = null,
+    leading: (@Composable () -> Unit)? = null,
+) {
+    val c = LocalAppColors.current
+    val view = androidx.compose.ui.platform.LocalView.current
+    val shape = RoundedCornerShape(14.dp)
+    val bg by androidx.compose.animation.animateColorAsState(if (selected) c.accent.copy(alpha = 0.16f) else c.glass, label = "optionBg")
+    val edge by androidx.compose.animation.animateColorAsState(if (selected) c.accent.copy(alpha = 0.75f) else c.textTertiary.copy(alpha = 0.18f), label = "optionEdge")
+    Row(
+        modifier
+            .height(44.dp)
+            .clip(shape)
+            .pressable({ com.leftovers.app.ui.components.Haptics.select(view); onClick() }, pressedScale = 0.96f)
+            .background(bg)
+            .border(1.dp, edge, shape)
+            .padding(horizontal = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.Center,
+    ) {
+        if (leading != null) { leading(); Spacer(Modifier.width(8.dp)) }
+        if (icon != null) { Icon(icon, contentDescription = null, tint = if (selected) c.accent else c.textSecondary, modifier = Modifier.size(16.dp)); Spacer(Modifier.width(6.dp)) }
+        Text(text, style = MaterialTheme.typography.labelLarge, color = if (selected) c.textPrimary else c.textSecondary, maxLines = 1)
     }
 }
 
@@ -817,9 +1027,11 @@ private fun BalanceView(state: StatsUiState) {
         TrendLine(
             values = points.map { it.balanceMinor },
             color = color,
-            modifier = Modifier.fillMaxWidth().height(150.dp),
+            modifier = Modifier.fillMaxWidth().height(170.dp),
             axis = { i -> if (i in marks) points[i].day.format(if (spansYears) java.time.format.DateTimeFormatter.ofPattern("MMM yy") else day) else null },
-            tooltip = { i -> "${points[i].day.format(if (spansYears) dayYear else day)} · ${money.format(points[i].balanceMinor)}" },
+            title = { i -> points[i].day.format(if (spansYears) dayYear else day) },
+            value = { i -> money.format(points[i].balanceMinor) },
+            scale = money::compact,
         )
     }
 }
@@ -857,9 +1069,11 @@ private fun FlowView(state: StatsUiState) {
                 pairs = months.map { it.inMinor to it.outMinor },
                 first = c.positive,
                 second = outColor,
-                modifier = Modifier.fillMaxWidth().height(150.dp),
+                modifier = Modifier.fillMaxWidth().height(160.dp),
                 axis = { i -> months[i].month.format(short) },
-                tooltip = { i -> "${months[i].month.format(short)} · in ${money.formatWhole(months[i].inMinor)} · out ${money.formatWhole(months[i].outMinor)}" },
+                title = { i -> months[i].month.format(short) },
+                value = { i -> "in ${money.formatWhole(months[i].inMinor)} · out ${money.formatWhole(months[i].outMinor)}" },
+                scale = money::compact,
             )
             Spacer(Modifier.height(10.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
