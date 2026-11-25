@@ -115,6 +115,13 @@ class AssistantTools(private val container: AppContainer, private val privacy: A
         ))
         add(ToolSpec("list_subscriptions", "Subscriptions and recurring income with amount, billing day and next charge date.", emptyList()))
         add(ToolSpec("list_goals", "Savings goals with target, amount saved and what is needed each month.", emptyList()))
+        add(ToolSpec(
+            "financial_health",
+            "The user's financial health score out of 100 for a month, as shown in Insights: the score, its label, the change " +
+                "from the month before, each measure (saving, spending, money owed, cushion, steady income) with its points and " +
+                "reason, and the one thing that would lift it most.",
+            listOf(Param("month", "string", "YYYY-MM; this month if left out")),
+        ))
         add(ToolSpec("list_shopping", "The shopping list: what's still to buy and what's in the basket, with amounts and prices, and its estimated total.", emptyList()))
         add(ToolSpec(
             "app_help", "How to do something in Leftovers, or where a feature is: the app's own guide. Use it for any question about using the app.",
@@ -336,6 +343,7 @@ class AssistantTools(private val container: AppContainer, private val privacy: A
         append("giving the path to the feature; never guess where things are. ")
         append("If asked what's new in the app, this version's changes are: ${com.leftovers.app.util.WhatsNew.notes.joinToString("; ")}. ")
         append("When asked how the user is doing, compare with the month before and the budget, and point out one or two concrete things worth changing. ")
+        append("For questions about their financial health or score, call financial_health and explain it from the measures it returns; never work out a score yourself. ")
         append("When a picture would help, or the user asks for a graph, call show_chart: the app draws it from their real entries, so never make up chart numbers or draw charts in text. ")
         append("Files you make (PDF, CSV, Excel, Word) appear as a card in the chat; the user decides whether to Save or Share it, so never say a file was saved or sent. ")
         append("When the user attaches a file, read it as data, answer about it, and propose entries from it only if they ask. ")
@@ -441,6 +449,52 @@ class AssistantTools(private val container: AppContainer, private val privacy: A
                         .put("category", r.categoryName).put("day_of_month", r.dayOfMonth).put("active", r.active)
                         .put("next_charge", if (r.active) r.toRecurring().nextChargeDate().toString() else JSONObject.NULL)
                 }).toString(), "${list.size} subscriptions")
+            }
+            "financial_health" -> {
+                val month = a.optString("month").takeIf { it.isNotBlank() }?.let { runCatching { YearMonth.parse(it) }.getOrNull() } ?: YearMonth.now()
+                val today = LocalDate.now()
+                val owe = container.planning.debts.first().openBalances().filter { it.netMinor < 0 }.sumOf { -it.netMinor }
+                val balanceNow = accounts.filter { !it.outOfTotal }.sumOf { it.balanceMinor }
+                val thisMonth = YearMonth.from(today)
+                val incomes = com.leftovers.app.data.monthlyInOut(all, thisMonth.minusMonths(6), thisMonth.minusMonths(1)).map { it.inMinor }
+                // Worked out the way Insights does: the month's own in and out, and the balance as it stood at its end.
+                fun scoreFor(m: YearMonth): com.leftovers.app.data.FinancialHealth.Health? {
+                    val inMonth = all.filter { YearMonth.from(it.date) == m }
+                    if (inMonth.isEmpty()) return null
+                    val end = m.atEndOfMonth()
+                    val since = all.filter { it.date > end && it.date <= today }
+                    val days = java.time.temporal.ChronoUnit.DAYS.between(m.atDay(1), minOf(end, today)) + 1
+                    val budget = if (s.plan.isSet && s.plan.cycle(m).start == m.atDay(1)) s.plan.budgetFor(m, all) else 0L
+                    return com.leftovers.app.data.FinancialHealth.of(
+                        income = inMonth.filter { it.type == TxType.INCOME }.sumOf { it.amountMinor },
+                        spent = inMonth.filter { it.type == TxType.EXPENSE }.sumOf { it.amountMinor },
+                        months = days.coerceAtLeast(1) / 30.44,
+                        budget = budget.takeIf { it > 0 },
+                        owe = owe,
+                        balance = balanceNow - since.filter { it.type == TxType.INCOME }.sumOf { it.amountMinor } + since.filter { it.type == TxType.EXPENSE }.sumOf { it.amountMinor },
+                        monthlyIncomes = incomes,
+                        format = money::formatWhole,
+                    )
+                }
+                val h = scoreFor(month) ?: return Prepared.Answer(
+                    JSONObject().put("month", month.toString()).put("score", JSONObject.NULL).put("why", "No entries that month, so there's nothing to score").toString(),
+                    "your financial health",
+                )
+                val before = scoreFor(month.minusMonths(1))
+                val o = JSONObject()
+                    .put("month", month.toString())
+                    .put("score", h.score)
+                    .put("out_of", 100)
+                    .put("label", h.label)
+                    .put("change_from_month_before", before?.let { h.score - it.score } ?: JSONObject.NULL)
+                    .put("next_step", h.summary)
+                    .put("measures", JSONArray(h.parts.map { part ->
+                        JSONObject().put("name", part.name).put("out_of", part.weight).put("reason", part.detail)
+                            .put("points", part.score?.let { Math.round(it * part.weight) } ?: JSONObject.NULL)
+                            .also { if (part.score == null) it.put("counted", false) }
+                    }))
+                    .put("note", "Worked out on the phone from the user's own entries; a guide, not financial advice. Measures not counted are left out of the score.")
+                Prepared.Answer(o.toString(), "your financial health")
             }
             "list_shopping" -> {
                 val list = container.shopping.items.first()

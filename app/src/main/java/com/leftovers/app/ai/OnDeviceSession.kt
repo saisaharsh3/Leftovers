@@ -129,6 +129,7 @@ internal class OnDeviceSession(
             "find_entries" to "find show list entries entry transactions last recent yesterday when did what paid bought",
             "list_subscriptions" to "subscription subscriptions bill bills renew recurring due upcoming rent netflix",
             "list_goals" to "goal goals saving savings save target",
+            "financial_health" to "health healthy score rating doing well shape improve better finances financial",
             "list_money_owed" to "owe owes owed lent lend borrowed borrow debt back friend who",
             "app_help" to "how do can where feature setting settings help turn enable",
             "make_statement_pdf" to "pdf statement report",
