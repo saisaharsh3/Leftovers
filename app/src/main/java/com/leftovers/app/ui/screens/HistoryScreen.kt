@@ -78,6 +78,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.layout.width
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
@@ -166,6 +167,8 @@ data class HistoryUiState(
     val month: YearMonth = YearMonth.now(),
     val filter: TypeFilter = TypeFilter.ALL,
     val query: String = "",
+    /** The filters read from the search ("over ₹500 · last month"), to show what was understood; null without any. */
+    val search: com.leftovers.app.util.SearchQuery? = null,
     val groups: List<DayGroup> = emptyList(),
     /** Every entry of the month regardless of filter, for the calendar. */
     val monthItems: List<TransactionItem> = emptyList(),
@@ -216,9 +219,12 @@ class HistoryViewModel(
             month, filter, query, filters,
         ) { (all, accountList, oneBill, debts, transfers), m, f, q, fl ->
             val monthItems = all.filter { YearMonth.from(it.date) == m }
+            // "food >500 last month": amounts and dates are filters, the words are searched for as before.
+            val parsed = com.leftovers.app.util.SearchQuery.parse(q)
+            val text = parsed.words.joinToString(" ")
             val scoped = if (q.isNotBlank()) {
                 val accountNames = accountList.associate { it.id to it.name }
-                all.filter { searchMatches(it, q, accountNames[it.accountId]) && (fl.tag == null || fl.tag in hashtags(it.note)) }
+                all.filter { searchMatches(it, text, accountNames[it.accountId]) && parsed.allows(it.amountMinor, it.date) && (fl.tag == null || fl.tag in hashtags(it.note)) }
             } else if (fl.tag != null) {
                 all.filter { fl.tag in hashtags(it.note) }
             } else if (fl.allTime) {
@@ -237,7 +243,7 @@ class HistoryViewModel(
             // Transfers between your own accounts, on their day (#55): not spending or income, so only in the full
             // list by day, never in the totals; filtered to an account, the ones in or out of it.
             val names = accountList.associate { it.id to it.name }
-            val words = q.lowercase().split(' ').filter { it.isNotBlank() }
+            val words = parsed.words
             val moved = if (fl.sort != ActivitySort.NEWEST || f != TypeFilter.ALL || fl.categoryId != null || fl.tag != null) emptyList()
             else transfers.asSequence()
                 .filter { if (q.isNotBlank() || fl.allTime) true else YearMonth.from(LocalDate.ofEpochDay(it.epochDay)) == m }
@@ -249,12 +255,14 @@ class HistoryViewModel(
                     )
                 }
                 .filter { line -> words.all { w -> "transfer ${line.from} ${line.to} ${line.transfer.note}".lowercase().contains(w) } }
+                .filter { line -> q.isBlank() || parsed.allows(line.transfer.amountMinor, LocalDate.ofEpochDay(line.transfer.epochDay)) }
                 .sortedByDescending { it.transfer.createdAt }
                 .toList()
             HistoryUiState(
                 month = m,
                 filter = f,
                 query = q,
+                search = parsed.takeIf { it.hasFilters },
                 groups = if (fl.sort == ActivitySort.NEWEST) {
                     val byDay = filtered.groupBy { it.epochDay }
                     val movedByDay = moved.groupBy { it.transfer.epochDay }
@@ -386,7 +394,15 @@ fun HistoryScreen(
             item(key = "top") {
                 Column(Modifier.animateItem(fadeInSpec = null, fadeOutSpec = null, placementSpec = listMotion)) {
                 if (searchOpen) {
-                    GlassTextField(typed, ::search, placeholder = "Search notes, #tags, categories or amounts")
+                    GlassTextField(typed, ::search, placeholder = "Try: food >500 last month")
+                    // What the search understood as filters, so "last month" visibly did something.
+                    state.search?.describe(money::formatWhole)?.let { understood ->
+                        Row(Modifier.padding(start = 6.dp, top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Lucide.SlidersHorizontal, contentDescription = null, tint = c.accent, modifier = Modifier.size(14.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text(understood, style = MaterialTheme.typography.labelMedium, color = c.textSecondary)
+                        }
+                    }
                 } else if (state.filters.tag == null || mode == ActivityView.CALENDAR) {
                     // One month at a time, or everything (on the list; the calendar is always one month).
                     if (mode == ActivityView.LIST) {

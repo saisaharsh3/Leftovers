@@ -42,6 +42,9 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.unit.sp
 import com.leftovers.app.ui.theme.LocalAppColors
 import java.time.LocalDate
@@ -132,6 +135,10 @@ fun Gauge(
     }
 }
 
+/** A day that's over, since [from], with nothing spent. Today doesn't count yet: it isn't over. */
+fun noSpendDay(date: LocalDate, spent: Long, from: LocalDate?, today: LocalDate = LocalDate.now()): Boolean =
+    from != null && spent == 0L && !date.isBefore(from) && date.isBefore(today)
+
 /** Calendar tinted by how each day compares with the average spending day. Days can be tapped. */
 @Composable
 fun SpendingCalendar(
@@ -140,6 +147,8 @@ fun SpendingCalendar(
     modifier: Modifier = Modifier,
     selected: Int? = null,
     onSelect: ((Int) -> Unit)? = null,
+    /** From when days with no spending get a soft dot: the first entry. Null leaves them plain. */
+    noSpendFrom: LocalDate? = null,
 ) {
     val c = LocalAppColors.current
     val today = LocalDate.now()
@@ -185,6 +194,18 @@ fun SpendingCalendar(
                             contentAlignment = Alignment.Center,
                         ) {
                             Text(day.toString(), style = MaterialTheme.typography.labelMedium, color = if (isSelected) c.onAccent else tone ?: c.textTertiary)
+                            // A day gone by with nothing spent: a small dot, a quiet well done.
+                            val date = month.atDay(day)
+                            if (noSpendDay(date, spent, noSpendFrom, today) && !isSelected) {
+                                Box(
+                                    Modifier
+                                        .align(Alignment.BottomCenter)
+                                        .padding(bottom = 4.dp)
+                                        .size(4.dp)
+                                        .clip(CircleShape)
+                                        .background(c.positive),
+                                )
+                            }
                         }
                     }
                 }

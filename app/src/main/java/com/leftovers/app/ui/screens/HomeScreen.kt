@@ -56,6 +56,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.flow.first
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
@@ -293,6 +295,49 @@ class HomeViewModel(
         viewModelScope.launch { sms.dismiss(id) }
     }
 
+    /** The category a detected payment would be added with: what was used for that payee before, else "Other". */
+    suspend fun guessCategory(s: SmsSuggestion): com.leftovers.app.data.Category? {
+        val categories = repository.categories.first()
+        val past = repository.getAllTransactions().map { com.leftovers.app.util.MerchantMemory.Past(it.note, it.type, it.categoryId, it.epochDay, it.createdAt) }
+        val id = if (!s.isIncome) com.leftovers.app.util.AutoAdd.category(s.merchant, past, categories)
+        else {
+            val usable = categories.filter { it.type == TxType.INCOME && !it.hidden }
+            com.leftovers.app.util.MerchantMemory.categoryFor(s.merchant, TxType.INCOME, past)?.takeIf { id -> usable.any { it.id == id } }
+                ?: (usable.firstOrNull { it.name.equals("Other", ignoreCase = true) } ?: usable.firstOrNull())?.id
+        }
+        return categories.firstOrNull { it.id == id }
+    }
+
+    /** Review (swiped right): added as it reads, on its own day and account, with its usual category. [onDone] gets the Undo. */
+    fun reviewAdd(s: SmsSuggestion, onDone: (suspend () -> Unit) -> Unit) {
+        viewModelScope.launch {
+            val category = guessCategory(s) ?: return@launch
+            val account = s.accountId ?: settings.settings.first().defaultAccountId
+            val t = com.leftovers.app.data.Transaction(
+                amountMinor = s.amountMinor,
+                type = if (s.isIncome) TxType.INCOME else TxType.EXPENSE,
+                categoryId = category.id,
+                epochDay = s.epochDay,
+                note = s.merchant,
+                accountId = account,
+            )
+            val id = repository.saveTransaction(t)
+            sms.dismiss(s.id)
+            onDone {
+                repository.removeTransaction(t.copy(id = id))
+                sms.putBack(s)
+            }
+        }
+    }
+
+    /** Review (swiped left): not added. [onDone] gets the Undo. */
+    fun reviewSkip(s: SmsSuggestion, onDone: (suspend () -> Unit) -> Unit) {
+        viewModelScope.launch {
+            sms.dismiss(s.id)
+            onDone { sms.putBack(s) }
+        }
+    }
+
     /**
      * A detected payment that is [match]'s person paying you back (or you paying them): settled against what's
      * open with them instead of becoming income or spending. [onDone] gets the Undo.
@@ -363,6 +408,16 @@ class HomeViewModel(
     }
 }
 
+/**
+ * Detected payments that are just spending or income, for the review stack. One that looks like someone paying you
+ * back, or a subscription's payment, stays on Home with its own button, so it's settled the right way.
+ */
+private fun plainSuggestions(state: HomeUiState): List<SmsSuggestion> = state.smsSuggestions.filter { s ->
+    com.leftovers.app.util.Payback.find(s.merchant, s.amountMinor, s.isIncome, state.owed) == null &&
+        com.leftovers.app.data.SubscriptionMatch.waiting(s.amountMinor, s.isIncome, s.merchant, s.epochDay, state.recurring) == null &&
+        com.leftovers.app.data.SubscriptionMatch.find(s.amountMinor, s.isIncome, s.merchant, s.epochDay, state.recurring, state.entries) == null
+}
+
 @Composable
 fun HomeScreen(
     onOpenBudget: () -> Unit,
@@ -407,6 +462,19 @@ fun HomeScreen(
         WhatsNewDialog { viewModel.closeWhatsNew(seenKey) }
     }
     val money = LocalMoney.current
+    var reviewing by rememberSaveable { mutableStateOf(false) }
+    if (reviewing) {
+        val homeState by viewModel.state.collectAsStateWithLifecycle()
+        // Kept as it was opened, so a payment that's just been added doesn't jump the stack while it flies off.
+        PaymentReview(
+            suggestions = plainSuggestions(homeState),
+            guess = viewModel::guessCategory,
+            onAdd = { s, undo -> viewModel.reviewAdd(s, undo) },
+            onSkip = { s, undo -> viewModel.reviewSkip(s, undo) },
+            onEdit = { s -> reviewing = false; onReviewSms(s) },
+            onClose = { reviewing = false },
+        )
+    }
     if (!state.loaded) return
     var owedOpen by remember { mutableStateOf<String?>(null) }
     // The tapped card steps out of the way until its pop-up shrinks back into it.
@@ -890,7 +958,14 @@ fun HomeScreen(
             }
 
             if (state.smsSuggestions.isNotEmpty()) {
-                item { SectionHeader("Detected payments", Modifier.appear(2)) }
+                // Two or more: one at a time, as a stack of cards to swipe through.
+                item {
+                    SectionHeader(
+                        "Detected payments", Modifier.appear(2),
+                        action = plainSuggestions(state).size.takeIf { it >= 2 }?.let { "Review $it" },
+                        onAction = { reviewing = true },
+                    )
+                }
                 item {
                     Glass(Modifier.fillMaxWidth().appear(2)) {
                         Column(Modifier.padding(vertical = 6.dp)) {

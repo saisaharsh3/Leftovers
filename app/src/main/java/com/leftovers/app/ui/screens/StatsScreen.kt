@@ -1008,6 +1008,9 @@ private fun CalendarCard(state: StatsUiState, peek: TransactionPeek) {
     var open by rememberSaveable { mutableStateOf(false) }
     val turn by animateFloatAsState(if (open) 90f else 0f, label = "calendarChevron")
     val heaviest = state.daily.withIndex().maxByOrNull { it.value }?.takeIf { it.value > 0 }
+    // No-spend days: only for spending as a whole, since a day without one category's spending isn't one.
+    val noSpendFrom = if (state.type == TxType.EXPENSE && state.categoryId == null) state.oldest else null
+    val noSpend = if (noSpendFrom == null) 0 else state.daily.indices.count { i -> com.leftovers.app.ui.components.noSpendDay(state.month.atDay(i + 1), state.daily[i], noSpendFrom) }
     Glass(Modifier.fillMaxWidth().appear(3)) {
         Column(Modifier.padding(horizontal = 20.dp, vertical = 14.dp)) {
             Row(
@@ -1018,7 +1021,8 @@ private fun CalendarCard(state: StatsUiState, peek: TransactionPeek) {
                     Text("Calendar", style = MaterialTheme.typography.titleMedium, color = c.textPrimary)
                     heaviest?.let {
                         Text(
-                            (if (state.type == TxType.EXPENSE) "Heaviest day " else "Best day ") + "${state.month.atDay(it.index + 1).shortLabel()}, ${money.formatWhole(it.value)}",
+                            (if (state.type == TxType.EXPENSE) "Heaviest day " else "Best day ") + "${state.month.atDay(it.index + 1).shortLabel()}, ${money.formatWhole(it.value)}" +
+                                if (noSpend > 0) " · $noSpend no-spend ${if (noSpend == 1) "day" else "days"}" else "",
                             style = MaterialTheme.typography.bodySmall,
                             color = c.textSecondary,
                         )
@@ -1034,12 +1038,21 @@ private fun CalendarCard(state: StatsUiState, peek: TransactionPeek) {
                         state.daily,
                         selected = selectedDay,
                         onSelect = { selectedDay = if (selectedDay == it) null else it },
+                        noSpendFrom = noSpendFrom,
                     )
                     Spacer(Modifier.height(12.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                         Legend(c.positive, "Lighter day")
                         Legend(c.warning, "Typical")
                         Legend(c.negative, "Heavier")
+                    }
+                    if (noSpend > 0) {
+                        Spacer(Modifier.height(8.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(Modifier.size(5.dp).clip(CircleShape).background(c.positive))
+                            Spacer(Modifier.width(6.dp))
+                            Text("No-spend day", style = MaterialTheme.typography.labelSmall, color = c.textSecondary)
+                        }
                     }
                     AnimatedContent(selectedDay, label = "dayDetail") { day ->
                         if (day == null) {
