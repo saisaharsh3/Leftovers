@@ -1,34 +1,38 @@
-<p><b>Leftovers</b> is a fast, private expense tracker. Log a spend in two taps, see what's safe to spend today, and plan for the things you want. Everything stays on your phone: no account, no ads, no analytics.</p>
+<p><b>Know what's safe to spend today.</b> Leftovers turns your budget into one daily number that already counts the bills still to come, so you can spend without guessing. Log a spend in two taps, and everything stays on your phone: no account, no ads, no tracking.</p>
 
-<p><b>Everyday tracking</b></p>
+<p><b>Fast to use, every day</b></p>
 <ul>
-<li>Keypad-first entry, categories, notes, accounts and receipt photos</li>
-<li>Split one bill across categories, and group entries with #tags</li>
-<li>Search and filter by account, category, tag or amount; swipe to delete with undo</li>
+<li>Keypad-first adding: amount, category, done. Notes, accounts, receipt photos and #tags when you want them</li>
+<li>Split a bill across categories, or with friends</li>
+<li>Payments can be picked up from bank SMS, bank emails and payment notifications in any currency, and wait for your tap</li>
 </ul>
 
-<p><b>Budgets that make sense day to day</b></p>
+<p><b>Budgets that make sense</b></p>
 <ul>
-<li>Monthly or yearly budget, with <i>Safe to spend today</i>: what's left minus bills still due, spread over the remaining days</li>
-<li>Per-category limits with alerts at 80% and 100%</li>
+<li><i>Safe to spend today</i>: what's left, minus bills still due, spread over the days remaining</li>
+<li>Monthly, yearly, weekly or your own dates, with category limits and alerts</li>
+<li>Subscriptions logged for you, with a reminder before each one</li>
 </ul>
 
-<p><b>Planning</b></p>
+<p><b>Insights you can read at a glance</b></p>
 <ul>
-<li>Subscriptions and recurring income, logged automatically, with a reminder before each bill</li>
-<li>Savings goals, multiple accounts with transfers, and money lent or borrowed</li>
+<li>Your balance over time, money in and out, and spending by day or by category</li>
+<li>Any period (a month, three months, a year, or your own dates) for one account or one category</li>
+<li>Trends in plain words, a monthly recap and a yearly story, and a PDF statement</li>
 </ul>
 
-<p><b>Insights</b></p>
+<p><b>Plan ahead</b></p>
 <ul>
-<li>Daily chart, category breakdown, spending calendar, trends and a shareable monthly recap</li>
+<li>Savings goals that tell you how much to put aside each month</li>
+<li>A shopping list with rates and aisles: tick what's in the basket, set a limit, then add it all to your spending</li>
+<li>Money lent and borrowed, kept out of your budget, with a link your friend can use to pay you back or add it to their own Leftovers</li>
 </ul>
 
-<p><b>Optional extras</b></p>
+<p><b>Yours, and private</b></p>
 <ul>
-<li>Payment detection from bank SMS and bank email alerts in any currency; nothing is added without your tap</li>
-<li>AI assistant with your own API key (Claude, ChatGPT, Gemini and more); every change waits for your confirmation</li>
-<li>Widgets, app lock, encrypted backups to a file or Google Drive, CSV export</li>
+<li>Several accounts and currencies, transfers, an app lock and home screen widgets</li>
+<li>Encrypted backups to a file or Google Drive; CSV export and PDF statements</li>
+<li>An optional AI assistant with your own key (Claude, ChatGPT, Gemini and others): ask about your money, see charts, and get Excel or Word reports. It only sees what each question needs, and every change waits for your OK</li>
 </ul>
 
 <p>Free and open source under the MIT License.</p>
