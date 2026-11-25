@@ -6,6 +6,7 @@ import androidx.glance.appwidget.updateAll
 import com.leftovers.app.data.AccountRepository
 import com.leftovers.app.data.AppDatabase
 import com.leftovers.app.data.SeedCategories
+import com.leftovers.app.data.ShoppingRepository
 import com.leftovers.app.data.PlanningRepository
 import com.leftovers.app.data.SettingsRepository
 import com.leftovers.app.data.SmsRepository
@@ -78,6 +79,7 @@ class AppContainer(private val context: Context) {
         settings.settings.map { it.plan }.distinctUntilChanged(),
     )
     val planning = PlanningRepository(database)
+    val shopping = ShoppingRepository(database.shoppingDao(), repository)
     val accounts = AccountRepository(
         database.accountDao(), database.transferDao(), database.transactionDao(), database.debtDao(),
         settings.settings.map { it.foreignRates }.distinctUntilChanged(),

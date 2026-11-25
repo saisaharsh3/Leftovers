@@ -121,6 +121,7 @@ fun PlanScreen(
     onOpenCategories: () -> Unit,
     onOpenDebts: () -> Unit,
     onOpenSettings: () -> Unit = {},
+    onOpenShopping: () -> Unit = {},
     viewModel: PlanViewModel = viewModel(factory = AppViewModelProvider.Factory),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -200,6 +201,10 @@ fun PlanScreen(
                     }
                 }
             }
+
+            // What's left to buy, between what's planned to pay (subscriptions) and what's saved for (goals).
+            item { SectionHeader("Shopping list", Modifier.appear(2)) }
+            item { ShoppingCard(onOpenShopping, Modifier.appear(2)) }
 
             item { SectionHeader("Savings goals", Modifier.appear(2), action = if (state.goals.isEmpty()) null else "All", onAction = onOpenGoals) }
             if (state.goals.isEmpty()) {

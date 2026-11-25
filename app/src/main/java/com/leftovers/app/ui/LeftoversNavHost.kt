@@ -126,6 +126,7 @@ private object Routes {
     /** [open] is a subscription to show straight away, or -1. */
     fun subscriptions(income: Boolean = false, open: Long = -1) = "subscriptions?income=$income&open=$open"
     const val GOALS = "goals"
+    const val SHOPPING = "shopping"
     const val GOAL = "goals/{id}"
     const val ACCOUNTS = "accounts"
     const val RECAP = "recap/{month}"
@@ -372,6 +373,7 @@ fun LeftoversNavHost(
                             onOpenGoal = { nav.navigate(Routes.goal(it)) },
                             onOpenCategories = { nav.navigate(Routes.CATEGORIES) },
                             onOpenDebts = { nav.navigate(Routes.DEBTS) },
+                            onOpenShopping = { nav.navigate(Routes.SHOPPING) },
                         )
                     }
                     screen(Routes.NOTICES) { NoticesScreen(onBack = back) }
@@ -436,6 +438,7 @@ fun LeftoversNavHost(
                         )
                     }
                     screen(Routes.GOALS) { GoalsScreen(onBack = back, onOpenGoal = { nav.navigate(Routes.goal(it)) }) }
+                    screen(Routes.SHOPPING) { com.leftovers.app.ui.screens.ShoppingListScreen(onBack = back) }
                     screen(Routes.GOAL, idArg) { GoalDetailScreen(onBack = back) }
                     screen(Routes.ACCOUNTS) { AccountsScreen(onBack = back, onOpenTransaction = { nav.navigate(Routes.edit(it)) }) }
                     screen(Routes.RECAP, listOf(navArgument("month") { type = NavType.StringType })) { RecapScreen(onClose = back) }

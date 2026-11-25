@@ -90,4 +90,14 @@ class MigrationTest {
             assertEquals(0, it.getInt(1)) // existing subscriptions still log themselves
         }
     }
+
+    @Test fun version31AddsAnEmptyShoppingListKeepingData() {
+        helper.createDatabase(name, 30).apply {
+            execSQL("INSERT INTO categories (id, name, emoji, color, type, budgetMinor, addsToBudget, bucket, hidden) VALUES (1, 'Food', 'utensils', 1, 'EXPENSE', NULL, 0, NULL, 0)")
+            close()
+        }
+        val db = helper.runMigrationsAndValidate(name, 31, true, *ALL_MIGRATIONS)
+        db.query("SELECT COUNT(*) FROM shopping_items").use { it.moveToFirst(); assertEquals(0, it.getInt(0)) }
+        db.query("SELECT name FROM categories WHERE id = 1").use { it.moveToFirst(); assertEquals("Food", it.getString(0)) }
+    }
 }
