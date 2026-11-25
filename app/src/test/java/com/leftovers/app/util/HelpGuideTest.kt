@@ -29,7 +29,7 @@ class HelpGuideTest {
         finds("where is the groceries list", "Shopping list")
         finds("what is my financial health score", "Financial health")
         finds("how do I search for food over 500 last month", "Search and filters")
-        finds("swipe through detected payments", "Detected payments")
+        finds("add a detected payment from sms", "Detected payments")
         finds("am I spending too fast", "Am I spending too fast?")
         finds("app icon shortcut", "Shortcuts on the app icon")
     }

@@ -952,12 +952,10 @@ fun HomeScreen(
                         }
                     }
                     fun dismiss(s: SmsSuggestion) = viewModel.reviewSkip(s) { restore -> undo.show("Dismissed ${s.merchant.ifBlank { "payment" }}", restore) }
-                    PaymentRoller(
-                        items = state.smsSuggestions,
-                        onAdd = ::confirm,
-                        onDismiss = ::dismiss,
-                        modifier = Modifier.appear(2),
-                    ) { s ->
+                    Glass(Modifier.fillMaxWidth().appear(2)) {
+                        Column(Modifier.padding(vertical = 6.dp)) {
+                        state.smsSuggestions.take(5).forEachIndexed { i, s ->
+                        if (i > 0) RowDivider()
                         val back = remember(s, state.owed) { com.leftovers.app.util.Payback.find(s.merchant, s.amountMinor, s.isIncome, state.owed) }
                         val waits = remember(s, state.recurring) {
                             if (back != null) null
@@ -1018,6 +1016,8 @@ fun HomeScreen(
                             },
                             onClick = { onReviewSms(s) },
                         )
+                        }
+                        }
                     }
                 }
             }
