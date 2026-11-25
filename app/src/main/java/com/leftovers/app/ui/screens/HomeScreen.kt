@@ -469,6 +469,7 @@ fun HomeScreen(
         PaymentReview(
             suggestions = plainSuggestions(homeState),
             guess = viewModel::guessCategory,
+            accountName = { s -> homeState.accounts.firstOrNull { it.id == s.accountId }?.name },
             onAdd = { s, undo -> viewModel.reviewAdd(s, undo) },
             onSkip = { s, undo -> viewModel.reviewSkip(s, undo) },
             onEdit = { s -> reviewing = false; onReviewSms(s) },
@@ -996,7 +997,11 @@ fun HomeScreen(
                                         java.time.LocalDate.ofEpochDay(s.epochDay).friendlyLabel() + " · " + where
                                     },
                                     leading = {
-                                        IconTile(
+                                        // Its category's icon, as it would be added; where it came from until that's known.
+                                        val guessed by androidx.compose.runtime.produceState<com.leftovers.app.data.Category?>(null, s.id) { value = viewModel.guessCategory(s) }
+                                        val cat = guessed
+                                        if (cat != null) CategoryIcon(cat.emoji, cat.color, size = 42.dp)
+                                        else IconTile(
                                             when (s.source) {
                                                 SmsSuggestion.SOURCE_EMAIL -> Lucide.Mail
                                                 SmsSuggestion.SOURCE_APP -> Lucide.Bell
