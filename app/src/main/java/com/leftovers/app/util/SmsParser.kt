@@ -8,10 +8,16 @@ object SmsParser {
     private val debitWords = Regex(
         // "Dr. from A/C" is Bank of Baroda's "debited".
         // "Transaction of", "payment of", "charged", "transferred" and "UPI txn" are how cards, billers and some banks say it.
-        """\b(debited|spent|paid|sent|withdrawn|purchase|txn of|transaction of|payment of|debit|charged|transferred|upi txn|send money|cash ?out|thank you for using|used at|used for)\b|\bdr\.?\s+(from|to)\b""",
+        """\b(debited|spent|paid|sent|withdrawn|purchase|txn of|transaction of|payment of|debit|charged|transferred|upi txn|send money|cash ?out|thank you for using|used at|used for)\b|\bdr\.?\s+(from|to)\b|""" +
+            // Other languages banks write in: Italian, Spanish, French, German, Portuguese, and Russian in Latin letters (#77).
+            """\b(acquisto|addebito|bonifico|pagamento|prelievo|compra|pago|cargo|retiro|paiement|achat|retrait|pr[ée]l[èe]vement|""" +
+            """zahlung|kartenzahlung|abbuchung|lastschrift|[üu]berweisung|abhebung|levantamento|transfer[êe]ncia|oplata|spisanie|pokupka|snyatie)\b""",
         RegexOption.IGNORE_CASE,
     )
-    private val creditOnly = Regex("""\b(credited|received|refund|cashback)\b""", RegexOption.IGNORE_CASE)
+    private val creditOnly = Regex(
+        """\b(credited|received|refund|cashback|versamento|accredito|abono|ingreso|cr[ée]dit[ée]|gutschrift|eingang|dep[óo]sito|zachislenie|popolnenie)\b""",
+        RegexOption.IGNORE_CASE,
+    )
     /**
      * Messages that aren't a completed payment. Banks add "never share your OTP" and "if you have not requested
      * this" to real alerts, so only an actual OTP, a collect request or a reminder counts here.
@@ -24,7 +30,7 @@ object SmsParser {
     )
     /** Offers mention amounts too ("get Rs 100 cashback"): skipped unless the money actually moved. */
     private val promo = Regex("""(\d+\s?% off|\boffers?\b|\bsale\b|\bcoupon|\bvoucher|\bwin\b|\bup ?to\b|\bapply now\b|\bpre-?approved\b|\beligible\b)""", RegexOption.IGNORE_CASE)
-    private val moved = Regex("""\b(debited|credited|spent|paid|sent|received|withdrawn|charged|transferred)\b""", RegexOption.IGNORE_CASE)
+    private val moved = Regex("""\b(debited|credited|spent|paid|sent|received|withdrawn|charged|transferred|eseguito|effettuato|oplata)\b""", RegexOption.IGNORE_CASE)
     /** "debited by 500.0" (SBI and others write the amount with no currency); Union Bank writes "Rs:200.00". */
     private val bareAmount = Regex(
         """\b(?:debited|spent|paid|sent|withdrawn|credited|received)\s+(?:by|with|for|of)?\s*(?:rs[.:]?|inr[.:]?|₹)?\s*([0-9][0-9,]*(?:\.[0-9]{1,2})?)\b""",
@@ -101,7 +107,7 @@ object SmsParser {
         val body = message.replace(Regex("""(\d)(to|from)\b""", RegexOption.IGNORE_CASE), "$1 $2")
         ignore.find(body)?.let { return Check(null, "Skipped: it says \"${it.value}\", like an OTP, a reminder or a failed payment.") }
         // "credited" or "received" without "debited" is money coming in, suggested as income.
-        val income = creditOnly.containsMatchIn(body) && !Regex("debited", RegexOption.IGNORE_CASE).containsMatchIn(body)
+        val income = creditOnly.containsMatchIn(body) && !Regex("debited|addebito", RegexOption.IGNORE_CASE).containsMatchIn(body)
         val custom = extraWords.firstOrNull { it.isNotBlank() && body.contains(it.trim(), ignoreCase = true) }
         if (promo.containsMatchIn(body) && !moved.containsMatchIn(body)) {
             return Check(null, "Skipped: it reads like an offer, not money that moved.")

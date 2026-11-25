@@ -7,14 +7,24 @@ import java.math.BigDecimal
  * "Rs.250", "₹ 1,250.00", "$12.50", "USD 12.50", "12.50 EUR", "AED 45", "RM 30", "Rp 50.000".
  */
 object MoneyText {
+    /** Symbols and words for money that aren't an ISO code, as banks write them. */
+    private val symbols = listOf(
+        "rs.", "rs", "₹", "tk.", "tk", "us\$", "\$", "€", "euro", "euros", "£", "s\$", "a\$", "c\$", "rmb", "¥", "₩", "rm",
+        "₱", "฿", "rp", "₫", "৳", "₨", "ksh", "₦", "r\$", "₺", "tl", "₽", "₵", "₴", "zł", "kč", "kr", "br", "₸", "₾", "₼", "₪",
+        "lei", "лв", "din", "nt\$", "hk\$", "rub.", "руб", "грн", "dh", "dhs",
+    )
+
+    /**
+     * Every ISO currency code ("BYN", "KZT", "GEL"...), so a bank in any country is understood. A few codes are
+     * also everyday words ("ALL", "TOP", "TRY"); those only count by their symbol, to avoid "try 3 times" as money.
+     */
+    private val wordCodes = setOf("all", "top", "try", "cup", "bob", "mop", "pen", "sos", "gel", "mad", "bam", "lak", "now", "std", "mro")
+    private val codes: List<String> = runCatching {
+        java.util.Currency.getAvailableCurrencies().map { it.currencyCode.lowercase() }.filter { it.length == 3 && it.all(Char::isLetter) && it !in wordCodes }
+    }.getOrDefault(emptyList()) + listOf("inr", "usd", "eur", "gbp", "aed", "byn")
+
     /** Symbols and codes, longest first so "US$" wins over "$" and "R$" over "R". */
-    private val marks = listOf(
-        "rs.", "rs", "inr", "₹", "tk.", "tk", "us\$", "usd", "\$", "eur", "€", "gbp", "£", "aed", "sar", "qar", "kwd", "bhd", "omr",
-        "sgd", "s\$", "aud", "a\$", "cad", "c\$", "nzd", "hkd", "jpy", "cny", "rmb", "¥", "krw", "₩", "myr", "rm",
-        "php", "₱", "thb", "฿", "idr", "rp", "vnd", "₫", "bdt", "৳", "pkr", "lkr", "npr", "₨", "kes", "ksh", "ngn",
-        "₦", "zar", "brl", "r\$", "mxn", "chf", "₺", "rub", "₽", "egp", "ghs", "₵", "uah", "₴", "pln", "zł",
-        "czk", "kč", "sek", "nok", "dkk", "kr",
-    ).sortedByDescending { it.length }
+    private val marks = (symbols + codes).distinct().sortedByDescending { it.length }
 
     private val markPattern = marks.joinToString("|") { Regex.escape(it) }
     private const val NUMBER = """([0-9][0-9,. ' ]*[0-9]|[0-9])"""
