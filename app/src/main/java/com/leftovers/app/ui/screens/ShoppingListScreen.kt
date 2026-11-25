@@ -237,7 +237,14 @@ fun ShoppingListScreen(onBack: () -> Unit) {
             if (toBuy.isNotEmpty()) {
                 item {
                     val sum = Shopping.sum(toBuy)
-                    ListHeading("To buy", "about ${money.formatWhole(sum.totalMinor)}" + if (sum.unpriced > 0) " + ${sum.unpriced} unpriced" else "")
+                    ListHeading(
+                        "To buy",
+                        when {
+                            sum.totalMinor == 0L -> "${sum.unpriced} without a rate"
+                            sum.unpriced > 0 -> "about ${money.formatWhole(sum.totalMinor)} + ${sum.unpriced} unpriced"
+                            else -> "about ${money.formatWhole(sum.totalMinor)}"
+                        },
+                    )
                 }
                 // In aisles, in the order a shop is walked, once there's enough to sort.
                 val aisles = if (toBuy.size >= 4) Shopping.bySection(toBuy) else listOf("" to toBuy)
@@ -404,6 +411,10 @@ private fun SwipeToRemove(onRemove: () -> Unit, content: @Composable () -> Unit)
     var width by remember { mutableStateOf(1f) }
     var armed by remember { mutableStateOf(false) }
     var gone by remember { mutableStateOf(false) }
+    // How far the finger has actually gone; where the row is drawn comes from it, so frames never build on each other.
+    var dragged by remember { mutableStateOf(0f) }
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val give = with(density) { 28.dp.toPx() }
     val threshold = width * 0.35f
     val progress = (-offset.value / threshold).coerceIn(0f, 1f)
     val iconScale by androidx.compose.animation.core.animateFloatAsState(
@@ -446,15 +457,17 @@ private fun SwipeToRemove(onRemove: () -> Unit, content: @Composable () -> Unit)
                     .graphicsLayer { translationX = offset.value }
                     .draggable(
                         orientation = androidx.compose.foundation.gestures.Orientation.Horizontal,
+                        // Picks up from wherever the row is, even mid-spring.
+                        onDragStarted = { dragged = offset.value; offset.stop() },
                         state = androidx.compose.foundation.gestures.rememberDraggableState { delta ->
-                            // Leftwards freely; rightwards only a little, with resistance, so it feels anchored.
-                            val next = offset.value + delta
-                            val target = if (next > 0f) next * 0.25f else next
-                            scope.launch { offset.snapTo(target.coerceIn(-width, 24f)) }
-                            val now = target < -threshold
+                            dragged = (dragged + delta).coerceIn(-width, width)
+                            // Leftwards 1:1; rightwards it gives a little and eases to a stop, so it feels anchored.
+                            val shown = if (dragged > 0f) give * (1f - kotlin.math.exp(-dragged / (give * 3f))) else dragged
+                            scope.launch { offset.snapTo(shown) }
+                            val now = shown < -threshold
                             if (now != armed) { armed = now; if (now) com.leftovers.app.ui.components.Haptics.tick(view) }
                         },
-                        onDragStopped = { velocity -> settle(velocity) },
+                        onDragStopped = { velocity -> settle(if (offset.value > 0f) 0f else velocity) },
                     ),
             ) { content() }
         }
