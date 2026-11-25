@@ -103,6 +103,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -275,7 +278,7 @@ class EditorViewModel(
 
     var amountText by mutableStateOf(savedState.get<Long>("amount")?.takeIf { it > 0 }?.let(AmountInput::fromMinor).orEmpty())
         private set
-    var type by mutableStateOf(TxType.EXPENSE)
+    var type by mutableStateOf(if (savedState.get<Boolean>("income") == true) TxType.INCOME else TxType.EXPENSE)
         private set
     var categoryId by mutableStateOf<Long?>(null)
         private set
@@ -300,6 +303,7 @@ class EditorViewModel(
         val check = com.leftovers.app.util.SmsParser.check(text, s.detectionKeywords)
         val parsed = check.parsed ?: return check.reason
         onTypeChange(if (parsed.isIncome) TxType.INCOME else TxType.EXPENSE)
+        sumPrefix = ""
         amountText = AmountInput.fromMinor(parsed.amountMinor)
         cursor = null
         if (parsed.merchant.isNotBlank()) note = parsed.merchant
@@ -483,7 +487,37 @@ class EditorViewModel(
         }
     }
 
-    val amountMinor: Long get() = AmountInput.toMinor(amountText) ?: 0L
+    /**
+     * A sum being typed on the keypad, up to the number being typed now ("120+45+"), or empty. The amount is then
+     * its total; = or saving settles it.
+     */
+    var sumPrefix by mutableStateOf("")
+        private set
+
+    val amountMinor: Long get() =
+        if (sumPrefix.isEmpty()) AmountInput.toMinor(amountText) ?: 0L
+        else com.leftovers.app.util.AmountSum.evaluate(sumPrefix + amountText) ?: 0L
+
+    /** + − × ÷: what's typed joins the sum and the next number starts; pressed again, the operator changes. */
+    fun onOperator(op: Char) {
+        if (amountText.isEmpty()) {
+            if (sumPrefix.isNotEmpty()) sumPrefix = sumPrefix.dropLast(1) + op
+            return
+        }
+        if (sumPrefix.length > 120) return
+        sumPrefix += amountText + op
+        amountText = ""
+        cursor = null
+    }
+
+    /** =: the sum becomes the amount. */
+    fun onEquals() {
+        if (sumPrefix.isEmpty()) return
+        val total = com.leftovers.app.util.AmountSum.evaluate(sumPrefix + amountText) ?: return
+        sumPrefix = ""
+        amountText = if (total > 0) AmountInput.fromMinor(total) else ""
+        cursor = null
+    }
 
     /** Where the keypad types; null means the end, with no visible caret. */
     var cursor by mutableStateOf<Int?>(null)
@@ -494,6 +528,15 @@ class EditorViewModel(
     }
 
     fun onKey(key: KeypadKey) {
+        // Erasing past the start of a number goes back into the sum: the operator goes, the number before comes back.
+        if (key == KeypadKey.Erase && amountText.isEmpty() && sumPrefix.isNotEmpty()) {
+            val before = sumPrefix.dropLast(1)
+            val start = before.indexOfLast { it in com.leftovers.app.util.AmountSum.OPERATORS } + 1
+            amountText = before.substring(start)
+            sumPrefix = before.substring(0, start)
+            cursor = null
+            return
+        }
         val placed = cursor
         val result = applyKey(AmountEdit(amountText, placed ?: amountText.length), key) ?: return
         amountText = result.text
@@ -501,6 +544,7 @@ class EditorViewModel(
     }
 
     fun clearAmount() {
+        sumPrefix = ""
         amountText = ""
         cursor = null
     }
@@ -972,6 +1016,8 @@ fun EditorScreen(
                 modifier = Modifier
                     .navigationBarsPadding()
                     .padding(16.dp),
+                onOperator = viewModel::onOperator,
+                onEquals = viewModel::onEquals,
             )
         }
     }
@@ -1039,6 +1085,22 @@ fun EditorScreen(
             }
             // Ease between sizes as digits are added instead of jumping.
             val size by animateFloatAsState(targetSize, spring(dampingRatio = 0.9f, stiffness = 500f), label = "amountSize")
+            // A sum on the keypad: what's been added so far, and what it comes to.
+            AnimatedVisibility(viewModel.sumPrefix.isNotEmpty(), enter = fadeIn() + expandVertically(), exit = fadeOut() + shrinkVertically()) {
+                val sum = com.leftovers.app.util.AmountSum.pretty(viewModel.sumPrefix + viewModel.amountText, money::groupInput)
+                val shown = if (sum.length > 34) "…" + sum.takeLast(33) else sum
+                Text(
+                    buildAnnotatedString {
+                        append(shown)
+                        append("  =  ")
+                        withStyle(SpanStyle(color = c.textPrimary)) { append(money.format(viewModel.amountMinor)) }
+                    },
+                    style = MaterialTheme.typography.titleMedium,
+                    color = c.textTertiary,
+                    maxLines = 1,
+                    modifier = Modifier.padding(horizontal = 24.dp).padding(bottom = 6.dp),
+                )
+            }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 // Tapping the symbol switches currency, for spending abroad.
                 Row(
@@ -1085,7 +1147,7 @@ fun EditorScreen(
             // A bank message copied from another app: one tap fills it in (#76). The clipboard is only read on the tap;
             // the chip shows when there's text there and nothing typed yet.
             val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
-            if (!viewModel.isEditing && !viewModel.owed && viewModel.amountText.isEmpty() && clipboard.hasText()) {
+            if (!viewModel.isEditing && !viewModel.owed && viewModel.amountText.isEmpty() && viewModel.sumPrefix.isEmpty() && clipboard.hasText()) {
                 Spacer(Modifier.height(10.dp))
                 Chip("Paste a bank message", onClick = { clipboard.getText()?.text?.let(viewModel::paste) }, icon = Lucide.ClipboardPaste, iconTint = c.textSecondary)
             }

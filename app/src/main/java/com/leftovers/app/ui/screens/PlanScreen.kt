@@ -75,6 +75,8 @@ data class PlanUiState(
     val budget: Long = 0,
     val spent: Long = 0,
     val dailyLimit: Long = 0,
+    /** How much of the budget's days have gone, today included: where spending would be at an even pace. */
+    val pace: Float? = null,
     val recurring: List<RecurringItem> = emptyList(),
     val goals: List<GoalWithSaved> = emptyList(),
     val owedToYou: Long = 0,
@@ -106,6 +108,11 @@ class PlanViewModel(
                 budget, items, if (s.plan.envelope) 0L else recurring.pendingExpenses(cycle), periodEnd = cycle.end,
                 billsToday = if (s.plan.envelope) 0L else items.billsOn(java.time.LocalDate.now(), recurring),
             )?.dailyLimit ?: 0,
+            pace = run {
+                val days = (cycle.end.toEpochDay() - cycle.start.toEpochDay() + 1).toFloat()
+                val gone = (java.time.LocalDate.now().toEpochDay() - cycle.start.toEpochDay() + 1).toFloat()
+                (gone / days).takeIf { days > 0 }?.coerceIn(0f, 1f)
+            },
             // Scheduled one-offs (#68) are on Home, not counted as subscriptions here.
             recurring = recurring.filterNot { it.once },
             goals = goals,
@@ -286,7 +293,7 @@ private fun BudgetHero(state: PlanUiState, onOpen: () -> Unit, modifier: Modifie
     val used = if (state.budget > 0) state.spent.toFloat() / state.budget else 1f
     Glass(modifier.fillMaxWidth(), strong = true, shape = RoundedCornerShape(32.dp), onClick = onOpen) {
         Column(Modifier.padding(22.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Gauge(used, Modifier.size(220.dp)) {
+            Gauge(used, Modifier.size(220.dp), pace = state.pace?.takeIf { state.budget > 0 }) {
                 Column(Modifier.align(Alignment.Center).fillMaxWidth().padding(horizontal = 28.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(if (left < 0) "Over budget" else if (state.plan.mode == BudgetMode.MONTHLY || state.plan.mode == BudgetMode.YEARLY) "Left this month" else "Left to spend", style = MaterialTheme.typography.labelLarge, color = c.textSecondary)
                     RollingText(money.format(abs(left)), MaterialTheme.typography.headlineLarge, if (left >= 0) c.textPrimary else c.negative)
@@ -302,6 +309,16 @@ private fun BudgetHero(state: PlanUiState, onOpen: () -> Unit, modifier: Modifie
                 Column(Modifier.weight(1f), horizontalAlignment = Alignment.End) {
                     Text("Used", style = MaterialTheme.typography.labelMedium, color = c.textSecondary)
                     Text("${(used * 100).toInt()}%", style = MaterialTheme.typography.titleMedium, color = c.textPrimary, textAlign = TextAlign.End)
+                    // What the mark on the ring means: ahead of it is spending faster than the days are going.
+                    state.pace?.takeIf { state.budget > 0 }?.let { p ->
+                        val ahead = used > p + 0.03f
+                        Text(
+                            if (ahead) "Spending fast" else "On track",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = if (ahead) c.warning else c.positive,
+                            textAlign = TextAlign.End,
+                        )
+                    }
                 }
             }
         }

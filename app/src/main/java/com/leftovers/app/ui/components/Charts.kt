@@ -90,10 +90,13 @@ fun Gauge(
     fraction: Float,
     modifier: Modifier = Modifier,
     thickness: Dp = 14.dp,
+    /** How far through the budget's days today is: a small mark where spending would be at an even pace. */
+    pace: Float? = null,
     content: @Composable BoxScope.() -> Unit = {},
 ) {
     val c = LocalAppColors.current
     val color = budgetColor(fraction)
+    val mark = c.textPrimary
     val animated by animateFloatAsState(fraction.coerceIn(0f, 1f), spring(dampingRatio = 0.85f, stiffness = 40f), label = "gauge")
     Box(modifier, contentAlignment = Alignment.Center) {
         Canvas(Modifier.fillMaxSize()) {
@@ -113,6 +116,16 @@ fun Gauge(
                     size = Size(d, d),
                     style = Stroke(stroke, cap = StrokeCap.Round),
                 )
+            }
+            pace?.let { p ->
+                // A short line across the ring at today's point, with a dark edge so it reads over any colour.
+                val a = Math.toRadians((start + sweep * p.coerceIn(0f, 1f)).toDouble())
+                val r = d / 2
+                val dir = Offset(kotlin.math.cos(a).toFloat(), kotlin.math.sin(a).toFloat())
+                val inner = center + dir * (r - stroke * 0.85f)
+                val outer = center + dir * (r + stroke * 0.85f)
+                drawLine(Color.Black.copy(alpha = 0.25f), inner, outer, strokeWidth = 5.dp.toPx(), cap = StrokeCap.Round)
+                drawLine(mark, inner, outer, strokeWidth = 2.5.dp.toPx(), cap = StrokeCap.Round)
             }
         }
         content()

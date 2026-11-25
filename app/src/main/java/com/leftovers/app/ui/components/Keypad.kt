@@ -46,6 +46,7 @@ sealed interface KeypadKey {
 
 private val keyHeight = 60.dp
 private val gap = 10.dp
+private val opHeight = 46.dp
 
 @Composable
 fun Keypad(
@@ -55,9 +56,28 @@ fun Keypad(
     confirmEnabled: Boolean,
     modifier: Modifier = Modifier,
     confirmLabel: String = "Add",
+    /** Sums on the keypad: + − × ÷ and =, in a slim row on top. Left out, the keypad is digits only. */
+    onOperator: ((Char) -> Unit)? = null,
+    onEquals: (() -> Unit)? = null,
 ) {
     val c = LocalAppColors.current
-    Row(modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(gap)) {
+    Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(gap)) {
+    if (onOperator != null) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(gap)) {
+            val names = mapOf('+' to "Plus", '−' to "Minus", '×' to "Times", '÷' to "Divided by")
+            com.leftovers.app.util.AmountSum.OPERATORS.forEach { op ->
+                Key(Modifier.weight(1f).semantics { contentDescription = names.getValue(op) }, onClick = { onOperator(op) }, height = opHeight) {
+                    Text(op.toString(), fontSize = 22.sp, color = c.textSecondary)
+                }
+            }
+            if (onEquals != null) {
+                Key(Modifier.weight(1f).semantics { contentDescription = "Equals" }, onClick = onEquals, height = opHeight) {
+                    Text("=", fontSize = 22.sp, color = c.accent)
+                }
+            }
+        }
+    }
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(gap)) {
         Column(Modifier.weight(3f), verticalArrangement = Arrangement.spacedBy(gap)) {
             listOf("123", "456", "789").forEach { row ->
                 Row(horizontalArrangement = Arrangement.spacedBy(gap)) {
@@ -99,6 +119,7 @@ fun Keypad(
                 }
             }
         }
+    }
     }
 }
 

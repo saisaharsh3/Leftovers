@@ -59,6 +59,8 @@ class MainActivity : FragmentActivity() {
 
     /** Set when the widget or reminder asks to jump straight to "add". */
     private var openAddRequest by mutableStateOf(false)
+    /** A long-press shortcut on the app icon: add income, or the shopping list. */
+    private var shortcutScreen by mutableStateOf<String?>(null)
     /** Money owed sent from a friend's Leftovers, in the link this was opened with; shown once the app is unlocked. */
     private var sharedOwed by mutableStateOf<com.leftovers.app.util.SharedOwed.Shared?>(null)
     /** Entries a friend shared from their Leftovers, in the link this was opened with. */
@@ -90,7 +92,11 @@ class MainActivity : FragmentActivity() {
         preferHighestRefreshRate()
         val container = (application as LeftoversApp).container
         openAddRequest = intent.getBooleanExtra(EXTRA_OPEN_ADD, false)
-        if (savedInstanceState == null) readShared(intent)
+        if (savedInstanceState == null) {
+            readShared(intent)
+            shortcutScreen = intent.getStringExtra(com.leftovers.app.util.AppShortcuts.EXTRA_SCREEN)
+            com.leftovers.app.util.AppShortcuts.publish(applicationContext)
+        }
         lifecycleScope.launch {
             val first = container.settings.settings.first()
             // Privacy mode on at the start, when asked for (#73); not again on rotating or coming back.
@@ -176,6 +182,8 @@ class MainActivity : FragmentActivity() {
                                 !showLock -> LeftoversNavHost(
                                     openAdd = openAddRequest,
                                     onOpenAddHandled = { openAddRequest = false },
+                                    shortcutScreen = shortcutScreen,
+                                    onShortcutHandled = { shortcutScreen = null },
                                     sharedOwed = sharedOwed,
                                     onSharedHandled = { sharedOwed = null },
                                     sharedEntries = sharedEntries,
@@ -259,6 +267,7 @@ class MainActivity : FragmentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         if (intent.getBooleanExtra(EXTRA_OPEN_ADD, false)) openAddRequest = true
+        intent.getStringExtra(com.leftovers.app.util.AppShortcuts.EXTRA_SCREEN)?.let { shortcutScreen = it }
         readShared(intent)
     }
 

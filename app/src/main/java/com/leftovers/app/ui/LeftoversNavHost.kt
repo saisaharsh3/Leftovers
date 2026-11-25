@@ -118,7 +118,7 @@ private object Routes {
     const val PLAN = "plan"
     const val DEBTS = "debts"
     const val DELETED = "deleted"
-    const val ADD = "add?day={day}&amount={amount}&note={note}&sms={sms}&text={text}"
+    const val ADD = "add?day={day}&amount={amount}&note={note}&sms={sms}&text={text}&income={income}"
     const val EDIT = "edit/{id}"
     const val BUDGET = "budget"
     const val BUDGET_PLAN = "budget/plan"
@@ -138,8 +138,8 @@ private object Routes {
     /** Opens the assistant; a non-empty [ask] is sent as the first question. */
     fun assistant(ask: String = "") = "assistant?ask=" + android.net.Uri.encode(ask)
 
-    fun add(day: Long = -1L, amount: Long = -1L, note: String = "", sms: Long = -1L, text: String = "") =
-        "add?day=$day&amount=$amount&note=${Uri.encode(note)}&sms=$sms&text=${Uri.encode(text.take(2000))}"
+    fun add(day: Long = -1L, amount: Long = -1L, note: String = "", sms: Long = -1L, text: String = "", income: Boolean = false) =
+        "add?day=$day&amount=$amount&note=${Uri.encode(note)}&sms=$sms&text=${Uri.encode(text.take(2000))}&income=$income"
     fun edit(id: Long) = "edit/$id"
     fun goal(id: Long) = "goals/$id"
     fun recap(month: String) = "recap/$month"
@@ -187,6 +187,8 @@ private fun NavGraphBuilder.screen(
 fun LeftoversNavHost(
     openAdd: Boolean = false,
     onOpenAddHandled: () -> Unit = {},
+    shortcutScreen: String? = null,
+    onShortcutHandled: () -> Unit = {},
     sharedOwed: com.leftovers.app.util.SharedOwed.Shared? = null,
     onSharedHandled: () -> Unit = {},
     sharedEntries: com.leftovers.app.util.SharedEntries.Shared? = null,
@@ -235,6 +237,15 @@ fun LeftoversNavHost(
             nav.navigate(Routes.add())
             onOpenAddHandled()
         }
+    }
+    // A long press on the app icon: straight to adding income, or to the shopping list.
+    LaunchedEffect(shortcutScreen) {
+        when (shortcutScreen) {
+            com.leftovers.app.util.AppShortcuts.SCREEN_INCOME -> nav.navigate(Routes.add(income = true))
+            com.leftovers.app.util.AppShortcuts.SCREEN_SHOPPING -> nav.navigate(Routes.SHOPPING)
+            else -> return@LaunchedEffect
+        }
+        onShortcutHandled()
     }
 
     val swipeThreshold = with(LocalDensity.current) { 72.dp.toPx() }
@@ -392,6 +403,7 @@ fun LeftoversNavHost(
                             navArgument("sms") { type = NavType.LongType; defaultValue = -1L },
                             // A bank message shared into Leftovers (#76): the add screen reads it and fills itself in.
                             navArgument("text") { type = NavType.StringType; defaultValue = "" },
+                            navArgument("income") { type = NavType.BoolType; defaultValue = false },
                         ),
                     ) {
                         EditorScreen(
