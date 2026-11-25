@@ -652,6 +652,7 @@ fun ShoppingCard(onOpen: () -> Unit, modifier: Modifier = Modifier) {
                 title = when {
                     list.isEmpty() -> "Make a shopping list"
                     toBuy.isEmpty() -> "All in the basket"
+                    Shopping.sum(toBuy).totalMinor == 0L -> "${toBuy.size} to buy"
                     else -> "${toBuy.size} to buy · about ${money.formatWhole(Shopping.sum(toBuy).totalMinor)}"
                 },
                 subtitle = if (list.isEmpty()) "Rates and shop links, then add what you bought to spending" else toBuy.take(3).joinToString(", ") { it.name } + if (toBuy.size > 3) " and more" else "",
