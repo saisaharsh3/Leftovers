@@ -110,6 +110,10 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.sync.withLock
 
@@ -165,6 +169,8 @@ class AssistantViewModel(private val container: AppContainer, private val assist
     val store = com.leftovers.app.ai.ChatStore(container.appContext)
     /** This chat's id in [store]; a new one for each new chat. */
     private var chatId = System.currentTimeMillis()
+    /** Which saved chat is open, to mark it in the list of chats. */
+    val openChatId: Long get() = chatId
     /**
      * The chat so far, for an AI that hasn't seen it: after switching AI, or opening a saved chat. It becomes that AI's
      * own earlier messages when it starts.
@@ -631,7 +637,7 @@ fun AssistantScreen(
         subtitle = cfg?.let { "${it.provider.label} · ${it.model}" } ?: "Not connected",
         onBack = onBack,
         actions = {
-            if (cfg != null) RoundButton(Lucide.History, "Saved chats", { showHistory = true })
+            if (cfg != null) RoundButton(Lucide.History, "Chats", { showHistory = true })
             if (cfg != null && viewModel.items.isNotEmpty()) RoundButton(Lucide.PenLine, "New chat", { viewModel.reset() })
             RoundButton(Lucide.Settings, "AI settings", { showSetup = true })
         },
@@ -799,7 +805,7 @@ fun AssistantScreen(
     }
 
     if (showSetup) AssistantSetupSheet(onDismiss = { showSetup = false })
-    if (showHistory) SavedChatsSheet(viewModel, onDismiss = { showHistory = false })
+    if (showHistory) ChatsDrawer(viewModel, onDismiss = { showHistory = false })
 
     if (photoMenu) {
         GlassSheet(onDismiss = { photoMenu = false }) {
@@ -1549,60 +1555,203 @@ private fun PrivacyToggle(title: String, detail: String, checked: Boolean, onCha
 
 class AssistantSetupViewModel(val settings: AssistantSettings) : ViewModel()
 
-/** Chats kept on the phone: open one to carry on, delete one or all, or stop keeping them. */
+/**
+ * The list of chats, as a panel from the left like other AI apps: search, a new chat, the chats grouped by when they
+ * were last used (the open one marked), and at the foot whether chats are kept at all. Long-press a chat to delete it.
+ * Tap outside, swipe it away to the left, or go back to close it.
+ */
 @Composable
-private fun SavedChatsSheet(viewModel: AssistantViewModel, onDismiss: () -> Unit) {
+private fun ChatsDrawer(viewModel: AssistantViewModel, onDismiss: () -> Unit) {
     val c = LocalAppColors.current
+    val scope = rememberCoroutineScope()
     var keep by remember { mutableStateOf(viewModel.store.enabled) }
     var chats by remember { mutableStateOf<List<com.leftovers.app.ai.ChatStore.Saved>?>(null) }
+    var query by remember { mutableStateOf("") }
+    var menuFor by remember { mutableStateOf<Long?>(null) }
+    var confirmAll by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { chats = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { viewModel.store.list() } }
-    val use24 = com.leftovers.app.util.LocalUse24Hour.current
-    GlassSheet(onDismiss) {
-        Column(
-            Modifier.verticalScroll(androidx.compose.foundation.rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            Text("Saved chats", style = MaterialTheme.typography.headlineSmall, color = c.textPrimary)
-            Glass(Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(vertical = 6.dp)) {
-                    PrivacyToggle(
-                        "Keep chats on this phone",
-                        "Only here, never in backups or sent anywhere. Off deletes them all.",
-                        keep,
-                    ) { on -> viewModel.store.enabled = on; keep = on; if (!on) chats = emptyList() }
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val width = with(density) { 320.dp.toPx() }
+    // 0 is closed (off to the left), 1 open; dragging moves it with the finger.
+    val shown = remember { androidx.compose.animation.core.Animatable(0f) }
+    val spring = androidx.compose.animation.core.spring<Float>(dampingRatio = 1f, stiffness = 420f)
+    LaunchedEffect(Unit) { shown.animateTo(1f, spring) }
+    fun close(then: () -> Unit = {}) = scope.launch { shown.animateTo(0f, spring); onDismiss(); then() }
+
+    androidx.compose.ui.window.Dialog(
+        onDismissRequest = { close() },
+        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
+    ) {
+        (androidx.compose.ui.platform.LocalView.current.parent as? androidx.compose.ui.window.DialogWindowProvider)?.window?.setDimAmount(0f)
+        Box(Modifier.fillMaxSize()) {
+            // The chat behind, dimmed as the panel comes in; a tap closes it.
+            Box(
+                Modifier.fillMaxSize()
+                    .graphicsLayer { alpha = shown.value }
+                    .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.45f))
+                    .pointerInput(Unit) { detectTapGestures { close() } },
+            )
+            Column(
+                Modifier
+                    .fillMaxHeight()
+                    .width(320.dp)
+                    .graphicsLayer { translationX = -width * (1f - shown.value) }
+                    .pointerInput(Unit) {
+                        detectHorizontalDragGestures(
+                            onDragEnd = { scope.launch { if (shown.value < 0.7f) close() else shown.animateTo(1f, spring) } },
+                        ) { change, drag ->
+                            change.consume()
+                            scope.launch { shown.snapTo((shown.value + drag / width).coerceIn(0f, 1f)) }
+                        }
+                    }
+                    .background(MaterialTheme.colorScheme.surfaceContainer)
+                    .windowInsetsPadding(androidx.compose.foundation.layout.WindowInsets.Companion.safeDrawing)
+                    .padding(horizontal = 12.dp),
+            ) {
+                Row(Modifier.fillMaxWidth().padding(start = 8.dp, top = 12.dp, bottom = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text("Chats", style = MaterialTheme.typography.headlineSmall, color = c.textPrimary, modifier = Modifier.weight(1f))
+                    RoundButton(Lucide.X, "Close", { close() }, size = 40.dp, tint = c.textSecondary)
                 }
-            }
-            val list = chats
-            if (list != null && list.isEmpty()) {
-                Text(if (keep) "No saved chats yet. Each chat is kept here once you've asked something." else "Chats aren't kept.", style = MaterialTheme.typography.bodyMedium, color = c.textSecondary)
-            }
-            if (!list.isNullOrEmpty()) {
-                Glass(Modifier.fillMaxWidth()) {
-                    Column(Modifier.padding(vertical = 6.dp)) {
-                        list.forEachIndexed { i, chat ->
-                            if (i > 0) com.leftovers.app.ui.components.RowDivider()
-                            val whenText = remember(chat.updated, use24) {
-                                val t = java.time.Instant.ofEpochMilli(chat.updated).atZone(java.time.ZoneId.systemDefault())
-                                t.toLocalDate().friendlyLabel() + " · " + t.toLocalTime().format(java.time.format.DateTimeFormatter.ofPattern(if (use24) "HH:mm" else "h:mm a"))
+                // Search, as you type.
+                Row(
+                    Modifier.fillMaxWidth().height(44.dp).clip(RoundedCornerShape(14.dp)).background(c.glass).padding(horizontal = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(Lucide.Search, contentDescription = null, tint = c.textTertiary, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Box(Modifier.weight(1f)) {
+                        if (query.isEmpty()) Text("Search chats", style = MaterialTheme.typography.bodyMedium, color = c.textTertiary)
+                        androidx.compose.foundation.text.BasicTextField(
+                            value = query,
+                            onValueChange = { query = it },
+                            singleLine = true,
+                            textStyle = MaterialTheme.typography.bodyMedium.copy(color = c.textPrimary),
+                            cursorBrush = androidx.compose.ui.graphics.SolidColor(c.accent),
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+                    if (query.isNotEmpty()) Icon(Lucide.X, contentDescription = "Clear the search", tint = c.textTertiary, modifier = Modifier.size(16.dp).clip(CircleShape).pressable({ query = "" }))
+                }
+                Spacer(Modifier.height(8.dp))
+                DrawerRow(Lucide.PenLine, "New chat", selected = false) { close { viewModel.reset() } }
+                Spacer(Modifier.height(6.dp))
+
+                val list = chats.orEmpty().filter { query.isBlank() || it.title.contains(query.trim(), ignoreCase = true) || it.lines.any { l -> l.text.contains(query.trim(), ignoreCase = true) } }
+                val today = java.time.LocalDate.now()
+                fun day(chat: com.leftovers.app.ai.ChatStore.Saved) = java.time.Instant.ofEpochMilli(chat.updated).atZone(java.time.ZoneId.systemDefault()).toLocalDate()
+                val groups = list.sortedByDescending { it.updated }.groupBy { chat ->
+                    val d = day(chat)
+                    when {
+                        d == today -> "Today"
+                        d == today.minusDays(1) -> "Yesterday"
+                        d.isAfter(today.minusDays(7)) -> "Previous 7 days"
+                        d.year == today.year -> d.month.getDisplayName(java.time.format.TextStyle.FULL, java.util.Locale.getDefault())
+                        else -> "${d.year}"
+                    }
+                }
+                androidx.compose.foundation.lazy.LazyColumn(Modifier.weight(1f)) {
+                    if (chats != null && list.isEmpty()) item {
+                        Text(
+                            when {
+                                query.isNotBlank() -> "No chat mentions \u201c${query.trim()}\u201d."
+                                keep -> "Your chats will be listed here."
+                                else -> "Chats aren't kept on this phone. Turn it on below to come back to them."
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = c.textTertiary,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 12.dp),
+                        )
+                    }
+                    groups.forEach { (label, items) ->
+                        item(key = "h-$label") {
+                            Text(label, style = MaterialTheme.typography.labelMedium, color = c.textTertiary, modifier = Modifier.padding(start = 8.dp, top = 14.dp, bottom = 4.dp))
+                        }
+                        items.forEach { chat ->
+                            item(key = chat.id) {
+                                Box {
+                                    DrawerRow(
+                                        null,
+                                        chat.title.ifBlank { "Chat" },
+                                        selected = chat.id == viewModel.openChatId,
+                                        onLongPress = { menuFor = chat.id },
+                                    ) { close { viewModel.open(chat) } }
+                                    androidx.compose.material3.DropdownMenu(
+                                        expanded = menuFor == chat.id,
+                                        onDismissRequest = { menuFor = null },
+                                        shape = RoundedCornerShape(16.dp),
+                                        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                    ) {
+                                        androidx.compose.material3.DropdownMenuItem(
+                                            text = { Text("Delete", color = c.negative) },
+                                            leadingIcon = { Icon(Lucide.Trash2, contentDescription = null, tint = c.negative, modifier = Modifier.size(18.dp)) },
+                                            onClick = {
+                                                menuFor = null
+                                                viewModel.deleteSaved(chat.id)
+                                                chats = chats?.filter { it.id != chat.id }
+                                            },
+                                        )
+                                    }
+                                }
                             }
-                            com.leftovers.app.ui.components.ListRow(
-                                chat.title.ifBlank { "Chat" },
-                                subtitle = whenText,
-                                leading = { IconTile(Lucide.MessageCircle, c.accent, size = 38.dp) },
-                                trailing = {
-                                    RoundButton(Lucide.Trash2, "Delete this chat", {
-                                        viewModel.deleteSaved(chat.id)
-                                        chats = chats?.filter { it.id != chat.id }
-                                    }, size = 36.dp, tint = c.textSecondary)
-                                },
-                                onClick = { viewModel.open(chat); onDismiss() },
-                            )
                         }
                     }
                 }
-                SecondaryButton("Delete all", { viewModel.store.deleteAll(); chats = emptyList() }, Modifier.fillMaxWidth())
+                // Whether chats are kept, and clearing them, at the foot like an app's own settings.
+                com.leftovers.app.ui.components.RowDivider(inset = 0.dp)
+                Row(Modifier.fillMaxWidth().padding(start = 8.dp, top = 8.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Keep chats on this phone", style = MaterialTheme.typography.bodyMedium, color = c.textPrimary)
+                        Text("Never in backups or sent anywhere", style = MaterialTheme.typography.labelSmall, color = c.textTertiary)
+                    }
+                    androidx.compose.material3.Switch(
+                        checked = keep,
+                        onCheckedChange = { on -> viewModel.store.enabled = on; keep = on; if (!on) chats = emptyList() },
+                        colors = androidx.compose.material3.SwitchDefaults.colors(checkedTrackColor = c.accent, checkedThumbColor = c.onAccent),
+                    )
+                }
+                if (!chats.isNullOrEmpty()) {
+                    Text(
+                        if (confirmAll) "Tap again to delete every chat" else "Delete all chats",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = c.negative,
+                        modifier = Modifier.padding(start = 8.dp, bottom = 12.dp).clip(RoundedCornerShape(10.dp)).pressable({
+                            if (confirmAll) { viewModel.store.deleteAll(); chats = emptyList(); confirmAll = false } else confirmAll = true
+                        }).padding(vertical = 8.dp),
+                    )
+                }
             }
         }
+    }
+}
+
+/** One line in the list of chats: a title, raised when it's the open one. */
+@Composable
+private fun DrawerRow(icon: androidx.compose.ui.graphics.vector.ImageVector?, text: String, selected: Boolean, onLongPress: (() -> Unit)? = null, onClick: () -> Unit) {
+    val c = LocalAppColors.current
+    val view = androidx.compose.ui.platform.LocalView.current
+    Row(
+        Modifier.fillMaxWidth().height(46.dp).clip(RoundedCornerShape(14.dp))
+            .background(if (selected) c.glassStrong else androidx.compose.ui.graphics.Color.Transparent)
+            .pointerInput(onLongPress) {
+                detectTapGestures(
+                    onLongPress = onLongPress?.let { { _: androidx.compose.ui.geometry.Offset -> com.leftovers.app.ui.components.Haptics.select(view); it() } },
+                    onTap = { onClick() },
+                )
+            }
+            .padding(horizontal = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (icon != null) {
+            Icon(icon, contentDescription = null, tint = c.textPrimary, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(12.dp))
+        }
+        Text(
+            text,
+            style = MaterialTheme.typography.bodyMedium,
+            color = c.textPrimary,
+            maxLines = 1,
+            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+        )
     }
 }
 
