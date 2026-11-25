@@ -100,6 +100,7 @@ import com.leftovers.app.data.MonthInOut
 import com.leftovers.app.data.PeriodKind
 import com.leftovers.app.data.balanceHistory
 import com.leftovers.app.data.monthlyInOut
+import com.leftovers.app.data.openBalances
 import com.leftovers.app.ui.components.PairBars
 import com.leftovers.app.ui.components.TrendLine
 import com.leftovers.app.ui.components.ColumnChart
@@ -141,6 +142,8 @@ data class StatsUiState(
     val trends: List<Trend> = emptyList(),
     val balance: List<BalancePoint> = emptyList(),
     val inOut: List<MonthInOut> = emptyList(),
+    /** The financial health score for the period (#73); null with a category picked, or nothing to judge. */
+    val health: com.leftovers.app.data.FinancialHealth.Health? = null,
     /** The category shown, or null for all of them; the ones with entries, most used first, to pick from. */
     val categoryId: Long? = null,
     val categoryOptions: List<CategoryOption> = emptyList(),
@@ -206,6 +209,22 @@ class StatsViewModel(
             val firstMonth = maxOf(if (byMonth) YearMonth.from(start) else lastMonth.minusMonths(5), oldest?.let(YearMonth::from) ?: lastMonth)
             val counted = accountList.filter { accountId != null || !it.outOfTotal }.associate { it.id to it.balanceMinor }
             val m = p.anchor
+            val monthBudget = if (p.kind == PeriodKind.MONTH && accountId == null && category == null && s.plan.isSet && s.plan.cycle(m).start == m.atDay(1)) s.plan.budgetFor(m, everything) else 0L
+            // Financial health (#73): for the money as a whole, so not for one category.
+            val health = if (category != null) null else {
+                val thisMonth = YearMonth.from(today)
+                com.leftovers.app.data.FinancialHealth.of(
+                    income = current.totalOf(TxType.INCOME),
+                    spent = current.totalOf(TxType.EXPENSE),
+                    months = p.daysSoFar(today, oldest) / 30.44,
+                    budget = monthBudget.takeIf { it > 0 },
+                    owe = debts.openBalances().filter { it.netMinor < 0 }.sumOf { -it.netMinor },
+                    balance = counted.values.sum(),
+                    // The six whole months before this one, so a month half gone doesn't look like a drop.
+                    monthlyIncomes = monthlyInOut(all, thisMonth.minusMonths(6), thisMonth.minusMonths(1)).map { it.inMinor },
+                    format = Money(s.currencyCode)::formatWhole,
+                )
+            }
             StatsUiState(
                 loaded = true,
                 period = p,
@@ -229,6 +248,7 @@ class StatsViewModel(
                 inOut = monthlyInOut(all, firstMonth, lastMonth),
                 categoryId = category?.id,
                 categoryOptions = options,
+                health = health,
             )
         }.flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), StatsUiState())
 
@@ -312,6 +332,7 @@ fun StatsScreen(
             // Balance, and in and out: they don't depend on Spending or Income, so they come before that choice.
             // They're about accounts, so they step aside while one category is shown.
             if (state.categoryId == null) item { MoneyCard(state) }
+            state.health?.let { h -> item { HealthCard(h) } }
             item {
                 SegmentedToggle(
                     TxType.entries, state.type,
@@ -1065,6 +1086,93 @@ private fun MoneyCard(state: StatsUiState) {
                 },
                 label = "moneyView",
             ) { view -> if (view == 0) BalanceView(state) else FlowView(state) }
+        }
+    }
+}
+
+/**
+ * Financial health (#73): a score out of 100 in a ring, what it means, and, on a tap, how it's worked out: each
+ * measure with a bar and a plain sentence. Measures without enough to go on say so and aren't counted.
+ */
+@Composable
+private fun HealthCard(h: com.leftovers.app.data.FinancialHealth.Health) {
+    val c = LocalAppColors.current
+    var open by rememberSaveable { mutableStateOf(false) }
+    fun tone(score: Float) = when {
+        score >= 0.8f -> c.positive
+        score >= 0.6f -> c.accent
+        score >= 0.4f -> c.warning
+        else -> c.negative
+    }
+    val color = tone(h.score / 100f)
+    val sweep by animateFloatAsState(h.score / 100f, androidx.compose.animation.core.tween(900, easing = androidx.compose.animation.core.FastOutSlowInEasing), label = "healthRing")
+    val turn by animateFloatAsState(if (open) 90f else 0f, label = "healthChevron")
+    Glass(Modifier.fillMaxWidth().appear(0)) {
+        Column(Modifier.padding(20.dp)) {
+            CardTitle("Financial health")
+            Spacer(Modifier.height(10.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(96.dp), contentAlignment = Alignment.Center) {
+                    val track = c.glassStrong
+                    androidx.compose.foundation.Canvas(Modifier.fillMaxSize()) {
+                        val stroke = 9.dp.toPx()
+                        val inset = stroke / 2
+                        val arc = androidx.compose.ui.geometry.Size(size.width - stroke, size.height - stroke)
+                        val tl = androidx.compose.ui.geometry.Offset(inset, inset)
+                        val style = androidx.compose.ui.graphics.drawscope.Stroke(stroke, cap = androidx.compose.ui.graphics.StrokeCap.Round)
+                        drawArc(track, 135f, 270f, false, tl, arc, style = style)
+                        drawArc(color, 135f, 270f * sweep, false, tl, arc, style = style)
+                    }
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("${h.score}", style = MaterialTheme.typography.headlineSmall, color = c.textPrimary)
+                        Text("of 100", style = MaterialTheme.typography.labelSmall, color = c.textTertiary)
+                    }
+                }
+                Spacer(Modifier.width(18.dp))
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(
+                        h.label,
+                        style = MaterialTheme.typography.labelLarge,
+                        color = color,
+                        modifier = Modifier.clip(CircleShape).background(color.copy(alpha = 0.15f)).padding(horizontal = 12.dp, vertical = 4.dp),
+                    )
+                    Text(h.summary, style = MaterialTheme.typography.bodyMedium, color = c.textSecondary)
+                }
+            }
+            Spacer(Modifier.height(10.dp))
+            Row(
+                Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).pressable({ open = !open }, pressedScale = 0.98f).padding(vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("How it's worked out", style = MaterialTheme.typography.labelLarge, color = c.textSecondary, modifier = Modifier.weight(1f))
+                Icon(Lucide.ChevronRight, contentDescription = null, tint = c.textTertiary, modifier = Modifier.size(16.dp).rotate(turn))
+            }
+            AnimatedVisibility(open, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
+                Column(Modifier.padding(top = 6.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    h.parts.forEach { part ->
+                        Column {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(part.name, style = MaterialTheme.typography.titleSmall, color = if (part.score == null) c.textTertiary else c.textPrimary, modifier = Modifier.weight(1f))
+                                Text(
+                                    part.score?.let { "${Math.round(it * part.weight)} of ${part.weight}" } ?: "Not counted",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = c.textTertiary,
+                                )
+                            }
+                            Text(part.detail, style = MaterialTheme.typography.bodySmall, color = c.textSecondary)
+                            if (part.score != null) {
+                                Spacer(Modifier.height(6.dp))
+                                ProgressLine(part.score, Modifier.fillMaxWidth(), color = tone(part.score), height = 5.dp)
+                            }
+                        }
+                    }
+                    Text(
+                        "Worked out on this phone from your own entries, balances and money owed. It's a guide, not financial advice.",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = c.textTertiary,
+                    )
+                }
+            }
         }
     }
 }
