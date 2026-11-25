@@ -142,6 +142,14 @@
         }
         data = JSON.parse(new TextDecoder().decode(bytes));
       } catch (e) {}
+      // Entries shared from someone's Leftovers ({v, t: "x", c, x: [[amount, income, day, category, note]]}): listed
+      // here, and the button offers them to the app. Turned into the same shape as money owed lines to show them.
+      if (data && data.v === 1 && data.t === "x" && Array.isArray(data.x)) {
+        var shared = data.x.filter(function (e) { return Array.isArray(e) && Number(e[0]) > 0; }).slice(0, 40);
+        if (!shared.length) { $("empty").hidden = false; return; }
+        showShared(data, shared, code);
+        return;
+      }
       var entries = data && data.v === 1 && Array.isArray(data.e) ? data.e.filter(function (e) { return Array.isArray(e) && Number(e[1]); }) : [];
       if (!entries.length) { $("empty").hidden = false; return; }
       // Shared with a whole group: everyone picks their own name, then sees only their share, and the app gets only theirs.
@@ -266,6 +274,55 @@
         });
       }
       $("found").hidden = false;
+      }
+
+      // Entries shared from someone's Leftovers: what they are, and the button that offers them to the app.
+      function showShared(data, shared, code) {
+        var currency = /^[A-Z]{3}$/.test(data.c || "") ? data.c : "";
+        var money = function (minor) {
+          var value = Math.abs(minor) / 100;
+          try {
+            if (currency) return new Intl.NumberFormat(currency === "INR" ? "en-IN" : undefined, { style: "currency", currency: currency, maximumFractionDigits: value % 1 ? 2 : 0 }).format(value);
+          } catch (e) {}
+          return value.toLocaleString(undefined, { maximumFractionDigits: 2 });
+        };
+        var day = function (epochDay) {
+          return new Date(epochDay * 86400000).toLocaleDateString(undefined, { day: "numeric", month: "short", timeZone: "UTC" });
+        };
+        var spent = shared.filter(function (e) { return Number(e[1]) !== 1; }).reduce(function (s, e) { return s + Number(e[0]); }, 0);
+        var earned = shared.filter(function (e) { return Number(e[1]) === 1; }).reduce(function (s, e) { return s + Number(e[0]); }, 0);
+        $("label").textContent = shared.length === 1 ? (Number(shared[0][1]) === 1 ? "Income shared with you" : "Spending shared with you") : "Shared with you";
+        $("number").textContent = spent ? money(spent) : money(earned);
+        var line = function (e) { return String(e[4] || e[3] || "Entry").slice(0, 80); };
+        if (shared.length === 1) {
+          $("what").textContent = [line(shared[0]), e3(shared[0]), day(Number(shared[0][2]))].filter(Boolean).join(" · ");
+        } else {
+          $("what").textContent = shared.length + " entries" + (spent && earned ? " · " + money(earned) + " in" : "");
+          var list = $("lines");
+          shared.forEach(function (e) {
+            var li = document.createElement("li");
+            var name = document.createElement("span"); name.className = "n"; name.textContent = line(e);
+            var when = document.createElement("span"); when.className = "d"; when.textContent = [e3(e), day(Number(e[2]))].filter(Boolean).join(" · ");
+            name.appendChild(when);
+            var amount = document.createElement("span"); amount.className = "a";
+            amount.textContent = (Number(e[1]) === 1 ? "+" : "") + money(Number(e[0]));
+            li.appendChild(name); li.appendChild(amount); list.appendChild(li);
+          });
+          list.hidden = false;
+        }
+        function e3(e) { var cat = String(e[3] || ""); return cat && cat !== String(e[4] || "") ? cat.slice(0, 40) : ""; }
+        $("get").querySelector(".add-why").textContent = "Get Leftovers to keep track of your own spending. It's free, has no ads or account, and your money stays on your phone. Then open this link again to add these.";
+        var android = /Android/i.test(navigator.userAgent);
+        var home = new URL("./", location.href).href;
+        var scheme = /\/add-dev(\.html)?$/.test(location.pathname) ? "leftovers-dev" : "leftovers";
+        $("open").href = android
+          ? "intent://owed?d=" + code + "#Intent;scheme=" + scheme + ";S.browser_fallback_url=" + encodeURIComponent(home) + ";end"
+          : scheme + "://owed?d=" + code;
+        if (!android) {
+          $("open").hidden = true;
+          $("note").textContent = "Leftovers is an Android app: open this link on an Android phone to add these. Nothing was uploaded; the amounts are in the link itself.";
+        }
+        $("found").hidden = false;
       }
     })();
   </script>

@@ -359,6 +359,13 @@ fun HistoryScreen(
                 },
             )
             if (mode == ActivityView.LIST) {
+                // What's shown, after the month, search and filters: share exactly these.
+                val shareContext = androidx.compose.ui.platform.LocalContext.current
+                val shareMoney = com.leftovers.app.util.LocalMoney.current
+                val shown = state.groups.flatMap { it.items }
+                if (shown.isNotEmpty()) RoundButton(Lucide.Share2, "Share these entries", {
+                    com.leftovers.app.util.ShareEntries.open(shareContext, shown, shareMoney)
+                })
                 RoundButton(Lucide.ListFilter, "Filter", { filterSheet = true })
                 RoundButton(
                     if (searchOpen) Lucide.X else Lucide.Search,

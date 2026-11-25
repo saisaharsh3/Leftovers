@@ -430,6 +430,12 @@ fun TransactionPeekCard(
                         undo.show("Entry deleted") { viewModel.restore(listOf(item)) }
                     }
                 }, size = 56.dp)
+                // As text and a link a friend's Leftovers can add it from.
+                val shareContext = androidx.compose.ui.platform.LocalContext.current
+                val shareMoney = com.leftovers.app.util.LocalMoney.current
+                com.leftovers.app.ui.components.RoundButton(Lucide.Share2, "Share", {
+                    com.leftovers.app.util.ShareEntries.open(shareContext, listOf(item), shareMoney)
+                }, size = 56.dp)
                 // The same again, for today.
                 com.leftovers.app.ui.components.RoundButton(Lucide.Repeat, "Add again for today", {
                     close { viewModel.addAgain(item) { id -> undo.show("Added again for today") { viewModel.removeAgain(id) } } }

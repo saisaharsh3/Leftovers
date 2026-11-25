@@ -188,6 +188,8 @@ fun LeftoversNavHost(
     onOpenAddHandled: () -> Unit = {},
     sharedOwed: com.leftovers.app.util.SharedOwed.Shared? = null,
     onSharedHandled: () -> Unit = {},
+    sharedEntries: com.leftovers.app.util.SharedEntries.Shared? = null,
+    onSharedEntriesHandled: () -> Unit = {},
 ) {
     val nav = rememberNavController()
     val backStack by nav.currentBackStackEntryAsState()
@@ -521,6 +523,7 @@ fun LeftoversNavHost(
 
                 // Money owed sent from a friend's Leftovers, from the link the app was opened with.
                 sharedOwed?.let { com.leftovers.app.ui.screens.SharedOwedSheet(it, onDismiss = onSharedHandled) }
+                sharedEntries?.let { com.leftovers.app.ui.screens.SharedEntriesSheet(it, onDismiss = onSharedEntriesHandled) }
 
                 // Pop-up cards, above the tab bar and everything else.
                 popups.Content()

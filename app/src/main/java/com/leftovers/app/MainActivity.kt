@@ -61,10 +61,14 @@ class MainActivity : FragmentActivity() {
     private var openAddRequest by mutableStateOf(false)
     /** Money owed sent from a friend's Leftovers, in the link this was opened with; shown once the app is unlocked. */
     private var sharedOwed by mutableStateOf<com.leftovers.app.util.SharedOwed.Shared?>(null)
+    /** Entries a friend shared from their Leftovers, in the link this was opened with. */
+    private var sharedEntries by mutableStateOf<com.leftovers.app.util.SharedEntries.Shared?>(null)
 
     private fun readShared(intent: Intent) {
         val data = intent.data?.takeIf { com.leftovers.app.util.SharedOwed.isLink(it.scheme, it.host, it.path) } ?: return
-        com.leftovers.app.util.SharedOwed.parse(data.toString())?.let { sharedOwed = it }
+        val link = data.toString()
+        com.leftovers.app.util.SharedOwed.parse(link)?.let { sharedOwed = it; return }
+        com.leftovers.app.util.SharedEntries.parse(link)?.let { sharedEntries = it }
     }
     private var locked by mutableStateOf(true)
     private var lockChecked by mutableStateOf(false)
@@ -164,6 +168,8 @@ class MainActivity : FragmentActivity() {
                                     onOpenAddHandled = { openAddRequest = false },
                                     sharedOwed = sharedOwed,
                                     onSharedHandled = { sharedOwed = null },
+                                    sharedEntries = sharedEntries,
+                                    onSharedEntriesHandled = { sharedEntries = null },
                                 )
                             }
                             // After a crash: offer to report it. Nothing leaves the phone unless the user sends it.
