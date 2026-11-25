@@ -29,6 +29,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.leftovers.app.data.billsOn
 import com.leftovers.app.data.periodName
 import com.leftovers.app.data.BudgetMode
 import com.leftovers.app.data.BudgetPlan
@@ -101,7 +102,10 @@ class PlanViewModel(
             plan = s.plan,
             budget = budget,
             spent = items.filter { !it.outOfBudget }.totalOf(TxType.EXPENSE),
-            dailyLimit = dailyBudget(budget, items, if (s.plan.envelope) 0L else recurring.pendingExpenses(cycle), periodEnd = cycle.end)?.dailyLimit ?: 0,
+            dailyLimit = dailyBudget(
+                budget, items, if (s.plan.envelope) 0L else recurring.pendingExpenses(cycle), periodEnd = cycle.end,
+                billsToday = if (s.plan.envelope) 0L else items.billsOn(java.time.LocalDate.now(), recurring),
+            )?.dailyLimit ?: 0,
             // Scheduled one-offs (#68) are on Home, not counted as subscriptions here.
             recurring = recurring.filterNot { it.once },
             goals = goals,

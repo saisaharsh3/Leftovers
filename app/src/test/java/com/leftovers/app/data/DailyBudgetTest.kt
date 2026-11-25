@@ -47,4 +47,35 @@ class DailyBudgetTest {
         // The last day of the budget: nothing to spread over.
         assertEquals(null, b.newDailyLimit(1))
     }
+
+    @Test
+    fun aBillPaidTodayDoesntUseTodaysAllowance() {
+        // #74: 10,000 a month; 5,000 spent; Netflix 1,000 set aside while it was due, then charged today.
+        val netflix = RecurringItem(
+            id = 1, name = "Netflix", amountMinor = 1_000_00, type = TxType.EXPENSE, categoryId = 2, dayOfMonth = 22, startMonth = "2026-01",
+            lastPostedMonth = "2026-10", active = true, everyMonths = 1, accountId = null, categoryName = "Fun", categoryEmoji = "", categoryColor = 0,
+        )
+        val before = listOf(spend(5_000_00, today.minusDays(3)))
+        // Yesterday's view, with the bill still to come: (10,000 - 5,000 - 1,000) / 11 days.
+        val dueYesterday = dailyBudget(10_000_00, before, reservedMinor = 1_000_00, today = today.minusDays(1))!!
+        // Today it's charged, and a 100 coffee.
+        val charged = spend(1_000_00, today).copy(id = 99, categoryId = 2, note = "Netflix", categoryName = "Fun")
+        val items = before + charged + spend(100_00, today)
+        val b = dailyBudget(10_000_00, items, today = today, billsToday = items.billsOn(today, listOf(netflix)))!!
+        assertEquals(1_000_00, items.billsOn(today, listOf(netflix)))
+        // The same allowance as when it was set aside (one day fewer to spread over), and only the coffee used it.
+        assertEquals((10_000_00L - 5_000_00 - 1_000_00) / 10, b.dailyLimit)
+        assertEquals(100_00, b.spentToday)
+        assertTrue(b.leftToday > 0)
+        assertTrue(dueYesterday.dailyLimit > 0)
+        // The month still counts it.
+        assertEquals(10_000_00L - 5_000_00 - 1_000_00 - 100_00, b.monthLeft)
+    }
+
+    @Test
+    fun withoutBillsNothingChanges() {
+        val items = listOf(spend(5_000_00, today.minusDays(3)), spend(100_00, today))
+        assertEquals(0L, items.billsOn(today, emptyList()))
+        assertEquals(dailyBudget(10_000_00, items, today = today), dailyBudget(10_000_00, items, today = today, billsToday = 0))
+    }
 }

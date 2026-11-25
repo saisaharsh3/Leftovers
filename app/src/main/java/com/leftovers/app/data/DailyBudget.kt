@@ -36,14 +36,33 @@ fun dailyBudget(
     today: LocalDate = LocalDate.now(),
     /** The last day of the budget month, when it isn't the calendar month's (#34). */
     periodEnd: LocalDate = YearMonth.from(today).atEndOfMonth(),
+    /**
+     * What subscriptions charged today ([billsOn]). It was set aside from the month while it was still due, so it
+     * comes out of the month like that, not out of today's allowance (#74).
+     */
+    billsToday: Long = 0,
 ): DailyBudget? {
     if (monthlyBudget <= 0) return null
     val todayDay = today.toEpochDay()
     // Spending from an account left out of the budget (#33) doesn't use it up.
     val expenses = monthItems.filter { it.type == TxType.EXPENSE && !it.outOfBudget }
     val spentBefore = expenses.filter { it.epochDay < todayDay }.sumOf { it.amountMinor }
-    val spentToday = expenses.filter { it.epochDay == todayDay }.sumOf { it.amountMinor }
+    val spentTodayAll = expenses.filter { it.epochDay == todayDay }.sumOf { it.amountMinor }
+    val bills = billsToday.coerceIn(0, spentTodayAll)
     val daysLeft = (periodEnd.toEpochDay() - todayDay + 1).toInt().coerceAtLeast(1)
-    val daily = (monthlyBudget - spentBefore - reservedMinor).coerceAtLeast(0) / daysLeft
-    return DailyBudget(daily, spentToday, monthlyBudget, monthlyBudget - spentBefore - spentToday - reservedMinor, reservedMinor)
+    val daily = (monthlyBudget - spentBefore - bills - reservedMinor).coerceAtLeast(0) / daysLeft
+    return DailyBudget(daily, spentTodayAll - bills, monthlyBudget, monthlyBudget - spentBefore - spentTodayAll - reservedMinor, reservedMinor)
+}
+
+/**
+ * Today's spending that a subscription logged (or a scheduled one-off): it was set aside from the month until today,
+ * so [dailyBudget] keeps it out of today's allowance (#74).
+ */
+fun List<TransactionItem>.billsOn(day: LocalDate, recurring: List<RecurringItem>): Long {
+    val bills = recurring.filter { it.type == TxType.EXPENSE }
+    if (bills.isEmpty()) return 0
+    return filter { t ->
+        t.type == TxType.EXPENSE && !t.outOfBudget && t.epochDay == day.toEpochDay() &&
+            bills.any { it.logged(t.type, t.categoryId, t.note, t.categoryName) }
+    }.sumOf { it.amountMinor }
 }

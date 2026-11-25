@@ -31,6 +31,7 @@ import androidx.glance.text.TextStyle
 import androidx.glance.unit.ColorProvider
 import com.leftovers.app.LeftoversApp
 import com.leftovers.app.MainActivity
+import com.leftovers.app.data.billsOn
 import com.leftovers.app.data.TxType
 import com.leftovers.app.data.dailyBudget
 import com.leftovers.app.data.pendingExpenses
@@ -71,11 +72,13 @@ class SafeToSpendWidget : GlanceAppWidget() {
         val cycle = s.plan.cycleOf(today)
         val items = all.filter { it.date in cycle }
         val spentToday = items.filter { it.type == TxType.EXPENSE && it.epochDay == today.toEpochDay() }.sumOf { it.amountMinor }
+        val recurring = container.planning.recurring.first()
         val budget = dailyBudget(
             s.plan.budgetFor(cycle.month, all),
             items,
-            if (s.plan.envelope) 0L else container.planning.recurring.first().pendingExpenses(cycle),
+            if (s.plan.envelope) 0L else recurring.pendingExpenses(cycle),
             periodEnd = cycle.end,
+            billsToday = if (s.plan.envelope) 0L else items.billsOn(today, recurring),
         )
         val daysLeft = cycle.daysLeft(today)
         return when {

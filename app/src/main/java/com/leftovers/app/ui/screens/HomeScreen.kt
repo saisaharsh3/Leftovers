@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.material3.TextButton
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.Dispatchers
+import com.leftovers.app.data.billsOn
 import com.leftovers.app.data.AccountWithBalance
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -188,8 +189,13 @@ class HomeViewModel(
             loaded = true,
             month = month,
             budgetSet = s.plan.isSet,
-            today = dailyBudget(budget, budgetItems, if (s.plan.envelope) 0L else recurring.pendingExpenses(cycle), periodEnd = cycle.end),
-            spentToday = items.filter { it.type == TxType.EXPENSE && !it.outOfBudget && it.epochDay == todayDate.toEpochDay() }.sumOf { it.amountMinor },
+            today = dailyBudget(
+                budget, budgetItems, if (s.plan.envelope) 0L else recurring.pendingExpenses(cycle), periodEnd = cycle.end,
+                billsToday = if (s.plan.envelope) 0L else budgetItems.billsOn(todayDate, recurring),
+            ),
+            // Today's bills were set aside already, so they aren't counted against today (#74).
+            spentToday = items.filter { it.type == TxType.EXPENSE && !it.outOfBudget && it.epochDay == todayDate.toEpochDay() }.sumOf { it.amountMinor } -
+                (if (s.plan.isSet && !s.plan.envelope) items.billsOn(todayDate, recurring) else 0L),
             daysLeft = cycle.daysLeft(todayDate),
             monthSpent = shownMonth.totalOf(TxType.EXPENSE),
             monthIncome = shownMonth.totalOf(TxType.INCOME),

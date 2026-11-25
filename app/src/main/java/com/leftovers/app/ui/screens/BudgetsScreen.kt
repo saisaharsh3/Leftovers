@@ -38,6 +38,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.leftovers.app.data.billsOn
 import com.leftovers.app.data.BudgetPlan
 import com.leftovers.app.data.Category
 import com.leftovers.app.data.DailyBudget
@@ -134,7 +135,7 @@ class BudgetsViewModel(
             // What uses the budget: not accounts left out of it (#33), nor spending outside an envelope (#42).
             totalSpent = items.filter { !it.outOfBudget }.totalOf(TxType.EXPENSE),
             daysLeft = cycle.daysLeft(),
-            today = dailyBudget(budget, items, pending, periodEnd = cycle.end),
+            today = dailyBudget(budget, items, pending, periodEnd = cycle.end, billsToday = if (s.plan.envelope) 0L else items.billsOn(LocalDate.now(), recurring)),
             pendingSubscriptions = pending,
             goalsMonthly = goals.filter { !it.reached }.sumOf { it.monthlyNeeded() },
             buckets = if (!s.plan.buckets) emptyList() else {
