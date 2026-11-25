@@ -1,5 +1,6 @@
 package com.leftovers.app.ui.screens
 
+import com.leftovers.app.data.matchFor
 import com.leftovers.app.data.openBalances
 import com.leftovers.app.ui.components.LocalUndo
 import com.leftovers.app.ui.components.Haptics
@@ -284,6 +285,37 @@ class EditorViewModel(
     /** More about it than its name (#62), kept out of lists. */
     var details by mutableStateOf("")
     var accountId by mutableStateOf<Long?>(null)
+
+    /** What a shared or pasted message (#76) couldn't be read as, said under the note; null when it read fine. */
+    var messageHint by mutableStateOf<String?>(null)
+    private val sharedText: String = savedState.get<String>("text").orEmpty()
+
+    /**
+     * Fills the entry from a bank message shared or pasted in (#76), read like an SMS: the amount, who was paid (or
+     * who paid), spending or income, the account it names, and the category used for them before. Nothing is saved:
+     * it's there to check, then Add. Returns why it couldn't be read, or null.
+     */
+    suspend fun fillFromMessage(text: String): String? {
+        val s = settings.settings.first()
+        val check = com.leftovers.app.util.SmsParser.check(text, s.detectionKeywords)
+        val parsed = check.parsed ?: return check.reason
+        onTypeChange(if (parsed.isIncome) TxType.INCOME else TxType.EXPENSE)
+        amountText = AmountInput.fromMinor(parsed.amountMinor)
+        cursor = null
+        if (parsed.merchant.isNotBlank()) note = parsed.merchant
+        accountRepository.accounts.first().matchFor(text)?.let { accountId = it.id }
+        if (note.isNotBlank() && categoryId == null) {
+            val hidden = repository.categories.first().filter { it.hidden }.map { it.id }.toSet()
+            val past = repository.getAllTransactions().filter { it.categoryId !in hidden }
+                .map { com.leftovers.app.util.MerchantMemory.Past(it.note, it.type, it.categoryId, it.epochDay, it.createdAt) }
+            com.leftovers.app.util.MerchantMemory.categoryFor(note, type, past)?.let { categoryId = it }
+        }
+        return null
+    }
+
+    fun paste(text: String) = viewModelScope.launch {
+        messageHint = fillFromMessage(text)?.let { "Couldn't read that message. $it" }
+    }
     var receiptPath by mutableStateOf<String?>(null)
         private set
     /** When on, saving also creates a subscription that repeats on this day every month. */
@@ -443,6 +475,10 @@ class EditorViewModel(
                         if (categoryId == null) categoryId = options.firstOrNull { it.name == name }?.id
                     }
                 }
+            }
+            // Opened with a message shared from another app (#76): read it now the account and the rest are set.
+            if (sharedText.isNotBlank() && !isEditing) {
+                messageHint = fillFromMessage(sharedText)?.let { "Couldn't read that message. $it" }
             }
         }
     }
@@ -1045,6 +1081,16 @@ fun EditorScreen(
             val payback = if (viewModel.isEditing || viewModel.owed || viewModel.amountMinor <= 0) null
             else remember(owedNow, viewModel.note, viewModel.amountMinor, viewModel.type) {
                 com.leftovers.app.util.Payback.find(com.leftovers.app.data.noteText(viewModel.note), viewModel.amountMinor, viewModel.type == TxType.INCOME, owedNow)
+            }
+            // A bank message copied from another app: one tap fills it in (#76). The clipboard is only read on the tap;
+            // the chip shows when there's text there and nothing typed yet.
+            val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
+            if (!viewModel.isEditing && !viewModel.owed && viewModel.amountText.isEmpty() && clipboard.hasText()) {
+                Spacer(Modifier.height(10.dp))
+                Chip("Paste a bank message", onClick = { clipboard.getText()?.text?.let(viewModel::paste) }, icon = Lucide.ClipboardPaste, iconTint = c.textSecondary)
+            }
+            viewModel.messageHint?.let { hint ->
+                Text(hint, style = MaterialTheme.typography.bodySmall, color = c.warning, textAlign = TextAlign.Center, modifier = Modifier.padding(horizontal = 32.dp, vertical = 8.dp))
             }
             if (payback != null) {
                 val undo = LocalUndo.current

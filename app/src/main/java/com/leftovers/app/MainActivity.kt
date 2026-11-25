@@ -64,7 +64,14 @@ class MainActivity : FragmentActivity() {
     /** Entries a friend shared from their Leftovers, in the link this was opened with. */
     private var sharedEntries by mutableStateOf<com.leftovers.app.util.SharedEntries.Shared?>(null)
 
+    /** A bank message (or any text) shared into Leftovers from another app (#76). */
+    private var sharedText by mutableStateOf<String?>(null)
+
     private fun readShared(intent: Intent) {
+        if (intent.action == Intent.ACTION_SEND && intent.type?.startsWith("text/") == true) {
+            intent.getStringExtra(Intent.EXTRA_TEXT)?.takeIf { it.isNotBlank() }?.let { sharedText = it.take(2000) }
+            return
+        }
         val data = intent.data?.takeIf { com.leftovers.app.util.SharedOwed.isLink(it.scheme, it.host, it.path) } ?: return
         val link = data.toString()
         com.leftovers.app.util.SharedOwed.parse(link)?.let { sharedOwed = it; return }
@@ -170,6 +177,8 @@ class MainActivity : FragmentActivity() {
                                     onSharedHandled = { sharedOwed = null },
                                     sharedEntries = sharedEntries,
                                     onSharedEntriesHandled = { sharedEntries = null },
+                                    sharedText = sharedText,
+                                    onSharedTextHandled = { sharedText = null },
                                 )
                             }
                             // After a crash: offer to report it. Nothing leaves the phone unless the user sends it.

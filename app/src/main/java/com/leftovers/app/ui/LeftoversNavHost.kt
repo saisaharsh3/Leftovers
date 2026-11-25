@@ -118,7 +118,7 @@ private object Routes {
     const val PLAN = "plan"
     const val DEBTS = "debts"
     const val DELETED = "deleted"
-    const val ADD = "add?day={day}&amount={amount}&note={note}&sms={sms}"
+    const val ADD = "add?day={day}&amount={amount}&note={note}&sms={sms}&text={text}"
     const val EDIT = "edit/{id}"
     const val BUDGET = "budget"
     const val BUDGET_PLAN = "budget/plan"
@@ -138,8 +138,8 @@ private object Routes {
     /** Opens the assistant; a non-empty [ask] is sent as the first question. */
     fun assistant(ask: String = "") = "assistant?ask=" + android.net.Uri.encode(ask)
 
-    fun add(day: Long = -1L, amount: Long = -1L, note: String = "", sms: Long = -1L) =
-        "add?day=$day&amount=$amount&note=${Uri.encode(note)}&sms=$sms"
+    fun add(day: Long = -1L, amount: Long = -1L, note: String = "", sms: Long = -1L, text: String = "") =
+        "add?day=$day&amount=$amount&note=${Uri.encode(note)}&sms=$sms&text=${Uri.encode(text.take(2000))}"
     fun edit(id: Long) = "edit/$id"
     fun goal(id: Long) = "goals/$id"
     fun recap(month: String) = "recap/$month"
@@ -191,6 +191,9 @@ fun LeftoversNavHost(
     onSharedHandled: () -> Unit = {},
     sharedEntries: com.leftovers.app.util.SharedEntries.Shared? = null,
     onSharedEntriesHandled: () -> Unit = {},
+    /** Text shared into Leftovers from another app, like a bank message (#76). */
+    sharedText: String? = null,
+    onSharedTextHandled: () -> Unit = {},
 ) {
     val nav = rememberNavController()
     val backStack by nav.currentBackStackEntryAsState()
@@ -386,6 +389,8 @@ fun LeftoversNavHost(
                             navArgument("amount") { type = NavType.LongType; defaultValue = -1L },
                             navArgument("note") { type = NavType.StringType; defaultValue = "" },
                             navArgument("sms") { type = NavType.LongType; defaultValue = -1L },
+                            // A bank message shared into Leftovers (#76): the add screen reads it and fills itself in.
+                            navArgument("text") { type = NavType.StringType; defaultValue = "" },
                         ),
                     ) {
                         EditorScreen(
@@ -527,6 +532,13 @@ fun LeftoversNavHost(
                 // Money owed sent from a friend's Leftovers, from the link the app was opened with.
                 sharedOwed?.let { com.leftovers.app.ui.screens.SharedOwedSheet(it, onDismiss = onSharedHandled) }
                 sharedEntries?.let { com.leftovers.app.ui.screens.SharedEntriesSheet(it, onDismiss = onSharedEntriesHandled) }
+                // A message shared in: the add screen opens with it read, for a look before adding.
+                LaunchedEffect(sharedText) {
+                    sharedText?.let { text ->
+                        nav.navigate(Routes.add(text = text))
+                        onSharedTextHandled()
+                    }
+                }
 
                 // Pop-up cards, above the tab bar and everything else.
                 popups.Content()
