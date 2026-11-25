@@ -36,6 +36,9 @@ class UndoState(private val scope: CoroutineScope) {
     var current by mutableStateOf<UndoRequest?>(null)
         private set
 
+    /** How much higher to show it: a screen with its own bar at the bottom (the shopping basket) sets its height. */
+    var lift by mutableStateOf(androidx.compose.ui.unit.Dp(0f))
+
     fun show(message: String, undo: suspend () -> Unit) {
         current = UndoRequest(message, undo)
     }

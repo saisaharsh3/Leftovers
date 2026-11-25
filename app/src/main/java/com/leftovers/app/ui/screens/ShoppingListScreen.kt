@@ -39,6 +39,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextDecoration
@@ -82,7 +83,12 @@ fun ShoppingListScreen(onBack: () -> Unit) {
     val context = LocalContext.current
     val shopping = (context.applicationContext as LeftoversApp).container.shopping
     val items by shopping.items.collectAsState(initial = null)
+    val boughtBefore by shopping.bought.collectAsState(initial = emptyList())
     val list = items ?: return
+    // A limit for this shop, kept on this phone; 0 for none.
+    val prefs = remember { context.getSharedPreferences("shopping", android.content.Context.MODE_PRIVATE) }
+    var limit by remember { mutableStateOf(prefs.getLong("limit", 0L)) }
+    var setLimit by remember { mutableStateOf(false) }
     val toBuy = list.filter { !it.inCart }
     val cart = list.filter { it.inCart }
     var editing by remember { mutableStateOf<ShoppingItem?>(null) }
@@ -90,22 +96,72 @@ fun ShoppingListScreen(onBack: () -> Unit) {
     var line by rememberSaveable { mutableStateOf("") }
 
     fun add() {
-        val item = Shopping.parse(line) ?: return
+        // What isn't typed comes from last time: "Rice" after buying it by the kg is a kg at last time's rate.
+        val item = Shopping.parse(line, boughtBefore) ?: return
         line = ""
         scope.launch { shopping.save(item) }
     }
 
-    editing?.let { item -> ShoppingItemSheet(item, onDismiss = { editing = null }) }
+    fun remove(item: ShoppingItem) = scope.launch {
+        shopping.delete(item)
+        undo.show("${item.name} removed") { shopping.restore(listOf(item)) }
+    }
+    if (setLimit) {
+        var text by remember { mutableStateOf(if (limit > 0) AmountInput.fromMinor(limit) else "") }
+        GlassAlertDialog(
+            onDismissRequest = { setLimit = false },
+            title = { Text("Spend limit for this shop") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text("The basket shows how close you are, and turns red past it.", style = MaterialTheme.typography.bodySmall, color = c.textSecondary)
+                    MoneyField(text, { text = it }, Modifier.fillMaxWidth())
+                }
+            },
+            confirmButton = {
+                androidx.compose.material3.TextButton(onClick = {
+                    limit = AmountInput.toMinor(text)?.takeIf { it > 0 } ?: 0L
+                    prefs.edit().putLong("limit", limit).apply()
+                    setLimit = false
+                }) { Text("Save", color = c.accent) }
+            },
+            dismissButton = {
+                if (limit > 0) androidx.compose.material3.TextButton(onClick = {
+                    limit = 0L
+                    prefs.edit().remove("limit").apply()
+                    setLimit = false
+                }) { Text("No limit", color = c.textSecondary) }
+            },
+        )
+    }
+
+    editing?.let { item -> ShoppingItemSheet(item, boughtBefore, onDismiss = { editing = null }) }
     if (checkout && cart.isNotEmpty()) CheckoutSheet(cart, onDismiss = { checkout = false })
 
     GlassScreen(
         title = "Shopping list",
         onBack = onBack,
+        actions = {
+            RoundButton(Lucide.Target, if (limit > 0) "Spend limit ${money.formatWhole(limit)}" else "Set a spend limit", { setLimit = true }, tint = if (limit > 0) c.accent else c.textPrimary)
+            if (list.any { !it.inCart }) RoundButton(Lucide.Share2, "Share the list", {
+                val send = android.content.Intent(android.content.Intent.ACTION_SEND).setType("text/plain").putExtra(android.content.Intent.EXTRA_TEXT, Shopping.shareText(list))
+                runCatching { context.startActivity(android.content.Intent.createChooser(send, "Share the list")) }
+            })
+        },
         bottomBar = {
             // The basket: what it comes to, then one wide button, so nothing has to squeeze.
+            if (cart.isEmpty()) androidx.compose.runtime.SideEffect { undo.lift = 0.dp }
             if (cart.isNotEmpty()) {
                 val sum = Shopping.sum(cart)
-                Glass(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 12.dp).navigationBarsPadding(), strong = true, shape = RoundedCornerShape(28.dp)) {
+                // Solid, not glass: the list scrolls underneath and mustn't show through its text. Undo shows above it.
+                val density = androidx.compose.ui.platform.LocalDensity.current
+                androidx.compose.runtime.DisposableEffect(Unit) { onDispose { undo.lift = 0.dp } }
+                Column(
+                    Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 12.dp).navigationBarsPadding()
+                        .onSizeChanged { undo.lift = with(density) { it.height.toDp() } }
+                        .clip(RoundedCornerShape(28.dp))
+                        .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                        .border(1.dp, com.leftovers.app.ui.components.glassBorder(c), RoundedCornerShape(28.dp)),
+                ) {
                     Column(Modifier.padding(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 16.dp)) {
                         Row(verticalAlignment = Alignment.Bottom) {
                             Text(
@@ -114,7 +170,16 @@ fun ShoppingListScreen(onBack: () -> Unit) {
                                 color = c.textSecondary,
                                 modifier = Modifier.weight(1f),
                             )
-                            Text(money.format(sum.totalMinor), style = MaterialTheme.typography.titleLarge, color = c.textPrimary)
+                            Text(
+                                money.format(sum.totalMinor) + if (limit > 0) " of ${money.formatWhole(limit)}" else "",
+                                style = MaterialTheme.typography.titleLarge,
+                                color = if (limit > 0 && sum.totalMinor > limit) c.negative else c.textPrimary,
+                            )
+                        }
+                        if (limit > 0) {
+                            Spacer(Modifier.height(10.dp))
+                            com.leftovers.app.ui.components.ProgressLine(sum.totalMinor.toFloat() / limit, Modifier.fillMaxWidth(), height = 6.dp)
+                            if (sum.totalMinor > limit) Text("${money.format(sum.totalMinor - limit)} over", style = MaterialTheme.typography.labelMedium, color = c.negative, modifier = Modifier.padding(top = 6.dp))
                         }
                         Spacer(Modifier.height(14.dp))
                         PrimaryButton("Add to spending", { checkout = true }, Modifier.fillMaxWidth())
@@ -138,6 +203,22 @@ fun ShoppingListScreen(onBack: () -> Unit) {
                     modifier = Modifier.padding(start = 20.dp, top = 2.dp, bottom = 12.dp),
                 )
             }
+            // Buy again: things bought before, most often first, as they were last time.
+            val again = Shopping.buyAgain(boughtBefore, list)
+            if (again.isNotEmpty()) {
+                item { ListHeading("Buy again", null) }
+                item {
+                    androidx.compose.foundation.lazy.LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(bottom = 12.dp)) {
+                        items(again, key = { it.id }) { old ->
+                            Chip(
+                                old.name + (old.totalMinor?.let { " · ${money.formatWhole(it)}" } ?: ""),
+                                { scope.launch { shopping.save(Shopping.again(old)) } },
+                                icon = Lucide.Plus,
+                            )
+                        }
+                    }
+                }
+            }
             if (list.isEmpty()) {
                 item {
                     EmptyState(
@@ -153,11 +234,18 @@ fun ShoppingListScreen(onBack: () -> Unit) {
                     val sum = Shopping.sum(toBuy)
                     ListHeading("To buy", "about ${money.formatWhole(sum.totalMinor)}" + if (sum.unpriced > 0) " + ${sum.unpriced} unpriced" else "")
                 }
-                item { ItemCard(toBuy, onTick = { scope.launch { shopping.save(it.copy(inCart = true)) } }, onOpen = { editing = it }) }
+                // In aisles, in the order a shop is walked, once there's enough to sort.
+                val aisles = if (toBuy.size >= 4) Shopping.bySection(toBuy) else listOf("" to toBuy)
+                aisles.forEach { (aisle, inAisle) ->
+                    if (aisle.isNotEmpty()) item(key = "aisle-$aisle") {
+                        Text(aisle.uppercase(), style = MaterialTheme.typography.labelSmall.copy(letterSpacing = androidx.compose.ui.unit.TextUnit(1.1f, androidx.compose.ui.unit.TextUnitType.Sp)), color = c.textTertiary, modifier = Modifier.padding(start = 8.dp, top = 8.dp))
+                    }
+                    item(key = "list-$aisle") { ItemCard(inAisle, onTick = { scope.launch { shopping.save(it.copy(inCart = true)) } }, onOpen = { editing = it }, onRemove = ::remove) }
+                }
             }
             if (cart.isNotEmpty()) {
                 item { ListHeading("In the basket", null, Modifier.padding(top = 16.dp)) }
-                item { ItemCard(cart, onTick = { scope.launch { shopping.save(it.copy(inCart = false)) } }, onOpen = { editing = it }) }
+                item { ItemCard(cart, onTick = { scope.launch { shopping.save(it.copy(inCart = false)) } }, onOpen = { editing = it }, onRemove = ::remove) }
             }
         }
     }
@@ -228,16 +316,34 @@ private fun Tick(on: Boolean, onClick: () -> Unit) {
 }
 
 @Composable
-private fun ItemCard(items: List<ShoppingItem>, onTick: (ShoppingItem) -> Unit, onOpen: (ShoppingItem) -> Unit) {
+private fun ItemCard(items: List<ShoppingItem>, onTick: (ShoppingItem) -> Unit, onOpen: (ShoppingItem) -> Unit, onRemove: (ShoppingItem) -> Unit) {
     val c = LocalAppColors.current
     val money = LocalMoney.current
     val context = LocalContext.current
-    Glass(Modifier.fillMaxWidth().animateContentSize(), shape = RoundedCornerShape(24.dp)) {
-        Column(Modifier.padding(vertical = 6.dp)) {
+    // No padding around the rows, so a row being swiped away is red right to the card's edges.
+    Glass(Modifier.fillMaxWidth().animateContentSize().clip(RoundedCornerShape(24.dp)), shape = RoundedCornerShape(24.dp)) {
+        Column {
             items.forEachIndexed { i, item ->
                 if (i > 0) RowDivider(inset = 64.dp)
+                // Swipe a row away to take it off the list (Undo brings it back). The state is the item's own, and
+                // springs back: the list leaving out the removed item is what makes it go.
+                androidx.compose.runtime.key(item.id) {
+                val swipe = androidx.compose.material3.rememberSwipeToDismissBoxState(
+                    confirmValueChange = { v -> if (v != androidx.compose.material3.SwipeToDismissBoxValue.Settled) onRemove(item); false },
+                )
+                androidx.compose.material3.SwipeToDismissBox(
+                    state = swipe,
+                    backgroundContent = {
+                        // Only while a row is moving: the rows are glass, so it would show through otherwise.
+                        if (swipe.dismissDirection != androidx.compose.material3.SwipeToDismissBoxValue.Settled) Row(
+                            Modifier.fillMaxSize().background(c.negative).padding(horizontal = 24.dp),
+                            horizontalArrangement = if (swipe.dismissDirection == androidx.compose.material3.SwipeToDismissBoxValue.StartToEnd) Arrangement.Start else Arrangement.End,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) { Icon(Lucide.Trash2, contentDescription = null, tint = Color.White, modifier = Modifier.size(22.dp)) }
+                    },
+                ) {
                 Row(
-                    Modifier.fillMaxWidth().heightIn(min = 68.dp).pressable({ onOpen(item) }, pressedScale = 0.99f).padding(start = 8.dp, end = 18.dp, top = 8.dp, bottom = 8.dp),
+                    Modifier.fillMaxWidth().heightIn(min = 72.dp).pressable({ onOpen(item) }, pressedScale = 0.99f).padding(start = 8.dp, end = 18.dp, top = 12.dp, bottom = 12.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Tick(item.inCart) { onTick(item) }
@@ -277,6 +383,8 @@ private fun ItemCard(items: List<ShoppingItem>, onTick: (ShoppingItem) -> Unit, 
                         Text(money.format(it), style = MaterialTheme.typography.titleMedium, color = if (item.inCart) c.textSecondary else c.textPrimary, modifier = Modifier.padding(start = 12.dp))
                     }
                 }
+                }
+                }
             }
         }
     }
@@ -287,7 +395,7 @@ private val Units = listOf("" to "Each", "kg" to "kg", "g" to "g", "L" to "L", "
 
 /** One item, to change: name, how much, the rate per unit, a shop's page and its price there. */
 @Composable
-private fun ShoppingItemSheet(item: ShoppingItem, onDismiss: () -> Unit) {
+private fun ShoppingItemSheet(item: ShoppingItem, boughtBefore: List<ShoppingItem>, onDismiss: () -> Unit) {
     val c = LocalAppColors.current
     val money = LocalMoney.current
     val undo = LocalUndo.current
@@ -327,6 +435,16 @@ private fun ShoppingItemSheet(item: ShoppingItem, onDismiss: () -> Unit) {
             }
             edited.totalMinor?.let {
                 Text("Comes to ${money.format(it)}", style = MaterialTheme.typography.titleMedium, color = c.textPrimary)
+            }
+            // What it cost last time, to see prices move.
+            Shopping.lastPrice(name, boughtBefore)?.let { last ->
+                val then = java.time.Instant.ofEpochMilli(last.boughtAt ?: 0).atZone(java.time.ZoneId.systemDefault()).toLocalDate()
+                val was = money.format(last.rateMinor!!) + if (last.unit.isNotBlank()) "/${last.unit}" else ""
+                val change = if (rateMinor != null && last.unit == unit && rateMinor != last.rateMinor) {
+                    val diff = rateMinor - last.rateMinor
+                    if (diff > 0) " · ${money.format(diff)} more now" else " · ${money.format(-diff)} less now"
+                } else ""
+                Text("Last time: $was on ${then.friendlyLabel()}$change", style = MaterialTheme.typography.bodySmall, color = c.textSecondary)
             }
             GlassTextField(link, { link = it.trim() }, "https://… (optional)", label = "Shop's page", keyboardType = androidx.compose.ui.text.input.KeyboardType.Uri)
             if (link.startsWith("https://")) {

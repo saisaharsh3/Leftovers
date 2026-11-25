@@ -4,6 +4,7 @@ import androidx.room.testing.MigrationTestHelper
 import androidx.sqlite.db.framework.FrameworkSQLiteOpenHelperFactory
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -99,5 +100,18 @@ class MigrationTest {
         val db = helper.runMigrationsAndValidate(name, 31, true, *ALL_MIGRATIONS)
         db.query("SELECT COUNT(*) FROM shopping_items").use { it.moveToFirst(); assertEquals(0, it.getInt(0)) }
         db.query("SELECT name FROM categories WHERE id = 1").use { it.moveToFirst(); assertEquals("Food", it.getString(0)) }
+    }
+
+    @Test fun version32RemembersWhatWasBoughtKeepingTheList() {
+        helper.createDatabase(name, 31).apply {
+            execSQL("INSERT INTO shopping_items (id, name, quantity, unit, rateMinor, link, inCart, position, createdAt) VALUES (1, 'Rice', 2.0, 'kg', 6000, NULL, 0, 0, 1)")
+            close()
+        }
+        val db = helper.runMigrationsAndValidate(name, 32, true, *ALL_MIGRATIONS)
+        db.query("SELECT name, boughtAt FROM shopping_items WHERE id = 1").use {
+            it.moveToFirst()
+            assertEquals("Rice", it.getString(0))
+            assertTrue(it.isNull(1)) // still on the list
+        }
     }
 }

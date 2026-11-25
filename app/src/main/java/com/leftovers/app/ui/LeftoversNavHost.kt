@@ -495,7 +495,7 @@ fun LeftoversNavHost(
                 }
 
                 // Sits just above the tab bar, or at the bottom on screens without one.
-                val undoLift by animateDpAsState(if (onTab) 92.dp else 16.dp, label = "undoLift")
+                val undoLift by animateDpAsState((if (onTab) 92.dp else 16.dp) + undo.lift, label = "undoLift")
                 var lastUndo by remember { mutableStateOf<UndoRequest?>(null) }
                 undo.current?.let { lastUndo = it }
                 AnimatedVisibility(

@@ -1065,6 +1065,7 @@ private fun ChangeCard(item: ChatItem.Change, waiting: Int, onDecide: (Boolean) 
         ChangeKind.TRANSFER -> Lucide.Wallet
         ChangeKind.GOAL -> Lucide.PiggyBank
         ChangeKind.OWED -> Lucide.HandCoins
+        ChangeKind.SHOPPING -> Lucide.ShoppingBasket
     }
     val tint = if (item.kind == ChangeKind.DELETE) c.negative else c.accent
     val pending = item.state == ChangeState.PENDING

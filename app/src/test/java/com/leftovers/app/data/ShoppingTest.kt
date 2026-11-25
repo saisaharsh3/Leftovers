@@ -57,4 +57,48 @@ class ShoppingTest {
         assertEquals(2L, Shopping.category(cats)!!.id)
         assertTrue(Shopping.category(cats + Category(id = 3, name = "Groceries", emoji = "", color = 0, type = TxType.EXPENSE))!!.id == 3L)
     }
+
+    @Test fun itemsGoInTheirAisles() {
+        assertEquals("Fruit & veg", Shopping.section("Tomatoes"))
+        assertEquals("Snacks", Shopping.section("Peanuts")) // not peas
+        assertEquals("Household", Shopping.section("Toilet roll")) // not bread
+        assertEquals("Household", Shopping.section("Candles")) // not tins
+        assertEquals("Dairy & eggs", Shopping.section("Eggs"))
+        assertEquals(Shopping.OTHER_SECTION, Shopping.section("Birthday card"))
+        val aisles = Shopping.bySection(listOf(ShoppingItem(name = "Soap"), ShoppingItem(name = "Milk"), ShoppingItem(name = "Apples")))
+        assertEquals(listOf("Fruit & veg", "Dairy & eggs", "Household"), aisles.map { it.first })
+    }
+
+    @Test fun buyAgainMostOftenFirstAndNotWhatsOnTheList() {
+        val bought = listOf(
+            ShoppingItem(id = 1, name = "Milk", rateMinor = 3000, boughtAt = 10),
+            ShoppingItem(id = 2, name = "milk", rateMinor = 3200, boughtAt = 20),
+            ShoppingItem(id = 3, name = "Rice", quantity = 2.0, unit = "kg", rateMinor = 6000, boughtAt = 30),
+            ShoppingItem(id = 4, name = "Bread", boughtAt = 5),
+        )
+        val again = Shopping.buyAgain(bought, onList = listOf(ShoppingItem(name = "Bread")))
+        assertEquals(listOf("milk", "Rice"), again.map { it.name })
+        assertEquals(3200L, again[0].rateMinor) // as last bought
+        val back = Shopping.again(again[1])
+        assertEquals(0L, back.id)
+        assertEquals(null, back.boughtAt)
+        assertEquals("kg", back.unit)
+    }
+
+    @Test fun typingANameFillsInLastTime() {
+        val bought = listOf(ShoppingItem(id = 1, name = "Rice", quantity = 2.0, unit = "kg", rateMinor = 6000, boughtAt = 30))
+        val rice = Shopping.parse("rice", bought)!!
+        assertEquals(2.0, rice.quantity, 0.0)
+        assertEquals("kg", rice.unit)
+        assertEquals(6000L, rice.rateMinor)
+        // A different unit doesn't take last time's rate.
+        assertNull(Shopping.parse("rice 500 g", bought)!!.rateMinor)
+        // What's typed wins.
+        assertEquals(6500L, Shopping.parse("rice 65", bought)!!.rateMinor)
+    }
+
+    @Test fun theSharedListIsByAisle() {
+        val text = Shopping.shareText(listOf(ShoppingItem(name = "Milk", quantity = 2.0, unit = "L"), ShoppingItem(name = "Apples"), ShoppingItem(name = "Soap", inCart = true)))
+        assertEquals("Shopping list\n\nFruit & veg\n• Apples\n\nDairy & eggs\n• Milk (2 L)", text)
+    }
 }

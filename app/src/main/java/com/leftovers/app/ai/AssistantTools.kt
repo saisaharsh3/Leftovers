@@ -54,6 +54,7 @@ enum class ChangeKind(val title: String, val done: String) {
     TRANSFER("Transfer", "Moved"),
     GOAL("Savings goal", "Saved"),
     OWED("Money owed", "Saved"),
+    SHOPPING("Shopping list", "Added"),
 }
 
 /** A change the AI proposed, waiting for the user's Apply or Cancel. */
@@ -114,6 +115,7 @@ class AssistantTools(private val container: AppContainer, private val privacy: A
         ))
         add(ToolSpec("list_subscriptions", "Subscriptions and recurring income with amount, billing day and next charge date.", emptyList()))
         add(ToolSpec("list_goals", "Savings goals with target, amount saved and what is needed each month.", emptyList()))
+        add(ToolSpec("list_shopping", "The shopping list: what's still to buy and what's in the basket, with amounts and prices, and its estimated total.", emptyList()))
         add(ToolSpec(
             "app_help", "How to do something in Leftovers, or where a feature is: the app's own guide. Use it for any question about using the app.",
             listOf(Param("question", "string", "What the user wants to do or find, e.g. transfer between accounts", required = true)),
@@ -264,6 +266,12 @@ class AssistantTools(private val container: AppContainer, private val privacy: A
                 "settle_up",
                 "Mark everything with one person as paid back, so it leaves Money owed.",
                 listOf(Param("person", "string", "Name as shown by list_money_owed", required = true)),
+                changesData = true,
+            ))
+            add(ToolSpec(
+                "add_to_shopping_list",
+                "Put things on the shopping list. One per line, as the user would type them: a name, then optionally how much and the rate, e.g. \"Rice 2 kg 60\" or \"Milk\". Prices left out are filled in from the last time it was bought.",
+                listOf(Param("items", "string", "The items, one per line", required = true)),
                 changesData = true,
             ))
             add(ToolSpec(
@@ -433,6 +441,20 @@ class AssistantTools(private val container: AppContainer, private val privacy: A
                         .put("category", r.categoryName).put("day_of_month", r.dayOfMonth).put("active", r.active)
                         .put("next_charge", if (r.active) r.toRecurring().nextChargeDate().toString() else JSONObject.NULL)
                 }).toString(), "${list.size} subscriptions")
+            }
+            "list_shopping" -> {
+                val list = container.shopping.items.first()
+                val line = { i: com.leftovers.app.data.ShoppingItem ->
+                    JSONObject().put("name", scrub(i.name)).put("amount", i.amountText).also { o -> i.totalMinor?.let { o.put("price", major(it)) } }
+                }
+                Prepared.Answer(
+                    JSONObject()
+                        .put("to_buy", JSONArray(list.filter { !it.inCart }.map(line)))
+                        .put("in_basket", JSONArray(list.filter { it.inCart }.map(line)))
+                        .put("estimated_total", major(com.leftovers.app.data.Shopping.sum(list).totalMinor))
+                        .toString(),
+                    "your shopping list",
+                )
             }
             "list_goals" -> {
                 val list = container.planning.goals.first()
@@ -747,6 +769,16 @@ class AssistantTools(private val container: AppContainer, private val privacy: A
             ) {
                 container.planning.settle(b.person)
                 "Settled"
+            }
+        }
+        "add_to_shopping_list" -> {
+            val bought = container.shopping.bought.first()
+            val items = a.getString("items").split('\n', ';').mapNotNull { com.leftovers.app.data.Shopping.parse(it.trim().removePrefix("-").removePrefix("•").trim(), bought) }.take(30)
+            if (items.isEmpty()) throw IllegalArgumentException("No items to add")
+            val names = items.joinToString(", ") { i -> i.name + (i.amountText.takeIf { it.isNotEmpty() }?.let { " ($it)" } ?: "") }
+            ProposedChange(ChangeKind.SHOPPING, "Add to the shopping list: $names") {
+                container.shopping.addAll(items)
+                "Added ${items.size} to the shopping list"
             }
         }
         "add_goal" -> {
