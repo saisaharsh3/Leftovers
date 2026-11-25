@@ -49,4 +49,20 @@ class GreetingsTest {
         val week = (0..6).map { spend(sunday.minusDays(it.toLong()), 800_00) }
         assertTrue(note(last + week)!!.startsWith("This week came to ₹5600, 60% more"))
     }
+
+    @Test fun aBigRiseFromLittleIsToldAsTwoAmounts() {
+        // Sports went from 50 to 4,113 (+8,126%): a percentage like that means little.
+        // The week as a whole about the same, so it's Sports that stands out.
+        val last = (7..13).map { spend(sunday.minusDays(it.toLong()), 3_000_00) } + spend(sunday.minusDays(8), 50_00, "Sports")
+        val week = (0..6).map { spend(sunday.minusDays(it.toLong()), 2_500_00) } + spend(sunday.minusDays(1), 4_113_00, "Sports")
+        val text = note(last + week)!!
+        assertTrue(text, !text.contains("%"))
+        assertTrue(text, text.contains("₹4113") && text.contains("₹50"))
+    }
+
+    @Test fun onlySundayEvening() {
+        assertTrue(WeeklyNote.due(sunday, java.time.LocalTime.of(19, 0)))
+        assertTrue(!WeeklyNote.due(sunday, java.time.LocalTime.of(9, 0)))
+        assertTrue(!WeeklyNote.due(sunday.minusDays(2), java.time.LocalTime.of(19, 0)))
+    }
 }

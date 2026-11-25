@@ -97,6 +97,12 @@ object Festivals {
  * down or up a lot on the week before, a category that changed, no-spend days. Null when there's nothing to say.
  */
 object WeeklyNote {
+    /** Above this (more than four times as much), a rise is told as "from X to Y", not as a percentage. */
+    const val BIG_RISE = 300
+
+    /** Sunday evening (from 5pm), when the week is all but done. */
+    fun due(day: LocalDate, time: LocalTime): Boolean = day.dayOfWeek == DayOfWeek.SUNDAY && time.hour >= 17
+
     fun note(items: List<TransactionItem>, today: LocalDate, format: (Long) -> String): String? {
         val start = today.minusDays(6)
         val before = start.minusDays(7)
@@ -120,8 +126,16 @@ object WeeklyNote {
         if (moved != null && moved.third <= -30) return "${moved.first} came to ${format(moved.second)} this week, ${-moved.third}% less than last week 👏"
         val free = (0..6).count { d -> week.none { it.date == today.minusDays(d.toLong()) } }
         if (free >= 2 && week.isNotEmpty()) return "$free no-spend days this week 🙌 Your wallet says thanks."
-        if (change != null && change >= 20) return "This week came to ${format(now)}, $change% more than last week. Next week's a fresh start 💪"
-        if (moved != null && moved.third >= 50) return "${moved.first} was up ${moved.third}% this week (${format(moved.second)}). Worth a look? 👀"
+        // A rise from very little (say 50 to 4,113) is clearer as the two amounts than as a huge percentage.
+        if (change != null && change >= 20) {
+            return if (change > BIG_RISE) "This week came to ${format(now)}, up from ${format(then)} last week. Next week's a fresh start 💪"
+            else "This week came to ${format(now)}, $change% more than last week. Next week's a fresh start 💪"
+        }
+        if (moved != null && moved.third >= 50) {
+            val was = byThen[moved.first] ?: 0
+            return if (moved.third > BIG_RISE) "${format(moved.second)} on ${moved.first} this week, up from ${format(was)} last week. Worth a look? 👀"
+            else "${moved.first} was up ${moved.third}% this week (${format(moved.second)}). Worth a look? 👀"
+        }
         val top = byNow.maxByOrNull { it.value } ?: return null
         return "${top.key} was your top spend this week, at ${format(top.value)} ✨"
     }
@@ -153,11 +167,12 @@ object Greetings {
             )
         } else wm.cancelUniqueWork(FESTIVAL_WORK)
         if (weekly) {
-            var next = LocalDate.now().with(TemporalAdjusters.nextOrSame(DayOfWeek.SUNDAY)).atTime(LocalTime.of(19, 0))
-            if (!next.isAfter(LocalDateTime.now())) next = next.plusWeeks(1)
+            // Every evening at 7, and the note itself waits for Sunday: Android can shift a weekly job by days.
+            var next = LocalDate.now().atTime(LocalTime.of(19, 0))
+            if (!next.isAfter(LocalDateTime.now())) next = next.plusDays(1)
             wm.enqueueUniquePeriodicWork(
                 WEEKLY_WORK, ExistingPeriodicWorkPolicy.UPDATE,
-                PeriodicWorkRequestBuilder<WeeklyNoteWorker>(7, TimeUnit.DAYS).setInitialDelay(delayUntil(next), TimeUnit.MINUTES).build(),
+                PeriodicWorkRequestBuilder<WeeklyNoteWorker>(24, TimeUnit.HOURS).setInitialDelay(delayUntil(next), TimeUnit.MINUTES).build(),
             )
         } else wm.cancelUniqueWork(WEEKLY_WORK)
     }
@@ -200,10 +215,16 @@ class FestivalWorker(context: Context, params: WorkerParameters) : CoroutineWork
 
 class WeeklyNoteWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result {
+        val today = LocalDate.now()
+        if (!WeeklyNote.due(today, LocalTime.now())) return Result.success()
+        // Once a week, even if the evening check runs twice.
+        val prefs = applicationContext.getSharedPreferences("greetings", Context.MODE_PRIVATE)
+        if (prefs.getString("weekly", null) == today.toString()) return Result.success()
+        prefs.edit().putString("weekly", today.toString()).apply()
         val container = (applicationContext as LeftoversApp).container
         val s = container.settings.settings.first()
         val money = Money(s.currencyCode)
-        val text = WeeklyNote.note(container.repository.getAllTransactions(), LocalDate.now(), money::formatWhole) ?: return Result.success()
+        val text = WeeklyNote.note(container.repository.getAllTransactions(), today, money::formatWhole) ?: return Result.success()
         Greetings.post(applicationContext, 72, "Your week", text)
         return Result.success()
     }
