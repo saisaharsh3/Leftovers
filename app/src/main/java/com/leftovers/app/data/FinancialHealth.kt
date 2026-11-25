@@ -8,8 +8,11 @@ import kotlin.math.sqrt
  * without enough to go on (no income yet, under three months of it) is left out, and the others count for more.
  */
 object FinancialHealth {
-    /** One measure: its [weight] in the score, how well it's doing from 0 to 1 ([score], null when it can't tell), and why. */
-    data class Part(val name: String, val weight: Int, val score: Float?, val detail: String)
+    /**
+     * One measure: its [weight] in the score, how well it's doing from 0 to 1 ([score], null when it can't tell), and
+     * why; a [short] name for small spaces and the one thing that would lift it ([tip]).
+     */
+    data class Part(val name: String, val weight: Int, val score: Float?, val detail: String, val short: String = name, val tip: String = "")
 
     data class Health(val score: Int, val parts: List<Part>) {
         val label: String get() = when {
@@ -22,9 +25,9 @@ object FinancialHealth {
         /** The part pulling the score down the most, to say what to look at. */
         val weakest: Part? get() = parts.filter { it.score != null }.minByOrNull { (it.score ?: 1f) * it.weight }?.takeIf { (it.score ?: 1f) < 0.7f }
 
-        val summary: String get() = when {
+        /** What to do next: the weakest part's tip, or a word that all's well. */
+        val summary: String get() = weakest?.tip?.takeIf { it.isNotEmpty() } ?: when {
             score >= 80 -> "You're in good shape. Keep it up."
-            weakest != null -> "Most room to grow: ${weakest!!.name.lowercase()}."
             else -> "Steady. A little more saved each month would lift it."
         }
     }
@@ -53,36 +56,38 @@ object FinancialHealth {
         parts += if (income > 0) {
             val rate = (income - spent).toDouble() / income
             Part("Saving", 25, scale(rate, 0.0, 0.2),
-                if (rate >= 0) "You kept ${pct(rate)} of what came in" else "You spent ${pct(-rate)} more than came in")
+                if (rate >= 0) "You kept ${pct(rate)} of what came in" else "You spent ${pct(-rate)} more than came in",
+                tip = "Try to keep a fifth of what comes in.")
         } else Part("Saving", 25, null, "No income in this period yet")
 
         // Spending: within the budget is full marks, 30% over is none. Without a budget, against income: 80% or less.
         parts += when {
             budget != null && budget > 0 -> {
                 val used = spent.toDouble() / budget
-                Part("Spending", 25, 1f - scale(used, 1.0, 1.3), "You spent ${pct(used)} of your budget")
+                Part("Spending", 25, 1f - scale(used, 1.0, 1.3), "You spent ${pct(used)} of your budget", tip = "Bringing spending back within budget lifts this most.")
             }
             income > 0 -> {
                 val used = spent.toDouble() / income
-                Part("Spending", 25, 1f - scale(used, 0.8, 1.1), "You spent ${pct(used)} of what came in")
+                Part("Spending", 25, 1f - scale(used, 0.8, 1.1), "You spent ${pct(used)} of what came in", tip = "Spending under 80% of what comes in lifts this most.")
             }
             else -> Part("Spending", 25, null, "Set a budget or log income to see this")
         }
 
         // Money you owe: none is full marks, a month's income or more is none.
         parts += when {
-            owe <= 0 -> Part("Money you owe", 20, 1f, "You don't owe anyone")
+            owe <= 0 -> Part("Money you owe", 20, 1f, "You don't owe anyone", "Owing")
             perMonthIncome > 0 -> {
                 val share = owe / perMonthIncome
-                Part("Money you owe", 20, 1f - scale(share, 0.0, 1.0), "You owe ${format(owe)}, ${pct(share)} of a month's income")
+                Part("Money you owe", 20, 1f - scale(share, 0.0, 1.0), "You owe ${format(owe)}, ${pct(share)} of a month's income", "Owing", "Paying back the ${format(owe)} you owe lifts this most.")
             }
-            else -> Part("Money you owe", 20, 0.5f, "You owe ${format(owe)}")
+            else -> Part("Money you owe", 20, 0.5f, "You owe ${format(owe)}", "Owing", "Paying back the ${format(owe)} you owe lifts this most.")
         }
 
         // Cushion: six months of spending in the accounts is full marks.
         parts += if (perMonthSpend > 0) {
             val cover = balance / perMonthSpend
-            Part("Cushion", 20, scale(cover, 0.0, 6.0), if (cover <= 0) "Nothing put by for a rainy day yet" else "Your balance would cover ${months(cover)} of spending")
+            Part("Cushion", 20, scale(cover, 0.0, 6.0), if (cover <= 0) "Nothing put by for a rainy day yet" else "Your balance would cover ${months(cover)} of spending",
+                tip = if (cover <= 0) "Start a cushion: six months of spending put by is the aim." else "Your cushion covers ${months(cover)}. Six months is the aim.")
         } else Part("Cushion", 20, null, "No spending to measure against yet")
 
         // Steady income: how much it moves month to month, over the months that had any.
@@ -92,8 +97,9 @@ object FinancialHealth {
             val sd = sqrt(earning.sumOf { (it - mean) * (it - mean) } / earning.size)
             val cv = sd / mean
             Part("Steady income", 10, 1f - scale(cv, 0.1, 0.6),
-                if (cv <= 0.15) "Your income is steady month to month" else "Your income changes by about ${pct(cv)} month to month")
-        } else Part("Steady income", 10, null, "Needs three months with income")
+                if (cv <= 0.15) "Your income is steady month to month" else "Your income changes by about ${pct(cv)} month to month",
+                "Income", "Your income moves a lot. A bigger cushion helps in lean months.")
+        } else Part("Steady income", 10, null, "Needs three months with income", "Income")
 
         val counted = parts.filter { it.score != null }
         if (counted.isEmpty()) return null

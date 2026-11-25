@@ -146,6 +146,9 @@ data class StatsUiState(
     val inOut: List<MonthInOut> = emptyList(),
     /** The financial health score for the period (#73); null with a category picked, or nothing to judge. */
     val health: com.leftovers.app.data.FinancialHealth.Health? = null,
+    /** The score the period before, to show the change, and what that period is called ("October"). */
+    val healthBefore: Int? = null,
+    val healthBeforeLabel: String = "",
     /** The category shown, or null for all of them; the ones with entries, most used first, to pick from. */
     val categoryId: Long? = null,
     val categoryOptions: List<CategoryOption> = emptyList(),
@@ -213,19 +216,39 @@ class StatsViewModel(
             val m = p.anchor
             val monthBudget = if (p.kind == PeriodKind.MONTH && accountId == null && category == null && s.plan.isSet && s.plan.cycle(m).start == m.atDay(1)) s.plan.budgetFor(m, everything) else 0L
             // Financial health (#73): for the money as a whole, so not for one category.
-            val health = if (category != null) null else {
-                val thisMonth = YearMonth.from(today)
-                com.leftovers.app.data.FinancialHealth.of(
-                    income = current.totalOf(TxType.INCOME),
-                    spent = current.totalOf(TxType.EXPENSE),
-                    months = p.daysSoFar(today, oldest) / 30.44,
-                    budget = monthBudget.takeIf { it > 0 },
-                    owe = debts.openBalances().filter { it.netMinor < 0 }.sumOf { -it.netMinor },
-                    balance = counted.values.sum(),
-                    // The six whole months before this one, so a month half gone doesn't look like a drop.
-                    monthlyIncomes = monthlyInOut(all, thisMonth.minusMonths(6), thisMonth.minusMonths(1)).map { it.inMinor },
-                    format = Money(s.currencyCode)::formatWhole,
-                )
+            val owe = debts.openBalances().filter { it.netMinor < 0 }.sumOf { -it.netMinor }
+            val thisMonth = YearMonth.from(today)
+            // The six whole months before this one, so a month half gone doesn't look like a drop.
+            val incomes = monthlyInOut(all, thisMonth.minusMonths(6), thisMonth.minusMonths(1)).map { it.inMinor }
+            val health = if (category != null) null else com.leftovers.app.data.FinancialHealth.of(
+                income = current.totalOf(TxType.INCOME),
+                spent = current.totalOf(TxType.EXPENSE),
+                months = p.daysSoFar(today, oldest) / 30.44,
+                budget = monthBudget.takeIf { it > 0 },
+                owe = owe,
+                balance = counted.values.sum(),
+                monthlyIncomes = incomes,
+                format = Money(s.currencyCode)::formatWhole,
+            )
+            // The period before, for the change: its own in and out, and the balance as it was at its end.
+            val prev = p.previous()
+            val healthBefore = if (health == null || prev == null) null else {
+                val inPrev = all.filter { prev.contains(it.date) }
+                if (inPrev.isEmpty()) null else {
+                    val since = all.filter { it.date > prev.end() && it.date <= today }
+                    val prevMonth = prev.anchor
+                    val prevBudget = if (prev.kind == PeriodKind.MONTH && accountId == null && s.plan.isSet && s.plan.cycle(prevMonth).start == prevMonth.atDay(1)) s.plan.budgetFor(prevMonth, everything) else 0L
+                    com.leftovers.app.data.FinancialHealth.of(
+                        income = inPrev.totalOf(TxType.INCOME),
+                        spent = inPrev.totalOf(TxType.EXPENSE),
+                        months = prev.daysSoFar(today, oldest) / 30.44,
+                        budget = prevBudget.takeIf { it > 0 },
+                        owe = owe,
+                        balance = counted.values.sum() - since.totalOf(TxType.INCOME) + since.totalOf(TxType.EXPENSE),
+                        monthlyIncomes = incomes,
+                        format = Money(s.currencyCode)::formatWhole,
+                    )?.score
+                }
             }
             StatsUiState(
                 loaded = true,
@@ -251,6 +274,8 @@ class StatsViewModel(
                 categoryId = category?.id,
                 categoryOptions = options,
                 health = health,
+                healthBefore = healthBefore,
+                healthBeforeLabel = prev?.let { if (it.kind == PeriodKind.MONTH) it.anchor.month.getDisplayName(TextStyle.FULL, Locale.getDefault()) else it.label() } ?: "",
             )
         }.flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), StatsUiState())
 
@@ -334,7 +359,7 @@ fun StatsScreen(
             // Balance, and in and out: they don't depend on Spending or Income, so they come before that choice.
             // They're about accounts, so they step aside while one category is shown.
             if (state.categoryId == null) item { MoneyCard(state) }
-            state.health?.let { h -> item { HealthCard(h) } }
+            state.health?.let { h -> item { HealthCard(h, state.healthBefore, state.healthBeforeLabel) } }
             item {
                 SegmentedToggle(
                     TxType.entries, state.type,
@@ -1097,7 +1122,7 @@ private fun MoneyCard(state: StatsUiState) {
  * measure with a bar and a plain sentence. Measures without enough to go on say so and aren't counted.
  */
 @Composable
-private fun HealthCard(h: com.leftovers.app.data.FinancialHealth.Health) {
+private fun HealthCard(h: com.leftovers.app.data.FinancialHealth.Health, before: Int?, beforeLabel: String) {
     val c = LocalAppColors.current
     var open by rememberSaveable { mutableStateOf(false) }
     fun tone(score: Float) = when {
@@ -1131,6 +1156,17 @@ private fun HealthCard(h: com.leftovers.app.data.FinancialHealth.Health) {
                         val tl = androidx.compose.ui.geometry.Offset(inset, inset)
                         val style = androidx.compose.ui.graphics.drawscope.Stroke(stroke, cap = androidx.compose.ui.graphics.StrokeCap.Round)
                         drawArc(track, 135f, 270f, false, tl, arc, style = style)
+                        // Where Fair, Good and Great begin, as small gaps in the track.
+                        listOf(0.4f, 0.6f, 0.8f).forEach { at ->
+                            if (at > sweep) {
+                                val ta = Math.toRadians((135f + 270f * at).toDouble())
+                                val tr = (size.minDimension - stroke) / 2
+                                drawCircle(
+                                    c.textTertiary.copy(alpha = 0.55f), stroke * 0.16f,
+                                    androidx.compose.ui.geometry.Offset(center.x + tr * kotlin.math.cos(ta).toFloat(), center.y + tr * kotlin.math.sin(ta).toFloat()),
+                                )
+                            }
+                        }
                         if (sweep > 0.005f) {
                             // The arc deepens toward the score, faint where it starts and full where it ends.
                             rotateDraw(135f) {
@@ -1172,17 +1208,43 @@ private fun HealthCard(h: com.leftovers.app.data.FinancialHealth.Health) {
                         Spacer(Modifier.width(7.dp))
                         Text(h.label, style = MaterialTheme.typography.labelLarge, color = color)
                     }
+                    before?.let { b ->
+                        val d = h.score - b
+                        Text(
+                            when {
+                                d > 0 -> "▲ $d since $beforeLabel"
+                                d < 0 -> "▼ ${-d} since $beforeLabel"
+                                else -> "Same as $beforeLabel"
+                            },
+                            style = MaterialTheme.typography.labelMedium,
+                            color = when {
+                                d > 0 -> c.positive
+                                d < 0 -> c.negative
+                                else -> c.textTertiary
+                            },
+                        )
+                    }
                     Text(h.summary, style = MaterialTheme.typography.bodyMedium.copy(lineBreak = androidx.compose.ui.text.style.LineBreak.Heading), color = c.textPrimary.copy(alpha = 0.85f))
                 }
             }
             Spacer(Modifier.height(18.dp))
             // The five measures at a glance: each as wide as it counts, filled as far as it's doing.
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 h.parts.forEach { part ->
-                    Box(Modifier.weight(part.weight.toFloat()).height(6.dp).clip(CircleShape).background(c.glassStrong)) {
-                        part.score?.let { f ->
-                            Box(Modifier.fillMaxHeight().fillMaxWidth(f.coerceAtLeast(0.04f)).clip(CircleShape).background(tone(f)))
+                    Column(Modifier.weight(1f)) {
+                        Box(Modifier.fillMaxWidth().height(5.dp).clip(CircleShape).background(c.glassStrong)) {
+                            part.score?.let { f ->
+                                Box(Modifier.fillMaxHeight().fillMaxWidth(f.coerceAtLeast(0.04f)).clip(CircleShape).background(tone(f)))
+                            }
                         }
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            part.short,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = if (part.score == null) c.textTertiary.copy(alpha = 0.6f) else c.textTertiary,
+                            maxLines = 1,
+                            softWrap = false,
+                        )
                     }
                 }
             }
