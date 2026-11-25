@@ -2,6 +2,8 @@ package com.leftovers.app.ui.screens
 
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -100,15 +102,22 @@ fun ShoppingListScreen(onBack: () -> Unit) {
         title = "Shopping list",
         onBack = onBack,
         bottomBar = {
+            // The basket: what it comes to, then one wide button, so nothing has to squeeze.
             if (cart.isNotEmpty()) {
                 val sum = Shopping.sum(cart)
-                Glass(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 12.dp).navigationBarsPadding(), strong = true, shape = RoundedCornerShape(26.dp)) {
-                    Row(Modifier.padding(start = 20.dp, end = 10.dp, top = 10.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Column(Modifier.weight(1f)) {
-                            Text("In the basket · ${cart.size}", style = MaterialTheme.typography.labelMedium, color = c.textSecondary)
+                Glass(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 12.dp).navigationBarsPadding(), strong = true, shape = RoundedCornerShape(28.dp)) {
+                    Column(Modifier.padding(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 16.dp)) {
+                        Row(verticalAlignment = Alignment.Bottom) {
+                            Text(
+                                "In the basket · ${cart.size} ${if (cart.size == 1) "item" else "items"}",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = c.textSecondary,
+                                modifier = Modifier.weight(1f),
+                            )
                             Text(money.format(sum.totalMinor), style = MaterialTheme.typography.titleLarge, color = c.textPrimary)
                         }
-                        PrimaryButton("Add to spending", { checkout = true })
+                        Spacer(Modifier.height(14.dp))
+                        PrimaryButton("Add to spending", { checkout = true }, Modifier.fillMaxWidth())
                     }
                 }
             }
@@ -116,30 +125,25 @@ fun ShoppingListScreen(onBack: () -> Unit) {
     ) { padding ->
         LazyColumn(
             Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = padding.calculateTopPadding() + 12.dp, bottom = padding.calculateBottomPadding() + 120.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = padding.calculateTopPadding() + 16.dp, bottom = padding.calculateBottomPadding() + 160.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            // Adding: a line like "Rice 2 kg 60" fills in the name, how much and the rate.
+            // Adding: one field. A line like "Rice 2 kg 60" fills in the name, how much and the rate.
+            item { AddLine(line, { line = it }, ::add) }
             item {
-                Glass(Modifier.fillMaxWidth(), shape = RoundedCornerShape(22.dp)) {
-                    Row(Modifier.padding(start = 6.dp, end = 8.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                        GlassTextField(
-                            value = line,
-                            onValueChange = { line = it },
-                            placeholder = "Add an item, like Rice 2 kg 60",
-                            modifier = Modifier.weight(1f),
-                            onDone = { add() },
-                        )
-                        RoundButton(Lucide.Plus, "Add", { add() }, size = 44.dp, container = if (line.isNotBlank()) c.accent else null, tint = if (line.isNotBlank()) c.onAccent else c.textSecondary)
-                    }
-                }
+                Text(
+                    "Type a name, how much and the rate: Rice 2 kg 60",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = c.textTertiary,
+                    modifier = Modifier.padding(start = 20.dp, top = 2.dp, bottom = 12.dp),
+                )
             }
             if (list.isEmpty()) {
                 item {
                     EmptyState(
                         Lucide.ShoppingBasket,
                         "Nothing on the list",
-                        "Type what you need, how much and its rate. Tick things as they go in the basket, then add them to your spending in one go.",
+                        "Tick things as they go in the basket, then add them to your spending in one go.",
                     )
                 }
                 return@LazyColumn
@@ -147,14 +151,78 @@ fun ShoppingListScreen(onBack: () -> Unit) {
             if (toBuy.isNotEmpty()) {
                 item {
                     val sum = Shopping.sum(toBuy)
-                    SectionHeader("To buy · about ${money.formatWhole(sum.totalMinor)}" + if (sum.unpriced > 0) " + ${sum.unpriced} without a rate" else "")
+                    ListHeading("To buy", "about ${money.formatWhole(sum.totalMinor)}" + if (sum.unpriced > 0) " + ${sum.unpriced} unpriced" else "")
                 }
                 item { ItemCard(toBuy, onTick = { scope.launch { shopping.save(it.copy(inCart = true)) } }, onOpen = { editing = it }) }
             }
             if (cart.isNotEmpty()) {
-                item { SectionHeader("In the basket") }
+                item { ListHeading("In the basket", null, Modifier.padding(top = 16.dp)) }
                 item { ItemCard(cart, onTick = { scope.launch { shopping.save(it.copy(inCart = false)) } }, onOpen = { editing = it }) }
             }
+        }
+    }
+}
+
+/** A section's name, with its sum on the right. */
+@Composable
+private fun ListHeading(title: String, trailing: String?, modifier: Modifier = Modifier) {
+    val c = LocalAppColors.current
+    Row(modifier.fillMaxWidth().padding(start = 4.dp, end = 4.dp, bottom = 6.dp), verticalAlignment = Alignment.Bottom) {
+        Text(title, style = MaterialTheme.typography.titleMedium, color = c.textPrimary, modifier = Modifier.weight(1f))
+        if (trailing != null) Text(trailing, style = MaterialTheme.typography.labelLarge, color = c.textSecondary)
+    }
+}
+
+/** The add field: one pill, with its button inside, lit once there's something to add. */
+@Composable
+private fun AddLine(text: String, onChange: (String) -> Unit, onAdd: () -> Unit) {
+    val c = LocalAppColors.current
+    val ready = text.isNotBlank()
+    val bg by androidx.compose.animation.animateColorAsState(if (ready) c.accent else c.glassStrong, label = "addBg")
+    Glass(Modifier.fillMaxWidth(), shape = RoundedCornerShape(28.dp)) {
+        Row(Modifier.height(56.dp).padding(start = 20.dp, end = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.weight(1f)) {
+                if (text.isEmpty()) Text("Add an item", style = MaterialTheme.typography.bodyLarge, color = c.textTertiary)
+                androidx.compose.foundation.text.BasicTextField(
+                    value = text,
+                    onValueChange = onChange,
+                    singleLine = true,
+                    textStyle = MaterialTheme.typography.bodyLarge.copy(color = c.textPrimary),
+                    cursorBrush = androidx.compose.ui.graphics.SolidColor(c.accent),
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                        capitalization = androidx.compose.ui.text.input.KeyboardCapitalization.Sentences,
+                        imeAction = androidx.compose.ui.text.input.ImeAction.Done,
+                    ),
+                    keyboardActions = androidx.compose.foundation.text.KeyboardActions(onDone = { onAdd() }),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+            Box(
+                Modifier.size(44.dp).clip(androidx.compose.foundation.shape.CircleShape).background(bg).pressable(onAdd, pressedScale = 0.9f),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(Lucide.Plus, contentDescription = "Add", tint = if (ready) c.onAccent else c.textSecondary, modifier = Modifier.size(20.dp))
+            }
+        }
+    }
+}
+
+/** A round tick, filled once the item is in the basket. */
+@Composable
+private fun Tick(on: Boolean, onClick: () -> Unit) {
+    val c = LocalAppColors.current
+    val bg by androidx.compose.animation.animateColorAsState(if (on) c.accent else Color.Transparent, label = "tickBg")
+    val edge by androidx.compose.animation.animateColorAsState(if (on) c.accent else c.textTertiary, label = "tickEdge")
+    Box(
+        Modifier.size(44.dp).clip(androidx.compose.foundation.shape.CircleShape).pressable(onClick, pressedScale = 0.85f),
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(
+            Modifier.size(24.dp).clip(androidx.compose.foundation.shape.CircleShape).background(bg)
+                .then(Modifier.border(1.5.dp, edge, androidx.compose.foundation.shape.CircleShape)),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (on) Icon(Lucide.Check, contentDescription = null, tint = c.onAccent, modifier = Modifier.size(14.dp))
         }
     }
 }
@@ -164,20 +232,17 @@ private fun ItemCard(items: List<ShoppingItem>, onTick: (ShoppingItem) -> Unit, 
     val c = LocalAppColors.current
     val money = LocalMoney.current
     val context = LocalContext.current
-    Glass(Modifier.fillMaxWidth().animateContentSize()) {
-        Column(Modifier.padding(vertical = 4.dp)) {
+    Glass(Modifier.fillMaxWidth().animateContentSize(), shape = RoundedCornerShape(24.dp)) {
+        Column(Modifier.padding(vertical = 6.dp)) {
             items.forEachIndexed { i, item ->
-                if (i > 0) RowDivider(inset = 56.dp)
+                if (i > 0) RowDivider(inset = 64.dp)
                 Row(
-                    Modifier.fillMaxWidth().pressable({ onOpen(item) }, pressedScale = 0.99f).padding(start = 4.dp, end = 12.dp, top = 6.dp, bottom = 6.dp),
+                    Modifier.fillMaxWidth().heightIn(min = 68.dp).pressable({ onOpen(item) }, pressedScale = 0.99f).padding(start = 8.dp, end = 18.dp, top = 8.dp, bottom = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Checkbox(
-                        checked = item.inCart,
-                        onCheckedChange = { onTick(item) },
-                        colors = CheckboxDefaults.colors(checkedColor = c.accent, checkmarkColor = c.onAccent),
-                    )
-                    Column(Modifier.weight(1f).alpha(if (item.inCart) 0.7f else 1f)) {
+                    Tick(item.inCart) { onTick(item) }
+                    Spacer(Modifier.width(8.dp))
+                    Column(Modifier.weight(1f).alpha(if (item.inCart) 0.6f else 1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                         Text(
                             item.name,
                             style = MaterialTheme.typography.bodyLarge,
@@ -188,24 +253,29 @@ private fun ItemCard(items: List<ShoppingItem>, onTick: (ShoppingItem) -> Unit, 
                         )
                         val detail = listOfNotNull(
                             item.amountText.takeIf { it.isNotEmpty() },
-                            item.rateMinor?.let { money.format(it) + if (item.unit.isNotBlank()) "/${item.unit}" else if (item.quantity != 1.0) " each" else "" },
-                        ).joinToString(" × ")
-                        Text(
-                            detail.ifEmpty { "Tap to add how much and the rate" },
-                            style = MaterialTheme.typography.labelMedium,
-                            color = if (detail.isEmpty()) c.textTertiary else c.textSecondary,
-                            maxLines = 1,
-                        )
+                            // A single plain item's price is already on the right.
+                            item.rateMinor?.takeIf { item.unit.isNotBlank() || item.quantity != 1.0 }?.let { money.format(it) + if (item.unit.isNotBlank()) " / ${item.unit}" else " each" },
+                        ).joinToString("  ·  ")
+                        if (detail.isNotEmpty() || item.rateMinor == null) {
+                            Text(
+                                detail.ifEmpty { "Add how much and the rate" },
+                                style = MaterialTheme.typography.bodySmall,
+                                color = if (detail.isEmpty()) c.textTertiary else c.textSecondary,
+                                maxLines = 1,
+                            )
+                        }
                     }
                     item.link?.let { link ->
                         Icon(
                             Lucide.ExternalLink, contentDescription = "Open the shop's page", tint = c.textSecondary,
-                            modifier = Modifier.size(34.dp).clip(RoundedCornerShape(10.dp)).pressable({
+                            modifier = Modifier.size(40.dp).clip(RoundedCornerShape(12.dp)).pressable({
                                 runCatching { context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(link))) }
-                            }).padding(8.dp),
+                            }).padding(10.dp),
                         )
                     }
-                    item.totalMinor?.let { Text(money.format(it), style = MaterialTheme.typography.titleSmall, color = c.textPrimary, modifier = Modifier.padding(start = 6.dp)) }
+                    item.totalMinor?.let {
+                        Text(money.format(it), style = MaterialTheme.typography.titleMedium, color = if (item.inCart) c.textSecondary else c.textPrimary, modifier = Modifier.padding(start = 12.dp))
+                    }
                 }
             }
         }
