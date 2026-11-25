@@ -408,16 +408,6 @@ class HomeViewModel(
     }
 }
 
-/**
- * Detected payments that are just spending or income, for the review stack. One that looks like someone paying you
- * back, or a subscription's payment, stays on Home with its own button, so it's settled the right way.
- */
-private fun plainSuggestions(state: HomeUiState): List<SmsSuggestion> = state.smsSuggestions.filter { s ->
-    com.leftovers.app.util.Payback.find(s.merchant, s.amountMinor, s.isIncome, state.owed) == null &&
-        com.leftovers.app.data.SubscriptionMatch.waiting(s.amountMinor, s.isIncome, s.merchant, s.epochDay, state.recurring) == null &&
-        com.leftovers.app.data.SubscriptionMatch.find(s.amountMinor, s.isIncome, s.merchant, s.epochDay, state.recurring, state.entries) == null
-}
-
 @Composable
 fun HomeScreen(
     onOpenBudget: () -> Unit,
@@ -462,20 +452,6 @@ fun HomeScreen(
         WhatsNewDialog { viewModel.closeWhatsNew(seenKey) }
     }
     val money = LocalMoney.current
-    var reviewing by rememberSaveable { mutableStateOf(false) }
-    if (reviewing) {
-        val homeState by viewModel.state.collectAsStateWithLifecycle()
-        // Kept as it was opened, so a payment that's just been added doesn't jump the stack while it flies off.
-        PaymentReview(
-            suggestions = plainSuggestions(homeState),
-            guess = viewModel::guessCategory,
-            accountName = { s -> homeState.accounts.firstOrNull { it.id == s.accountId }?.name },
-            onAdd = { s, undo -> viewModel.reviewAdd(s, undo) },
-            onSkip = { s, undo -> viewModel.reviewSkip(s, undo) },
-            onEdit = { s -> reviewing = false; onReviewSms(s) },
-            onClose = { reviewing = false },
-        )
-    }
     if (!state.loaded) return
     var owedOpen by remember { mutableStateOf<String?>(null) }
     // The tapped card steps out of the way until its pop-up shrinks back into it.
@@ -959,94 +935,89 @@ fun HomeScreen(
             }
 
             if (state.smsSuggestions.isNotEmpty()) {
-                // Two or more: one at a time, as a stack of cards to swipe through.
+                item { SectionHeader("Detected payments", Modifier.appear(2)) }
                 item {
-                    SectionHeader(
-                        "Detected payments", Modifier.appear(2),
-                        action = plainSuggestions(state).size.takeIf { it >= 2 }?.let { "Review $it" },
-                        onAction = { reviewing = true },
-                    )
-                }
-                item {
-                    Glass(Modifier.fillMaxWidth().appear(2)) {
-                        Column(Modifier.padding(vertical = 6.dp)) {
-                            state.smsSuggestions.take(5).forEachIndexed { i, s ->
-                                if (i > 0) RowDivider()
-                                // Someone paying you back (or you paying them): settled in Money owed, not income.
-                                val back = remember(s, state.owed) { com.leftovers.app.util.Payback.find(s.merchant, s.amountMinor, s.isIncome, state.owed) }
-                                // A subscription's real payment, on another day than it was logged: that entry moves here.
-                                // The payment a subscription waits for (#64): one tap logs it as that month's.
-                                val waits = remember(s, state.recurring) {
-                                    if (back != null) null
-                                    else com.leftovers.app.data.SubscriptionMatch.waiting(s.amountMinor, s.isIncome, s.merchant, s.epochDay, state.recurring)
-                                }
-                                val late = remember(s, state.recurring, state.entries) {
-                                    if (back != null || waits != null) null
-                                    else com.leftovers.app.data.SubscriptionMatch.find(s.amountMinor, s.isIncome, s.merchant, s.epochDay, state.recurring, state.entries)
-                                }
-                                val where = s.sender.ifBlank { if (s.source == SmsSuggestion.SOURCE_EMAIL) "email" else if (s.source == SmsSuggestion.SOURCE_APP) "payment app" else "bank SMS" }
-                                ListRow(
-                                    title = s.merchant.ifBlank { if (s.isIncome) "Money in" else "Bank payment" },
-                                    subtitle = if (back != null) {
-                                        (if (s.isIncome) "${back.person} paying you back?" else "Paying ${back.person} back?") + " · " + where
-                                    } else if (waits != null) {
-                                        "Your ${waits.subscription.name}? · " + where
-                                    } else if (late != null) {
-                                        "Your ${late.subscription.name}, logged ${java.time.LocalDate.ofEpochDay(late.entry.epochDay).friendlyLabel()}?"
-                                    } else {
-                                        java.time.LocalDate.ofEpochDay(s.epochDay).friendlyLabel() + " · " + where
-                                    },
-                                    leading = {
-                                        // Its category's icon, as it would be added; where it came from until that's known.
-                                        val guessed by androidx.compose.runtime.produceState<com.leftovers.app.data.Category?>(null, s.id) { value = viewModel.guessCategory(s) }
-                                        val cat = guessed
-                                        if (cat != null) CategoryIcon(cat.emoji, cat.color, size = 42.dp)
-                                        else IconTile(
-                                            when (s.source) {
-                                                SmsSuggestion.SOURCE_EMAIL -> Lucide.Mail
-                                                SmsSuggestion.SOURCE_APP -> Lucide.Bell
-                                                else -> Lucide.Smartphone
-                                            },
-                                            c.textPrimary,
-                                            size = 42.dp,
-                                        )
-                                    },
-                                    trailing = {
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            Text(
-                                                if (s.isIncome) "+" + money.format(s.amountMinor) else money.format(s.amountMinor),
-                                                style = MaterialTheme.typography.titleSmall,
-                                                color = if (s.isIncome) c.positive else c.textPrimary,
-                                            )
-                                            Spacer(Modifier.width(10.dp))
-                                            if (back != null) {
-                                                val undo = LocalUndo.current
-                                                RoundButton(Lucide.Check, if (s.isIncome) "${back.person} paid you back" else "You paid ${back.person} back", {
-                                                    viewModel.paidBack(s, back) { restore ->
-                                                        undo.show(if (s.isIncome) "${back.person} paid you back" else "Paid ${back.person} back", restore)
-                                                    }
-                                                }, size = 34.dp, tint = c.onAccent, container = c.accent)
-                                                Spacer(Modifier.width(6.dp))
-                                            } else if (waits != null) {
-                                                val undo = LocalUndo.current
-                                                RoundButton(Lucide.Check, "That's ${waits.subscription.name}", {
-                                                    viewModel.linkPayment(s, waits) { restore -> undo.show("${waits.subscription.name} ${if (s.isIncome) "received" else "paid"}", restore) }
-                                                }, size = 34.dp, tint = c.onAccent, container = c.accent)
-                                                Spacer(Modifier.width(6.dp))
-                                            } else if (late != null) {
-                                                val undo = LocalUndo.current
-                                                RoundButton(Lucide.Check, "Move ${late.subscription.name} to this day", {
-                                                    viewModel.movePayment(s, late) { restore -> undo.show("${late.subscription.name} moved to ${java.time.LocalDate.ofEpochDay(s.epochDay).friendlyLabel()}", restore) }
-                                                }, size = 34.dp, tint = c.onAccent, container = c.accent)
-                                                Spacer(Modifier.width(6.dp))
-                                            }
-                                            RoundButton(Lucide.X, "Dismiss", { viewModel.dismissSms(s.id) }, size = 34.dp, tint = c.textTertiary)
-                                        }
-                                    },
-                                    onClick = { onReviewSms(s) },
-                                )
-                            }
+                    val undo = LocalUndo.current
+                    // What ✓ (or a swipe right) does: settled as a payback or a subscription's payment when it looks
+                    // like one, so it isn't counted as income or spending twice; otherwise added as it reads.
+                    fun confirm(s: SmsSuggestion) {
+                        val back = com.leftovers.app.util.Payback.find(s.merchant, s.amountMinor, s.isIncome, state.owed)
+                        val waits = if (back != null) null else com.leftovers.app.data.SubscriptionMatch.waiting(s.amountMinor, s.isIncome, s.merchant, s.epochDay, state.recurring)
+                        val late = if (back != null || waits != null) null else com.leftovers.app.data.SubscriptionMatch.find(s.amountMinor, s.isIncome, s.merchant, s.epochDay, state.recurring, state.entries)
+                        when {
+                            back != null -> viewModel.paidBack(s, back) { restore -> undo.show(if (s.isIncome) "${back.person} paid you back" else "Paid ${back.person} back", restore) }
+                            waits != null -> viewModel.linkPayment(s, waits) { restore -> undo.show("${waits.subscription.name} ${if (s.isIncome) "received" else "paid"}", restore) }
+                            late != null -> viewModel.movePayment(s, late) { restore -> undo.show("${late.subscription.name} moved to ${java.time.LocalDate.ofEpochDay(s.epochDay).friendlyLabel()}", restore) }
+                            else -> viewModel.reviewAdd(s) { restore -> undo.show("Added ${s.merchant.ifBlank { "payment" }}", restore) }
                         }
+                    }
+                    fun dismiss(s: SmsSuggestion) = viewModel.reviewSkip(s) { restore -> undo.show("Dismissed ${s.merchant.ifBlank { "payment" }}", restore) }
+                    PaymentRoller(
+                        items = state.smsSuggestions,
+                        onAdd = ::confirm,
+                        onDismiss = ::dismiss,
+                        modifier = Modifier.appear(2),
+                    ) { s ->
+                        val back = remember(s, state.owed) { com.leftovers.app.util.Payback.find(s.merchant, s.amountMinor, s.isIncome, state.owed) }
+                        val waits = remember(s, state.recurring) {
+                            if (back != null) null
+                            else com.leftovers.app.data.SubscriptionMatch.waiting(s.amountMinor, s.isIncome, s.merchant, s.epochDay, state.recurring)
+                        }
+                        val late = remember(s, state.recurring, state.entries) {
+                            if (back != null || waits != null) null
+                            else com.leftovers.app.data.SubscriptionMatch.find(s.amountMinor, s.isIncome, s.merchant, s.epochDay, state.recurring, state.entries)
+                        }
+                        val where = s.sender.ifBlank { if (s.source == SmsSuggestion.SOURCE_EMAIL) "email" else if (s.source == SmsSuggestion.SOURCE_APP) "payment app" else "bank SMS" }
+                        ListRow(
+                            title = s.merchant.ifBlank { if (s.isIncome) "Money in" else "Bank payment" },
+                            subtitle = if (back != null) {
+                                (if (s.isIncome) "${back.person} paying you back?" else "Paying ${back.person} back?") + " · " + where
+                            } else if (waits != null) {
+                                "Your ${waits.subscription.name}? · " + where
+                            } else if (late != null) {
+                                "Your ${late.subscription.name}, logged ${java.time.LocalDate.ofEpochDay(late.entry.epochDay).friendlyLabel()}?"
+                            } else {
+                                java.time.LocalDate.ofEpochDay(s.epochDay).friendlyLabel() + " · " + where
+                            },
+                            leading = {
+                                // Its category's icon, as it would be added; where it came from until that's known.
+                                val guessed by androidx.compose.runtime.produceState<com.leftovers.app.data.Category?>(null, s.id) { value = viewModel.guessCategory(s) }
+                                val cat = guessed
+                                if (cat != null) CategoryIcon(cat.emoji, cat.color, size = 42.dp)
+                                else IconTile(
+                                    when (s.source) {
+                                        SmsSuggestion.SOURCE_EMAIL -> Lucide.Mail
+                                        SmsSuggestion.SOURCE_APP -> Lucide.Bell
+                                        else -> Lucide.Smartphone
+                                    },
+                                    c.textPrimary,
+                                    size = 42.dp,
+                                )
+                            },
+                            trailing = {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        if (s.isIncome) "+" + money.format(s.amountMinor) else money.format(s.amountMinor),
+                                        style = MaterialTheme.typography.titleSmall,
+                                        color = if (s.isIncome) c.positive else c.textPrimary,
+                                    )
+                                    Spacer(Modifier.width(10.dp))
+                                    RoundButton(
+                                        Lucide.Check,
+                                        when {
+                                            back != null -> if (s.isIncome) "${back.person} paid you back" else "You paid ${back.person} back"
+                                            waits != null -> "That's ${waits.subscription.name}"
+                                            late != null -> "Move ${late.subscription.name} to this day"
+                                            else -> "Add it"
+                                        },
+                                        { confirm(s) }, size = 34.dp, tint = c.onAccent, container = c.accent,
+                                    )
+                                    Spacer(Modifier.width(6.dp))
+                                    RoundButton(Lucide.X, "Dismiss", { dismiss(s) }, size = 34.dp, tint = c.textTertiary)
+                                }
+                            },
+                            onClick = { onReviewSms(s) },
+                        )
                     }
                 }
             }
