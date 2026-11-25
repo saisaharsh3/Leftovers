@@ -380,10 +380,14 @@ fun HomeScreen(
     onOpenAssistant: () -> Unit,
     onOpenNotices: () -> Unit,
     onOpenDebts: () -> Unit = {},
+    onOpenShopping: () -> Unit = {},
     /** Opens Subscriptions on this one: its day in the calendar, and its details. */
     onOpenSubscription: (RecurringItem) -> Unit = { onOpenSubscriptions(it.type == TxType.INCOME) },
     viewModel: HomeViewModel = viewModel(factory = AppViewModelProvider.Factory),
 ) {
+    val shoppingItems by (androidx.compose.ui.platform.LocalContext.current.applicationContext as com.leftovers.app.LeftoversApp)
+        .container.shopping.items.collectAsStateWithLifecycle(initialValue = emptyList())
+    val toBuy = shoppingItems.any { !it.inCart }
     val state by viewModel.state.collectAsStateWithLifecycle()
     val c = LocalAppColors.current
     val versionContext = androidx.compose.ui.platform.LocalContext.current
@@ -1017,6 +1021,12 @@ fun HomeScreen(
             if (state.owed.isNotEmpty()) {
                 item { SectionHeader("Money owed", Modifier.appear(3), action = "See all", onAction = onOpenDebts) }
                 item { OwedSummary(state.owed, Modifier.appear(3), open = owedHidden, onOpen = { person, at -> owedFrom = at; owedOpen = person }, onSeeAll = onOpenDebts) }
+            }
+
+            // The shopping list, while there's something on it to buy; tapping the card opens it.
+            if (toBuy) {
+                item { SectionHeader("Shopping list", Modifier.appear(4)) }
+                item { ShoppingCard(onOpenShopping, Modifier.appear(4)) }
             }
 
             if (state.goals.isNotEmpty()) {

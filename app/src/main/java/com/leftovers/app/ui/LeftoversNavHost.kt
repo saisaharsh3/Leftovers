@@ -342,6 +342,7 @@ fun LeftoversNavHost(
                             onOpenAccounts = { nav.navigate(Routes.ACCOUNTS) },
                             onOpenAssistant = { nav.navigate(Routes.assistant()) },
                             onOpenDebts = { nav.navigate(Routes.DEBTS) },
+                            onOpenShopping = { nav.navigate(Routes.SHOPPING) },
                             onOpenSubscription = { r -> nav.navigate(Routes.subscriptions(r.type == TxType.INCOME, r.id)) },
                         )
                     }
