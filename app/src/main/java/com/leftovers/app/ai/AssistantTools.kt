@@ -313,6 +313,10 @@ class AssistantTools(private val container: AppContainer, private val privacy: A
             append("Income categories: ${categories.filter { it.type == TxType.INCOME && !it.hidden }.joinToString { it.name }}.\n")
             append("Accounts: ${accounts.joinToString { scrub(it.name) + if (it.id == defaultAccount) " (default)" else "" }}.\n\n")
             append(rules(currency))
+            // Every feature by name, so it knows what the app can do; app_help has the how and where of each.
+            append("\n\nEverything in the app, by section (call app_help for how each works and where it is): ")
+            append(com.leftovers.app.util.HelpGuide.items.groupBy { it.section }.entries.joinToString("; ") { (section, list) -> "$section: " + list.joinToString(", ") { it.title } })
+            append(".")
         }
     }
 
@@ -322,7 +326,8 @@ class AssistantTools(private val container: AppContainer, private val privacy: A
         append("for the budget or balances. When you need several lookups, request them together in one turn. ")
         if (privacy.allowChanges) {
             append("When the user asks for a change, call the matching tool directly: the app shows each change to the user with Apply and Cancel, ")
-            append("so don't ask for permission in text first. If a tool result says the user cancelled, don't retry it. ")
+            append("so don't ask for permission in text first. Nothing changes until they tap Apply, so never say a change is done before the result ")
+            append("says Applied; until then say what you've proposed. Only propose changes the user asked for. If a tool result says the user cancelled, don't retry it. ")
             append("For edits or deletes, find the entry first and use its id. If the user names a date, only consider entries on that date. ")
             append("If more than one entry still matches, don't guess: list them briefly (date and amount) and ask which one. ")
             append("If nothing matches what the user named, say you couldn't find it; never pick a different entry instead. ")

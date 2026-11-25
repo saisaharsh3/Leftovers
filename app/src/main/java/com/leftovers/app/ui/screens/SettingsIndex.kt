@@ -43,7 +43,7 @@ object SettingsIndex {
                 Page(AI, Lucide.BotMessageSquare, "", Palette.IRIS),
             ),
             listOf(
-                Page(SECURITY, Lucide.Shield, "App lock, screenshots", Palette.CORAL),
+                Page(SECURITY, Lucide.Shield, "App lock, hide amounts, screenshots", Palette.CORAL),
                 Page(DATA, Lucide.Download, "Backups, import, export, deleted entries", Palette.SKY),
                 Page(SYNC, Lucide.Repeat, "Between your devices", Palette.TEAL),
             ),

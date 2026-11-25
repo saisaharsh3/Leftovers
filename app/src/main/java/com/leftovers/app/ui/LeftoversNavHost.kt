@@ -490,6 +490,7 @@ fun LeftoversNavHost(
                                 com.leftovers.app.util.HelpGuide.Place.DELETED -> nav.navigate(Routes.DELETED)
                                 com.leftovers.app.util.HelpGuide.Place.ASSISTANT -> nav.navigate(Routes.assistant())
                                 com.leftovers.app.util.HelpGuide.Place.NOTICES -> nav.navigate(Routes.NOTICES)
+                                com.leftovers.app.util.HelpGuide.Place.SHOPPING -> nav.navigate(Routes.SHOPPING)
                             }
                         }
                     }

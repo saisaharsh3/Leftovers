@@ -22,6 +22,18 @@ class HelpGuideTest {
         assertTrue(HelpGuide.forAssistant("qwerty zxcv").isEmpty())
     }
 
+    @Test fun theNewerFeaturesAreThere() {
+        fun finds(question: String, title: String) = assertTrue(question, HelpGuide.forAssistant(question).any { it.title == title })
+        finds("can I hide my balance for a screenshot", "Hide amounts")
+        finds("is there a calculator when adding", "Sums on the keypad")
+        finds("where is the groceries list", "Shopping list")
+        finds("what is my financial health score", "Financial health")
+        finds("how do I search for food over 500 last month", "Search and filters")
+        finds("swipe through detected payments", "Detected payments")
+        finds("am I spending too fast", "Am I spending too fast?")
+        finds("app icon shortcut", "Shortcuts on the app icon")
+    }
+
     @Test fun everyEntryIsComplete() {
         assertEquals(HelpGuide.items.size, HelpGuide.search("  ").size)
         HelpGuide.items.forEach { assertTrue(it.title, it.text.isNotBlank() && it.where.isNotBlank()) }
