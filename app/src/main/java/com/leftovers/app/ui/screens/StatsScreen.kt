@@ -1,5 +1,6 @@
 package com.leftovers.app.ui.screens
 
+import com.leftovers.app.ui.components.privateAmount
 import com.leftovers.app.ui.components.toggleHaptic
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.first
@@ -1321,7 +1322,7 @@ private fun BalanceView(state: StatsUiState) {
     val dayYear = remember { java.time.format.DateTimeFormatter.ofPattern("d MMM yyyy") }
     val since = first.day.format(if (spansYears) dayYear else day)
     Column {
-        RollingText(money.format(last.balanceMinor), MaterialTheme.typography.headlineMedium, if (last.balanceMinor < 0) c.negative else c.textPrimary)
+        RollingText(money.format(last.balanceMinor), MaterialTheme.typography.headlineMedium, if (last.balanceMinor < 0) c.negative else c.textPrimary, modifier = Modifier.privateAmount())
         Text(
             (state.accountName ?: "All accounts") + " · " + when {
                 change == 0L -> "no change since $since"
@@ -1331,6 +1332,7 @@ private fun BalanceView(state: StatsUiState) {
             style = MaterialTheme.typography.labelMedium,
             color = if (change == 0L) c.textSecondary else if (change > 0) c.positive else c.negative,
             maxLines = 1,
+            modifier = Modifier.privateAmount(),
         )
         Spacer(Modifier.height(8.dp))
         // Four dates along the bottom, evenly apart.
@@ -1341,8 +1343,8 @@ private fun BalanceView(state: StatsUiState) {
             modifier = Modifier.fillMaxWidth().height(170.dp),
             axis = { i -> if (i in marks) points[i].day.format(if (spansYears) java.time.format.DateTimeFormatter.ofPattern("MMM yy") else day) else null },
             title = { i -> points[i].day.format(if (spansYears) dayYear else day) },
-            value = { i -> money.format(points[i].balanceMinor) },
-            scale = money::compact,
+            value = { i -> if (com.leftovers.app.util.PrivacyMode.hidden) "Hidden" else money.format(points[i].balanceMinor) },
+            scale = { v -> if (com.leftovers.app.util.PrivacyMode.hidden) "" else money.compact(v) },
         )
     }
 }
@@ -1357,7 +1359,7 @@ private fun FlowView(state: StatsUiState) {
     // Out is kept neutral, so it doesn't read as a second kind of good.
     val outColor = c.textSecondary
     Column {
-        RollingText(money.formatWhole(kotlin.math.abs(saved)), MaterialTheme.typography.headlineMedium, c.textPrimary)
+        RollingText(money.formatWhole(kotlin.math.abs(saved)), MaterialTheme.typography.headlineMedium, c.textPrimary, modifier = Modifier.privateAmount())
         Text(
             (if (saved >= 0) "Saved" else "More out than in") + " · $over",
             style = MaterialTheme.typography.labelMedium,

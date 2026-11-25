@@ -550,6 +550,8 @@ fun StatTile(
     iconTint: Color = LocalAppColors.current.textSecondary,
     footnote: String? = null,
     onClick: (() -> Unit)? = null,
+    /** A big total that privacy mode blurs. */
+    private: Boolean = false,
 ) {
     val c = LocalAppColors.current
     Glass(modifier, onClick = onClick) {
@@ -562,7 +564,7 @@ fun StatTile(
                 Text(label, style = MaterialTheme.typography.labelMedium, color = c.textSecondary, maxLines = 1)
             }
             Spacer(Modifier.height(10.dp))
-            Text(value, style = MaterialTheme.typography.titleLarge, color = c.textPrimary, maxLines = 1)
+            Text(value, style = MaterialTheme.typography.titleLarge, color = c.textPrimary, maxLines = 1, modifier = if (private) Modifier.privateAmount() else Modifier)
             if (footnote != null) {
                 Spacer(Modifier.height(2.dp))
                 Text(footnote, style = MaterialTheme.typography.bodySmall, color = c.textTertiary, maxLines = 1, overflow = TextOverflow.Ellipsis)

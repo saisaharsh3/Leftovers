@@ -1,5 +1,6 @@
 package com.leftovers.app.ui.screens
 
+import com.leftovers.app.ui.components.privateAmount
 import com.leftovers.app.ui.components.LocalUndo
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.graphics.graphicsLayer
@@ -292,7 +293,7 @@ fun AccountsScreen(
                     Column(Modifier.padding(22.dp)) {
                         Text("Total across accounts", style = MaterialTheme.typography.labelLarge, color = c.textSecondary)
                         Spacer(Modifier.height(4.dp))
-                        RollingText(money.format(accounts.filterNot { it.outOfTotal }.sumOf { it.balanceMinor }), MaterialTheme.typography.displaySmall, c.textPrimary)
+                        RollingText(money.format(accounts.filterNot { it.outOfTotal }.sumOf { it.balanceMinor }), MaterialTheme.typography.displaySmall, c.textPrimary, modifier = Modifier.privateAmount())
                         Spacer(Modifier.height(6.dp))
                         Text("Starts from each account's opening balance", style = MaterialTheme.typography.bodySmall, color = c.textTertiary)
                     }
@@ -329,6 +330,7 @@ fun AccountsScreen(
                                         a.shownBalance(money),
                                         style = MaterialTheme.typography.titleSmall,
                                         color = if (a.shownNegative) c.negative else c.textPrimary,
+                                        modifier = Modifier.privateAmount(),
                                     )
                                 },
                                 onClick = if (arranging) null else ({ viewingFrom = rowBounds[a.id]; viewing = a.id }),
@@ -402,9 +404,9 @@ fun AccountsScreen(
                     .padding(horizontal = 18.dp, vertical = 16.dp),
             ) {
                 Text("Balance", style = MaterialTheme.typography.labelLarge, color = c.textSecondary)
-                Text(a.shownBalance(money), style = MaterialTheme.typography.displaySmall, color = if (a.shownNegative) c.negative else c.textPrimary)
+                Text(a.shownBalance(money), style = MaterialTheme.typography.displaySmall, color = if (a.shownNegative) c.negative else c.textPrimary, modifier = Modifier.privateAmount())
                 if (a.currency != null) {
-                    Text("About ${money.formatWhole(a.balanceMinor)} converted. In and out below are in ${money.symbol}", style = MaterialTheme.typography.bodySmall, color = c.textSecondary)
+                    Text("About ${money.formatWhole(a.balanceMinor)} converted. In and out below are in ${money.symbol}", style = MaterialTheme.typography.bodySmall, color = c.textSecondary, modifier = Modifier.privateAmount())
                 }
                 Text(
                     "In ${money.formatWhole(b.income + b.transfersIn + b.borrowed)} · Out ${money.formatWhole(b.spent + b.transfersOut + b.lent)}",

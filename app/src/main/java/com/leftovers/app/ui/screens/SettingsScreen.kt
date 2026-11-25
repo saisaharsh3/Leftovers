@@ -934,7 +934,7 @@ fun SettingsScreen(
                         Column(Modifier.padding(vertical = 6.dp)) {
                             ToggleRow(
                                 Lucide.EyeOff, "Hide amounts when the app opens", s.hideAmountsOnOpen, { viewModel.setHideAmountsOnOpen(it) },
-                                detail = "For screenshots or when someone's looking. The eye on Home shows or hides them anytime.",
+                                detail = "Blurs your balances and the month's spent and income, for screenshots or when someone's looking. The eye on Home does it anytime.",
                             )
                             RowDivider()
                             ToggleRow(Lucide.Lock, "App lock", s.appLock, { on ->

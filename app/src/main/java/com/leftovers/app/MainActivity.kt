@@ -119,8 +119,7 @@ class MainActivity : FragmentActivity() {
                     }
                 }
 
-                val hidden = com.leftovers.app.util.PrivacyMode.hidden
-                val money = remember(s.currencyCode, hidden) { Money(s.currencyCode, hidden) }
+                val money = remember(s.currencyCode) { Money(s.currencyCode) }
                 val hazeState = rememberHazeState()
                 val showLock = s.appLock && locked
                 val backdrop = com.leftovers.app.ui.theme.Backdrop.of(s.backdrop)

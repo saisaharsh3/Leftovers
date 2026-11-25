@@ -1,5 +1,6 @@
 package com.leftovers.app.ui.screens
 
+import com.leftovers.app.ui.components.privateAmount
 import com.leftovers.app.ui.components.LocalUndo
 import androidx.compose.foundation.layout.asPaddingValues
 import com.leftovers.app.ui.components.frosted
@@ -461,14 +462,14 @@ fun HomeScreen(
             ) {
                 Text("Balance", style = MaterialTheme.typography.labelLarge, color = c.textSecondary)
                 val own = state.selectedAccount?.takeIf { it.currency != null }
-                Text(own?.shownBalance(money) ?: money.format(balance), style = MaterialTheme.typography.displaySmall, color = if (own?.shownNegative ?: (balance < 0)) c.negative else c.textPrimary)
+                Text(own?.shownBalance(money) ?: money.format(balance), style = MaterialTheme.typography.displaySmall, color = if (own?.shownNegative ?: (balance < 0)) c.negative else c.textPrimary, modifier = Modifier.privateAmount())
                 state.forecast?.let { f ->
                     val end = state.month.atEndOfMonth().format(java.time.format.DateTimeFormatter.ofPattern("d MMM"))
                     Text(
                         "About ${money.formatWhole(f)} by $end",
                         style = MaterialTheme.typography.bodySmall,
                         color = if (f < 0) c.negative else c.textSecondary,
-                        modifier = Modifier.padding(top = 2.dp),
+                        modifier = Modifier.padding(top = 2.dp).privateAmount(),
                     )
                 }
             }
@@ -493,6 +494,7 @@ fun HomeScreen(
                                 a?.shownBalance(money, whole = true) ?: money.formatWhole(amount),
                                 style = MaterialTheme.typography.titleSmall,
                                 color = if (a?.shownNegative ?: (amount < 0)) c.negative else c.textPrimary,
+                                modifier = Modifier.privateAmount(),
                             )
                             Box(Modifier.width(28.dp), contentAlignment = Alignment.CenterEnd) {
                                 if (a?.id == selected?.id) Icon(Lucide.Check, contentDescription = "Showing", tint = c.accent, modifier = Modifier.size(18.dp))
@@ -856,6 +858,7 @@ fun HomeScreen(
                                     shown?.shownBalance(money, whole = true) ?: money.formatWhole(balance),
                                     MaterialTheme.typography.headlineSmall,
                                     if (shown?.shownNegative ?: (balance < 0)) c.negative else c.textPrimary,
+                                    modifier = Modifier.privateAmount(),
                                 )
                                 state.forecast?.let { f ->
                                     val end = state.month.atEndOfMonth().format(java.time.format.DateTimeFormatter.ofPattern("d MMM"))
@@ -863,6 +866,7 @@ fun HomeScreen(
                                         "About ${money.formatWhole(f)} by $end",
                                         style = MaterialTheme.typography.bodySmall,
                                         color = if (f < 0) c.negative else c.textSecondary,
+                                        modifier = Modifier.privateAmount(),
                                     )
                                 }
                             }
@@ -982,6 +986,7 @@ fun HomeScreen(
                         iconTint = c.negative,
                         modifier = Modifier.weight(1f),
                         onClick = { onOpenActivity(TxType.EXPENSE, state.selectedAccount?.id) },
+                        private = true,
                     )
                     StatTile(
                         label = "Income",
@@ -990,6 +995,7 @@ fun HomeScreen(
                         iconTint = c.positive,
                         modifier = Modifier.weight(1f),
                         onClick = { onOpenActivity(TxType.INCOME, state.selectedAccount?.id) },
+                        private = true,
                     )
                 }
             }
@@ -1134,7 +1140,7 @@ private fun SplitHalf(label: String, value: String, icon: androidx.compose.ui.gr
             Text(label, style = MaterialTheme.typography.labelMedium, color = c.textSecondary, maxLines = 1)
         }
         Spacer(Modifier.height(6.dp))
-        RollingText(value, MaterialTheme.typography.titleLarge, c.textPrimary)
+        RollingText(value, MaterialTheme.typography.titleLarge, c.textPrimary, modifier = Modifier.privateAmount())
     }
 }
 
