@@ -2,6 +2,8 @@ package com.leftovers.app.ui.screens
 
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -88,6 +90,8 @@ fun ShoppingListScreen(onBack: () -> Unit) {
     // A limit for this shop, kept on this phone; 0 for none.
     val prefs = remember { context.getSharedPreferences("shopping", android.content.Context.MODE_PRIVATE) }
     var limit by remember { mutableStateOf(prefs.getLong("limit", 0L)) }
+    // How to change and remove items, said under the list until an item's been swiped away once.
+    var taught by remember { mutableStateOf(prefs.getBoolean("swipeTaught", false)) }
     var setLimit by remember { mutableStateOf(false) }
     val toBuy = list.filter { !it.inCart }
     val cart = list.filter { it.inCart }
@@ -103,6 +107,7 @@ fun ShoppingListScreen(onBack: () -> Unit) {
     }
 
     fun remove(item: ShoppingItem) = scope.launch {
+        if (!taught) { taught = true; prefs.edit().putBoolean("swipeTaught", true).apply() }
         shopping.delete(item)
         undo.show("${item.name} removed") { shopping.restore(listOf(item)) }
     }
@@ -243,6 +248,15 @@ fun ShoppingListScreen(onBack: () -> Unit) {
                     item(key = "list-$aisle") { ItemCard(inAisle, onTick = { scope.launch { shopping.save(it.copy(inCart = true)) } }, onOpen = { editing = it }, onRemove = ::remove) }
                 }
             }
+            if (!taught && list.isNotEmpty()) {
+                item(key = "hint") {
+                    Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Lucide.ChevronLeft, contentDescription = null, tint = c.textTertiary, modifier = Modifier.size(14.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("Tap an item to change it · swipe left to remove", style = MaterialTheme.typography.labelMedium, color = c.textTertiary)
+                    }
+                }
+            }
             if (cart.isNotEmpty()) {
                 item { ListHeading("In the basket", null, Modifier.padding(top = 16.dp)) }
                 item { ItemCard(cart, onTick = { scope.launch { shopping.save(it.copy(inCart = false)) } }, onOpen = { editing = it }, onRemove = ::remove) }
@@ -325,23 +339,9 @@ private fun ItemCard(items: List<ShoppingItem>, onTick: (ShoppingItem) -> Unit, 
         Column {
             items.forEachIndexed { i, item ->
                 if (i > 0) RowDivider(inset = 64.dp)
-                // Swipe a row away to take it off the list (Undo brings it back). The state is the item's own, and
-                // springs back: the list leaving out the removed item is what makes it go.
+                // Swipe left to take it off the list (Undo brings it back).
                 androidx.compose.runtime.key(item.id) {
-                val swipe = androidx.compose.material3.rememberSwipeToDismissBoxState(
-                    confirmValueChange = { v -> if (v != androidx.compose.material3.SwipeToDismissBoxValue.Settled) onRemove(item); false },
-                )
-                androidx.compose.material3.SwipeToDismissBox(
-                    state = swipe,
-                    backgroundContent = {
-                        // Only while a row is moving: the rows are glass, so it would show through otherwise.
-                        if (swipe.dismissDirection != androidx.compose.material3.SwipeToDismissBoxValue.Settled) Row(
-                            Modifier.fillMaxSize().background(c.negative).padding(horizontal = 24.dp),
-                            horizontalArrangement = if (swipe.dismissDirection == androidx.compose.material3.SwipeToDismissBoxValue.StartToEnd) Arrangement.Start else Arrangement.End,
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) { Icon(Lucide.Trash2, contentDescription = null, tint = Color.White, modifier = Modifier.size(22.dp)) }
-                    },
-                ) {
+                SwipeToRemove(onRemove = { onRemove(item) }) {
                 Row(
                     Modifier.fillMaxWidth().heightIn(min = 72.dp).pressable({ onOpen(item) }, pressedScale = 0.99f).padding(start = 8.dp, end = 18.dp, top = 12.dp, bottom = 12.dp),
                     verticalAlignment = Alignment.CenterVertically,
@@ -386,6 +386,77 @@ private fun ItemCard(items: List<ShoppingItem>, onTick: (ShoppingItem) -> Unit, 
                 }
                 }
             }
+        }
+    }
+}
+
+/**
+ * A row that can be swiped left to remove it. It follows the finger 1:1; the red behind deepens and the bin grows as
+ * it goes, with a tick once it's far enough. Let go past a third of the way (or flick it), and it carries on off at the
+ * finger's speed, then its space closes smoothly before [onRemove]; let go short, and it springs back.
+ */
+@Composable
+private fun SwipeToRemove(onRemove: () -> Unit, content: @Composable () -> Unit) {
+    val c = LocalAppColors.current
+    val view = androidx.compose.ui.platform.LocalView.current
+    val scope = rememberCoroutineScope()
+    val offset = remember { androidx.compose.animation.core.Animatable(0f) }
+    var width by remember { mutableStateOf(1f) }
+    var armed by remember { mutableStateOf(false) }
+    var gone by remember { mutableStateOf(false) }
+    val threshold = width * 0.35f
+    val progress = (-offset.value / threshold).coerceIn(0f, 1f)
+    val iconScale by androidx.compose.animation.core.animateFloatAsState(
+        if (armed) 1.15f else 0.75f + 0.25f * progress,
+        androidx.compose.animation.core.spring(dampingRatio = 0.55f, stiffness = 600f),
+        label = "binScale",
+    )
+    fun settle(velocity: Float) = scope.launch {
+        // Far enough, or flicked: off it goes, keeping the finger's speed; then the space closes.
+        if (offset.value < -threshold || velocity < -1800f) {
+            offset.animateTo(-width * 1.1f, androidx.compose.animation.core.spring(dampingRatio = 1f, stiffness = 380f), initialVelocity = velocity)
+            gone = true
+        } else {
+            offset.animateTo(0f, androidx.compose.animation.core.spring(dampingRatio = 0.75f, stiffness = 420f), initialVelocity = velocity)
+            armed = false
+        }
+    }
+    androidx.compose.animation.AnimatedVisibility(
+        visible = !gone,
+        enter = androidx.compose.animation.EnterTransition.None,
+        exit = androidx.compose.animation.shrinkVertically(androidx.compose.animation.core.spring(dampingRatio = 1f, stiffness = 500f)) +
+            androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(120)),
+    ) {
+        androidx.compose.runtime.DisposableEffect(Unit) { onDispose { if (gone) onRemove() } }
+        Box(Modifier.fillMaxWidth().onSizeChanged { width = it.width.toFloat().coerceAtLeast(1f) }) {
+            // Behind: only while it's moving, as the rows are glass.
+            if (offset.value < 0f) {
+                Box(
+                    Modifier.matchParentSize().background(c.negative.copy(alpha = 0.35f + 0.65f * progress)),
+                    contentAlignment = Alignment.CenterEnd,
+                ) {
+                    Icon(
+                        Lucide.Trash2, contentDescription = null, tint = Color.White,
+                        modifier = Modifier.padding(end = 28.dp).size(22.dp).graphicsLayer { scaleX = iconScale; scaleY = iconScale },
+                    )
+                }
+            }
+            Box(
+                Modifier
+                    .graphicsLayer { translationX = offset.value }
+                    .draggable(
+                        orientation = androidx.compose.foundation.gestures.Orientation.Horizontal,
+                        state = androidx.compose.foundation.gestures.rememberDraggableState { delta ->
+                            // Leftwards freely; rightwards only a little, with resistance, so it feels anchored.
+                            val next = offset.value + delta
+                            val target = if (next > 0f) next * 0.25f else next
+                            scope.launch { offset.snapTo(target.coerceIn(-width, 24f)) }
+                            val now = target < -threshold
+                            if (now != armed) { armed = now; if (now) com.leftovers.app.ui.components.Haptics.tick(view) }
+                        },
+                        onDragStopped = { velocity -> settle(velocity) },
+                    ),
+            ) { content() }
         }
     }
 }
