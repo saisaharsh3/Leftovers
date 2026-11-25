@@ -13,7 +13,11 @@ import java.util.Locale
 import kotlin.math.abs
 
 /** Formats minor-unit amounts (amount × 100) in the user's chosen currency. */
-class Money(currencyCode: String) {
+/**
+ * Formats amounts in [currencyCode]. With [hidden] (privacy mode, #73) every amount shows as the currency and dots,
+ * "₹••••", so a screenshot or someone looking over a shoulder sees no numbers; files the app makes use their own.
+ */
+class Money(currencyCode: String, val hidden: Boolean = false) {
     val currency: Currency =
         runCatching { Currency.getInstance(currencyCode) }.getOrElse { Currency.getInstance("USD") }
 
@@ -31,7 +35,10 @@ class Money(currencyCode: String) {
     // A symbol made of letters ("AED", "CHF") needs a space before the number: "AED 250", not "AED250".
     private val wordSymbol = symbol.isNotEmpty() && symbol.last().isLetter()
 
-    fun format(minor: Long): String = synchronized(formatter) {
+    /** What an amount looks like hidden. */
+    val masked: String get() = if (wordSymbol) "$symbol ••••" else "$symbol••••"
+
+    fun format(minor: Long): String = if (hidden) (if (minor < 0) "-" else "") + masked else synchronized(formatter) {
         formatter.minimumFractionDigits = if (minor % 100 == 0L) 0 else 2
         formatter.maximumFractionDigits = 2
         val text = formatter.format(BigDecimal.valueOf(minor, 2))
@@ -39,11 +46,12 @@ class Money(currencyCode: String) {
     }
 
     /** Rounded to whole units, for headline numbers like a daily allowance. Halves round away from zero, so -12.50 and 12.50 both show 13. */
-    fun formatWhole(minor: Long): String =
+    fun formatWhole(minor: Long): String = if (hidden) format(minor) else
         format(BigDecimal.valueOf(minor, 2).setScale(0, java.math.RoundingMode.HALF_UP).movePointRight(2).toLong())
 
     /** Short, for the labels along a chart's side: $480, $1.2k, $15k, $2.4M. */
     fun compact(minor: Long): String {
+        if (hidden) return "••"
         val units = abs(minor) / 100.0
         val sign = if (minor < 0) "-" else ""
         val gap = if (wordSymbol) " " else ""

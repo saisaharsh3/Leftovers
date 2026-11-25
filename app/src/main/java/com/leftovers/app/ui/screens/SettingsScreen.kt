@@ -341,6 +341,8 @@ class SettingsViewModel(
         viewModelScope.launch { settingsRepository.setReminder(enabled, minutes) }
     }
 
+    fun setHideAmountsOnOpen(enabled: Boolean) = viewModelScope.launch { settingsRepository.setHideAmountsOnOpen(enabled) }
+
     fun setAppLock(enabled: Boolean) {
         viewModelScope.launch { settingsRepository.setAppLock(enabled) }
     }
@@ -930,6 +932,11 @@ fun SettingsScreen(
                 item {
                     Glass(Modifier.fillMaxWidth()) {
                         Column(Modifier.padding(vertical = 6.dp)) {
+                            ToggleRow(
+                                Lucide.EyeOff, "Hide amounts when the app opens", s.hideAmountsOnOpen, { viewModel.setHideAmountsOnOpen(it) },
+                                detail = "For screenshots or when someone's looking. The eye on Home shows or hides them anytime.",
+                            )
+                            RowDivider()
                             ToggleRow(Lucide.Lock, "App lock", s.appLock, { on ->
                                 // Without a phone screen lock, an app PIN or password is the way to lock it.
                                 if (on && !canLock(context) && passcodeKind == null) {

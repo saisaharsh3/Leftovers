@@ -63,6 +63,8 @@ data class AppSettings(
     /** Minutes after midnight for the daily reminder. */
     val reminderMinutes: Int,
     val appLock: Boolean,
+    /** Privacy mode (#73): amounts start hidden each time the app opens. */
+    val hideAmountsOnOpen: Boolean = false,
     /** No screenshots or screen recording, and a blank preview in Recents (#44); always so with [appLock]. */
     val blockScreenshots: Boolean = false,
     /** How long the app can be away before it locks again: 0 is straight away. */
@@ -183,6 +185,7 @@ class SettingsRepository(context: Context) {
             reminderEnabled = p[REMINDER] ?: false,
             reminderMinutes = p[REMINDER_TIME] ?: (21 * 60),
             appLock = p[APP_LOCK] ?: false,
+            hideAmountsOnOpen = p[HIDE_AMOUNTS] ?: false,
             blockScreenshots = p[BLOCK_SCREENSHOTS] ?: false,
             lockAfterSeconds = p[LOCK_AFTER] ?: 0,
             lockFingerprint = p[LOCK_FINGERPRINT] ?: true,
@@ -304,6 +307,7 @@ class SettingsRepository(context: Context) {
         it[REMINDER_TIME] = minutes
     }
     suspend fun setAppLock(enabled: Boolean) = store.edit { it[APP_LOCK] = enabled }
+    suspend fun setHideAmountsOnOpen(enabled: Boolean) = store.edit { it[HIDE_AMOUNTS] = enabled }
     suspend fun setBlockScreenshots(enabled: Boolean) = store.edit { it[BLOCK_SCREENSHOTS] = enabled }
 
     suspend fun setLockAfter(seconds: Int) = store.edit { it[LOCK_AFTER] = seconds }
@@ -464,6 +468,7 @@ class SettingsRepository(context: Context) {
         val REMINDER = booleanPreferencesKey("reminder")
         val REMINDER_TIME = intPreferencesKey("reminder_time")
         val APP_LOCK = booleanPreferencesKey("app_lock")
+        val HIDE_AMOUNTS = booleanPreferencesKey("hide_amounts_on_open")
         val BLOCK_SCREENSHOTS = booleanPreferencesKey("block_screenshots")
         val LOCK_AFTER = androidx.datastore.preferences.core.intPreferencesKey("lock_after_seconds")
         val LOCK_FINGERPRINT = booleanPreferencesKey("lock_fingerprint")

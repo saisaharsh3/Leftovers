@@ -92,7 +92,10 @@ class MainActivity : FragmentActivity() {
         openAddRequest = intent.getBooleanExtra(EXTRA_OPEN_ADD, false)
         if (savedInstanceState == null) readShared(intent)
         lifecycleScope.launch {
-            locked = container.settings.settings.first().appLock
+            val first = container.settings.settings.first()
+            // Privacy mode on at the start, when asked for (#73); not again on rotating or coming back.
+            if (savedInstanceState == null && first.hideAmountsOnOpen) com.leftovers.app.util.PrivacyMode.hidden = true
+            locked = first.appLock
             lockChecked = true
         }
 
@@ -116,7 +119,8 @@ class MainActivity : FragmentActivity() {
                     }
                 }
 
-                val money = remember(s.currencyCode) { Money(s.currencyCode) }
+                val hidden = com.leftovers.app.util.PrivacyMode.hidden
+                val money = remember(s.currencyCode, hidden) { Money(s.currencyCode, hidden) }
                 val hazeState = rememberHazeState()
                 val showLock = s.appLock && locked
                 val backdrop = com.leftovers.app.ui.theme.Backdrop.of(s.backdrop)

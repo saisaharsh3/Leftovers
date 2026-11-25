@@ -1164,6 +1164,17 @@ private fun TodayCard(state: HomeUiState, onClick: () -> Unit, modifier: Modifie
                     color = c.textSecondary,
                     modifier = Modifier.weight(1f),
                 )
+                // Privacy mode (#73): every amount in the app hidden, or shown again.
+                val hiddenNow = com.leftovers.app.util.PrivacyMode.hidden
+                val eyeView = androidx.compose.ui.platform.LocalView.current
+                Icon(
+                    if (hiddenNow) Lucide.EyeOff else Lucide.Eye,
+                    contentDescription = if (hiddenNow) "Show amounts" else "Hide amounts",
+                    tint = if (hiddenNow) c.accent else c.textTertiary,
+                    modifier = Modifier.size(40.dp).clip(CircleShape)
+                        .pressable({ com.leftovers.app.ui.components.Haptics.select(eyeView); com.leftovers.app.util.PrivacyMode.toggle() }, pressedScale = 0.85f)
+                        .padding(10.dp),
+                )
                 Icon(Lucide.ChevronRight, contentDescription = null, tint = c.textTertiary, modifier = Modifier.size(18.dp))
             }
             Spacer(Modifier.height(2.dp))
