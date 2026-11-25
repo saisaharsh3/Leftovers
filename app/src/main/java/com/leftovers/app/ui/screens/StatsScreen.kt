@@ -57,6 +57,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.graphics.drawscope.rotate as rotateDraw
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
@@ -1112,34 +1114,79 @@ private fun HealthCard(h: com.leftovers.app.data.FinancialHealth.Health) {
             CardTitle("Financial health")
             Spacer(Modifier.height(10.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(96.dp), contentAlignment = Alignment.Center) {
+                Box(Modifier.size(116.dp), contentAlignment = Alignment.Center) {
                     val track = c.glassStrong
                     androidx.compose.foundation.Canvas(Modifier.fillMaxSize()) {
-                        val stroke = 9.dp.toPx()
+                        // A soft glow of the score's colour behind the ring, so the card takes on its mood.
+                        drawCircle(
+                            androidx.compose.ui.graphics.Brush.radialGradient(
+                                listOf(color.copy(alpha = 0.22f), Color.Transparent),
+                                center = center, radius = size.minDimension * 0.85f,
+                            ),
+                            radius = size.minDimension * 0.85f,
+                        )
+                        val stroke = 11.dp.toPx()
                         val inset = stroke / 2
                         val arc = androidx.compose.ui.geometry.Size(size.width - stroke, size.height - stroke)
                         val tl = androidx.compose.ui.geometry.Offset(inset, inset)
                         val style = androidx.compose.ui.graphics.drawscope.Stroke(stroke, cap = androidx.compose.ui.graphics.StrokeCap.Round)
                         drawArc(track, 135f, 270f, false, tl, arc, style = style)
-                        drawArc(color, 135f, 270f * sweep, false, tl, arc, style = style)
+                        if (sweep > 0.005f) {
+                            // The arc deepens toward the score, faint where it starts and full where it ends.
+                            rotateDraw(135f) {
+                                drawArc(
+                                    androidx.compose.ui.graphics.Brush.sweepGradient(
+                                        0f to color.copy(alpha = 0.35f),
+                                        0.75f * sweep to color,
+                                        1f to color.copy(alpha = 0.35f),
+                                        center = center,
+                                    ),
+                                    0f, 270f * sweep, false, tl, arc, style = style,
+                                )
+                            }
+                            // A bright bead where the score sits.
+                            val a = Math.toRadians((135f + 270f * sweep).toDouble())
+                            val r = (size.minDimension - stroke) / 2
+                            val at = androidx.compose.ui.geometry.Offset(center.x + r * kotlin.math.cos(a).toFloat(), center.y + r * kotlin.math.sin(a).toFloat())
+                            drawCircle(color.copy(alpha = 0.3f), stroke * 0.95f, at)
+                            drawCircle(Color.White, stroke * 0.32f, at)
+                        }
                     }
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("${h.score}", style = MaterialTheme.typography.headlineSmall, color = c.textPrimary)
+                        // Counts up with the ring as it fills.
+                        Text(
+                            "${Math.round(sweep * 100)}",
+                            style = MaterialTheme.typography.headlineLarge.copy(letterSpacing = (-1).sp, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold),
+                            color = c.textPrimary,
+                        )
                         Text("of 100", style = MaterialTheme.typography.labelSmall, color = c.textTertiary)
                     }
                 }
-                Spacer(Modifier.width(18.dp))
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text(
-                        h.label,
-                        style = MaterialTheme.typography.labelLarge,
-                        color = color,
-                        modifier = Modifier.clip(CircleShape).background(color.copy(alpha = 0.15f)).padding(horizontal = 12.dp, vertical = 4.dp),
-                    )
-                    Text(h.summary, style = MaterialTheme.typography.bodyMedium, color = c.textSecondary)
+                Spacer(Modifier.width(20.dp))
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(
+                        Modifier.clip(CircleShape).background(color.copy(alpha = 0.14f)).padding(start = 10.dp, end = 12.dp, top = 5.dp, bottom = 5.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Box(Modifier.size(7.dp).clip(CircleShape).background(color))
+                        Spacer(Modifier.width(7.dp))
+                        Text(h.label, style = MaterialTheme.typography.labelLarge, color = color)
+                    }
+                    Text(h.summary, style = MaterialTheme.typography.bodyMedium.copy(lineBreak = androidx.compose.ui.text.style.LineBreak.Heading), color = c.textPrimary.copy(alpha = 0.85f))
                 }
             }
-            Spacer(Modifier.height(10.dp))
+            Spacer(Modifier.height(18.dp))
+            // The five measures at a glance: each as wide as it counts, filled as far as it's doing.
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                h.parts.forEach { part ->
+                    Box(Modifier.weight(part.weight.toFloat()).height(6.dp).clip(CircleShape).background(c.glassStrong)) {
+                        part.score?.let { f ->
+                            Box(Modifier.fillMaxHeight().fillMaxWidth(f.coerceAtLeast(0.04f)).clip(CircleShape).background(tone(f)))
+                        }
+                    }
+                }
+            }
+            Spacer(Modifier.height(8.dp))
             Row(
                 Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).pressable({ open = !open }, pressedScale = 0.98f).padding(vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
