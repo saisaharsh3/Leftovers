@@ -127,6 +127,7 @@ private object Routes {
     fun subscriptions(income: Boolean = false, open: Long = -1) = "subscriptions?income=$income&open=$open"
     const val GOALS = "goals"
     const val SHOPPING = "shopping"
+    const val DETECTED = "detected"
     const val GOAL = "goals/{id}"
     const val ACCOUNTS = "accounts"
     const val RECAP = "recap/{month}"
@@ -349,6 +350,7 @@ fun LeftoversNavHost(
                             onOpenNotices = { nav.navigate(Routes.NOTICES) },
                             onOpenTransaction = { nav.navigate(Routes.edit(it)) },
                             onReviewSms = { s -> nav.navigate(Routes.add(s.epochDay, s.amountMinor, s.merchant, s.id)) },
+                            onOpenDetected = { nav.navigate(Routes.DETECTED) },
                             onOpenRecap = { nav.navigate(Routes.recap(it.toString())) },
                             onOpenAccounts = { nav.navigate(Routes.ACCOUNTS) },
                             onOpenAssistant = { nav.navigate(Routes.assistant()) },
@@ -457,6 +459,12 @@ fun LeftoversNavHost(
                     }
                     screen(Routes.GOALS) { GoalsScreen(onBack = back, onOpenGoal = { nav.navigate(Routes.goal(it)) }) }
                     screen(Routes.SHOPPING) { com.leftovers.app.ui.screens.ShoppingListScreen(onBack = back) }
+                    screen(Routes.DETECTED) {
+                        com.leftovers.app.ui.screens.DetectedPaymentsScreen(
+                            onBack = back,
+                            onReviewSms = { s -> nav.navigate(Routes.add(s.epochDay, s.amountMinor, s.merchant, s.id)) },
+                        )
+                    }
                     screen(Routes.GOAL, idArg) { GoalDetailScreen(onBack = back) }
                     screen(Routes.ACCOUNTS) { AccountsScreen(onBack = back, onOpenTransaction = { nav.navigate(Routes.edit(it)) }) }
                     screen(Routes.RECAP, listOf(navArgument("month") { type = NavType.StringType })) { RecapScreen(onClose = back) }
