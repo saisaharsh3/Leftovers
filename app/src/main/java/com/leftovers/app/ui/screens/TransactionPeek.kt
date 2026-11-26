@@ -113,10 +113,6 @@ class TransactionPeekViewModel(
     val oneBill: StateFlow<Boolean> = settings.settings.map { it.splitsAsOneBill }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), true)
 
-    fun saveTransfer(transfer: com.leftovers.app.data.Transfer) {
-        viewModelScope.launch { accountRepository.saveTransfer(transfer) }
-    }
-
     fun deleteTransfer(transfer: com.leftovers.app.data.Transfer) {
         viewModelScope.launch { accountRepository.deleteTransfer(transfer) }
     }
@@ -200,7 +196,7 @@ fun TransactionPeekCard(
             onSettle = { viewModel.settleShare(it); peek.share = null },
         )
     }
-    TransferPeek(peek, viewModel)
+    TransferPeek(peek, viewModel, onEdit)
     val item = peek.open ?: return
     val c = LocalAppColors.current
     val money = LocalMoney.current
@@ -453,20 +449,10 @@ fun TransactionPeekCard(
 
 /** Tapping a transfer in Activity: a card with where the money went, how much and when, to change or delete it. */
 @Composable
-private fun TransferPeek(peek: TransactionPeek, viewModel: TransactionPeekViewModel) {
+private fun TransferPeek(peek: TransactionPeek, viewModel: TransactionPeekViewModel, onEdit: (Long) -> Unit) {
     val c = LocalAppColors.current
     val money = LocalMoney.current
     val undo = LocalUndo.current
-    val accounts by viewModel.accounts.collectAsStateWithLifecycle()
-    var editing by remember { mutableStateOf<com.leftovers.app.data.Transfer?>(null) }
-    editing?.let { transfer ->
-        if (accounts.size >= 2) {
-            TransferSheet(accounts, onDismiss = { editing = null }, initial = transfer) { from, to, amount, note, day ->
-                viewModel.saveTransfer(transfer.copy(fromAccountId = from, toAccountId = to, amountMinor = amount, note = note, epochDay = day.toEpochDay()))
-                editing = null
-            }
-        }
-    }
     val line = peek.transfer ?: return
     val transfer = line.transfer
     MorphCard(
@@ -506,7 +492,7 @@ private fun TransferPeek(peek: TransactionPeek, viewModel: TransactionPeekViewMo
                     undo.show("Transfer deleted") { viewModel.restoreTransfer(transfer) }
                 }
             }, size = 56.dp)
-            PrimaryButton("Edit", { close { editing = transfer } }, Modifier.weight(1f), icon = Lucide.Pencil)
+            PrimaryButton("Edit", { close { onEdit(-transfer.id - 1) } }, Modifier.weight(1f), icon = Lucide.Pencil)
         }
     }
 }

@@ -126,6 +126,7 @@ import com.leftovers.app.data.SmsRepository
 import com.leftovers.app.data.Transaction
 import com.leftovers.app.data.TransactionItem
 import com.leftovers.app.data.TransactionRepository
+import com.leftovers.app.data.Transfer
 import com.leftovers.app.data.TxType
 import com.leftovers.app.ui.AppViewModelProvider
 import com.leftovers.app.ui.components.AmountCursor
@@ -276,11 +277,19 @@ class EditorViewModel(
 
     private val id: Long = savedState.get<Long>("id") ?: -1L
     private val smsId: Long = savedState.get<Long>("sms") ?: -1L
-    val isEditing = id > 0
+    val isTransactionEditing = id > 0
+    val isTransferEditing = id < -1
+    private val transferId = id.takeIf { it < -1 }?.let { -it - 1 }
+    val isEditing = isTransactionEditing || isTransferEditing
+    private var originalTransfer: Transfer? = null
+    var transferUnavailable by mutableStateOf(false)
+        private set
 
     var amountText by mutableStateOf(savedState.get<Long>("amount")?.takeIf { it > 0 }?.let(AmountInput::fromMinor).orEmpty())
         private set
     var type by mutableStateOf(if (savedState.get<Boolean>("income") == true) TxType.INCOME else TxType.EXPENSE)
+        private set
+    var isTransfer by mutableStateOf(false)
         private set
     var categoryId by mutableStateOf<Long?>(null)
         private set
@@ -290,6 +299,10 @@ class EditorViewModel(
     /** More about it than its name (#62), kept out of lists. */
     var details by mutableStateOf("")
     var accountId by mutableStateOf<Long?>(null)
+    var transferFromAccountId by mutableStateOf<Long?>(null)
+        private set
+    var transferToAccountId by mutableStateOf<Long?>(null)
+        private set
 
     /** What a shared or pasted message (#76) couldn't be read as, said under the note; null when it read fine. */
     var messageHint by mutableStateOf<String?>(null)
@@ -423,7 +436,22 @@ class EditorViewModel(
 
     init {
         viewModelScope.launch {
-            if (isEditing) {
+            if (isTransferEditing) {
+                isTransfer = true
+                val transfer = accountRepository.transfers.first().firstOrNull { it.id == transferId }
+                if (transfer == null) {
+                    transferUnavailable = true
+                } else {
+                    originalTransfer = transfer
+                    amountText = AmountInput.fromMinor(transfer.amountMinor)
+                    date = LocalDate.ofEpochDay(transfer.epochDay)
+                    note = transfer.note
+                    transferFromAccountId = transfer.fromAccountId
+                    transferToAccountId = transfer.toAccountId
+                    createdAt = transfer.createdAt
+                }
+                loaded = true
+            } else if (isTransactionEditing) {
                 repository.getTransaction(id)?.let { tx ->
                     amountText = AmountInput.fromMinor(tx.amountMinor)
                     val foreign = tx.foreignMinor
@@ -462,7 +490,7 @@ class EditorViewModel(
                 }
                 loaded = true
             }
-            if (accountId == null) {
+            if (accountId == null && !isTransferEditing) {
                 // The account Home is showing, if one is picked there; otherwise the default account.
                 val s = settings.settings.first()
                 val known = accountRepository.accounts.first().map { it.id }
@@ -478,6 +506,12 @@ class EditorViewModel(
                 accountRepository.accounts.first().firstOrNull { it.id == accountId }?.currency?.let { code ->
                     if (foreignCurrency == null) useForeign(code, lastRate(code))
                 }
+            }
+            val knownAccounts = accountRepository.accounts.first()
+            if (transferFromAccountId == null) {
+                transferFromAccountId = accountId?.takeIf { id -> knownAccounts.any { it.id == id } }
+                    ?: knownAccounts.firstOrNull()?.id
+                transferToAccountId = knownAccounts.firstOrNull { it.id != transferFromAccountId }?.id
             }
             // A detected payment to somewhere filed before opens under the same category again.
             if (smsId > 0 && categoryId == null && note.isNotBlank()) {
@@ -628,12 +662,25 @@ class EditorViewModel(
     fun leaveOwed() = selectKind(if (type == TxType.INCOME) EntryKind.INCOME else EntryKind.EXPENSE)
 
     val kind: EntryKind get() = when {
+        isTransfer -> EntryKind.TRANSFER
         owed -> EntryKind.OWED
         type == TxType.INCOME -> EntryKind.INCOME
         else -> EntryKind.EXPENSE
     }
 
     fun selectKind(next: EntryKind) {
+        if (next == EntryKind.TRANSFER) {
+            if (isEditing) return
+            isTransfer = true
+            owed = false
+            repeatMonthly = false
+            splits.clear()
+            clearPeople()
+            useForeign(null, "")
+            if (date > LocalDate.now()) date = LocalDate.now()
+            return
+        }
+        isTransfer = false
         owed = next == EntryKind.OWED
         if (owed) {
             // Lending isn't spending, so nothing repeats or splits.
@@ -642,6 +689,20 @@ class EditorViewModel(
             clearPeople()
         } else {
             onTypeChange(if (next == EntryKind.INCOME) TxType.INCOME else TxType.EXPENSE)
+        }
+    }
+
+    fun selectTransferFrom(id: Long) {
+        transferFromAccountId = id
+        if (transferToAccountId == id) {
+            transferToAccountId = accounts.value.firstOrNull { it.id != id }?.id
+        }
+    }
+
+    fun selectTransferTo(id: Long) {
+        transferToAccountId = id
+        if (transferFromAccountId == id) {
+            transferFromAccountId = accounts.value.firstOrNull { it.id != id }?.id
         }
     }
 
@@ -687,7 +748,7 @@ class EditorViewModel(
             viewModelScope.launch {
                 val account = settledAccount()
                 people.forEach { planning.saveDebt(Debt(person = it, amountMinor = 0, note = text, epochDay = day, receiptPath = receiptPath, accountId = account, pending = way)) }
-                if (isEditing) repository.getTransaction(id)?.let { repository.removeTransaction(it) }
+                if (isTransactionEditing) repository.getTransaction(id)?.let { repository.removeTransaction(it) }
                 onDone("Saved for ${people.joinToString(" and ")} · amount pending, in Money owed")
             }
             return true
@@ -712,7 +773,7 @@ class EditorViewModel(
                 planning.saveDebt(Debt(person = person, amountMinor = if (wasLent) amount else -amount, note = text, epochDay = day, receiptPath = photo, accountId = account))
             }
             // An entry edited into lent or borrowed is now in Money owed, so the expense or income goes.
-            if (isEditing) repository.getTransaction(id)?.let { repository.removeTransaction(it) }
+            if (isTransactionEditing) repository.getTransaction(id)?.let { repository.removeTransaction(it) }
             if (smsId > 0) sms.dismiss(smsId)
             val names = shares.map { it.first }.let { if (it.size == 1) it[0] else it.dropLast(1).joinToString(", ") + " and " + it.last() }
             val same = shares.map { it.second }.distinct().size == 1
@@ -726,6 +787,38 @@ class EditorViewModel(
         if (newType != type) {
             type = newType
             categoryId = null
+        }
+    }
+
+    fun saveTransfer(onDone: (String) -> Unit): Boolean {
+        val from = transferFromAccountId ?: return false
+        val to = transferToAccountId ?: return false
+        if (amountMinor <= 0 || from == to || date > LocalDate.now() || (isTransferEditing && originalTransfer == null)) return false
+        viewModelScope.launch {
+            val transfer = originalTransfer?.copy(
+                fromAccountId = from,
+                toAccountId = to,
+                amountMinor = amountMinor,
+                epochDay = date.toEpochDay(),
+                note = note.trim(),
+            ) ?: Transfer(
+                fromAccountId = from,
+                toAccountId = to,
+                amountMinor = amountMinor,
+                epochDay = date.toEpochDay(),
+                note = note.trim(),
+            )
+            accountRepository.saveTransfer(transfer)
+            onDone(if (isTransferEditing) "Changes saved" else "Transfer recorded")
+        }
+        return true
+    }
+
+    fun deleteTransfer(onDeleted: (suspend () -> Unit) -> Unit) {
+        val transfer = originalTransfer ?: return
+        viewModelScope.launch {
+            accountRepository.deleteTransfer(transfer)
+            onDeleted { accountRepository.saveTransfer(transfer) }
         }
     }
 
@@ -771,7 +864,8 @@ class EditorViewModel(
     val scheduled: Boolean get() = !isEditing && !owed && !repeatMonthly && date > LocalDate.now() && people.isEmpty() && splits.isEmpty()
 
     /** Whether [day] can be picked: a later day only when it can be scheduled, or the entry repeats. */
-    fun canPick(day: LocalDate): Boolean = day <= LocalDate.now() || repeatMonthly || (!isEditing && !owed && people.isEmpty() && splits.isEmpty())
+    fun canPick(day: LocalDate): Boolean =
+        day <= LocalDate.now() || (!isTransfer && (repeatMonthly || (!isEditing && !owed && people.isEmpty() && splits.isEmpty())))
 
     private fun saveScheduled(onDone: (String) -> Unit, describe: (Long) -> String): Boolean {
         val category = categoryId ?: run { needCategory = true; return false }
@@ -819,7 +913,7 @@ class EditorViewModel(
             val account = settledAccount()
             val mainId = repository.saveTransaction(
                 Transaction(
-                    id = if (isEditing) id else 0,
+                    id = if (isTransactionEditing) id else 0,
                     amountMinor = savedAmount,
                     type = savedType,
                     categoryId = category,
@@ -904,6 +998,7 @@ class EditorViewModel(
 
     /** The subscription or recurring income that logged this entry, if any. */
     suspend fun linkedSubscription(): RecurringItem? {
+        if (isTransferEditing) return null
         val tx = repository.getTransaction(id) ?: return null
         val categoryName = repository.categories.first().firstOrNull { it.id == tx.categoryId }?.name.orEmpty()
         return planning.recurring.first().firstOrNull { it.logged(tx.type, tx.categoryId, tx.note, categoryName) }
@@ -912,6 +1007,11 @@ class EditorViewModel(
     /** Deletes the entry; with [stopRepeating], also removes the subscription that logged it (past entries stay). */
     fun delete(stopRepeating: RecurringItem? = null, onDone: () -> Unit) {
         viewModelScope.launch {
+            if (isTransferEditing) {
+                originalTransfer?.let { accountRepository.deleteTransfer(it) }
+                onDone()
+                return@launch
+            }
             repository.getTransaction(id)?.let {
                 // The photo stays with the entry in Deleted entries until it's removed for good.
                 repository.deleteTransaction(it)
@@ -931,7 +1031,7 @@ private val stripDay = DateTimeFormatter.ofPattern("EEE")
 enum class OwedSplit(val label: String) { EACH("Each"), SPLIT("Split"), BY_AMOUNT("By amount") }
 
 /** What the add screen is logging. Swiping across the amount moves between expense and income; the lent or borrowed button sets owed. */
-enum class EntryKind(val label: String) { EXPENSE("Spending"), INCOME("Income"), OWED("Lent or borrowed") }
+enum class EntryKind(val label: String) { EXPENSE("Spending"), INCOME("Income"), TRANSFER("Transfer"), OWED("Lent or borrowed") }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -964,6 +1064,7 @@ fun EditorScreen(
 
     // Swiping across the amount moves between Expense and Income; the new one slides in from its side.
     val kinds = listOf(EntryKind.EXPENSE, EntryKind.INCOME)
+    val entryOptions = if (viewModel.isEditing) kinds else kinds + EntryKind.TRANSFER
     val density = LocalDensity.current
     val swipeIn = with(density) { 56.dp.toPx() }
     val swipeAt = with(density) { 44.dp.toPx() }
@@ -1023,11 +1124,20 @@ fun EditorScreen(
                 onKey = viewModel::onKey,
                 onClear = viewModel::clearAmount,
                 onConfirm = {
-                    val ok = viewModel.save(onDone = onSaved, describe = money::format)
+                    val ok = if (viewModel.isTransfer) viewModel.saveTransfer(onSaved)
+                    else viewModel.save(onDone = onSaved, describe = money::format)
                     if (!ok) view.performHapticFeedback(HapticFeedbackConstants.REJECT)
                 },
-                confirmEnabled = viewModel.amountMinor > 0,
-                confirmLabel = if (viewModel.isEditing) "Save" else if (viewModel.scheduled) "Schedule" else "Add",
+                confirmEnabled = viewModel.amountMinor > 0 && (!viewModel.isTransfer ||
+                    (viewModel.transferFromAccountId != null && viewModel.transferToAccountId != null &&
+                        viewModel.transferFromAccountId != viewModel.transferToAccountId && !viewModel.transferUnavailable)),
+                confirmLabel = when {
+                    viewModel.isTransferEditing -> "Save"
+                    viewModel.isTransfer -> "Add"
+                    viewModel.isEditing -> "Save"
+                    viewModel.scheduled -> "Schedule"
+                    else -> "Add"
+                },
                 modifier = Modifier
                     .navigationBarsPadding()
                     .padding(16.dp),
@@ -1061,19 +1171,19 @@ fun EditorScreen(
             // In lent or borrowed, this goes back to the expense or income it came from.
             if (viewModel.owed) RoundButton(Lucide.ChevronLeft, "Back", viewModel::leaveOwed) else RoundButton(Lucide.X, "Close", onClose)
             Spacer(Modifier.weight(1f))
-            if (viewModel.owed) {
-                Text("Lent or borrowed", style = MaterialTheme.typography.titleMedium, color = c.textPrimary)
+            if (viewModel.owed || viewModel.isTransferEditing) {
+                Text(if (viewModel.owed) "Lent or borrowed" else "Transfer", style = MaterialTheme.typography.titleMedium, color = c.textPrimary)
             } else {
                 SegmentedToggle(
-                    options = kinds,
+                    options = entryOptions,
                     selected = viewModel.kind,
                     label = { it.label },
                     onSelect = viewModel::selectKind,
-                    modifier = Modifier.width(210.dp),
+                    modifier = Modifier.width(if (viewModel.isEditing) 210.dp else 270.dp),
                 )
             }
             Spacer(Modifier.weight(1f))
-            if (viewModel.isEditing) {
+            if (viewModel.isEditing && !viewModel.transferUnavailable) {
                 RoundButton(Lucide.Trash2, "Delete", { confirmDelete = true }, tint = c.negative)
             } else {
                 Spacer(Modifier.size(44.dp))
@@ -1087,7 +1197,7 @@ fun EditorScreen(
             Modifier
                 .then(if (wide) Modifier.padding(vertical = 16.dp) else Modifier.weight(1f))
                 .fillMaxWidth()
-                .then(swipeable),
+                .then(if (viewModel.isTransfer) Modifier else swipeable),
             contentAlignment = Alignment.Center,
         ) {
         Column(
@@ -1165,14 +1275,16 @@ fun EditorScreen(
                 // Tapping the symbol switches currency, for spending abroad.
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.pressable({ showForeign = true }, pressedScale = 0.9f),
+                    modifier = if (viewModel.isTransfer) Modifier else Modifier.pressable({ showForeign = true }, pressedScale = 0.9f),
                 ) {
                     Text(
                         viewModel.foreignCurrency?.let { com.leftovers.app.util.Money(it).symbol } ?: money.symbol,
                         style = MaterialTheme.typography.headlineMedium,
                         color = if (viewModel.foreignCurrency != null) c.accent else c.textTertiary,
                     )
-                    Icon(Lucide.ChevronDown, contentDescription = "Change currency", tint = c.textTertiary, modifier = Modifier.size(16.dp))
+                    if (!viewModel.isTransfer) {
+                        Icon(Lucide.ChevronDown, contentDescription = "Change currency", tint = c.textTertiary, modifier = Modifier.size(16.dp))
+                    }
                 }
                 Spacer(Modifier.width(6.dp))
                 val raw = viewModel.amountText
@@ -1182,7 +1294,7 @@ fun EditorScreen(
                     style = MaterialTheme.typography.displayLarge.copy(fontSize = size.sp, lineHeight = (size * 1.1).sp),
                     color = when {
                         raw.isEmpty() -> c.textTertiary
-                        viewModel.type == TxType.INCOME && !viewModel.owed -> c.positive
+                        viewModel.type == TxType.INCOME && !viewModel.owed && !viewModel.isTransfer -> c.positive
                         else -> c.textPrimary
                     },
                     caretAfter = if (placed != null && raw.isNotEmpty()) AmountCursor.displayAfter(display, raw, placed) else null,
@@ -1198,10 +1310,17 @@ fun EditorScreen(
             Spacer(Modifier.height(16.dp))
             // A long note is cut short here rather than pushing the buttons below off screen.
             NotePill(viewModel.note, onClick = { showNote = true }, modifier = Modifier.padding(horizontal = 32.dp).widthIn(max = 320.dp))
+            if (viewModel.transferUnavailable) {
+                Text(
+                    "This transfer is no longer available.",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = c.warning,
+                )
+            }
             // Someone paying you back, typed as income (or you paying them, as spending): one tap records it in
             // Money owed instead, so it isn't counted twice. Only for a new entry, by the note's name or the amount.
             val owedNow by viewModel.openOwed.collectAsStateWithLifecycle()
-            val payback = if (viewModel.isEditing || viewModel.owed || viewModel.amountMinor <= 0) null
+            val payback = if (viewModel.isEditing || viewModel.owed || viewModel.isTransfer || viewModel.amountMinor <= 0) null
             else remember(owedNow, viewModel.note, viewModel.amountMinor, viewModel.type) {
                 com.leftovers.app.util.Payback.find(com.leftovers.app.data.noteText(viewModel.note), viewModel.amountMinor, viewModel.type == TxType.INCOME, owedNow)
             }
@@ -1226,7 +1345,7 @@ fun EditorScreen(
             // An envelope budget by #tag: one tap counts this entry in it, instead of typing the tag (#57).
             val envelope by viewModel.envelope.collectAsStateWithLifecycle()
             val envelopeTag = envelope?.envelopeTag
-            if (envelopeTag != null && envelope?.envelopeCovers(viewModel.date) == true && viewModel.type == TxType.EXPENSE && !viewModel.owed) {
+            if (envelopeTag != null && envelope?.envelopeCovers(viewModel.date) == true && viewModel.type == TxType.EXPENSE && !viewModel.owed && !viewModel.isTransfer) {
                 val on = viewModel.inEnvelope(envelopeTag)
                 Spacer(Modifier.height(10.dp))
                 Chip(
@@ -1239,7 +1358,42 @@ fun EditorScreen(
             }
             Spacer(Modifier.height(10.dp))
             // Top-aligned outside lent or borrowed, so the account chip lines up with the buttons, their names below.
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = if (viewModel.owed) Alignment.CenterVertically else Alignment.Top) {
+            if (viewModel.isTransfer) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    if (accounts.size >= 2) {
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text("From", style = MaterialTheme.typography.labelMedium, color = c.textSecondary)
+                            AccountPicker(
+                                accounts = accounts,
+                                selectedId = viewModel.transferFromAccountId,
+                                nameMaxWidth = 62.dp,
+                                modifier = Modifier.fillMaxWidth(),
+                                onSelect = viewModel::selectTransferFrom,
+                            )
+                        }
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text("To", style = MaterialTheme.typography.labelMedium, color = c.textSecondary)
+                            AccountPicker(
+                                accounts = accounts.filter { it.id != viewModel.transferFromAccountId },
+                                selectedId = viewModel.transferToAccountId,
+                                nameMaxWidth = 62.dp,
+                                modifier = Modifier.fillMaxWidth(),
+                                onSelect = viewModel::selectTransferTo,
+                            )
+                        }
+                    } else {
+                        Text(
+                            "Add a second account to transfer money.",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = c.warning,
+                            modifier = Modifier.align(Alignment.CenterVertically),
+                        )
+                    }
+                }
+            } else Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = if (viewModel.owed) Alignment.CenterVertically else Alignment.Top) {
                 if (viewModel.owed) {
                     RoundButton(
                         Lucide.HandCoins,
@@ -1292,49 +1446,51 @@ fun EditorScreen(
                     NamedRound(Lucide.HandCoins, "Lent", "Lent or borrowed", { viewModel.selectKind(EntryKind.OWED) }, tint = c.textSecondary)
                 }
                 }
-                val path = viewModel.receiptPath
-                if (path == null) {
-                    if (viewModel.owed) RoundButton(Lucide.Camera, "Attach receipt", { receiptMenu = true }, size = 40.dp, tint = c.textSecondary)
-                    else NamedRound(Lucide.Camera, "Photo", "Attach receipt", { receiptMenu = true }, tint = c.textSecondary)
-                } else {
-                    ReceiptThumb(path, onOpen = { viewReceipt = true })
-                }
-            }
-            // Lent or borrowed money still comes out of, or goes into, an account.
-            if (viewModel.owed && accounts.size > 1) {
-                Spacer(Modifier.height(10.dp))
-                AccountPicker(accounts, viewModel.accountId) { viewModel.accountId = it }
-            }
-            viewModel.foreignCurrency?.let { code ->
-                Text(
-                    if (viewModel.totalMinor > 0) "≈ ${money.format(viewModel.totalMinor)} · 1 $code = ${money.symbol}${viewModel.rateText}"
-                    else "Set the rate for $code",
-                    textAlign = TextAlign.Center,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = c.textSecondary,
-                    modifier = Modifier.padding(bottom = 6.dp).pressable({ showForeign = true }, pressedScale = 0.96f),
-                )
-            }
-            val aiConfig by viewModel.aiConfig.collectAsStateWithLifecycle()
-            if (aiConfig != null && viewModel.receiptPath != null && !viewModel.owed) {
-                val message = viewModel.receiptMessage
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .padding(top = 10.dp)
-                        .then(if (!viewModel.readingReceipt && (message == null || viewModel.receiptFailed)) Modifier.pressable(viewModel::fillFromReceipt, pressedScale = 0.96f) else Modifier),
-                ) {
-                    Icon(Lucide.Sparkles, contentDescription = null, tint = c.accent, modifier = Modifier.size(14.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text(
-                        when {
-                            viewModel.readingReceipt -> "Reading the photo…"
-                            message != null -> message
-                            else -> "Fill in from this photo"
-                        },
-                        style = MaterialTheme.typography.labelMedium,
-                        color = c.accent,
-                    )
+                if (!viewModel.isTransfer) {
+                    val path = viewModel.receiptPath
+                    if (path == null) {
+                        if (viewModel.owed) RoundButton(Lucide.Camera, "Attach receipt", { receiptMenu = true }, size = 40.dp, tint = c.textSecondary)
+                        else NamedRound(Lucide.Camera, "Photo", "Attach receipt", { receiptMenu = true }, tint = c.textSecondary)
+                    } else {
+                        ReceiptThumb(path, onOpen = { viewReceipt = true })
+                    }
+                    // Lent or borrowed money still comes out of, or goes into, an account.
+                    if (viewModel.owed && accounts.size > 1) {
+                        Spacer(Modifier.height(10.dp))
+                        AccountPicker(accounts, viewModel.accountId) { viewModel.accountId = it }
+                    }
+                    viewModel.foreignCurrency?.let { code ->
+                        Text(
+                            if (viewModel.totalMinor > 0) "≈ ${money.format(viewModel.totalMinor)} · 1 $code = ${money.symbol}${viewModel.rateText}"
+                            else "Set the rate for $code",
+                            textAlign = TextAlign.Center,
+                            style = MaterialTheme.typography.labelMedium,
+                            color = c.textSecondary,
+                            modifier = Modifier.padding(bottom = 6.dp).pressable({ showForeign = true }, pressedScale = 0.96f),
+                        )
+                    }
+                    val aiConfig by viewModel.aiConfig.collectAsStateWithLifecycle()
+                    if (aiConfig != null && viewModel.receiptPath != null && !viewModel.owed) {
+                        val message = viewModel.receiptMessage
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .padding(top = 10.dp)
+                                .then(if (!viewModel.readingReceipt && (message == null || viewModel.receiptFailed)) Modifier.pressable(viewModel::fillFromReceipt, pressedScale = 0.96f) else Modifier),
+                        ) {
+                            Icon(Lucide.Sparkles, contentDescription = null, tint = c.accent, modifier = Modifier.size(14.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text(
+                                when {
+                                    viewModel.readingReceipt -> "Reading the photo…"
+                                    message != null -> message
+                                    else -> "Fill in from this photo"
+                                },
+                                style = MaterialTheme.typography.labelMedium,
+                                color = c.accent,
+                            )
+                        }
+                    }
                 }
             }
             val splitting = viewModel.people.isNotEmpty() && viewModel.type == TxType.EXPENSE && !viewModel.repeatMonthly
@@ -1393,7 +1549,7 @@ fun EditorScreen(
 
         DateStrip(
             selected = viewModel.date,
-            onSelect = { viewModel.date = it },
+            onSelect = { if (!viewModel.isTransfer || it <= LocalDate.now()) viewModel.date = it },
             onOpenCalendar = { showCalendar = true },
         )
         Spacer(Modifier.height(12.dp))
@@ -1430,7 +1586,7 @@ fun EditorScreen(
                     Chip(name, onClick = { viewModel.togglePerson(name) }, icon = if (picked) Lucide.Check else null, selected = picked)
                 }
             }
-        } else {
+        } else if (!viewModel.isTransfer) {
         AnimatedVisibility(viewModel.needCategory, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
             Text(
                 "Choose a category to save",
@@ -1627,7 +1783,8 @@ fun EditorScreen(
                         )
                     } else if (laterDay) {
                         Text(
-                            if (viewModel.isEditing) "An entry already logged can't move to a later day. Add a new one on that day to schedule it."
+                            if (viewModel.isTransfer) "A transfer can't be dated in the future. Pick today or an earlier day."
+                            else if (viewModel.isEditing) "An entry already logged can't move to a later day. Add a new one on that day to schedule it."
                             else "A split bill or money lent can't be scheduled. Pick today or an earlier day.",
                             style = MaterialTheme.typography.bodyMedium,
                             color = c.warning,
@@ -1673,12 +1830,14 @@ fun EditorScreen(
                         focusRequester = focus,
                     )
                     // Anything more (#62): who it was with, an import's purpose line. Shown when the entry is opened, not in lists.
-                    GlassTextField(
-                        detailsDraft,
-                        { detailsDraft = it.take(500) },
-                        placeholder = "More details (optional)",
-                        singleLine = false,
-                    )
+                    if (!viewModel.isTransfer) {
+                        GlassTextField(
+                            detailsDraft,
+                            { detailsDraft = it.take(500) },
+                            placeholder = "More details (optional)",
+                            singleLine = false,
+                        )
+                    }
                     Text("Tags", style = MaterialTheme.typography.labelMedium, color = c.textSecondary, modifier = Modifier.padding(start = 6.dp, top = 4.dp))
                     if (tags.isNotEmpty()) {
                         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -1723,14 +1882,19 @@ fun EditorScreen(
     if (confirmDelete) {
         val linked by produceState<RecurringItem?>(null) { value = viewModel.linkedSubscription() }
         var stopRepeating by remember { mutableStateOf(true) }
+        val undo = LocalUndo.current
         GlassAlertDialog(
             onDismissRequest = { confirmDelete = false },
             containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
             shape = RoundedCornerShape(30.dp),
-            title = { Text("Delete this entry?") },
+            title = { Text(if (viewModel.isTransferEditing) "Delete this transfer?" else "Delete this entry?") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text("You can restore it later from Settings → Backup & data → Deleted entries.", color = c.textSecondary)
+                    Text(
+                        if (viewModel.isTransferEditing) "This transfer will be removed from both account balances."
+                        else "You can restore it later from Settings → Backup & data → Deleted entries.",
+                        color = c.textSecondary,
+                    )
                     linked?.let { r ->
                         Row(
                             Modifier.fillMaxWidth().pressable({ stopRepeating = !stopRepeating }, pressedScale = 0.98f),
@@ -1755,7 +1919,14 @@ fun EditorScreen(
                 TextButton(onClick = {
                     confirmDelete = false
                     Haptics.confirm(view)
-                    viewModel.delete(linked?.takeIf { stopRepeating }, onClose)
+                    if (viewModel.isTransferEditing) {
+                        viewModel.deleteTransfer { restore ->
+                            undo.show("Transfer deleted", restore)
+                            onClose()
+                        }
+                    } else {
+                        viewModel.delete(linked?.takeIf { stopRepeating }, onClose)
+                    }
                 }) { Text("Delete", color = c.negative) }
             },
             dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("Cancel", color = c.textSecondary) } },
@@ -1795,13 +1966,19 @@ private fun NotePill(note: String, onClick: () -> Unit, modifier: Modifier = Mod
 
 /** The account this entry goes to; tap to pick another. */
 @Composable
-private fun AccountPicker(accounts: List<AccountWithBalance>, selectedId: Long?, onSelect: (Long) -> Unit) {
+private fun AccountPicker(
+    accounts: List<AccountWithBalance>,
+    selectedId: Long?,
+    nameMaxWidth: androidx.compose.ui.unit.Dp = 110.dp,
+    modifier: Modifier = Modifier,
+    onSelect: (Long) -> Unit,
+) {
     val c = LocalAppColors.current
     var open by remember { mutableStateOf(false) }
     val current = accounts.firstOrNull { it.id == selectedId } ?: accounts.first()
     Box {
         Row(
-            Modifier
+            modifier
                 .height(40.dp)
                 .pressable({ open = true }, pressedScale = 0.95f)
                 .clip(RoundedCornerShape(50))
@@ -1818,7 +1995,7 @@ private fun AccountPicker(accounts: List<AccountWithBalance>, selectedId: Long?,
                 color = c.textPrimary,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.widthIn(max = 110.dp),
+                modifier = Modifier.widthIn(max = nameMaxWidth),
             )
             Spacer(Modifier.width(4.dp))
             Icon(Lucide.ChevronDown, contentDescription = "Change account", tint = c.textTertiary, modifier = Modifier.size(14.dp))
