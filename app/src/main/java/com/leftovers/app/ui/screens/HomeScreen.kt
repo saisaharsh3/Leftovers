@@ -299,6 +299,28 @@ class HomeViewModel(
     suspend fun guessCategory(s: SmsSuggestion): com.leftovers.app.data.Category? {
         val categories = repository.categories.first()
         val past = repository.getAllTransactions().map { com.leftovers.app.util.MerchantMemory.Past(it.note, it.type, it.categoryId, it.epochDay, it.createdAt) }
+        return guessFor(s, past, categories)
+    }
+
+    /**
+     * The category each detected payment would be added with, by its id, for the icons on its row. Worked out once,
+     * away from the screen, whenever the payments or entries change: going through every entry for each row as it
+     * was drawn made Home stutter on the way in and when scrolled past.
+     */
+    val detectedCategories: StateFlow<Map<Long, com.leftovers.app.data.Category>> =
+        combine(sms.suggestions, repository.allTransactions, repository.categories) { suggestions, all, categories ->
+            if (suggestions.isEmpty()) emptyMap()
+            else {
+                val past = all.map { com.leftovers.app.util.MerchantMemory.Past(it.note, it.type, it.categoryId, it.epochDay, it.createdAt) }
+                suggestions.mapNotNull { s -> guessFor(s, past, categories)?.let { s.id to it } }.toMap()
+            }
+        }.flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
+
+    private fun guessFor(
+        s: SmsSuggestion,
+        past: List<com.leftovers.app.util.MerchantMemory.Past>,
+        categories: List<com.leftovers.app.data.Category>,
+    ): com.leftovers.app.data.Category? {
         val id = if (!s.isIncome) com.leftovers.app.util.AutoAdd.category(s.merchant, past, categories)
         else {
             val usable = categories.filter { it.type == TxType.INCOME && !it.hidden }
@@ -1496,6 +1518,7 @@ fun DetectedRows(
     val c = LocalAppColors.current
     val money = LocalMoney.current
     val undo = LocalUndo.current
+    val guessed by viewModel.detectedCategories.collectAsStateWithLifecycle()
     // What ✓ does: settled as a payback or a subscription's payment when it looks
     // like one, so it isn't counted as income or spending twice; otherwise added as it reads.
     fun confirm(s: SmsSuggestion) {
@@ -1537,8 +1560,7 @@ fun DetectedRows(
             },
             leading = {
                 // Its category's icon, as it would be added; where it came from until that's known.
-                val guessed by androidx.compose.runtime.produceState<com.leftovers.app.data.Category?>(null, s.id) { value = viewModel.guessCategory(s) }
-                val cat = guessed
+                val cat = guessed[s.id]
                 if (cat != null) CategoryIcon(cat.emoji, cat.color, size = 42.dp)
                 else IconTile(
                     when (s.source) {

@@ -44,9 +44,8 @@ sealed interface KeypadKey {
     data object Erase : KeypadKey
 }
 
-private val keyHeight = 60.dp
-private val gap = 10.dp
-private val opHeight = 46.dp
+/** Key sizes: a little smaller on a short screen, so the add screen above the keypad keeps its room. */
+private val LocalKeyHeight = androidx.compose.runtime.staticCompositionLocalOf { 60.dp }
 
 @Composable
 fun Keypad(
@@ -61,6 +60,11 @@ fun Keypad(
     onEquals: (() -> Unit)? = null,
 ) {
     val c = LocalAppColors.current
+    val short = androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp < 820
+    val keyHeight = if (short) 52.dp else 60.dp
+    val gap = if (short) 8.dp else 10.dp
+    val opHeight = if (short) 38.dp else 46.dp
+    androidx.compose.runtime.CompositionLocalProvider(LocalKeyHeight provides keyHeight) {
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(gap)) {
     if (onOperator != null) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(gap)) {
@@ -121,6 +125,7 @@ fun Keypad(
         }
     }
     }
+    }
 }
 
 @Composable
@@ -137,7 +142,7 @@ private fun KeyLabel(text: String) {
 private fun Key(
     modifier: Modifier,
     onClick: () -> Unit,
-    height: Dp = keyHeight,
+    height: Dp = LocalKeyHeight.current,
     fill: Color? = null,
     bordered: Boolean = true,
     onLongClick: (() -> Unit)? = null,

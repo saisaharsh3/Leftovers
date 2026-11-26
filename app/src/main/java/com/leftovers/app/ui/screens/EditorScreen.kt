@@ -10,6 +10,8 @@ import kotlin.math.abs
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.animation.core.Animatable
 import com.leftovers.app.data.Debt
@@ -317,7 +319,20 @@ class EditorViewModel(
         return null
     }
 
+    /**
+     * Pasted onto the amount: a plain number ("1,299.50", "₹450") becomes the amount; anything else is read as a bank
+     * message (#76) and fills the entry in.
+     */
     fun paste(text: String) = viewModelScope.launch {
+        val number = text.trim().filterNot { it == ',' || it.isWhitespace() }.trimStart { !it.isDigit() && it != '.' }
+        val amount = AmountInput.sanitize(number)?.takeIf { it.isNotEmpty() && it != "." }
+        if (amount != null) {
+            sumPrefix = ""
+            amountText = AmountInput.fromMinor(AmountInput.toMinor(amount) ?: return@launch)
+            cursor = null
+            messageHint = null
+            return@launch
+        }
         messageHint = fillFromMessage(text)?.let { "Couldn't read that message. $it" }
     }
     var receiptPath by mutableStateOf<String?>(null)
@@ -1067,12 +1082,19 @@ fun EditorScreen(
 
         if (!viewModel.loaded) return@Column
 
-        Column(
+        // On a short screen this part scrolls rather than squashing its rows; with room to spare it sits centred.
+        Box(
             Modifier
                 .then(if (wide) Modifier.padding(vertical = 16.dp) else Modifier.weight(1f))
                 .fillMaxWidth()
-                .then(swipeable)
-                .then(sliding),
+                .then(swipeable),
+            contentAlignment = Alignment.Center,
+        ) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .then(sliding)
+                .verticalScroll(androidx.compose.foundation.rememberScrollState()),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
         ) {
@@ -1101,7 +1123,45 @@ fun EditorScreen(
                     modifier = Modifier.padding(horizontal = 24.dp).padding(bottom = 6.dp),
                 )
             }
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            // Long-press the amount to paste: a number becomes the amount, a bank message fills the entry in (#76).
+            // The clipboard is only read when Paste is tapped.
+            val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
+            var pasteOpen by remember { mutableStateOf(false) }
+            Box {
+            if (pasteOpen) {
+                androidx.compose.ui.window.Popup(
+                    alignment = Alignment.TopCenter,
+                    offset = androidx.compose.ui.unit.IntOffset(0, with(LocalDensity.current) { -52.dp.roundToPx() }),
+                    onDismissRequest = { pasteOpen = false },
+                ) {
+                    val has = clipboard.hasText()
+                    Row(
+                        Modifier
+                            .clip(CircleShape)
+                            .background(if (c.isDark) androidx.compose.ui.graphics.Color(0xFF2A2A33) else androidx.compose.ui.graphics.Color.White)
+                            .border(1.dp, c.borderTop, CircleShape)
+                            .pressable({
+                                pasteOpen = false
+                                clipboard.getText()?.text?.takeIf { it.isNotBlank() }?.let(viewModel::paste)
+                            }, pressedScale = 0.94f)
+                            .padding(horizontal = 18.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(Lucide.ClipboardPaste, contentDescription = null, tint = if (has) c.textPrimary else c.textTertiary, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text(if (has) "Paste" else "Nothing to paste", style = MaterialTheme.typography.labelLarge, color = if (has) c.textPrimary else c.textTertiary)
+                    }
+                }
+            }
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = if (viewModel.isEditing) Modifier else Modifier.pointerInput(Unit) {
+                    detectTapGestures(onLongPress = {
+                        view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                        pasteOpen = true
+                    })
+                },
+            ) {
                 // Tapping the symbol switches currency, for spending abroad.
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
@@ -1134,6 +1194,7 @@ fun EditorScreen(
                     },
                 )
             }
+            }
             Spacer(Modifier.height(16.dp))
             // A long note is cut short here rather than pushing the buttons below off screen.
             NotePill(viewModel.note, onClick = { showNote = true }, modifier = Modifier.padding(horizontal = 32.dp).widthIn(max = 320.dp))
@@ -1143,13 +1204,6 @@ fun EditorScreen(
             val payback = if (viewModel.isEditing || viewModel.owed || viewModel.amountMinor <= 0) null
             else remember(owedNow, viewModel.note, viewModel.amountMinor, viewModel.type) {
                 com.leftovers.app.util.Payback.find(com.leftovers.app.data.noteText(viewModel.note), viewModel.amountMinor, viewModel.type == TxType.INCOME, owedNow)
-            }
-            // A bank message copied from another app: one tap fills it in (#76). The clipboard is only read on the tap;
-            // the chip shows when there's text there and nothing typed yet.
-            val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
-            if (!viewModel.isEditing && !viewModel.owed && viewModel.amountText.isEmpty() && viewModel.sumPrefix.isEmpty() && clipboard.hasText()) {
-                Spacer(Modifier.height(10.dp))
-                Chip("Paste a bank message", onClick = { clipboard.getText()?.text?.let(viewModel::paste) }, icon = Lucide.ClipboardPaste, iconTint = c.textSecondary)
             }
             viewModel.messageHint?.let { hint ->
                 Text(hint, style = MaterialTheme.typography.bodySmall, color = c.warning, textAlign = TextAlign.Center, modifier = Modifier.padding(horizontal = 32.dp, vertical = 8.dp))
@@ -1334,6 +1388,7 @@ fun EditorScreen(
                     modifier = Modifier.padding(top = 10.dp),
                 )
             }
+        }
         }
 
         DateStrip(
