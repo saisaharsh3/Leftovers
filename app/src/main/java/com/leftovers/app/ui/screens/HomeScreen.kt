@@ -126,6 +126,7 @@ data class HomeUiState(
     /** Everyone with money still owed either way, largest first. */
     val owed: List<com.leftovers.app.data.PersonBalance> = emptyList(),
     val recent: List<TransactionItem> = emptyList(),
+    val recentTransfers: List<TransferLine> = emptyList(),
     /** Splits as one bill with their parts under them; off, every entry on its own. */
     val oneBill: Boolean = true,
     /** What people owe for bills split with them, by the entry (your share) each came from. */
@@ -159,6 +160,12 @@ data class HomeUiState(
     val entries: List<TransactionItem> = emptyList(),
 )
 
+private data class HomeBooks(
+    val transactions: List<TransactionItem>,
+    val accounts: List<AccountWithBalance>,
+    val transfers: List<com.leftovers.app.data.Transfer>,
+)
+
 /** A subscription paid by hand whose day has come: which [month]'s, and its [date]. */
 data class DueBill(val item: RecurringItem, val month: YearMonth, val date: LocalDate)
 
@@ -170,12 +177,17 @@ class HomeViewModel(
     accounts: AccountRepository,
 ) : ViewModel() {
     val state: StateFlow<HomeUiState> = combine(
-        combine(repository.allTransactions, accounts.accounts, ::Pair),
+        combine(
+            combine(repository.allTransactions, accounts.accounts, ::Pair),
+            accounts.transfers,
+        ) { (all, accountList), transfers -> HomeBooks(all, accountList, transfers) },
         settings.settings,
         combine(planning.recurring, planning.debts, ::Pair),
         planning.goals,
         sms.suggestions,
-    ) { (all, accountList), s, (recurring, debts), goals, suggestions ->
+    ) { books, s, (recurring, debts), goals, suggestions ->
+        val all = books.transactions
+        val accountList = books.accounts
         val month = YearMonth.now()
         val todayDate = LocalDate.now()
         val items = all.filter { YearMonth.from(it.date) == month }
@@ -188,6 +200,7 @@ class HomeViewModel(
         val selected = accountList.firstOrNull { it.id == s.homeAccountId }
         val shownAll = if (selected == null) all else all.filter { it.accountId == selected.id }
         val shownMonth = if (selected == null) items else items.filter { it.accountId == selected.id }
+        val accountNames = accountList.associate { it.id to it.name }
         HomeUiState(
             loaded = true,
             month = month,
@@ -213,6 +226,18 @@ class HomeViewModel(
             recent = if (!s.splitsAsOneBill) shownAll.take(6)
             else shownAll.filter { it.splitOf == null || shownAll.none { m -> m.id == it.splitOf } }.take(6)
                 .let { mains -> splitOrder(mains + shownAll.filter { p -> p.splitOf != null && mains.any { it.id == p.splitOf } }) },
+            recentTransfers = books.transfers
+                .filter { selected == null || it.fromAccountId == selected.id || it.toAccountId == selected.id }
+                .sortedWith(compareByDescending<com.leftovers.app.data.Transfer> { it.epochDay }.thenByDescending { it.createdAt })
+                .take(6)
+                .map { transfer ->
+                    TransferLine(
+                        transfer,
+                        accountNames[transfer.fromAccountId] ?: "?",
+                        accountNames[transfer.toAccountId] ?: "?",
+                        when (selected?.id) { null -> 0; transfer.fromAccountId -> -1; else -> 1 },
+                    )
+                },
             oneBill = s.splitsAsOneBill,
             shares = debts.filter { it.splitOf != null && !it.repayment }.groupBy { it.splitOf!! },
             smsSuggestions = suggestions,
@@ -1081,29 +1106,38 @@ fun HomeScreen(
                 }
             }
 
-            item { SectionHeader("Recent", Modifier.appear(5), action = if (state.recent.isNotEmpty()) "See all" else null, onAction = { onOpenActivity(null, state.selectedAccount?.id) }) }
             item {
-                if (state.recent.isEmpty()) {
+                SectionHeader(
+                    "Recent",
+                    Modifier.appear(5),
+                    action = if (state.recent.isNotEmpty() || state.recentTransfers.isNotEmpty()) "See all" else null,
+                    onAction = { onOpenActivity(null, state.selectedAccount?.id) },
+                )
+            }
+            item {
+                if (state.recent.isEmpty() && state.recentTransfers.isEmpty()) {
                     Glass(Modifier.fillMaxWidth().appear(5)) {
                         EmptyState(Lucide.Wallet, "Nothing logged yet", "Tap the + button below to add your first expense.")
                     }
                 } else {
-                    // Each split bill on a card of its own, as in Activity (#36).
+                    val feed = activityFeed(state.recent, state.shares, state.oneBill, state.recentTransfers).take(6)
                     Column(Modifier.appear(5), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        billCards(state.recent, state.shares, state.oneBill).forEach { card ->
+                        feed.forEach { row ->
                             Glass(Modifier.fillMaxWidth()) {
                                 Column(Modifier.padding(vertical = 6.dp)) {
-                                    // A split bill is one row here; where its money went is on its card and in Activity.
-                                    card.forEachIndexed { i, line ->
-                                        if (line !is BillLine.Entry || line.under()) return@forEachIndexed
-                                        if (i > 0) RowDivider(inset = 74.dp)
-                                        TransactionRow(
-                                            line.item,
-                                            onClick = { peek.show(line.item) },
-                                            subtitle = billSubtitle(line.item.date.friendlyLabel(), line),
-                                            wholeMinor = line.whole(),
-                                            modifier = Modifier.peekSource(peek, line.item.id),
-                                        )
+                                    when (row) {
+                                        is ActivityFeedRow.Bill -> {
+                                            val line = row.lines.first() as BillLine.Entry
+                                            TransactionRow(
+                                                line.item,
+                                                onClick = { peek.show(line.item) },
+                                                subtitle = billSubtitle(line.item.date.friendlyLabel(), line),
+                                                wholeMinor = line.whole(),
+                                                modifier = Modifier.peekSource(peek, line.item.id),
+                                            )
+                                        }
+                                        is ActivityFeedRow.Transfer ->
+                                            TransferRow(row.line, onClick = { peek.show(row.line) }, modifier = Modifier.peekSource(peek, -row.line.transfer.id))
                                     }
                                 }
                             }

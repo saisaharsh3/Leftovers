@@ -140,6 +140,43 @@ data class DayGroup(val date: LocalDate, val items: List<TransactionItem>, val l
 /** Money moved between two of your accounts that day; [sign] is −1 or +1 for the account Activity is showing, else 0. */
 data class TransferLine(val transfer: com.leftovers.app.data.Transfer, val from: String, val to: String, val sign: Int)
 
+internal sealed interface ActivityFeedRow {
+    val epochDay: Long
+    val createdAt: Long
+
+    data class Bill(val lines: List<BillLine>, override val epochDay: Long, override val createdAt: Long) : ActivityFeedRow
+    data class Transfer(val line: TransferLine) : ActivityFeedRow {
+        override val epochDay: Long get() = line.transfer.epochDay
+        override val createdAt: Long get() = line.transfer.createdAt
+    }
+}
+
+internal fun activityFeed(
+    items: List<TransactionItem>,
+    shares: Map<Long, List<com.leftovers.app.data.Debt>>,
+    oneBill: Boolean,
+    transfers: List<TransferLine>,
+): List<ActivityFeedRow> {
+    val rows = mutableListOf<ActivityFeedRow>()
+    billCards(items, shares, oneBill).forEach { card ->
+        var current = mutableListOf<BillLine>()
+        fun addBill() {
+            if (current.isNotEmpty()) {
+                val root = current.first() as BillLine.Entry
+                rows += ActivityFeedRow.Bill(current.toList(), root.item.epochDay, root.item.createdAt)
+                current = mutableListOf()
+            }
+        }
+        card.forEach { line ->
+            if (!line.under()) addBill()
+            current += line
+        }
+        addBill()
+    }
+    transfers.forEach { rows += ActivityFeedRow.Transfer(it) }
+    return rows.sortedWith(compareByDescending<ActivityFeedRow> { it.epochDay }.thenByDescending { it.createdAt })
+}
+
 /** Narrows the list to one account, one category and/or one #tag. A tag looks across all months. */
 /** [allTime]: every entry instead of one month's (#29); it isn't a filter, so it doesn't make the list "filtered". */
 data class ActivityFilters(
@@ -172,6 +209,7 @@ data class HistoryUiState(
     val groups: List<DayGroup> = emptyList(),
     /** Every entry of the month regardless of filter, for the calendar. */
     val monthItems: List<TransactionItem> = emptyList(),
+    val monthTransfers: List<TransferLine> = emptyList(),
     val income: Long = 0,
     val expense: Long = 0,
     val count: Int = 0,
@@ -240,9 +278,12 @@ class HistoryViewModel(
                 TypeFilter.EXPENSE -> narrowed.filter { it.type == TxType.EXPENSE }
                 TypeFilter.INCOME -> narrowed.filter { it.type == TxType.INCOME }
             }
-            // Transfers between your own accounts, on their day (#55): not spending or income, so only in the full
-            // list by day, never in the totals; filtered to an account, the ones in or out of it.
+            // Transfers appear on their day, but stay out of spending and income totals; an account filter shows
+            // the ones in or out of that account.
             val names = accountList.associate { it.id to it.name }
+            val monthTransfers = transfers.filter {
+                YearMonth.from(LocalDate.ofEpochDay(it.epochDay)) == m
+            }.map { t -> TransferLine(t, names[t.fromAccountId] ?: "?", names[t.toAccountId] ?: "?", 0) }
             val words = parsed.words
             val moved = if (fl.sort != ActivitySort.NEWEST || f != TypeFilter.ALL || fl.categoryId != null || fl.tag != null) emptyList()
             else transfers.asSequence()
@@ -283,9 +324,10 @@ class HistoryViewModel(
                     else listOf(DayGroup(sorted.first().first().date, sorted.flatten(), if (fl.sort == ActivitySort.HIGHEST) "Highest first" else "Lowest first"))
                 },
                 monthItems = monthItems,
+                monthTransfers = monthTransfers,
                 income = filtered.totalOf(TxType.INCOME),
                 expense = filtered.totalOf(TxType.EXPENSE),
-                count = filtered.size,
+                count = filtered.size + moved.size,
                 filters = fl,
                 accounts = if (accountList.size > 1) accountList.map { FilterOption(it.id, it.name, it.icon, it.color) } else emptyList(),
                 categories = all.distinctBy { it.categoryId }.sortedBy { it.categoryName }
@@ -433,6 +475,7 @@ fun HistoryScreen(
                     MonthCalendar(
                         month = state.month,
                         items = state.monthItems,
+                        transfers = state.monthTransfers,
                         selected = LocalDate.ofEpochDay(selectedDay),
                         onSelect = { selectedDay = it.toEpochDay() },
                         modifier = Modifier.appear(0),
@@ -440,7 +483,13 @@ fun HistoryScreen(
                 }
                 item {
                     val day = LocalDate.ofEpochDay(selectedDay)
-                    DayPanel(day, state.monthItems.filter { it.epochDay == selectedDay }, onAdd = { onAddForDay(day) }, peek = peek)
+                    DayPanel(
+                        day,
+                        state.monthItems.filter { it.epochDay == selectedDay },
+                        state.monthTransfers.filter { it.transfer.epochDay == selectedDay },
+                        onAdd = { onAddForDay(day) },
+                        peek = peek,
+                    )
                 }
                 return@LazyColumn
             }
@@ -519,54 +568,48 @@ fun HistoryScreen(
                         if (spent > 0) Text(money.format(spent), style = MaterialTheme.typography.labelLarge, color = c.textSecondary)
                     }
                 }
-                // Each split bill on a card of its own: the entry, its parts, and who owes for it (#36).
-                val cards = billCards(group.items, state.shares, state.oneBill)
-                cards.forEachIndexed { cardIndex, card ->
-                    // A split bill is its row and where its money went; its parts and shares aren't rows of their own.
-                    val bill = card.drop(1).any { it.under() }
-                    card.forEachIndexed { i, line ->
-                        if (line !is BillLine.Entry || line.under()) return@forEachIndexed
-                        item(key = "tx-${line.item.id}") {
-                            CardSlice(
-                                first = i == 0,
-                                last = card.drop(i + 1).all { it.under() },
-                                modifier = Modifier
-                                    .animateItem(fadeInSpec = tween(220), placementSpec = listMotion, fadeOutSpec = tween(160))
-                                    .padding(top = if (i == 0 && cardIndex > 0) 10.dp else 0.dp)
-                                    .appear(groupIndex + 1),
-                            ) {
-                                if (i > 0) RowDivider(inset = 74.dp)
-                                // No swipe actions: they fired by accident. A tap opens the entry, where it can be edited or deleted.
-                                TransactionRow(
-                                    line.item,
-                                    onClick = { peek.show(line.item) },
-                                    modifier = Modifier.peekSource(peek, line.item.id),
-                                    subtitle = billSubtitle(if (group.label != null) line.item.date.friendlyLabel() else line.item.timeLabel(), line),
-                                    wholeMinor = line.whole(),
-                                )
-                                if (bill && i == 0) {
-                                    BillBreakdown(
-                                        line, onPart = { peek.show(it) }, onShare = { peek.share = it },
-                                        partModifier = { Modifier.peekSource(peek, it.id) },
+                val feed = activityFeed(group.items, state.shares, state.oneBill, group.transfers)
+                feed.forEachIndexed { feedIndex, row ->
+                    when (row) {
+                        is ActivityFeedRow.Bill -> {
+                            val line = row.lines.first() as BillLine.Entry
+                            val bill = row.lines.drop(1).any { it.under() }
+                            item(key = "tx-${line.item.id}") {
+                                CardSlice(
+                                    first = feedIndex == 0,
+                                    last = feedIndex == feed.lastIndex,
+                                    modifier = Modifier
+                                        .animateItem(fadeInSpec = tween(220), placementSpec = listMotion, fadeOutSpec = tween(160))
+                                        .appear(groupIndex + 1),
+                                ) {
+                                    if (feedIndex > 0) RowDivider(inset = 74.dp)
+                                    TransactionRow(
+                                        line.item,
+                                        onClick = { peek.show(line.item) },
+                                        modifier = Modifier.peekSource(peek, line.item.id),
+                                        subtitle = billSubtitle(if (group.label != null) line.item.date.friendlyLabel() else line.item.timeLabel(), line),
+                                        wholeMinor = line.whole(),
                                     )
+                                    if (bill) {
+                                        BillBreakdown(
+                                            line, onPart = { peek.show(it) }, onShare = { peek.share = it },
+                                            partModifier = { Modifier.peekSource(peek, it.id) },
+                                        )
+                                    }
                                 }
                             }
                         }
-                    }
-                }
-                // The day's transfers, on a card of their own after its entries.
-                group.transfers.forEachIndexed { i, line ->
-                    item(key = "transfer-${line.transfer.id}") {
-                        CardSlice(
-                            first = i == 0,
-                            last = i == group.transfers.lastIndex,
-                            modifier = Modifier
-                                .animateItem(fadeInSpec = tween(220), placementSpec = listMotion, fadeOutSpec = tween(160))
-                                .padding(top = if (i == 0 && cards.isNotEmpty()) 10.dp else 0.dp)
-                                .appear(groupIndex + 1),
-                        ) {
-                            if (i > 0) RowDivider(inset = 74.dp)
-                            TransferRow(line, onClick = { peek.show(line) }, modifier = Modifier.peekSource(peek, -line.transfer.id))
+                        is ActivityFeedRow.Transfer -> item(key = "transfer-${row.line.transfer.id}") {
+                            CardSlice(
+                                first = feedIndex == 0,
+                                last = feedIndex == feed.lastIndex,
+                                modifier = Modifier
+                                    .animateItem(fadeInSpec = tween(220), placementSpec = listMotion, fadeOutSpec = tween(160))
+                                    .appear(groupIndex + 1),
+                            ) {
+                                if (feedIndex > 0) RowDivider(inset = 74.dp)
+                                TransferRow(row.line, onClick = { peek.show(row.line) }, modifier = Modifier.peekSource(peek, -row.line.transfer.id))
+                            }
                         }
                     }
                 }
@@ -692,6 +735,7 @@ private fun CardSlice(first: Boolean, last: Boolean, modifier: Modifier = Modifi
 private fun MonthCalendar(
     month: YearMonth,
     items: List<TransactionItem>,
+    transfers: List<TransferLine>,
     selected: LocalDate,
     onSelect: (LocalDate) -> Unit,
     modifier: Modifier = Modifier,
@@ -700,6 +744,7 @@ private fun MonthCalendar(
     val today = LocalDate.now()
     val spentByDay = items.filter { it.type == TxType.EXPENSE }.groupBy { it.date.dayOfMonth }.mapValues { (_, l) -> l.sumOf { it.amountMinor } }
     val incomeDays = items.filter { it.type == TxType.INCOME }.map { it.date.dayOfMonth }.toSet()
+    val transferDays = transfers.map { LocalDate.ofEpochDay(it.transfer.epochDay).dayOfMonth }.toSet()
     val leading = month.atDay(1).dayOfWeek.value - 1
     val cells: List<Int?> = List(leading) { null } + (1..month.lengthOfMonth()).toList()
     val shape = RoundedCornerShape(14.dp)
@@ -752,14 +797,25 @@ private fun MonthCalendar(
                                         color = if (isSelected) c.onAccent.copy(alpha = 0.75f) else c.textSecondary,
                                         maxLines = 1,
                                     )
-                                } else if (day in incomeDays) {
-                                    Box(
-                                        Modifier
-                                            .padding(top = 4.dp)
-                                            .size(5.dp)
-                                            .clip(RoundedCornerShape(50))
-                                            .background(if (isSelected) c.onAccent else c.positive),
-                                    )
+                                }
+                                if (day in incomeDays || day in transferDays) {
+                                    Row(
+                                        modifier = Modifier.padding(top = 4.dp),
+                                        horizontalArrangement = Arrangement.spacedBy(3.dp),
+                                    ) {
+                                        if (day in incomeDays) {
+                                            Box(
+                                                Modifier.size(5.dp).clip(RoundedCornerShape(50))
+                                                    .background(if (isSelected) c.onAccent else c.positive),
+                                            )
+                                        }
+                                        if (day in transferDays) {
+                                            Box(
+                                                Modifier.size(5.dp).clip(RoundedCornerShape(50))
+                                                    .background(if (isSelected) c.onAccent else c.textSecondary),
+                                            )
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -771,17 +827,28 @@ private fun MonthCalendar(
 }
 
 @Composable
-private fun DayPanel(day: LocalDate, items: List<TransactionItem>, onAdd: () -> Unit, peek: TransactionPeek) {
+private fun DayPanel(
+    day: LocalDate,
+    items: List<TransactionItem>,
+    transfers: List<TransferLine>,
+    onAdd: () -> Unit,
+    peek: TransactionPeek,
+) {
     val c = LocalAppColors.current
     val money = LocalMoney.current
     val spent = items.filter { it.type == TxType.EXPENSE }.sumOf { it.amountMinor }
+    val feed = activityFeed(items, emptyMap(), oneBill = false, transfers = transfers)
+    val summary = buildList {
+        if (spent > 0) add("${money.format(spent)} spent")
+        if (transfers.isNotEmpty()) add("${transfers.size} ${if (transfers.size == 1) "transfer" else "transfers"}")
+    }.joinToString(" · ").ifBlank { "Nothing spent" }
     AnimatedContent(targetState = day, transitionSpec = { fadeIn().togetherWith(fadeOut()) }, label = "dayPanel") { d ->
         Column(Modifier.padding(top = 18.dp)) {
             Row(Modifier.padding(horizontal = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Text(d.friendlyLabel(), style = MaterialTheme.typography.titleMedium, color = c.textPrimary)
                     Text(
-                        if (spent > 0) "${money.format(spent)} spent" else "Nothing spent",
+                        summary,
                         style = MaterialTheme.typography.bodySmall,
                         color = c.textSecondary,
                     )
@@ -790,11 +857,18 @@ private fun DayPanel(day: LocalDate, items: List<TransactionItem>, onAdd: () -> 
             }
             Spacer(Modifier.height(12.dp))
             Glass(Modifier.fillMaxWidth()) {
-                if (items.isNotEmpty()) {
+                if (feed.isNotEmpty()) {
                     Column(Modifier.padding(vertical = 4.dp)) {
-                        items.forEachIndexed { i, item ->
+                        feed.forEachIndexed { i, row ->
                             if (i > 0) RowDivider()
-                            TransactionRow(item, onClick = { peek.show(item) }, modifier = Modifier.peekSource(peek, item.id))
+                            when (row) {
+                                is ActivityFeedRow.Bill -> {
+                                    val item = (row.lines.first() as BillLine.Entry).item
+                                    TransactionRow(item, onClick = { peek.show(item) }, modifier = Modifier.peekSource(peek, item.id))
+                                }
+                                is ActivityFeedRow.Transfer ->
+                                    TransferRow(row.line, onClick = { peek.show(row.line) }, modifier = Modifier.peekSource(peek, -row.line.transfer.id))
+                            }
                         }
                     }
                 } else {
@@ -840,7 +914,7 @@ private data class Books(
 
 /** A transfer in Activity: neutral, neither spending nor income; signed only when one account is shown. */
 @Composable
-private fun TransferRow(line: TransferLine, onClick: () -> Unit, modifier: Modifier = Modifier) {
+internal fun TransferRow(line: TransferLine, onClick: () -> Unit, modifier: Modifier = Modifier) {
     val c = LocalAppColors.current
     val money = LocalMoney.current
     com.leftovers.app.ui.components.ListRow(
