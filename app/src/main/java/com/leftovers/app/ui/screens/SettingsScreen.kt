@@ -1086,9 +1086,43 @@ fun SettingsScreen(
                 item {
                     Glass(Modifier.fillMaxWidth()) {
                         Column(Modifier.padding(vertical = 6.dp)) {
+                            // Before Android asks for SMS access: what is read, what is kept, and that none of it leaves the phone.
+                            var smsDisclosure by rememberSaveable { mutableStateOf(false) }
                             ToggleRow(Lucide.Smartphone, "Detect bank SMS", s.smsDetection, { on ->
-                                if (on) smsPermission.launch(Manifest.permission.RECEIVE_SMS) else viewModel.setSmsDetection(false)
+                                when {
+                                    !on -> viewModel.setSmsDetection(false)
+                                    androidx.core.content.ContextCompat.checkSelfPermission(context, Manifest.permission.RECEIVE_SMS) == android.content.pm.PackageManager.PERMISSION_GRANTED -> viewModel.setSmsDetection(true)
+                                    else -> smsDisclosure = true
+                                }
                             })
+                            if (smsDisclosure) {
+                                GlassAlertDialog(
+                                    onDismissRequest = { smsDisclosure = false },
+                                    title = { Text("Read bank SMS?") },
+                                    text = {
+                                        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                            Text(
+                                                "Leftovers reads SMS as they arrive, to spot payments from your bank and suggest them as entries.",
+                                                color = c.textSecondary,
+                                            )
+                                            Text(
+                                                "From a bank payment it keeps only the amount, the shop, the date, the sender, the last digits of the account and the balance it shows. The message itself is never saved, and other texts are ignored.",
+                                                color = c.textSecondary,
+                                            )
+                                            Text(
+                                                "Everything is read on this phone. No SMS is sent anywhere or shared with anyone.",
+                                                color = c.textSecondary,
+                                            )
+                                        }
+                                    },
+                                    confirmButton = {
+                                        TextButton(onClick = { smsDisclosure = false; smsPermission.launch(Manifest.permission.RECEIVE_SMS) }) {
+                                            Text("Continue", color = c.textPrimary)
+                                        }
+                                    },
+                                    dismissButton = { TextButton(onClick = { smsDisclosure = false }) { Text("Not now", color = c.textSecondary) } },
+                                )
+                            }
                             // With bank SMS read: small spending can go straight in, up to an amount of the user's choosing.
                             if (s.smsDetection) {
                                 RowDivider()
