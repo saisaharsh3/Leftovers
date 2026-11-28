@@ -127,6 +127,15 @@ class SubscriptionsViewModel(
         }
     }
 
+    /** [item]'s next charge paid before its day (#85); see [HomeViewModel.payEarly]. [onDone] gets the Undo. */
+    fun payEarly(item: RecurringItem, amountMinor: Long, epochDay: Long, accountId: Long?, onDone: (suspend () -> Unit) -> Unit) {
+        viewModelScope.launch {
+            val r = item.toRecurring()
+            val id = planning.payRecurring(r, YearMonth.from(r.nextChargeDate()), amountMinor, epochDay, accountId)
+            onDone { planning.unpayRecurring(r, id) }
+        }
+    }
+
     fun setActive(item: RecurringItem, active: Boolean) {
         viewModelScope.launch {
             // Resuming shouldn't back-charge the months it was paused for.
@@ -187,6 +196,7 @@ fun SubscriptionsScreen(
     var hiddenRow by remember { mutableStateOf<Long?>(null) }
     var viewingFrom by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
     val rowBounds = remember { mutableMapOf<Long, androidx.compose.ui.geometry.Rect>() }
+    val undoEarly = com.leftovers.app.ui.components.LocalUndo.current
     items.firstOrNull { it.id == viewing }?.let { item ->
         SubscriptionCard(
             item,
@@ -200,6 +210,12 @@ fun SubscriptionsScreen(
                 editing = item.toRecurring()
             },
             onSetActive = { viewModel.setActive(item, it) },
+            accounts = accounts,
+            onPaidEarly = { amount, day, account ->
+                viewModel.payEarly(item, amount, day, account) { restore ->
+                    undoEarly.show(if (item.type == TxType.INCOME) "${item.name} received early" else "${item.name} paid early", restore)
+                }
+            },
         )
     }
     val focus = items.firstOrNull { it.id == openId }
@@ -945,6 +961,10 @@ internal fun SubscriptionCard(
     /** For a one-off scheduled for a later day (#68): add it now, or cancel it. */
     onAddNow: () -> Unit = {},
     onCancel: () -> Unit = {},
+    /** The accounts to choose from when it's paid early. */
+    accounts: List<com.leftovers.app.data.AccountWithBalance> = emptyList(),
+    /** Its next charge paid before its day (#85): what was paid, on which day, from which account. */
+    onPaidEarly: ((amountMinor: Long, epochDay: Long, accountId: Long?) -> Unit)? = null,
 ) {
     val c = LocalAppColors.current
     val money = LocalMoney.current
@@ -953,6 +973,15 @@ internal fun SubscriptionCard(
     val tone = if (!item.active) c.textSecondary else if (income) c.positive else Color(item.categoryColor)
     val next = if (item.active) r.nextChargeDate() else null
     val days = next?.let { java.time.temporal.ChronoUnit.DAYS.between(LocalDate.now(), it) }
+    // Paid before its day (#85): only for one still to come; one already due is settled under Due on Home.
+    var payingEarly by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
+    val canPayEarly = onPaidEarly != null && !item.once && next != null && next > LocalDate.now()
+    if (payingEarly && onPaidEarly != null && next != null) {
+        PayBillSheet(item, accounts, dueDate = next, onDismiss = { payingEarly = false }) { amount, day, account ->
+            onPaidEarly(amount, day, account)
+            onDismiss()
+        }
+    }
     val cycle = when (item.everyMonths) {
         0 -> "Once"
         12 -> "Yearly"
@@ -1005,6 +1034,14 @@ internal fun SubscriptionCard(
                         color = c.textSecondary,
                         modifier = Modifier.padding(top = 2.dp),
                     )
+                    if (canPayEarly) {
+                        Spacer(Modifier.height(12.dp))
+                        com.leftovers.app.ui.components.Chip(
+                            if (income) "Received it early" else "Paid it early",
+                            onClick = { payingEarly = true },
+                            icon = Lucide.Check,
+                        )
+                    }
                 }
                 // Label on the left, value on the right, so long amounts and dates never get cut.
                 if (item.once) {
@@ -1045,5 +1082,71 @@ private fun SubscriptionFact(label: String, value: String) {
     Row(Modifier.fillMaxWidth().padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
         Text(label, style = MaterialTheme.typography.bodySmall, color = c.textSecondary, modifier = Modifier.weight(1f))
         Text(value, style = MaterialTheme.typography.labelLarge, color = c.textPrimary)
+    }
+}
+
+/**
+ * A bill paid, or income received: what it really came to, on which day and from which account, filled in with the
+ * usual amount and today. For one due on Home (#64), and for one paid before its day (#85).
+ */
+@Composable
+internal fun PayBillSheet(
+    item: RecurringItem,
+    accounts: List<com.leftovers.app.data.AccountWithBalance>,
+    dueDate: LocalDate,
+    onDismiss: () -> Unit,
+    onPaid: (amountMinor: Long, epochDay: Long, accountId: Long?) -> Unit,
+) {
+    val c = LocalAppColors.current
+    val income = item.type == TxType.INCOME
+    val today = LocalDate.now()
+    var amountText by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(com.leftovers.app.util.AmountInput.fromMinor(item.amountMinor)) }
+    var day by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(today.toEpochDay()) }
+    var account by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(item.accountId ?: accounts.firstOrNull()?.id) }
+    var calendar by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
+    val amount = com.leftovers.app.util.AmountInput.toMinor(amountText) ?: 0L
+    GlassSheet(onDismiss = onDismiss) {
+        Column(Modifier.padding(horizontal = 20.dp).padding(bottom = 16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            Text(if (income) "${item.name} received" else "${item.name} paid", style = MaterialTheme.typography.headlineSmall, color = c.textPrimary)
+            if (dueDate > today) {
+                Text(
+                    "Logged now, so it won't come out again on ${dueDate.friendlyLabel()}. After that it carries on as usual.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = c.textSecondary,
+                )
+            }
+            MoneyField(amountText, { amountText = it }, label = "Amount")
+            Text("When", style = MaterialTheme.typography.labelMedium, color = c.textSecondary, modifier = Modifier.padding(start = 6.dp))
+            androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                val choices = listOf(today, today.minusDays(1), dueDate).filter { it <= today }.distinct()
+                choices.forEach { date ->
+                    val label = when (date) {
+                        today -> "Today"
+                        today.minusDays(1) -> "Yesterday"
+                        else -> "On its day, " + date.friendlyLabel()
+                    }
+                    com.leftovers.app.ui.components.Chip(label, onClick = { day = date.toEpochDay() }, selected = day == date.toEpochDay())
+                }
+                // Any other day, from a calendar: the chosen one shows on the chip.
+                val other = choices.none { it.toEpochDay() == day }
+                com.leftovers.app.ui.components.Chip(
+                    if (other) LocalDate.ofEpochDay(day).friendlyLabel() else "Another day",
+                    onClick = { calendar = true }, selected = other, icon = Lucide.Calendar,
+                )
+            }
+            if (calendar) {
+                DayPickerDialog(LocalDate.ofEpochDay(day), if (income) "Which day did it come in?" else "Which day was it paid?", onPick = { day = it.toEpochDay() }, onDismiss = { calendar = false })
+            }
+            if (accounts.size > 1) {
+                Text("Account", style = MaterialTheme.typography.labelMedium, color = c.textSecondary, modifier = Modifier.padding(start = 6.dp))
+                androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    accounts.forEach { a -> com.leftovers.app.ui.components.Chip(a.name, onClick = { account = a.id }, selected = account == a.id) }
+                }
+            }
+            PrimaryButton(if (income) "Received" else "Paid", {
+                onDismiss()
+                onPaid(amount, day, account)
+            }, Modifier.fillMaxWidth(), enabled = amount > 0, icon = Lucide.Check)
+        }
     }
 }
